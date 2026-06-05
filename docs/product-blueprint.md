@@ -212,3 +212,28 @@ yeni workflow
 yeni karar
 
 eklenecektir.
+
+# Future Opportunities
+
+Bu bölüm MVP kapsamına alınmayan ancak gelecekte değerlendirilmesi planlanan fikirleri içerir.
+
+---
+
+## FUTURE-CANDIDATE-001
+
+### Historical Pricing Intelligence Engine
+
+Amaç:
+
+* Fiyat trendlerini analiz etmek
+* Supplier fiyat davranışlarını öğrenmek
+* Müşteri fiyat hassasiyetini öğrenmek
+* Anormal fiyat değişimlerini tespit etmek
+* Operasyon personeline referans fiyat aralığı sunmak
+
+Not:
+
+Road Freight piyasasında fiyatlar günlük değişebildiği için bu modül MVP v1'de otomatik fiyat üretimi amacıyla kullanılmayacaktır.
+
+İlerleyen sürümlerde yeterli veri birikmesi halinde karar destek sistemi olarak değerlendirilecektir.
+
