@@ -163,3 +163,14 @@ Customer Recognition Engine
 4. Historical Email Context
 5. Manual Assignment
 
+
+DEC-022
+
+Knowledge Capture Phase tamamlanmıştır.
+
+Yeni özellik ekleme geçici olarak durdurulur.
+
+Öncelik:
+Database Schema
+Workflow Engine
+MVP Architecture
