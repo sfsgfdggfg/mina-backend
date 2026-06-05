@@ -1,5 +1,5 @@
-from src.workflow.pipeline import run_simulation_pipeline
+from src.workflow.pipeline import run_scenario_pipeline
 
 
 if __name__ == "__main__":
-    run_simulation_pipeline()
+    run_scenario_pipeline()
