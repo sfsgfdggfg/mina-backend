@@ -177,8 +177,16 @@ MVP Architecture
 
 [DEC-023 REVISION]
 
-Historical Pricing Intelligence
-MVP kapsamına dahil değildir.
+Historical Pricing Intelligence MVP kapsamına dahil değildir.
 
-Ancak gelecekte kullanılmak üzere
-fiyat geçmişi saklanacaktır.
+Ancak gelecekte kullanılabilmesi için fiyat geçmişi sistemde saklanacaktır.
+
+İlk sürümde geçmiş fiyatlar:
+
+referans amaçlı
+anomali tespiti amaçlı
+raporlama amaçlı
+
+kullanılabilir.
+
+Otomatik fiyat oluşturma amacıyla kullanılmayacaktır.
