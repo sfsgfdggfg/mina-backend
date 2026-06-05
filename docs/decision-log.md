@@ -174,3 +174,11 @@ Yeni özellik ekleme geçici olarak durdurulur.
 Database Schema
 Workflow Engine
 MVP Architecture
+
+[DEC-023 REVISION]
+
+Historical Pricing Intelligence
+MVP kapsamına dahil değildir.
+
+Ancak gelecekte kullanılmak üzere
+fiyat geçmişi saklanacaktır.
