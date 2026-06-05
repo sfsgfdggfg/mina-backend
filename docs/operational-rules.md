@@ -200,3 +200,9 @@ selman@temsa.com
 Road Freight fiyatı supplier’dan gelen güncel fiyatlara dayanır.
 
 Geçmiş fiyatlar karar destek verisidir; ana fiyat kaynağı değildir.
+
+RULE-034
+
+Makine yüklerinde ölçü bilgisi eksikse sistem fiyat üretmez.
+
+Müşteriden ölçü ve ağırlık bilgisi ister.
