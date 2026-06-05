@@ -195,3 +195,8 @@ RULE-032
 selman@temsa.com
 → Selman bilinen kontaksa
 → Customer = TEMSA
+
+[RULE-033]
+Road Freight fiyatı supplier’dan gelen güncel fiyatlara dayanır.
+
+Geçmiş fiyatlar karar destek verisidir; ana fiyat kaynağı değildir.
