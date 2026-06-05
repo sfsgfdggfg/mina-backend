@@ -185,3 +185,13 @@ Resmi tatiller, dini bayramlar ve kritik tatil dönemleri operasyonel risk fakt�
 
 AI bu durumlarda kullanıcıyı uyarır ancak tek başına karar vermez.
 
+RULE-031
+Public email domain kullanan kontaklarda müşteri şirketi otomatik domain üzerinden belirlenmez.
+
+RULE-032
+Çok düzenli müşterilerde kişi adı / email ön eki müşteri tanıma için güçlü sinyaldir.
+
+Örnek:
+selman@temsa.com
+→ Selman bilinen kontaksa
+→ Customer = TEMSA
