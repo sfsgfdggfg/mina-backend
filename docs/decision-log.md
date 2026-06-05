@@ -131,5 +131,35 @@ gerektirebilir.
 
 sıralaması takip edilecektir.
 
+
 Kod geliştirme, bilgi modelinden sonra yapılacaktır.
+
+
+DEC-019
+Customer = Company
+
+Contact Person ≠ Customer
+
+DEC-020
+Public email domainleri müşteri tanımlamada company domain olarak kullanılmaz.
+
+Örnek:
+gmail.com
+hotmail.com
+outlook.com
+yahoo.com
+icloud.com
+
+DEC-021
+
+Customer Recognition Engine
+çok katmanlı çalışacaktır.
+
+Öncelik sırası:
+
+1. Known Contact
+2. Company Domain
+3. Email Signature
+4. Historical Email Context
+5. Manual Assignment
 
