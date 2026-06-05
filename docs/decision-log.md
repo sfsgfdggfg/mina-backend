@@ -190,3 +190,11 @@ raporlama amaçlı
 kullanılabilir.
 
 Otomatik fiyat oluşturma amacıyla kullanılmayacaktır.
+
+DEC-024
+
+Yellow veya Red risk durumlarında sistem quote draft üretebilir ancak eğer risk "critical missing information" kaynaklıysa fiyat/teklif oluşturmaz.
+
+Bu durumda clarification email hazırlanır.
+
+
