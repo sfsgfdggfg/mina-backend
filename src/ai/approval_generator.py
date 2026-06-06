@@ -1,5 +1,4 @@
-from src.core.models import Shipment, QuoteDraft
-from src.core.risk import RiskAssessment
+from src.core.models import Shipment, QuoteDraft, RiskAssessment
 
 
 def generate_management_review_draft(
@@ -9,7 +8,7 @@ def generate_management_review_draft(
     """
     Management Review Draft Generator v1.
 
-    Red risk durumlarında müşteriye quote üretmek yerine,
+    RED risk durumlarında müşteriye quote üretmek yerine,
     iç onay / yönetici incelemesi için taslak üretir.
     """
 
@@ -27,8 +26,8 @@ Aşağıdaki taşıma talebi RED risk seviyesinde değerlendirilmiştir.
 {route_text}
 
 Müşteri: {shipment.customer_name}
-Yük: {shipment.commodity}
-Brüt Ağırlık: {shipment.gross_weight_kg} kg
+Yük: {shipment.commodity or "Belirtilmemiş"}
+Brüt Ağırlık: {shipment.gross_weight_kg or "Belirtilmemiş"} kg
 Servis Tipi: {shipment.service_type}
 
 Risk nedenleri:

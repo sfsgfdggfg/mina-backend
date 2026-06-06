@@ -1,14 +1,17 @@
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
+from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
+
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
+from src.ai.quote_generator import generate_quote_draft
+from src.ai.clarification_generator import generate_clarification_draft
+from src.ai.approval_generator import generate_management_review_draft
+
 from src.core.equipment import decide_equipment
 from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
 from src.simulation.supplier_simulator import simulate_supplier_quote
 from src.core.pricing import calculate_customer_quote
-from src.ai.quote_generator import generate_quote_draft
-from src.ai.clarification_generator import generate_clarification_draft
-from src.ai.approval_generator import generate_management_review_draft
 
 
 def process_shipment(shipment):
@@ -16,24 +19,7 @@ def process_shipment(shipment):
     equipment_decision = decide_equipment(shipment)
     risk_assessment = assess_risk(shipment)
 
-    if not missing_info.can_continue_to_quote:
-        clarification_draft = generate_clarification_draft(
-            shipment=shipment,
-            missing_info=missing_info,
-        )
-
-        return {
-            "shipment": shipment,
-            "missing_info": missing_info,
-            "equipment_decision": equipment_decision,
-            "risk_assessment": risk_assessment,
-            "supplier_quote": None,
-            "customer_quote": None,
-            "quote_draft": None,
-            "clarification_draft": clarification_draft,
-            "management_review_draft": None,
-        }
-
+    # 1. RED risk varsa önce yönetici onayına gider
     if risk_assessment.risk_level == "red":
         management_review_draft = generate_management_review_draft(
             shipment=shipment,
@@ -52,6 +38,26 @@ def process_shipment(shipment):
             "management_review_draft": management_review_draft,
         }
 
+    # 2. RED değilse kritik eksik bilgi kontrol edilir
+    if not missing_info.can_continue_to_quote:
+        clarification_draft = generate_clarification_draft(
+            shipment=shipment,
+            missing_info=missing_info,
+        )
+
+        return {
+            "shipment": shipment,
+            "missing_info": missing_info,
+            "equipment_decision": equipment_decision,
+            "risk_assessment": risk_assessment,
+            "supplier_quote": None,
+            "customer_quote": None,
+            "quote_draft": None,
+            "clarification_draft": clarification_draft,
+            "management_review_draft": None,
+        }
+
+    # 3. Her şey uygunsa quote akışı çalışır
     supplier_quote = simulate_supplier_quote(shipment, equipment_decision)
     customer_quote = calculate_customer_quote(supplier_quote)
 
@@ -74,6 +80,7 @@ def process_shipment(shipment):
         "clarification_draft": None,
         "management_review_draft": None,
     }
+
 
 def run_simulation_pipeline():
     print("\n==============================")
@@ -135,7 +142,32 @@ Teşekkürler.
     return result
 
 
+def run_ai_email_test_suite():
+    print("\n==============================")
+    print("MINAI FREIGHT OS - AI EMAIL TEST SUITE")
+    print("==============================")
+
+    for index, test_case in enumerate(AI_EMAIL_TEST_CASES, start=1):
+        print("\n\n########################################")
+        print(f"AI TEST {index}: {test_case['name']}")
+        print("########################################")
+
+        email_text = test_case["email"]
+
+        print("\n--- RAW EMAIL ---")
+        print(email_text.strip())
+
+        shipment = parse_email_with_ai(email_text)
+        result = process_shipment(shipment)
+
+        print_result(result)
+
+
 def print_result(result):
+    if result is None:
+        print("\nERROR: process_shipment None döndürdü.")
+        return
+
     shipment = result["shipment"]
     missing_info = result.get("missing_info")
     equipment_decision = result["equipment_decision"]
@@ -164,6 +196,8 @@ def print_result(result):
             print("\n--- MANAGEMENT REVIEW DRAFT ---")
             print(f"Subject: {management_review_draft.subject}\n")
             print(management_review_draft.body)
+        else:
+            print("\nUYARI: Management review draft üretilemedi.")
 
         return
 

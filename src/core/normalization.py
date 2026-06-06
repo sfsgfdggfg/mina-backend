@@ -1,6 +1,24 @@
 from src.core.models import Shipment
 
 
+NULL_LIKE_VALUES = {
+    "",
+    "/",
+    "-",
+    ",",
+    ".",
+    "n/a",
+    "na",
+    "none",
+    "null",
+    "unknown",
+    "müşteri",
+    "customer",
+    "bilinmiyor",
+    "belirtilmemiş",
+}
+
+
 COUNTRY_MAP = {
     "turkey": "Türkiye",
     "türkiye": "Türkiye",
@@ -55,6 +73,8 @@ PACKAGE_TYPE_MAP = {
 
     "roll": "roll",
     "rulo": "roll",
+
+    "loose": "loose",
 }
 
 
@@ -75,9 +95,13 @@ def normalize_text(value: str | None) -> str | None:
     if value is None:
         return None
 
-    cleaned = value.strip()
+    cleaned = str(value).strip()
 
-    if cleaned == "":
+    if cleaned.lower() in NULL_LIKE_VALUES:
+        return None
+
+    # Sadece noktalama işaretlerinden oluşuyorsa geçersiz say
+    if all(char in ".,;:/\\|-_()[]{}" for char in cleaned):
         return None
 
     return cleaned
@@ -89,32 +113,38 @@ def map_value(value: str | None, mapping: dict[str, str]) -> str | None:
     if cleaned is None:
         return None
 
-    key = cleaned.lower()
-
-    return mapping.get(key, cleaned)
+    return mapping.get(cleaned.lower(), cleaned)
 
 
 def normalize_shipment(shipment: Shipment) -> Shipment:
     """
     AI parser çıktısını operasyonel canonical değerlere dönüştürür.
-
-    Bu katman çok kritik:
-    AI farklı dillerde veya farklı terimlerle alanları çıkarabilir.
-    Workflow motoru ise standart değerlerle çalışmalıdır.
     """
 
-    shipment.customer_name = (
-        shipment.customer_name.strip()
-        if shipment.customer_name and shipment.customer_name.strip()
-        else "Unknown Customer"
-    )
+    customer_name = normalize_text(shipment.customer_name)
+    shipment.customer_name = customer_name or "Unknown Customer"
 
     shipment.pickup_country = map_value(shipment.pickup_country, COUNTRY_MAP)
+    shipment.pickup_city = normalize_text(shipment.pickup_city)
+    shipment.pickup_area = normalize_text(shipment.pickup_area)
+    shipment.pickup_postcode = normalize_text(shipment.pickup_postcode)
+
     shipment.delivery_country = map_value(shipment.delivery_country, COUNTRY_MAP)
+    shipment.delivery_city = normalize_text(shipment.delivery_city)
+    shipment.delivery_area = normalize_text(shipment.delivery_area)
+    shipment.delivery_postcode = normalize_text(shipment.delivery_postcode)
 
     shipment.commodity = map_value(shipment.commodity, COMMODITY_MAP)
 
     shipment.service_type = map_value(shipment.service_type, SERVICE_TYPE_MAP) or "FTL"
+    shipment.equipment_type = normalize_text(shipment.equipment_type)
+
+    shipment.cargo_ready_date = normalize_text(shipment.cargo_ready_date)
+    shipment.required_delivery_date = normalize_text(shipment.required_delivery_date)
+
+    shipment.adr_class = normalize_text(shipment.adr_class)
+    shipment.temperature_requirement = normalize_text(shipment.temperature_requirement)
+    shipment.special_notes = normalize_text(shipment.special_notes)
 
     for package in shipment.packages:
         package.package_type = map_value(package.package_type, PACKAGE_TYPE_MAP) or "unknown"
