@@ -8,6 +8,7 @@ from src.simulation.supplier_simulator import simulate_supplier_quote
 from src.core.pricing import calculate_customer_quote
 from src.ai.quote_generator import generate_quote_draft
 from src.ai.clarification_generator import generate_clarification_draft
+from src.ai.approval_generator import generate_management_review_draft
 
 
 def process_shipment(shipment):
@@ -30,6 +31,25 @@ def process_shipment(shipment):
             "customer_quote": None,
             "quote_draft": None,
             "clarification_draft": clarification_draft,
+            "management_review_draft": None,
+        }
+
+    if risk_assessment.risk_level == "red":
+        management_review_draft = generate_management_review_draft(
+            shipment=shipment,
+            risk_assessment=risk_assessment,
+        )
+
+        return {
+            "shipment": shipment,
+            "missing_info": missing_info,
+            "equipment_decision": equipment_decision,
+            "risk_assessment": risk_assessment,
+            "supplier_quote": None,
+            "customer_quote": None,
+            "quote_draft": None,
+            "clarification_draft": None,
+            "management_review_draft": management_review_draft,
         }
 
     supplier_quote = simulate_supplier_quote(shipment, equipment_decision)
@@ -52,8 +72,8 @@ def process_shipment(shipment):
         "customer_quote": customer_quote,
         "quote_draft": quote_draft,
         "clarification_draft": None,
+        "management_review_draft": None,
     }
-
 
 def run_simulation_pipeline():
     print("\n==============================")
@@ -98,6 +118,7 @@ def print_result(result):
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
     clarification_draft = result.get("clarification_draft")
+    management_review_draft = result.get("management_review_draft")
 
     print("\n--- SHIPMENT ---")
     print(shipment.model_dump_json(indent=2))
@@ -107,6 +128,18 @@ def print_result(result):
 
     print("\n--- RISK ASSESSMENT ---")
     print(risk_assessment.model_dump_json(indent=2))
+
+    if risk_assessment.risk_level == "red":
+        print("\n--- WORKFLOW STOPPED ---")
+        print("RED risk nedeniyle müşteriye teklif oluşturulmadı.")
+        print("Bir sonraki adım: yönetici / senior operasyon onayı.")
+
+        if management_review_draft:
+            print("\n--- MANAGEMENT REVIEW DRAFT ---")
+            print(f"Subject: {management_review_draft.subject}\n")
+            print(management_review_draft.body)
+
+        return
 
     if missing_info:
         print("\n--- MISSING INFORMATION CHECK ---")
