@@ -7,6 +7,7 @@ from src.core.missing_info import check_missing_information
 from src.simulation.supplier_simulator import simulate_supplier_quote
 from src.core.pricing import calculate_customer_quote
 from src.ai.quote_generator import generate_quote_draft
+from src.ai.clarification_generator import generate_clarification_draft
 
 
 def process_shipment(shipment):
@@ -15,6 +16,11 @@ def process_shipment(shipment):
     risk_assessment = assess_risk(shipment)
 
     if not missing_info.can_continue_to_quote:
+        clarification_draft = generate_clarification_draft(
+            shipment=shipment,
+            missing_info=missing_info,
+        )
+
         return {
             "shipment": shipment,
             "missing_info": missing_info,
@@ -23,6 +29,7 @@ def process_shipment(shipment):
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
+            "clarification_draft": clarification_draft,
         }
 
     supplier_quote = simulate_supplier_quote(shipment, equipment_decision)
@@ -44,6 +51,7 @@ def process_shipment(shipment):
         "supplier_quote": supplier_quote,
         "customer_quote": customer_quote,
         "quote_draft": quote_draft,
+        "clarification_draft": None,
     }
 
 
@@ -89,6 +97,7 @@ def print_result(result):
     supplier_quote = result.get("supplier_quote")
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
+    clarification_draft = result.get("clarification_draft")
 
     print("\n--- SHIPMENT ---")
     print(shipment.model_dump_json(indent=2))
@@ -107,6 +116,12 @@ def print_result(result):
             print("\n--- WORKFLOW STOPPED ---")
             print("Kritik eksik bilgi nedeniyle fiyat/teklif oluşturulmadı.")
             print("Bir sonraki adım: müşteriden eksik bilgi istenecek.")
+
+            if clarification_draft:
+                print("\n--- CLARIFICATION EMAIL DRAFT ---")
+                print(f"Subject: {clarification_draft.subject}\n")
+                print(clarification_draft.body)
+
             return
 
     print("\n--- SUPPLIER QUOTE ---")
