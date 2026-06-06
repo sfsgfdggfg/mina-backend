@@ -1,5 +1,13 @@
+import sys
+from pathlib import Path
+
 import requests
 import streamlit as st
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
+
+from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
 
 
 API_BASE_URL = "http://127.0.0.1:8000"
@@ -10,6 +18,17 @@ st.set_page_config(
     page_icon="🚛",
     layout="wide",
 )
+
+
+def get_example_email_options() -> dict:
+    examples = {
+        test_case["name"]: test_case["email"].strip()
+        for test_case in AI_EMAIL_TEST_CASES
+    }
+
+    examples["Custom Email"] = ""
+
+    return examples
 
 
 def get_action_text(result_type: str) -> str:
@@ -156,18 +175,21 @@ st.write(
     "Müşteri mailini yapıştırın. MINAI shipment bilgilerini çıkarır, riskleri değerlendirir ve uygun aksiyonu üretir."
 )
 
-default_email = """Merhaba,
+example_options = get_example_email_options()
 
-Adana OSB'den Stuttgart Almanya'ya 1 adet makine için komple araç fiyat rica ederiz.
-Yaklaşık 3000 kg. Ölçüleri henüz net değil.
-Yük 23.06.2026 tarihinde hazır olacaktır.
+selected_example = st.selectbox(
+    "Hazır Senaryo Seç",
+    options=list(example_options.keys()),
+)
 
-Teşekkürler.
-"""
+selected_email = example_options[selected_example]
+
+if selected_example == "Custom Email":
+    selected_email = ""
 
 email_text = st.text_area(
     "Müşteri Email Metni",
-    value=default_email,
+    value=selected_email,
     height=220,
 )
 
