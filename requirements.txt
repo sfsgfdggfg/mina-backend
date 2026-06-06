@@ -4,3 +4,5 @@ python-dotenv
 faker
 fastapi
 uvicorn
+streamlit
+requests
