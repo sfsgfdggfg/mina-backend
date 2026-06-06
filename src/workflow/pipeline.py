@@ -1,6 +1,6 @@
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
-from src.ai.email_parser import parse_email_to_shipment
+from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.core.equipment import decide_equipment
 from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
@@ -107,6 +107,32 @@ def run_scenario_pipeline():
 
         result = process_shipment(shipment)
         print_result(result)
+
+
+def run_ai_email_pipeline():
+    print("\n==============================")
+    print("MINAI FREIGHT OS - AI EMAIL PARSER MODE")
+    print("==============================")
+
+    email_text = """
+Merhaba,
+
+Adana OSB'den Stuttgart Almanya'ya 1 adet makine için komple araç fiyat rica ederiz.
+Yaklaşık 3000 kg. Ölçüleri henüz net değil.
+Yük 23.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+"""
+
+    print("\n--- RAW EMAIL ---")
+    print(email_text.strip())
+
+    shipment = parse_email_with_ai(email_text)
+    result = process_shipment(shipment)
+
+    print_result(result)
+
+    return result
 
 
 def print_result(result):

@@ -1,5 +1,5 @@
-from src.workflow.pipeline import run_scenario_pipeline
+from src.workflow.pipeline import run_ai_email_pipeline
 
 
 if __name__ == "__main__":
-    run_scenario_pipeline()
+    run_ai_email_pipeline()
