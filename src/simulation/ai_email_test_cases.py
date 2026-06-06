@@ -9,6 +9,12 @@ Yük 15.06.2026 tarihinde hazır olacaktır.
 
 Teşekkürler.
 """,
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Tenteli / Curtainsider",
+            "service_type": "FTL",
+            "risk_level": "yellow",
+        },
     },
     {
         "name": "Machine missing dimensions",
@@ -21,6 +27,12 @@ Yük 23.06.2026 tarihinde hazır olacaktır.
 
 Teşekkürler.
 """,
+        "expected": {
+            "result_type": "clarification",
+            "service_type": "FTL",
+            "risk_level": "yellow",
+            "missing_fields": ["machine dimensions"],
+        },
     },
     {
         "name": "Temperature controlled food",
@@ -34,6 +46,12 @@ Yük 18.06.2026 tarihinde hazırdır.
 
 İyi çalışmalar.
 """,
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Reefer",
+            "service_type": "FTL",
+            "risk_level": "yellow",
+        },
     },
     {
         "name": "ADR Class 7",
@@ -46,6 +64,12 @@ Yük 22.06.2026 tarihinde hazır olacaktır.
 
 Saygılar.
 """,
+        "expected": {
+            "result_type": "management_review",
+            "equipment": "Special ADR Equipment",
+            "service_type": "FTL",
+            "risk_level": "red",
+        },
     },
     {
         "name": "Partial shipment request",
@@ -59,6 +83,12 @@ Yük 19.06.2026 tarihinde hazır.
 
 Teşekkürler.
 """,
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Tenteli / Curtainsider",
+            "service_type": "LTL",
+            "risk_level": "yellow",
+        },
     },
     {
         "name": "Machine height 2.90m",
@@ -72,5 +102,11 @@ Yük 20.06.2026 tarihinde hazır olacaktır.
 
 Teşekkürler.
 """,
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Mega Trailer",
+            "service_type": "FTL",
+            "risk_level": "yellow",
+        },
     },
 ]

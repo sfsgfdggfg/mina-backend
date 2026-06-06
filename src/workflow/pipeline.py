@@ -1,7 +1,7 @@
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-
+from src.simulation.test_reporter import evaluate_test_result, print_test_report
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.ai.quote_generator import generate_quote_draft
 from src.ai.clarification_generator import generate_clarification_draft
@@ -147,6 +147,8 @@ def run_ai_email_test_suite():
     print("MINAI FREIGHT OS - AI EMAIL TEST SUITE")
     print("==============================")
 
+    test_results = []
+
     for index, test_case in enumerate(AI_EMAIL_TEST_CASES, start=1):
         print("\n\n########################################")
         print(f"AI TEST {index}: {test_case['name']}")
@@ -162,6 +164,14 @@ def run_ai_email_test_suite():
 
         print_result(result)
 
+        test_results.append(
+            evaluate_test_result(
+                test_case=test_case,
+                result=result,
+            )
+        )
+
+    print_test_report(test_results)
 
 def print_result(result):
     if result is None:
