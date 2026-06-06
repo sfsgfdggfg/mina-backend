@@ -197,4 +197,19 @@ Yellow veya Red risk durumlarında sistem quote draft üretebilir ancak eğer ri
 
 Bu durumda clarification email hazırlanır.
 
+DEC-025
+
+AI parser çıktıları doğrudan workflow'a verilmez.
+
+Önce normalization layer üzerinden geçirilir.
+
+Amaç:
+- farklı dillerde gelen değerleri standartlaştırmak
+- machine → Makine
+- Turkey → Türkiye
+- Germany → Almanya
+- FTL / full truck / komple → FTL
+
+gibi canonical değerlere çevirmektir.
+
 
