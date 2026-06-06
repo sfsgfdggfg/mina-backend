@@ -2,3 +2,5 @@ openai
 pydantic
 python-dotenv
 faker
+fastapi
+uvicorn
