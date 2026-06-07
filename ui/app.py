@@ -303,6 +303,179 @@ def render_test_suite_runner():
                 st.error("Test suite API çağrısı başarısız oldu.")
                 st.code(str(error))
 
+def render_customer_memory_edit_form(profile: dict):
+    customer_name = profile.get("customer_name") or ""
+    active = profile.get("active", True)
+
+    with st.expander(f"Edit {customer_name}"):
+        edited_customer_name = st.text_input(
+            "Edit Customer Name",
+            value=customer_name,
+            key=f"edit_customer_name_{customer_name}",
+        )
+
+        edited_active = st.checkbox(
+            "Edit Active",
+            value=active,
+            key=f"edit_active_{customer_name}",
+        )
+
+        aliases_text = "\n".join(profile.get("aliases") or [])
+        edited_aliases_text = st.text_area(
+            "Edit Aliases",
+            value=aliases_text,
+            height=100,
+            key=f"edit_aliases_{customer_name}",
+        )
+
+        edited_default_commodity = st.text_input(
+            "Edit Default Commodity",
+            value=profile.get("default_commodity") or "",
+            key=f"edit_default_commodity_{customer_name}",
+        )
+
+        edited_default_equipment_type = st.text_input(
+            "Edit Default Equipment Type",
+            value=profile.get("default_equipment_type") or "",
+            key=f"edit_default_equipment_type_{customer_name}",
+        )
+
+        col1, col2 = st.columns(2)
+
+        price_options = ["", "low", "medium", "high"]
+        time_options = ["", "low", "medium", "high"]
+
+        current_price = profile.get("price_sensitivity") or ""
+        current_time = profile.get("time_sensitivity") or ""
+
+        with col1:
+            edited_price_sensitivity = st.selectbox(
+                "Edit Price Sensitivity",
+                options=price_options,
+                index=price_options.index(current_price) if current_price in price_options else 0,
+                key=f"edit_price_sensitivity_{customer_name}",
+            )
+
+        with col2:
+            edited_time_sensitivity = st.selectbox(
+                "Edit Time Sensitivity",
+                options=time_options,
+                index=time_options.index(current_time) if current_time in time_options else 0,
+                key=f"edit_time_sensitivity_{customer_name}",
+            )
+
+        st.markdown("### Edit Default Pickup")
+
+        pickup_col1, pickup_col2, pickup_col3 = st.columns(3)
+
+        with pickup_col1:
+            edited_default_pickup_city = st.text_input(
+                "Edit Default Pickup City",
+                value=profile.get("default_pickup_city") or "",
+                key=f"edit_pickup_city_{customer_name}",
+            )
+
+        with pickup_col2:
+            edited_default_pickup_area = st.text_input(
+                "Edit Default Pickup Area",
+                value=profile.get("default_pickup_area") or "",
+                key=f"edit_pickup_area_{customer_name}",
+            )
+
+        with pickup_col3:
+            edited_default_pickup_country = st.text_input(
+                "Edit Default Pickup Country",
+                value=profile.get("default_pickup_country") or "",
+                key=f"edit_pickup_country_{customer_name}",
+            )
+
+        st.markdown("### Edit Default Delivery")
+
+        delivery_col1, delivery_col2 = st.columns(2)
+
+        with delivery_col1:
+            edited_default_delivery_city = st.text_input(
+                "Edit Default Delivery City",
+                value=profile.get("default_delivery_city") or "",
+                key=f"edit_delivery_city_{customer_name}",
+            )
+
+        with delivery_col2:
+            edited_default_delivery_country = st.text_input(
+                "Edit Default Delivery Country",
+                value=profile.get("default_delivery_country") or "",
+                key=f"edit_delivery_country_{customer_name}",
+            )
+
+        notes_text = "\n".join(profile.get("operational_notes") or [])
+        edited_notes_text = st.text_area(
+            "Edit Operational Notes",
+            value=notes_text,
+            height=120,
+            key=f"edit_notes_{customer_name}",
+        )
+
+        if st.button("Update Customer Profile", key=f"update_customer_{customer_name}"):
+            if not edited_customer_name.strip():
+                st.warning("Customer Name zorunludur.")
+                return
+
+            aliases = [
+                line.strip()
+                for line in edited_aliases_text.splitlines()
+                if line.strip()
+            ]
+
+            operational_notes = [
+                line.strip()
+                for line in edited_notes_text.splitlines()
+                if line.strip()
+            ]
+
+            payload = {
+                "original_customer_name": customer_name,
+                "customer_name": edited_customer_name.strip(),
+                "active": edited_active,
+                "aliases": aliases,
+                "default_commodity": edited_default_commodity.strip() or None,
+                "default_equipment_type": edited_default_equipment_type.strip() or None,
+                "price_sensitivity": edited_price_sensitivity or None,
+                "time_sensitivity": edited_time_sensitivity or None,
+                "default_pickup_city": edited_default_pickup_city.strip() or None,
+                "default_pickup_area": edited_default_pickup_area.strip() or None,
+                "default_pickup_country": edited_default_pickup_country.strip() or None,
+                "default_delivery_city": edited_default_delivery_city.strip() or None,
+                "default_delivery_country": edited_default_delivery_country.strip() or None,
+                "operational_notes": operational_notes,
+            }
+
+            try:
+                response = requests.put(
+                    f"{API_BASE_URL}/customer-memory",
+                    json=payload,
+                    timeout=30,
+                )
+
+                response.raise_for_status()
+                result = response.json()
+
+                st.success(
+                    f"Müşteri profili güncellendi: {result['profile']['customer_name']}"
+                )
+                st.rerun()
+
+            except requests.exceptions.HTTPError as error:
+                st.error("Customer memory güncellemesi reddedildi.")
+
+                try:
+                    error_detail = error.response.json().get("detail")
+                    st.warning(error_detail)
+                except Exception:
+                    st.code(str(error))
+
+            except requests.exceptions.RequestException as error:
+                st.error("Customer memory güncellemesi başarısız oldu.")
+                st.code(str(error))
 
 def render_customer_memory_list():
     st.markdown("---")
@@ -380,6 +553,7 @@ def render_customer_memory_list():
                         st.write(f"- {note}")
 
                 target_active = not active
+                render_customer_memory_edit_form(profile)
                 button_label = "Set Passive" if active else "Set Active"
 
                 if st.button(button_label, key=f"toggle_active_{customer_name}"):

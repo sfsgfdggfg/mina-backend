@@ -6,6 +6,7 @@ from src.core.customer_memory import (
     load_customer_memory,
     save_customer_profile,
     set_customer_profile_active_status,
+    update_customer_profile,
 )
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
@@ -43,9 +44,64 @@ class CustomerMemoryCreateRequest(BaseModel):
 
     operational_notes: List[str] = []
 
+class CustomerMemoryUpdateRequest(BaseModel):
+    original_customer_name: str
+    customer_name: str
+    active: bool = True
+    aliases: List[str] = []
+
+    default_commodity: Optional[str] = None
+    default_equipment_type: Optional[str] = None
+
+    price_sensitivity: Optional[str] = None
+    time_sensitivity: Optional[str] = None
+
+    default_pickup_city: Optional[str] = None
+    default_pickup_area: Optional[str] = None
+    default_pickup_country: Optional[str] = None
+
+    default_delivery_city: Optional[str] = None
+    default_delivery_country: Optional[str] = None
+
+    operational_notes: List[str] = []
+
 class CustomerMemoryStatusUpdateRequest(BaseModel):
     customer_name: str
     active: bool
+
+@app.put("/customer-memory")
+def update_customer_memory_profile(request: CustomerMemoryUpdateRequest):
+    profile = CustomerMemoryProfile(
+        customer_name=request.customer_name,
+        active=request.active,
+        aliases=request.aliases,
+        default_commodity=request.default_commodity,
+        default_equipment_type=request.default_equipment_type,
+        price_sensitivity=request.price_sensitivity,
+        time_sensitivity=request.time_sensitivity,
+        default_pickup_city=request.default_pickup_city,
+        default_pickup_area=request.default_pickup_area,
+        default_pickup_country=request.default_pickup_country,
+        default_delivery_city=request.default_delivery_city,
+        default_delivery_country=request.default_delivery_country,
+        operational_notes=request.operational_notes,
+    )
+
+    try:
+        updated_profile = update_customer_profile(
+            customer_name=request.original_customer_name,
+            updated_profile=profile,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return {
+        "status": "updated",
+        "profile": updated_profile.model_dump(),
+    }
 
 @app.patch("/customer-memory/status")
 def update_customer_memory_status(request: CustomerMemoryStatusUpdateRequest):

@@ -74,7 +74,7 @@
     "aliases": [
       "t"
     ],
-    "default_commodity": "Testler",
+    "default_commodity": "Testler v2",
     "default_equipment_type": "Tenteli / Curtainsider",
     "price_sensitivity": "low",
     "time_sensitivity": "low",

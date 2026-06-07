@@ -309,3 +309,88 @@ def set_customer_profile_active_status(
         )
 
     return updated_profile
+
+def update_customer_profile(
+    customer_name: str,
+    updated_profile: CustomerMemoryProfile,
+) -> CustomerMemoryProfile:
+    """
+    Updates an existing customer profile in data/customer_memory.json.
+
+    Matching is done by original customer_name.
+    Customer name can also be changed, but duplicate names and aliases are protected.
+    """
+
+    customer_memory = load_customer_memory()
+    normalized_target = normalize_alias(customer_name)
+
+    profile_index = None
+
+    for index, existing_profile in enumerate(customer_memory):
+        if normalize_alias(existing_profile.customer_name) == normalized_target:
+            profile_index = index
+            break
+
+    if profile_index is None:
+        raise ValueError(f"Customer not found: {customer_name}")
+
+    new_customer_name = normalize_alias(updated_profile.customer_name)
+
+    if not new_customer_name:
+        raise ValueError("Customer name is required.")
+
+    normalized_new_aliases = [
+        normalize_alias(alias)
+        for alias in updated_profile.aliases
+        if normalize_alias(alias)
+    ]
+
+    if len(normalized_new_aliases) != len(set(normalized_new_aliases)):
+        raise ValueError("Duplicate aliases found in the customer profile.")
+
+    existing_alias_map = {}
+
+    for index, existing_profile in enumerate(customer_memory):
+        if index == profile_index:
+            continue
+
+        existing_names_and_aliases = [
+            existing_profile.customer_name,
+            *existing_profile.aliases,
+        ]
+
+        for alias in existing_names_and_aliases:
+            normalized_existing_alias = normalize_alias(alias)
+
+            if normalized_existing_alias:
+                existing_alias_map[normalized_existing_alias] = existing_profile.customer_name
+
+    if new_customer_name in existing_alias_map:
+        existing_customer = existing_alias_map[new_customer_name]
+        raise ValueError(
+            f"Customer name '{updated_profile.customer_name}' conflicts with existing customer or alias: {existing_customer}"
+        )
+
+    for alias in normalized_new_aliases:
+        if alias in existing_alias_map:
+            existing_customer = existing_alias_map[alias]
+            raise ValueError(
+                f"Alias '{alias}' already belongs to customer: {existing_customer}"
+            )
+
+    customer_memory[profile_index] = updated_profile
+
+    raw_profiles = [
+        profile.model_dump()
+        for profile in customer_memory
+    ]
+
+    with CUSTOMER_MEMORY_FILE.open("w", encoding="utf-8") as file:
+        json.dump(
+            raw_profiles,
+            file,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    return updated_profile
