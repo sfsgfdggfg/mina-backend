@@ -19,6 +19,7 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
     equipment_decision = result["equipment_decision"]
     risk_assessment = result["risk_assessment"]
     missing_info = result.get("missing_info")
+    action_recommendation = result.get("action_recommendation")
 
     actual_result_type = determine_result_type(result)
 
@@ -45,6 +46,19 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
         failures.append(
             f"risk_level expected {expected_risk_level}, got {risk_assessment.risk_level}"
         )
+    
+    expected_action_type = expected.get("action_type")
+    if expected_action_type:
+        actual_action_type = (
+            action_recommendation.action_type
+            if action_recommendation
+            else None
+        )
+
+        if actual_action_type != expected_action_type:
+            failures.append(
+                f"action_type expected {expected_action_type}, got {actual_action_type}"
+            )
     
     expected_customer_memory_matched = expected.get("customer_memory_matched")
     if expected_customer_memory_matched is not None:

@@ -14,6 +14,7 @@ Teşekkürler.
             "equipment": "Tenteli / Curtainsider",
             "service_type": "FTL",
             "risk_level": "yellow",
+            "action_type": "quote_with_review",
         },
     },
     {
@@ -32,6 +33,7 @@ Teşekkürler.
             "service_type": "FTL",
             "risk_level": "yellow",
             "missing_fields": ["machine dimensions"],
+            "action_type": "clarification",
         },
     },
     {
@@ -51,6 +53,7 @@ Yük 18.06.2026 tarihinde hazırdır.
             "equipment": "Reefer",
             "service_type": "FTL",
             "risk_level": "yellow",
+            "action_type": "quote_with_review",
         },
     },
     {
@@ -69,6 +72,7 @@ Saygılar.
             "equipment": "Special ADR Equipment",
             "service_type": "FTL",
             "risk_level": "red",
+            "action_type": "management_review",
         },
     },
     {
@@ -88,6 +92,7 @@ Teşekkürler.
             "equipment": "Tenteli / Curtainsider",
             "service_type": "LTL",
             "risk_level": "yellow",
+            "action_type": "quote_with_review",
         },
     },
     {
@@ -107,6 +112,7 @@ Teşekkürler.
             "equipment": "Mega Trailer",
             "service_type": "FTL",
             "risk_level": "yellow",
+            "action_type": "quote_with_review",
         },
     },
         {
@@ -126,6 +132,7 @@ Teşekkürler.
             "service_type": "FTL",
             "risk_level": "green",
             "customer_memory_matched": True,
+            "action_type": "quote_ready",
         },
     },
         {
@@ -146,6 +153,7 @@ Teşekkürler.
             "service_type": "FTL",
             "risk_level": "green",
             "customer_memory_matched": True,
+            "action_type": "quote_ready",
         },
     },
         {
@@ -166,6 +174,7 @@ Teşekkürler.
             "service_type": "FTL",
             "risk_level": "green",
             "customer_memory_matched": True,
+            "action_type": "quote_ready",
         },
     },
     {
@@ -186,6 +195,7 @@ Teşekkürler.
             "service_type": "FTL",
             "risk_level": "yellow",
             "customer_memory_matched": True,
+            "action_type": "quote_with_review",
         },
     },
 ]
