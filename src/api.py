@@ -29,7 +29,10 @@ def health_check():
 @app.post("/process-email")
 def process_email(request: ProcessEmailRequest):
     shipment = parse_email_with_ai(request.email_text)
-    result = process_shipment(shipment)
+    result = process_shipment(
+    shipment=shipment,
+    email_text=request.email_text,
+)
 
     return serialize_result(result)
 
@@ -40,7 +43,10 @@ def run_test_suite():
 
     for test_case in AI_EMAIL_TEST_CASES:
         shipment = parse_email_with_ai(test_case["email"])
-        result = process_shipment(shipment)
+        result = process_shipment(
+    shipment=shipment,
+    email_text=test_case["email"],
+)
 
         test_results.append(
             evaluate_test_result(

@@ -128,4 +128,24 @@ Teşekkürler.
             "customer_memory_matched": True,
         },
     },
+        {
+        "name": "Customer recognition from email content",
+        "email": """
+Merhaba,
+
+Bu taşıma Oğuz Gıda içindir.
+Adana'dan Ankara'ya içecek yükümüz için fiyat rica ederiz.
+Toplam 18 ton.
+Yük 25.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Kapalı Kasa / Box Trailer",
+            "service_type": "FTL",
+            "risk_level": "green",
+            "customer_memory_matched": True,
+        },
+    },
 ]

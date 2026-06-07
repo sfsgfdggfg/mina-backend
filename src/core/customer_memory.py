@@ -98,16 +98,41 @@ def find_customer_profile(customer_name: Optional[str]) -> Optional[CustomerMemo
 
     return None
 
+def find_customer_profile_in_text(text: Optional[str]) -> Optional[CustomerMemoryProfile]:
+    if not text:
+        return None
 
-def enrich_shipment_with_customer_memory(shipment: Shipment) -> CustomerMemoryResult:
+    normalized_text = text.lower()
+
+    for profile in CUSTOMER_MEMORY:
+        names_to_check = [profile.customer_name.lower()] + [
+            alias.lower() for alias in profile.aliases
+        ]
+
+        for name in names_to_check:
+            if name in normalized_text:
+                return profile
+
+    return None
+
+def enrich_shipment_with_customer_memory(
+    shipment: Shipment,
+    email_text: Optional[str] = None,
+) -> CustomerMemoryResult:
     """
     Customer Memory v1.
 
-    Şimdilik sadece shipment.customer_name üzerinden eşleşme yapar.
+    Eşleşme sırası:
+    1. shipment.customer_name
+    2. raw email text içinde customer alias/name arama
+
     İleride email sender, domain, signature ve historical context ile güçlenecek.
     """
 
     profile = find_customer_profile(shipment.customer_name)
+
+    if not profile and email_text:
+        profile = find_customer_profile_in_text(email_text)
 
     if not profile:
         return CustomerMemoryResult(

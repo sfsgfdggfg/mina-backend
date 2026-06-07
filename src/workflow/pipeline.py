@@ -16,8 +16,11 @@ from src.simulation.supplier_simulator import simulate_supplier_quote
 from src.core.pricing import calculate_customer_quote
 
 
-def process_shipment(shipment):
-    customer_memory = enrich_shipment_with_customer_memory(shipment)
+def process_shipment(shipment, email_text: str | None = None):
+    customer_memory = enrich_shipment_with_customer_memory(
+        shipment=shipment,
+        email_text=email_text,
+    )
 
     missing_info = check_missing_information(shipment)
     equipment_decision = decide_equipment(shipment)
@@ -100,7 +103,7 @@ def run_simulation_pipeline():
     print(email_text.strip())
 
     shipment = parse_email_to_shipment(email_text)
-    result = process_shipment(shipment)
+    result = process_shipment(shipment, email_text=email_text)
 
     print_result(result)
 
@@ -142,7 +145,7 @@ Teşekkürler.
     print(email_text.strip())
 
     shipment = parse_email_with_ai(email_text)
-    result = process_shipment(shipment)
+    result = process_shipment(shipment, email_text=email_text)
 
     print_result(result)
 
@@ -167,7 +170,7 @@ def run_ai_email_test_suite():
         print(email_text.strip())
 
         shipment = parse_email_with_ai(email_text)
-        result = process_shipment(shipment)
+        result = process_shipment(shipment, email_text=email_text)
 
         print_result(result)
 
