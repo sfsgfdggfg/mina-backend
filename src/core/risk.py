@@ -1,7 +1,7 @@
 from src.core.models import Shipment, RiskAssessment
 
 
-def assess_risk(shipment: Shipment) -> RiskAssessment:
+def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
     """
     Operational Risk Engine v1.
     """
@@ -15,10 +15,27 @@ def assess_risk(shipment: Shipment) -> RiskAssessment:
         risk_reasons.append("Yeni veya tanınmayan müşteri.")
         requires_human_review = True
 
+    # Customer sensitivity from memory
+    if customer_memory and customer_memory.matched and customer_memory.profile:
+        profile = customer_memory.profile
+
+        if profile.time_sensitivity == "high":
+            risk_reasons.append(
+                "Müşteri süre hassasiyetine sahip. Transit süre ve termin ayrıca kontrol edilmeli."
+            )
+            requires_human_review = True
+
+        if profile.price_sensitivity == "high":
+            risk_reasons.append(
+                "Müşteri fiyat hassasiyetine sahip. Piyasa fiyatı ve marj ayrıca kontrol edilmeli."
+            )
+            requires_human_review = True
+
     # ADR high-risk
     if shipment.is_adr and shipment.adr_class in ["1", "7"]:
         risk_reasons.append("Yüksek riskli ADR sınıfı.")
         requires_management_review = True
+        requires_human_review = True
 
     # Heavy / oversize
     for package in shipment.packages:

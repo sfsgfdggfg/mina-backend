@@ -24,7 +24,10 @@ def process_shipment(shipment, email_text: str | None = None):
 
     missing_info = check_missing_information(shipment)
     equipment_decision = decide_equipment(shipment)
-    risk_assessment = assess_risk(shipment)
+    risk_assessment = assess_risk(
+    shipment=shipment,
+    customer_memory=customer_memory,
+)
 
     # 1. RED risk varsa önce yönetici onayına gider
     if risk_assessment.risk_level == "red":

@@ -184,7 +184,7 @@ Teşekkürler.
             "result_type": "quote",
             "equipment": "Tenteli / Curtainsider",
             "service_type": "FTL",
-            "risk_level": "green",
+            "risk_level": "yellow",
             "customer_memory_matched": True,
         },
     },
