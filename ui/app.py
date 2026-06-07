@@ -348,6 +348,80 @@ if st.button("Process Email"):
                 st.error("API çağrısı başarısız oldu.")
                 st.code(str(error))
 
+def render_customer_memory_list():
+    st.markdown("---")
+    st.markdown("## Customer Memory Profiles")
+
+    st.write(
+        "Sistemde kayıtlı müşteri hafızası profillerini görüntüleyin."
+    )
+
+    if st.button("Refresh Customer Memory List"):
+        st.session_state["customer_memory_list_refresh"] = True
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/customer-memory",
+            timeout=30,
+        )
+
+        response.raise_for_status()
+        result = response.json()
+
+        profiles = result.get("profiles", [])
+        count = result.get("count", 0)
+
+        st.write(f"**Toplam profil:** {count}")
+
+        if not profiles:
+            st.info("Henüz müşteri hafızası profili bulunmuyor.")
+            return
+
+        for profile in profiles:
+            customer_name = profile.get("customer_name") or "-"
+
+            with st.expander(customer_name):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.write(f"**Default Commodity:** {profile.get('default_commodity') or '-'}")
+                    st.write(f"**Default Equipment:** {profile.get('default_equipment_type') or '-'}")
+                    st.write(f"**Price Sensitivity:** {profile.get('price_sensitivity') or '-'}")
+                    st.write(f"**Time Sensitivity:** {profile.get('time_sensitivity') or '-'}")
+
+                with col2:
+                    pickup_parts = [
+                        profile.get("default_pickup_area"),
+                        profile.get("default_pickup_city"),
+                        profile.get("default_pickup_country"),
+                    ]
+                    delivery_parts = [
+                        profile.get("default_delivery_city"),
+                        profile.get("default_delivery_country"),
+                    ]
+
+                    pickup = ", ".join(part for part in pickup_parts if part) or "-"
+                    delivery = ", ".join(part for part in delivery_parts if part) or "-"
+
+                    st.write(f"**Default Pickup:** {pickup}")
+                    st.write(f"**Default Delivery:** {delivery}")
+
+                aliases = profile.get("aliases") or []
+                if aliases:
+                    st.markdown("**Aliases:**")
+                    for alias in aliases:
+                        st.write(f"- {alias}")
+
+                notes = profile.get("operational_notes") or []
+                if notes:
+                    st.markdown("**Operational Notes:**")
+                    for note in notes:
+                        st.write(f"- {note}")
+
+    except requests.exceptions.RequestException as error:
+        st.error("Customer memory listesi alınamadı.")
+        st.code(str(error))
+
 def render_customer_memory_editor():
     st.markdown("---")
     st.markdown("## Customer Memory Editor")
@@ -460,4 +534,5 @@ def render_customer_memory_editor():
                 st.code(str(error))
 
 render_test_suite_runner()
+render_customer_memory_list()
 render_customer_memory_editor()
