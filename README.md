@@ -6,9 +6,12 @@ MVP kapsamı:
 
 * Müşteri emailini okur
 * Shipment bilgilerini çıkarır
+* Müşteri hafızası ile bilinen müşterileri tanır
 * Eksik bilgi kontrolü yapar
 * Araç / ekipman kararı verir
 * Operasyonel risk seviyesini belirler
+* Kararlarının nedenini açıklar
+* Sonraki operasyon aksiyonunu önerir
 * Teklif, eksik bilgi veya yönetici onayı taslağı üretir
 * FastAPI backend ve Streamlit UI ile çalışır
 
@@ -16,11 +19,14 @@ MVP kapsamı:
 
 ## Current MVP Flow
 
+```text
 Customer Email
 ↓
 AI Structured Parser
 ↓
 Normalization Layer
+↓
+Customer Memory / Customer Recognition
 ↓
 Missing Info Engine
 ↓
@@ -32,7 +38,10 @@ Workflow Gate
 ↓
 Quote / Clarification / Management Review Draft
 ↓
+Action Recommendation
+↓
 UI Result Screen
+```
 
 ---
 
@@ -52,6 +61,8 @@ src/
 │   ├── risk.py
 │   ├── missing_info.py
 │   ├── normalization.py
+│   ├── customer_memory.py
+│   ├── action_recommendation.py
 │   └── pricing.py
 │
 ├── simulation/
@@ -143,6 +154,10 @@ The UI allows you to:
 * paste custom customer emails
 * process email through MINAI
 * view operation summary
+* view customer memory match
+* view equipment decision explanation
+* view risk notes
+* view recommended action and checklist
 * view generated draft
 * run automated test suite
 
@@ -164,9 +179,13 @@ AI TEST 3: PASS
 AI TEST 4: PASS
 AI TEST 5: PASS
 AI TEST 6: PASS
+AI TEST 7: PASS
+AI TEST 8: PASS
+AI TEST 9: PASS
+AI TEST 10: PASS
 
 SUMMARY:
-6 passed, 0 failed
+10 passed, 0 failed
 ```
 
 ---
@@ -182,7 +201,7 @@ Run Test Suite
 Expected result:
 
 ```text
-6/6 passed, 0 failed
+10/10 passed, 0 failed
 ```
 
 ---
@@ -197,6 +216,116 @@ The current test suite covers:
 4. ADR Class 7
 5. Partial shipment request
 6. Machine height 2.90m
+7. Known customer Oğuz Gıda default equipment
+8. Customer recognition from email content
+9. Known customer Beta Enerji transformer
+10. Known customer Temsa time sensitive automotive
+
+---
+
+## Customer Memory
+
+MINAI can recognize known customers and enrich shipment data using customer-specific memory.
+
+Current customer memory supports:
+
+* known customer recognition
+* customer aliases
+* default commodity
+* default equipment
+* price sensitivity
+* time sensitivity
+* operational notes
+
+Example profiles:
+
+```text
+Oğuz Gıda
+→ default commodity: Meşrubat
+→ default equipment: Kapalı Kasa / Box Trailer
+
+Beta Enerji
+→ default commodity: Elektrik Transformatörü
+→ default equipment: Tenteli / Curtainsider
+
+Temsa
+→ default commodity: Otomotiv Parçası
+→ time sensitivity: high
+```
+
+Customer recognition can happen through:
+
+```text
+shipment.customer_name
+email_text
+```
+
+The UI shows:
+
+```text
+Customer Memory Match
+Source
+Matched By
+Operational Notes
+```
+
+---
+
+## Decision Explanation and Action Recommendation
+
+MINAI explains why it made important operational decisions.
+
+For equipment decisions, the system returns:
+
+```text
+selected_equipment
+reason
+confidence
+source
+explanation
+```
+
+Example:
+
+```text
+Equipment: Reefer
+Reason: Sıcaklık kontrollü yük tespit edildi.
+Explanation: Tenteli araç sıcaklık kontrolü sağlayamayacağı için Reefer seçildi.
+```
+
+MINAI also recommends the next operational action.
+
+Possible action types:
+
+```text
+quote_ready
+quote_with_review
+clarification
+management_review
+unknown
+```
+
+The UI shows:
+
+```text
+Önerilen Aksiyon
+Priority
+Action Type
+Source
+Checklist
+```
+
+Example:
+
+```text
+Action Type: clarification
+Priority: high
+Title: Müşteriden Eksik Bilgi İste
+Checklist:
+- Eksik bilgi mail taslağını kontrol et.
+- Müşteriden ölçü / ürün / adres / hazır tarih gibi kritik bilgileri iste.
+- Bilgi gelmeden fiyat paylaşma.
+```
 
 ---
 
@@ -212,6 +341,10 @@ result_type = quote
 
 MINAI generates a customer quote draft.
 
+If risk is yellow, MINAI still creates a quote draft but recommends operational review before sending.
+
+---
+
 ### Clarification
 
 If critical information is missing:
@@ -220,7 +353,9 @@ If critical information is missing:
 result_type = clarification
 ```
 
-MINAI generates a missing information email draft.
+MINAI stops quote generation and creates a missing information email draft.
+
+---
 
 ### Management Review
 
@@ -245,7 +380,7 @@ python -m src.main
 Before accepting the change, test result should be:
 
 ```text
-6 passed, 0 failed
+10 passed, 0 failed
 ```
 
 ---
@@ -284,27 +419,35 @@ Completed:
 * normalization layer
 * missing info engine
 * equipment decision engine
+* equipment decision explanations
 * risk engine
+* customer memory v1
+* customer recognition from email content
+* customer memory source tracking
+* customer sensitivity risk notes
 * clarification draft generator
 * management review gate
 * quote draft generator
+* action recommendation engine
+* action recommendation test coverage
 * automated test report
 * FastAPI backend
 * Streamlit UI
 * UI example selector
 * UI test suite runner
+* UI operation summary
+* UI action recommendation checklist
 
 ---
 
 ## Next Suggested Task
 
 ```text
-TASK-029 — Customer Memory v1
+TASK-040 — Customer Memory Data File
 ```
 
 Purpose:
 
-* known customer recognition
-* default customer products
-* default pickup/delivery locations
-* customer-specific operational rules
+* move customer memory from Python code into editable data file
+* make customer profiles easier to update
+* prepare future database migration
