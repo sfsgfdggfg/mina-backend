@@ -51,6 +51,8 @@ class EquipmentDecision(BaseModel):
     selected_equipment: str
     reason: str
     confidence: float
+    source: str = "rule_engine"
+    explanation: Optional[str] = None
 
 
 class RiskAssessment(BaseModel):

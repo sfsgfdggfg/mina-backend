@@ -132,6 +132,13 @@ def render_summary(result: dict):
 
     with col3:
         st.metric("Araç", equipment.get("selected_equipment") or "-")
+        
+    if equipment.get("explanation"):
+        st.markdown("### Ekipman Karar Açıklaması")
+        st.info(equipment.get("explanation"))
+
+    if equipment.get("source"):
+        st.write(f"**Ekipman Karar Kaynağı:** {equipment.get('source')}")
 
     st.markdown("### Temel Bilgiler")
 
