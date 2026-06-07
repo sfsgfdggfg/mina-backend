@@ -1,0 +1,56 @@
+[
+  {
+    "customer_name": "Oğuz Gıda",
+    "aliases": ["oguz gida", "oğuz gıda", "oguz", "oğuz"],
+    "default_commodity": "Meşrubat",
+    "default_equipment_type": "Kapalı Kasa / Box Trailer",
+    "price_sensitivity": "medium",
+    "time_sensitivity": "medium",
+    "default_pickup_city": "Adana",
+    "default_pickup_area": "Adana Organize Sanayi Bölgesi",
+    "default_pickup_country": "Türkiye",
+    "default_delivery_city": null,
+    "default_delivery_country": null,
+    "operational_notes": [
+      "Müşteri genellikle meşrubat taşır.",
+      "Meşrubat yüklerinde kapalı kasa tercih edilir.",
+      "Ürün ölçüleri ve yükleme düzeni genellikle standarttır."
+    ]
+  },
+  {
+    "customer_name": "Beta Enerji",
+    "aliases": ["beta enerji", "beta", "beta energy"],
+    "default_commodity": "Elektrik Transformatörü",
+    "default_equipment_type": "Tenteli / Curtainsider",
+    "price_sensitivity": "medium",
+    "time_sensitivity": "medium",
+    "default_pickup_city": null,
+    "default_pickup_area": null,
+    "default_pickup_country": "Türkiye",
+    "default_delivery_city": null,
+    "default_delivery_country": null,
+    "operational_notes": [
+      "Müşteri elektrik transformatörü üretir.",
+      "Trafo / makine yüklerinde ölçü ve ağırlık bilgisi önemlidir.",
+      "Uygun ölçülerde tenteli araçla taşınabilir."
+    ]
+  },
+  {
+    "customer_name": "Temsa",
+    "aliases": ["temsa", "temsa otomotiv"],
+    "default_commodity": "Otomotiv Parçası",
+    "default_equipment_type": "Tenteli / Curtainsider",
+    "price_sensitivity": "medium",
+    "time_sensitivity": "high",
+    "default_pickup_city": "Adana",
+    "default_pickup_area": null,
+    "default_pickup_country": "Türkiye",
+    "default_delivery_city": null,
+    "default_delivery_country": null,
+    "operational_notes": [
+      "Otomotiv müşterisi olduğu için süre hassasiyeti yüksek olabilir.",
+      "İthalat operasyonlarında süre hassasiyeti artar.",
+      "İhracat operasyonlarında fiyat hassasiyeti daha belirgin olabilir."
+    ]
+  }
+]
