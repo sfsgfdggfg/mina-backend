@@ -105,26 +105,43 @@ def render_action_recommendation(action: dict):
     if not action:
         return
 
-    st.markdown("### Önerilen Aksiyon")
+    st.markdown("## Önerilen Aksiyon")
 
-    priority = action.get("priority")
+    priority = action.get("priority") or "normal"
+    action_type = action.get("action_type") or "-"
+    title = action.get("title") or "Aksiyon"
+    message = action.get("message") or ""
 
     if priority == "high":
-        st.error(action.get("title") or "Aksiyon Gerekli")
+        st.error(title)
     elif priority == "medium":
-        st.warning(action.get("title") or "Kontrol Gerekli")
+        st.warning(title)
     else:
-        st.success(action.get("title") or "Aksiyon")
+        st.success(title)
 
-    st.write(action.get("message") or "")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Priority", priority.upper())
+
+    with col2:
+        st.metric("Action Type", action_type)
+
+    with col3:
+        st.metric("Source", action.get("source") or "-")
+
+    st.write(message)
 
     checklist = action.get("checklist") or []
     if checklist:
-        st.markdown("**Kontrol Listesi:**")
-        for item in checklist:
-            st.write(f"- {item}")
+        st.markdown("### Kontrol Listesi")
 
-    st.write(f"**Aksiyon Kaynağı:** {action.get('source') or '-'}")
+        for index, item in enumerate(checklist, start=1):
+            st.checkbox(
+                item,
+                value=False,
+                key=f"action_check_{action_type}_{index}",
+            )
 
 def render_summary(result: dict):
     shipment = result.get("shipment") or {}
