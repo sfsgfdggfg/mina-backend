@@ -43,7 +43,7 @@ CUSTOMER_MEMORY = [
     ),
     CustomerMemoryProfile(
         customer_name="Beta Enerji",
-        aliases=["beta enerji", "beta"],
+        aliases=["beta enerji", "beta", "beta energy"],
         default_commodity="Elektrik Transformatörü",
         default_equipment_type="Tenteli / Curtainsider",
         price_sensitivity="medium",

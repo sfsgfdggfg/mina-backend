@@ -148,4 +148,44 @@ Teşekkürler.
             "customer_memory_matched": True,
         },
     },
+        {
+        "name": "Known customer Beta Enerji transformer",
+        "email": """
+Merhaba,
+
+Beta Enerji için Adana'dan Stuttgart Almanya'ya elektrik transformatörü taşıması için fiyat rica ederiz.
+1 adet trafo, ölçüler 240 x 120 x 180 cm.
+Ağırlık yaklaşık 5000 kg.
+Yük 26.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Tenteli / Curtainsider",
+            "service_type": "FTL",
+            "risk_level": "green",
+            "customer_memory_matched": True,
+        },
+    },
+    {
+        "name": "Known customer Temsa time sensitive automotive",
+        "email": """
+Merhaba,
+
+Temsa için Adana'dan Münih Almanya'ya otomotiv parçası taşıması için komple araç fiyat rica ederiz.
+Toplam yaklaşık 12 ton.
+Yük 27.06.2026 tarihinde hazır olacaktır.
+Teslimat süresi bizim için önemlidir.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Tenteli / Curtainsider",
+            "service_type": "FTL",
+            "risk_level": "green",
+            "customer_memory_matched": True,
+        },
+    },
 ]
