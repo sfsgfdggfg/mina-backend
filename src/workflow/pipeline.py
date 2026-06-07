@@ -2,7 +2,7 @@ from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
 from src.simulation.test_reporter import evaluate_test_result, print_test_report
-
+from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.ai.quote_generator import generate_quote_draft
 from src.ai.clarification_generator import generate_clarification_draft
@@ -35,6 +35,14 @@ def process_shipment(shipment, email_text: str | None = None):
             shipment=shipment,
             risk_assessment=risk_assessment,
         )
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="management_review",
+        )
+        
 
         return {
             "shipment": shipment,
@@ -47,6 +55,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "quote_draft": None,
             "clarification_draft": None,
             "management_review_draft": management_review_draft,
+            "action_recommendation": action_recommendation,
         }
 
     # 2. RED değilse kritik eksik bilgi kontrol edilir
@@ -54,6 +63,13 @@ def process_shipment(shipment, email_text: str | None = None):
         clarification_draft = generate_clarification_draft(
             shipment=shipment,
             missing_info=missing_info,
+        )
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="clarification",
         )
 
         return {
@@ -67,6 +83,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "quote_draft": None,
             "clarification_draft": clarification_draft,
             "management_review_draft": None,
+            "action_recommendation": action_recommendation,
         }
 
     # 3. Her şey uygunsa quote akışı çalışır
@@ -80,6 +97,13 @@ def process_shipment(shipment, email_text: str | None = None):
         supplier_quote=supplier_quote,
         customer_quote=customer_quote,
     )
+    action_recommendation = generate_action_recommendation(
+        shipment=shipment,
+        equipment_decision=equipment_decision,
+        risk_assessment=risk_assessment,
+        missing_info=missing_info,
+        result_type="quote",
+    )
 
     return {
         "shipment": shipment,
@@ -92,6 +116,7 @@ def process_shipment(shipment, email_text: str | None = None):
         "quote_draft": quote_draft,
         "clarification_draft": None,
         "management_review_draft": None,
+        "action_recommendation": action_recommendation,
     }
 
 
@@ -202,6 +227,7 @@ def print_result(result):
     quote_draft = result.get("quote_draft")
     clarification_draft = result.get("clarification_draft")
     management_review_draft = result.get("management_review_draft")
+    action_recommendation = result.get("action_recommendation")
 
     print("\n--- SHIPMENT ---")
     print(shipment.model_dump_json(indent=2))
@@ -215,6 +241,10 @@ def print_result(result):
     if customer_memory:
         print("\n--- CUSTOMER MEMORY ---")
         print(customer_memory.model_dump_json(indent=2))
+    
+    if action_recommendation:
+        print("\n--- ACTION RECOMMENDATION ---")
+        print(action_recommendation.model_dump_json(indent=2))
 
     if risk_assessment.risk_level == "red":
         print("\n--- WORKFLOW STOPPED ---")

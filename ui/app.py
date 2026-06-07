@@ -101,12 +101,38 @@ def render_customer_memory(customer_memory: dict):
         for note in notes:
             st.write(f"- {note}")
 
+def render_action_recommendation(action: dict):
+    if not action:
+        return
+
+    st.markdown("### Önerilen Aksiyon")
+
+    priority = action.get("priority")
+
+    if priority == "high":
+        st.error(action.get("title") or "Aksiyon Gerekli")
+    elif priority == "medium":
+        st.warning(action.get("title") or "Kontrol Gerekli")
+    else:
+        st.success(action.get("title") or "Aksiyon")
+
+    st.write(action.get("message") or "")
+
+    checklist = action.get("checklist") or []
+    if checklist:
+        st.markdown("**Kontrol Listesi:**")
+        for item in checklist:
+            st.write(f"- {item}")
+
+    st.write(f"**Aksiyon Kaynağı:** {action.get('source') or '-'}")
+
 def render_summary(result: dict):
     shipment = result.get("shipment") or {}
     equipment = result.get("equipment_decision") or {}
     risk = result.get("risk_assessment") or {}
     missing = result.get("missing_info") or {}
     customer_memory = result.get("customer_memory") or {}
+    action_recommendation = result.get("action_recommendation") or {}
     result_type = result.get("result_type")
     result_label = get_result_label(result_type)
     action_text = get_action_text(result_type)
@@ -167,6 +193,7 @@ def render_summary(result: dict):
             st.write(f"- {field}")
             
     render_customer_memory(customer_memory)
+    render_action_recommendation(action_recommendation)
 
 
 def render_draft(result: dict):
