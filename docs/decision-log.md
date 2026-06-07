@@ -135,12 +135,12 @@ sıralaması takip edilecektir.
 Kod geliştirme, bilgi modelinden sonra yapılacaktır.
 
 
-DEC-019
+## DEC-019
 Customer = Company
 
 Contact Person ≠ Customer
 
-DEC-020
+## DEC-020
 Public email domainleri müşteri tanımlamada company domain olarak kullanılmaz.
 
 Örnek:
@@ -150,7 +150,7 @@ outlook.com
 yahoo.com
 icloud.com
 
-DEC-021
+## DEC-021
 
 Customer Recognition Engine
 çok katmanlı çalışacaktır.
@@ -164,7 +164,7 @@ Customer Recognition Engine
 5. Manual Assignment
 
 
-DEC-022
+## DEC-022
 
 Knowledge Capture Phase tamamlanmıştır.
 
@@ -175,7 +175,7 @@ Database Schema
 Workflow Engine
 MVP Architecture
 
-[DEC-023 REVISION]
+## [DEC-023 REVISION]
 
 Historical Pricing Intelligence MVP kapsamına dahil değildir.
 
@@ -191,13 +191,13 @@ kullanılabilir.
 
 Otomatik fiyat oluşturma amacıyla kullanılmayacaktır.
 
-DEC-024
+## DEC-024
 
 Yellow veya Red risk durumlarında sistem quote draft üretebilir ancak eğer risk "critical missing information" kaynaklıysa fiyat/teklif oluşturmaz.
 
 Bu durumda clarification email hazırlanır.
 
-DEC-025
+## DEC-025
 
 AI parser çıktıları doğrudan workflow'a verilmez.
 
@@ -211,5 +211,20 @@ Amaç:
 - FTL / full truck / komple → FTL
 
 gibi canonical değerlere çevirmektir.
+
+## DEC-026 — Customer Memory Delete Policy
+
+Customer Memory profilleri UI üzerinden fiziksel olarak silinmeyecek.
+
+Bunun yerine active/passive mantığı kullanılacak.
+
+Gerekçe:
+- Yanlışlıkla müşteri bilgisinin silinmesini önlemek
+- Geçmiş operasyon kararlarının izlenebilirliğini korumak
+- İleride audit trail / değişiklik geçmişi için daha güvenli zemin oluşturmak
+
+Kural:
+- active = true olan müşteri profilleri recognition ve enrichment süreçlerinde kullanılabilir.
+- active = false olan müşteri profilleri listede görünebilir ancak matching/enrichment için kullanılmaz.
 
 

@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 import requests
-import streamlit as st # type: ignore
+import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
@@ -70,6 +70,7 @@ def build_route_text(shipment: dict) -> str:
 
     return "Güzergah net değil"
 
+
 def render_customer_memory(customer_memory: dict):
     if not customer_memory:
         return
@@ -100,6 +101,7 @@ def render_customer_memory(customer_memory: dict):
         st.markdown("**Operational Notes:**")
         for note in notes:
             st.write(f"- {note}")
+
 
 def render_action_recommendation(action: dict):
     if not action:
@@ -143,6 +145,7 @@ def render_action_recommendation(action: dict):
                 key=f"action_check_{action_type}_{index}",
             )
 
+
 def render_summary(result: dict):
     shipment = result.get("shipment") or {}
     equipment = result.get("equipment_decision") or {}
@@ -150,6 +153,7 @@ def render_summary(result: dict):
     missing = result.get("missing_info") or {}
     customer_memory = result.get("customer_memory") or {}
     action_recommendation = result.get("action_recommendation") or {}
+
     result_type = result.get("result_type")
     result_label = get_result_label(result_type)
     action_text = get_action_text(result_type)
@@ -175,7 +179,7 @@ def render_summary(result: dict):
 
     with col3:
         st.metric("Araç", equipment.get("selected_equipment") or "-")
-        
+
     if equipment.get("explanation"):
         st.markdown("### Ekipman Karar Açıklaması")
         st.info(equipment.get("explanation"))
@@ -208,7 +212,7 @@ def render_summary(result: dict):
         st.markdown("### Eksik Bilgiler")
         for field in missing_fields:
             st.write(f"- {field}")
-            
+
     render_customer_memory(customer_memory)
     render_action_recommendation(action_recommendation)
 
@@ -249,6 +253,7 @@ def render_draft(result: dict):
 def render_debug(result: dict):
     with st.expander("Teknik JSON Detayları"):
         st.json(result)
+
 
 def render_test_suite_runner():
     st.markdown("---")
@@ -298,55 +303,6 @@ def render_test_suite_runner():
                 st.error("Test suite API çağrısı başarısız oldu.")
                 st.code(str(error))
 
-st.title("MINAI Freight OS")
-st.subheader("AI Freight Operations Assistant")
-
-st.write(
-    "Müşteri mailini yapıştırın. MINAI shipment bilgilerini çıkarır, riskleri değerlendirir ve uygun aksiyonu üretir."
-)
-
-example_options = get_example_email_options()
-
-selected_example = st.selectbox(
-    "Hazır Senaryo Seç",
-    options=list(example_options.keys()),
-)
-
-selected_email = example_options[selected_example]
-
-if selected_example == "Custom Email":
-    selected_email = ""
-
-email_text = st.text_area(
-    "Müşteri Email Metni",
-    value=selected_email,
-    height=220,
-)
-
-if st.button("Process Email"):
-    if not email_text.strip():
-        st.warning("Lütfen bir email metni girin.")
-    else:
-        with st.spinner("MINAI emaili işliyor..."):
-            try:
-                response = requests.post(
-                    f"{API_BASE_URL}/process-email",
-                    json={"email_text": email_text},
-                    timeout=60,
-                )
-
-                response.raise_for_status()
-                result = response.json()
-
-                st.success("Email işlendi.")
-
-                render_summary(result)
-                render_draft(result)
-                render_debug(result)
-
-            except requests.exceptions.RequestException as error:
-                st.error("API çağrısı başarısız oldu.")
-                st.code(str(error))
 
 def render_customer_memory_list():
     st.markdown("---")
@@ -379,11 +335,16 @@ def render_customer_memory_list():
 
         for profile in profiles:
             customer_name = profile.get("customer_name") or "-"
+            active = profile.get("active", True)
 
-            with st.expander(customer_name):
+            status_label = "ACTIVE" if active else "PASSIVE"
+            expander_title = f"{customer_name} — {status_label}"
+
+            with st.expander(expander_title):
                 col1, col2 = st.columns(2)
 
                 with col1:
+                    st.write(f"**Status:** {'Active' if active else 'Passive'}")
                     st.write(f"**Default Commodity:** {profile.get('default_commodity') or '-'}")
                     st.write(f"**Default Equipment:** {profile.get('default_equipment_type') or '-'}")
                     st.write(f"**Price Sensitivity:** {profile.get('price_sensitivity') or '-'}")
@@ -418,9 +379,35 @@ def render_customer_memory_list():
                     for note in notes:
                         st.write(f"- {note}")
 
+                target_active = not active
+                button_label = "Set Passive" if active else "Set Active"
+
+                if st.button(button_label, key=f"toggle_active_{customer_name}"):
+                    try:
+                        response = requests.patch(
+                            f"{API_BASE_URL}/customer-memory/status",
+                            json={
+                                "customer_name": customer_name,
+                                "active": target_active,
+                            },
+                            timeout=30,
+                        )
+
+                        response.raise_for_status()
+
+                        st.success(
+                            f"{customer_name} status updated to {'Active' if target_active else 'Passive'}."
+                        )
+                        st.rerun()
+
+                    except requests.exceptions.RequestException as error:
+                        st.error("Customer status güncellenemedi.")
+                        st.code(str(error))
+
     except requests.exceptions.RequestException as error:
         st.error("Customer memory listesi alınamadı.")
         st.code(str(error))
+
 
 def render_customer_memory_editor():
     st.markdown("---")
@@ -432,6 +419,7 @@ def render_customer_memory_editor():
 
     with st.expander("Yeni Müşteri Profili Ekle"):
         customer_name = st.text_input("Customer Name")
+        active = st.checkbox("Active", value=True)
 
         aliases_text = st.text_area(
             "Aliases",
@@ -504,6 +492,7 @@ def render_customer_memory_editor():
 
             payload = {
                 "customer_name": customer_name.strip(),
+                "active": active,
                 "aliases": aliases,
                 "default_commodity": default_commodity.strip() or None,
                 "default_equipment_type": default_equipment_type.strip() or None,
@@ -529,9 +518,70 @@ def render_customer_memory_editor():
 
                 st.success(f"Müşteri profili eklendi: {result['profile']['customer_name']}")
 
+            except requests.exceptions.HTTPError as error:
+                st.error("Customer memory kaydı reddedildi.")
+
+                try:
+                    error_detail = error.response.json().get("detail")
+                    st.warning(error_detail)
+                except Exception:
+                    st.code(str(error))
+
             except requests.exceptions.RequestException as error:
                 st.error("Customer memory kaydı başarısız oldu.")
                 st.code(str(error))
+
+
+st.title("MINAI Freight OS")
+st.subheader("AI Freight Operations Assistant")
+
+st.write(
+    "Müşteri mailini yapıştırın. MINAI shipment bilgilerini çıkarır, riskleri değerlendirir ve uygun aksiyonu üretir."
+)
+
+example_options = get_example_email_options()
+
+selected_example = st.selectbox(
+    "Hazır Senaryo Seç",
+    options=list(example_options.keys()),
+)
+
+selected_email = example_options[selected_example]
+
+if selected_example == "Custom Email":
+    selected_email = ""
+
+email_text = st.text_area(
+    "Müşteri Email Metni",
+    value=selected_email,
+    height=220,
+)
+
+if st.button("Process Email"):
+    if not email_text.strip():
+        st.warning("Lütfen bir email metni girin.")
+    else:
+        with st.spinner("MINAI emaili işliyor..."):
+            try:
+                response = requests.post(
+                    f"{API_BASE_URL}/process-email",
+                    json={"email_text": email_text},
+                    timeout=60,
+                )
+
+                response.raise_for_status()
+                result = response.json()
+
+                st.success("Email işlendi.")
+
+                render_summary(result)
+                render_draft(result)
+                render_debug(result)
+
+            except requests.exceptions.RequestException as error:
+                st.error("API çağrısı başarısız oldu.")
+                st.code(str(error))
+
 
 render_test_suite_runner()
 render_customer_memory_list()

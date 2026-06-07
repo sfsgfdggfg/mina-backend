@@ -10,6 +10,7 @@ CUSTOMER_MEMORY_FILE = Path("data/customer_memory.json")
 
 class CustomerMemoryProfile(BaseModel):
     customer_name: str
+    active: bool = True
     aliases: List[str] = Field(default_factory=list)
 
     default_commodity: Optional[str] = None
@@ -74,6 +75,9 @@ def find_customer_profile(customer_name: Optional[str]) -> Optional[CustomerMemo
     customer_memory = load_customer_memory()
 
     for profile in customer_memory:
+        if not profile.active:
+            continue
+
         names_to_check = [profile.customer_name.lower()] + [
             alias.lower() for alias in profile.aliases
         ]
@@ -268,3 +272,40 @@ def save_customer_profile(profile: CustomerMemoryProfile) -> CustomerMemoryProfi
         )
 
     return profile
+
+def set_customer_profile_active_status(
+    customer_name: str,
+    active: bool,
+) -> CustomerMemoryProfile:
+    """
+    Updates active/passive status for a customer profile.
+    """
+
+    customer_memory = load_customer_memory()
+    normalized_target = normalize_alias(customer_name)
+
+    updated_profile = None
+
+    for profile in customer_memory:
+        if normalize_alias(profile.customer_name) == normalized_target:
+            profile.active = active
+            updated_profile = profile
+            break
+
+    if not updated_profile:
+        raise ValueError(f"Customer not found: {customer_name}")
+
+    raw_profiles = [
+        profile.model_dump()
+        for profile in customer_memory
+    ]
+
+    with CUSTOMER_MEMORY_FILE.open("w", encoding="utf-8") as file:
+        json.dump(
+            raw_profiles,
+            file,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    return updated_profile

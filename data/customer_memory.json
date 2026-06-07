@@ -1,6 +1,7 @@
 [
   {
     "customer_name": "Oğuz Gıda",
+    "active": true,
     "aliases": [
       "oguz gida",
       "oğuz gıda",
@@ -24,6 +25,7 @@
   },
   {
     "customer_name": "Beta Enerji",
+    "active": true,
     "aliases": [
       "beta enerji",
       "beta",
@@ -46,6 +48,7 @@
   },
   {
     "customer_name": "Temsa",
+    "active": true,
     "aliases": [
       "temsa",
       "temsa otomotiv"
@@ -63,6 +66,25 @@
       "Otomotiv müşterisi olduğu için süre hassasiyeti yüksek olabilir.",
       "İthalat operasyonlarında süre hassasiyeti artar.",
       "İhracat operasyonlarında fiyat hassasiyeti daha belirgin olabilir."
+    ]
+  },
+  {
+    "customer_name": "Test",
+    "active": false,
+    "aliases": [
+      "t"
+    ],
+    "default_commodity": "Testler",
+    "default_equipment_type": "Tenteli / Curtainsider",
+    "price_sensitivity": "low",
+    "time_sensitivity": "low",
+    "default_pickup_city": "Adana",
+    "default_pickup_area": null,
+    "default_pickup_country": "Türkiye",
+    "default_delivery_city": "Mersin",
+    "default_delivery_country": "Türkiye",
+    "operational_notes": [
+      "Test"
     ]
   }
 ]
