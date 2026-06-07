@@ -70,6 +70,34 @@ def build_route_text(shipment: dict) -> str:
 
     return "Güzergah net değil"
 
+def render_customer_memory(customer_memory: dict):
+    if not customer_memory:
+        return
+
+    if not customer_memory.get("matched"):
+        return
+
+    profile = customer_memory.get("profile") or {}
+    notes = customer_memory.get("notes_applied") or []
+
+    st.markdown("### Customer Memory")
+
+    st.success(f"Customer Memory Match: {profile.get('customer_name', '-')}")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write(f"**Default Commodity:** {profile.get('default_commodity') or '-'}")
+        st.write(f"**Default Equipment:** {profile.get('default_equipment_type') or '-'}")
+
+    with col2:
+        st.write(f"**Price Sensitivity:** {profile.get('price_sensitivity') or '-'}")
+        st.write(f"**Time Sensitivity:** {profile.get('time_sensitivity') or '-'}")
+
+    if notes:
+        st.markdown("**Operational Notes:**")
+        for note in notes:
+            st.write(f"- {note}")
 
 def render_summary(result: dict):
     shipment = result.get("shipment") or {}
@@ -128,15 +156,8 @@ def render_summary(result: dict):
         st.markdown("### Eksik Bilgiler")
         for field in missing_fields:
             st.write(f"- {field}")
-    
-    
-    if customer_memory.get("matched"):
-        st.markdown("### Customer Memory")
-        st.success("Müşteri hafızası eşleşti.")
-
-        notes = customer_memory.get("notes_applied") or []
-        for note in notes:
-            st.write(f"- {note}")
+            
+    render_customer_memory(customer_memory)
 
 
 def render_draft(result: dict):
