@@ -1,7 +1,12 @@
 [
   {
     "customer_name": "Oğuz Gıda",
-    "aliases": ["oguz gida", "oğuz gıda", "oguz", "oğuz"],
+    "aliases": [
+      "oguz gida",
+      "oğuz gıda",
+      "oguz",
+      "oğuz"
+    ],
     "default_commodity": "Meşrubat",
     "default_equipment_type": "Kapalı Kasa / Box Trailer",
     "price_sensitivity": "medium",
@@ -19,7 +24,11 @@
   },
   {
     "customer_name": "Beta Enerji",
-    "aliases": ["beta enerji", "beta", "beta energy"],
+    "aliases": [
+      "beta enerji",
+      "beta",
+      "beta energy"
+    ],
     "default_commodity": "Elektrik Transformatörü",
     "default_equipment_type": "Tenteli / Curtainsider",
     "price_sensitivity": "medium",
@@ -37,7 +46,10 @@
   },
   {
     "customer_name": "Temsa",
-    "aliases": ["temsa", "temsa otomotiv"],
+    "aliases": [
+      "temsa",
+      "temsa otomotiv"
+    ],
     "default_commodity": "Otomotiv Parçası",
     "default_equipment_type": "Tenteli / Curtainsider",
     "price_sensitivity": "medium",

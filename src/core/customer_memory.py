@@ -194,3 +194,36 @@ def enrich_shipment_with_customer_memory(
         source="customer_memory",
         matched_by=matched_by,
     )
+
+def save_customer_profile(profile: CustomerMemoryProfile) -> CustomerMemoryProfile:
+    """
+    Adds a new customer profile to data/customer_memory.json.
+    If customer already exists by exact customer_name, it raises ValueError.
+    """
+
+    customer_memory = load_customer_memory()
+
+    existing_names = [
+        existing_profile.customer_name.strip().lower()
+        for existing_profile in customer_memory
+    ]
+
+    if profile.customer_name.strip().lower() in existing_names:
+        raise ValueError(f"Customer already exists: {profile.customer_name}")
+
+    customer_memory.append(profile)
+
+    raw_profiles = [
+        existing_profile.model_dump()
+        for existing_profile in customer_memory
+    ]
+
+    with CUSTOMER_MEMORY_FILE.open("w", encoding="utf-8") as file:
+        json.dump(
+            raw_profiles,
+            file,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    return profile

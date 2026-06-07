@@ -347,4 +347,117 @@ if st.button("Process Email"):
             except requests.exceptions.RequestException as error:
                 st.error("API çağrısı başarısız oldu.")
                 st.code(str(error))
+
+def render_customer_memory_editor():
+    st.markdown("---")
+    st.markdown("## Customer Memory Editor")
+
+    st.write(
+        "Yeni müşteri hafızası profili eklemek için bu formu kullanın."
+    )
+
+    with st.expander("Yeni Müşteri Profili Ekle"):
+        customer_name = st.text_input("Customer Name")
+
+        aliases_text = st.text_area(
+            "Aliases",
+            placeholder="Her satıra bir alias yazın. Örn:\noguz gida\noğuz gıda",
+            height=100,
+        )
+
+        default_commodity = st.text_input("Default Commodity")
+        default_equipment_type = st.text_input("Default Equipment Type")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            price_sensitivity = st.selectbox(
+                "Price Sensitivity",
+                options=["", "low", "medium", "high"],
+            )
+
+        with col2:
+            time_sensitivity = st.selectbox(
+                "Time Sensitivity",
+                options=["", "low", "medium", "high"],
+            )
+
+        st.markdown("### Default Pickup")
+
+        pickup_col1, pickup_col2, pickup_col3 = st.columns(3)
+
+        with pickup_col1:
+            default_pickup_city = st.text_input("Default Pickup City")
+
+        with pickup_col2:
+            default_pickup_area = st.text_input("Default Pickup Area")
+
+        with pickup_col3:
+            default_pickup_country = st.text_input("Default Pickup Country")
+
+        st.markdown("### Default Delivery")
+
+        delivery_col1, delivery_col2 = st.columns(2)
+
+        with delivery_col1:
+            default_delivery_city = st.text_input("Default Delivery City")
+
+        with delivery_col2:
+            default_delivery_country = st.text_input("Default Delivery Country")
+
+        operational_notes_text = st.text_area(
+            "Operational Notes",
+            placeholder="Her satıra bir operasyon notu yazın.",
+            height=120,
+        )
+
+        if st.button("Save Customer Profile"):
+            if not customer_name.strip():
+                st.warning("Customer Name zorunludur.")
+                return
+
+            aliases = [
+                line.strip()
+                for line in aliases_text.splitlines()
+                if line.strip()
+            ]
+
+            operational_notes = [
+                line.strip()
+                for line in operational_notes_text.splitlines()
+                if line.strip()
+            ]
+
+            payload = {
+                "customer_name": customer_name.strip(),
+                "aliases": aliases,
+                "default_commodity": default_commodity.strip() or None,
+                "default_equipment_type": default_equipment_type.strip() or None,
+                "price_sensitivity": price_sensitivity or None,
+                "time_sensitivity": time_sensitivity or None,
+                "default_pickup_city": default_pickup_city.strip() or None,
+                "default_pickup_area": default_pickup_area.strip() or None,
+                "default_pickup_country": default_pickup_country.strip() or None,
+                "default_delivery_city": default_delivery_city.strip() or None,
+                "default_delivery_country": default_delivery_country.strip() or None,
+                "operational_notes": operational_notes,
+            }
+
+            try:
+                response = requests.post(
+                    f"{API_BASE_URL}/customer-memory",
+                    json=payload,
+                    timeout=30,
+                )
+
+                response.raise_for_status()
+                result = response.json()
+
+                st.success(f"Müşteri profili eklendi: {result['profile']['customer_name']}")
+
+            except requests.exceptions.RequestException as error:
+                st.error("Customer memory kaydı başarısız oldu.")
+                st.code(str(error))
+
 render_test_suite_runner()
+render_customer_memory_editor()

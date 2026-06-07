@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-
+from typing import List, Optional
+from src.core.customer_memory import (
+    CustomerMemoryProfile,
+    load_customer_memory,
+    save_customer_profile,
+)
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
@@ -17,6 +22,61 @@ app = FastAPI(
 class ProcessEmailRequest(BaseModel):
     email_text: str
 
+class CustomerMemoryCreateRequest(BaseModel):
+    customer_name: str
+    aliases: List[str] = []
+
+    default_commodity: Optional[str] = None
+    default_equipment_type: Optional[str] = None
+
+    price_sensitivity: Optional[str] = None
+    time_sensitivity: Optional[str] = None
+
+    default_pickup_city: Optional[str] = None
+    default_pickup_area: Optional[str] = None
+    default_pickup_country: Optional[str] = None
+
+    default_delivery_city: Optional[str] = None
+    default_delivery_country: Optional[str] = None
+
+    operational_notes: List[str] = []
+
+@app.get("/customer-memory")
+def get_customer_memory():
+    profiles = load_customer_memory()
+
+    return {
+        "count": len(profiles),
+        "profiles": [
+            profile.model_dump()
+            for profile in profiles
+        ],
+    }
+
+
+@app.post("/customer-memory")
+def create_customer_memory_profile(request: CustomerMemoryCreateRequest):
+    profile = CustomerMemoryProfile(
+        customer_name=request.customer_name,
+        aliases=request.aliases,
+        default_commodity=request.default_commodity,
+        default_equipment_type=request.default_equipment_type,
+        price_sensitivity=request.price_sensitivity,
+        time_sensitivity=request.time_sensitivity,
+        default_pickup_city=request.default_pickup_city,
+        default_pickup_area=request.default_pickup_area,
+        default_pickup_country=request.default_pickup_country,
+        default_delivery_city=request.default_delivery_city,
+        default_delivery_country=request.default_delivery_country,
+        operational_notes=request.operational_notes,
+    )
+
+    saved_profile = save_customer_profile(profile)
+
+    return {
+        "status": "created",
+        "profile": saved_profile.model_dump(),
+    }
 
 @app.get("/health")
 def health_check():
