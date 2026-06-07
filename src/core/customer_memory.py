@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List
-
 from src.core.models import Shipment
 
 
@@ -195,21 +194,63 @@ def enrich_shipment_with_customer_memory(
         matched_by=matched_by,
     )
 
+def normalize_alias(value: str) -> str:
+    return value.strip().lower()
+
 def save_customer_profile(profile: CustomerMemoryProfile) -> CustomerMemoryProfile:
     """
     Adds a new customer profile to data/customer_memory.json.
-    If customer already exists by exact customer_name, it raises ValueError.
+
+    Protection rules:
+    - customer_name cannot already exist
+    - aliases cannot duplicate within the same profile
+    - aliases cannot already belong to another customer
     """
 
     customer_memory = load_customer_memory()
 
-    existing_names = [
-        existing_profile.customer_name.strip().lower()
+    new_customer_name = normalize_alias(profile.customer_name)
+
+    if not new_customer_name:
+        raise ValueError("Customer name is required.")
+
+    existing_customer_names = [
+        normalize_alias(existing_profile.customer_name)
         for existing_profile in customer_memory
     ]
 
-    if profile.customer_name.strip().lower() in existing_names:
+    if new_customer_name in existing_customer_names:
         raise ValueError(f"Customer already exists: {profile.customer_name}")
+
+    normalized_new_aliases = [
+        normalize_alias(alias)
+        for alias in profile.aliases
+        if normalize_alias(alias)
+    ]
+
+    if len(normalized_new_aliases) != len(set(normalized_new_aliases)):
+        raise ValueError("Duplicate aliases found in the new customer profile.")
+
+    existing_alias_map = {}
+
+    for existing_profile in customer_memory:
+        existing_names_and_aliases = [
+            existing_profile.customer_name,
+            *existing_profile.aliases,
+        ]
+
+        for alias in existing_names_and_aliases:
+            normalized_existing_alias = normalize_alias(alias)
+
+            if normalized_existing_alias:
+                existing_alias_map[normalized_existing_alias] = existing_profile.customer_name
+
+    for alias in normalized_new_aliases:
+        if alias in existing_alias_map:
+            existing_customer = existing_alias_map[alias]
+            raise ValueError(
+                f"Alias '{alias}' already belongs to customer: {existing_customer}"
+            )
 
     customer_memory.append(profile)
 

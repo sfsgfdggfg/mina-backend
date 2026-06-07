@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from src.core.customer_memory import (
@@ -71,7 +71,13 @@ def create_customer_memory_profile(request: CustomerMemoryCreateRequest):
         operational_notes=request.operational_notes,
     )
 
-    saved_profile = save_customer_profile(profile)
+    try:
+        saved_profile = save_customer_profile(profile)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
 
     return {
         "status": "created",
