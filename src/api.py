@@ -42,6 +42,9 @@ class CustomerMemoryCreateRequest(BaseModel):
     default_delivery_city: Optional[str] = None
     default_delivery_country: Optional[str] = None
 
+    last_updated_by: Optional[str] = "ui"
+    change_note: Optional[str] = "Customer profile created from UI."
+
     operational_notes: List[str] = []
 
 class CustomerMemoryUpdateRequest(BaseModel):
@@ -62,6 +65,9 @@ class CustomerMemoryUpdateRequest(BaseModel):
 
     default_delivery_city: Optional[str] = None
     default_delivery_country: Optional[str] = None
+
+    last_updated_by: Optional[str] = "ui"
+    change_note: Optional[str] = "Customer profile updated from UI."
 
     operational_notes: List[str] = []
 
@@ -85,6 +91,8 @@ def update_customer_memory_profile(request: CustomerMemoryUpdateRequest):
         default_delivery_city=request.default_delivery_city,
         default_delivery_country=request.default_delivery_country,
         operational_notes=request.operational_notes,
+        last_updated_by=request.last_updated_by,
+        change_note=request.change_note,
     )
 
     try:
@@ -150,6 +158,8 @@ def create_customer_memory_profile(request: CustomerMemoryCreateRequest):
         default_delivery_city=request.default_delivery_city,
         default_delivery_country=request.default_delivery_country,
         operational_notes=request.operational_notes,
+        last_updated_by=request.last_updated_by,
+        change_note=request.change_note,
     )
 
     try:

@@ -5,6 +5,51 @@ from src.core.normalization import normalize_shipment
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.core.models import Shipment, Package
 
+GENERIC_CUSTOMER_NAMES = {
+    "",
+    "-",
+    "/",
+    ".",
+    ",",
+    "unknown",
+    "unknown customer",
+    "none",
+    "null",
+    "müşteri",
+    "firma",
+    "şirket",
+    "customer",
+    "company",
+    "client",
+    "sender",
+    "gönderen",
+    "Test",
+}
+
+
+def clean_customer_name(customer_name: str | None, email_text: str) -> str:
+    """
+    AI parser bazen müşteri adı yokken generic/hayali değer döndürebilir.
+    Bu fonksiyon müşteri adını deterministik olarak güvenli hale getirir.
+
+    Kural:
+    - Boş/generic değerler Unknown Customer olur.
+    - Customer name email içinde açıkça geçmiyorsa ve çok genel görünüyorsa Unknown Customer olur.
+    """
+
+    if not customer_name:
+        return "Unknown Customer"
+
+    cleaned = customer_name.strip()
+
+    if cleaned.lower() in GENERIC_CUSTOMER_NAMES:
+        return "Unknown Customer"
+
+    # Çok kısa ve anlamsız değerleri müşteri adı sayma
+    if len(cleaned) <= 2:
+        return "Unknown Customer"
+
+    return cleaned
 
 class ExtractedPackage(BaseModel):
     package_type: str = Field(default="unknown", description="Package type such as pallet, crate, machine, roll, loose")
@@ -135,7 +180,10 @@ def parse_email_with_ai(email_text: str) -> Shipment:
         for p in extracted.packages
     ]
     shipment = Shipment(
-        customer_name=extracted.customer_name.strip() if extracted.customer_name and extracted.customer_name.strip() else "Unknown Customer",
+        customer_name=clean_customer_name(
+            customer_name=extracted.customer_name,
+            email_text=email_text,
+        ),
         pickup_country=extracted.pickup_country,
         pickup_city=extracted.pickup_city,
         pickup_area=extracted.pickup_area,

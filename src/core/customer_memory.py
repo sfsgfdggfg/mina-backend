@@ -3,6 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from src.core.models import Shipment
+from datetime import datetime, timezone
 
 
 CUSTOMER_MEMORY_FILE = Path("data/customer_memory.json")
@@ -26,6 +27,11 @@ class CustomerMemoryProfile(BaseModel):
     default_delivery_city: Optional[str] = None
     default_delivery_country: Optional[str] = None
 
+    created_at: Optional[str] = None
+    last_updated_at: Optional[str] = None
+    last_updated_by: Optional[str] = None
+    change_note: Optional[str] = None
+
     operational_notes: List[str] = Field(default_factory=list)
 
 
@@ -36,6 +42,8 @@ class CustomerMemoryResult(BaseModel):
     source: str = "customer_memory"
     matched_by: Optional[str] = None
 
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 def load_customer_memory() -> List[CustomerMemoryProfile]:
     """
@@ -60,7 +68,28 @@ def normalize_lookup_text(value: Optional[str]) -> Optional[str]:
 
     cleaned = value.strip().lower()
 
-    if cleaned in ["", "unknown customer", "none", "null"]:
+    invalid_lookup_values = {
+        "",
+        "-",
+        "/",
+        ".",
+        ",",
+        "unknown customer",
+        "unknown",
+        "none",
+        "null",
+        "müşteri",
+        "firma",
+        "şirket",
+        "customer",
+        "company",
+        "client",
+        "sender",
+        "gönderen",
+        "test",
+    }
+
+    if cleaned in invalid_lookup_values:
         return None
 
     return cleaned
@@ -78,8 +107,17 @@ def find_customer_profile(customer_name: Optional[str]) -> Optional[CustomerMemo
         if not profile.active:
             continue
 
-        names_to_check = [profile.customer_name.lower()] + [
-            alias.lower() for alias in profile.aliases
+        names_to_check = [
+            normalize_lookup_text(profile.customer_name),
+            *[
+                normalize_lookup_text(alias)
+                for alias in profile.aliases
+            ],
+        ]
+
+        names_to_check = [
+            name for name in names_to_check
+            if name
         ]
 
         if normalized_name in names_to_check:
@@ -96,8 +134,17 @@ def find_customer_profile_in_text(text: Optional[str]) -> Optional[CustomerMemor
     customer_memory = load_customer_memory()
 
     for profile in customer_memory:
-        names_to_check = [profile.customer_name.lower()] + [
-            alias.lower() for alias in profile.aliases
+        names_to_check = [
+            normalize_lookup_text(profile.customer_name),
+            *[
+                normalize_lookup_text(alias)
+                for alias in profile.aliases
+            ],
+        ]
+
+        names_to_check = [
+            name for name in names_to_check
+            if name
         ]
 
         for name in names_to_check:
@@ -256,6 +303,13 @@ def save_customer_profile(profile: CustomerMemoryProfile) -> CustomerMemoryProfi
                 f"Alias '{alias}' already belongs to customer: {existing_customer}"
             )
 
+    timestamp = now_iso()
+
+    profile.created_at = profile.created_at or timestamp
+    profile.last_updated_at = timestamp
+    profile.last_updated_by = profile.last_updated_by or "ui"
+    profile.change_note = profile.change_note or "Customer profile created."
+
     customer_memory.append(profile)
 
     raw_profiles = [
@@ -289,6 +343,13 @@ def set_customer_profile_active_status(
     for profile in customer_memory:
         if normalize_alias(profile.customer_name) == normalized_target:
             profile.active = active
+            profile.last_updated_at = now_iso()
+            profile.last_updated_by = "ui"
+            profile.change_note = (
+                "Customer profile activated."
+                if active
+                else "Customer profile set to passive."
+            )
             updated_profile = profile
             break
 
@@ -377,6 +438,13 @@ def update_customer_profile(
             raise ValueError(
                 f"Alias '{alias}' already belongs to customer: {existing_customer}"
             )
+
+    existing_profile = customer_memory[profile_index]
+
+    updated_profile.created_at = existing_profile.created_at or now_iso()
+    updated_profile.last_updated_at = now_iso()
+    updated_profile.last_updated_by = updated_profile.last_updated_by or "ui"
+    updated_profile.change_note = updated_profile.change_note or "Customer profile updated."
 
     customer_memory[profile_index] = updated_profile
 

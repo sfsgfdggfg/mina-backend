@@ -414,6 +414,11 @@ def render_customer_memory_edit_form(profile: dict):
             height=120,
             key=f"edit_notes_{customer_name}",
         )
+        edited_change_note = st.text_input(
+            "Edit Change Note",
+            value="Customer profile updated from UI.",
+            key=f"edit_change_note_{customer_name}",
+        )
 
         if st.button("Update Customer Profile", key=f"update_customer_{customer_name}"):
             if not edited_customer_name.strip():
@@ -446,6 +451,8 @@ def render_customer_memory_edit_form(profile: dict):
                 "default_pickup_country": edited_default_pickup_country.strip() or None,
                 "default_delivery_city": edited_default_delivery_city.strip() or None,
                 "default_delivery_country": edited_default_delivery_country.strip() or None,
+                "last_updated_by": "ui",
+                "change_note": edited_change_note.strip() or "Customer profile updated from UI.",
                 "operational_notes": operational_notes,
             }
 
@@ -551,6 +558,12 @@ def render_customer_memory_list():
                     st.markdown("**Operational Notes:**")
                     for note in notes:
                         st.write(f"- {note}")
+                        
+                st.markdown("**Audit:**")
+                st.write(f"- Created At: {profile.get('created_at') or '-'}")
+                st.write(f"- Last Updated At: {profile.get('last_updated_at') or '-'}")
+                st.write(f"- Last Updated By: {profile.get('last_updated_by') or '-'}")
+                st.write(f"- Change Note: {profile.get('change_note') or '-'}")
 
                 target_active = not active
                 render_customer_memory_edit_form(profile)
@@ -664,6 +677,11 @@ def render_customer_memory_editor():
                 if line.strip()
             ]
 
+            change_note = st.text_input(
+                "Change Note",
+                value="Customer profile created from UI.",
+            )
+
             payload = {
                 "customer_name": customer_name.strip(),
                 "active": active,
@@ -677,6 +695,8 @@ def render_customer_memory_editor():
                 "default_pickup_country": default_pickup_country.strip() or None,
                 "default_delivery_city": default_delivery_city.strip() or None,
                 "default_delivery_country": default_delivery_country.strip() or None,
+                "last_updated_by": "ui",
+                "change_note": change_note.strip() or "Customer profile created from UI.",
                 "operational_notes": operational_notes,
             }
 

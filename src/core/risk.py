@@ -11,7 +11,21 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
     requires_management_review = False
 
     # New/unknown customer
-    if shipment.customer_name == "Unknown Customer":
+    unknown_customer_values = {
+        "",
+        "unknown customer",
+        "unknown",
+        "none",
+        "null",
+        "müşteri",
+        "customer",
+        "-",
+        "/",
+    }
+
+    customer_name = (shipment.customer_name or "").strip().lower()
+
+    if customer_name in unknown_customer_values:
         risk_reasons.append("Yeni veya tanınmayan müşteri.")
         requires_human_review = True
 
