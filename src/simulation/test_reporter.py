@@ -45,6 +45,16 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
         failures.append(
             f"risk_level expected {expected_risk_level}, got {risk_assessment.risk_level}"
         )
+    
+    expected_customer_memory_matched = expected.get("customer_memory_matched")
+    if expected_customer_memory_matched is not None:
+        customer_memory = result.get("customer_memory")
+        actual_matched = customer_memory.matched if customer_memory else False
+
+        if actual_matched != expected_customer_memory_matched:
+            failures.append(
+                f"customer_memory_matched expected {expected_customer_memory_matched}, got {actual_matched}"
+            )
 
     expected_missing_fields = expected.get("missing_fields")
     if expected_missing_fields:

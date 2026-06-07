@@ -2,11 +2,13 @@ from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
 from src.simulation.test_reporter import evaluate_test_result, print_test_report
+
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.ai.quote_generator import generate_quote_draft
 from src.ai.clarification_generator import generate_clarification_draft
 from src.ai.approval_generator import generate_management_review_draft
 
+from src.core.customer_memory import enrich_shipment_with_customer_memory
 from src.core.equipment import decide_equipment
 from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
@@ -15,6 +17,8 @@ from src.core.pricing import calculate_customer_quote
 
 
 def process_shipment(shipment):
+    customer_memory = enrich_shipment_with_customer_memory(shipment)
+
     missing_info = check_missing_information(shipment)
     equipment_decision = decide_equipment(shipment)
     risk_assessment = assess_risk(shipment)
@@ -28,6 +32,7 @@ def process_shipment(shipment):
 
         return {
             "shipment": shipment,
+            "customer_memory": customer_memory,
             "missing_info": missing_info,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
@@ -47,6 +52,7 @@ def process_shipment(shipment):
 
         return {
             "shipment": shipment,
+            "customer_memory": customer_memory,
             "missing_info": missing_info,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
@@ -71,6 +77,7 @@ def process_shipment(shipment):
 
     return {
         "shipment": shipment,
+        "customer_memory": customer_memory,
         "missing_info": missing_info,
         "equipment_decision": equipment_decision,
         "risk_assessment": risk_assessment,
@@ -173,12 +180,14 @@ def run_ai_email_test_suite():
 
     print_test_report(test_results)
 
+
 def print_result(result):
     if result is None:
         print("\nERROR: process_shipment None döndürdü.")
         return
 
     shipment = result["shipment"]
+    customer_memory = result.get("customer_memory")
     missing_info = result.get("missing_info")
     equipment_decision = result["equipment_decision"]
     risk_assessment = result["risk_assessment"]
@@ -196,6 +205,10 @@ def print_result(result):
 
     print("\n--- RISK ASSESSMENT ---")
     print(risk_assessment.model_dump_json(indent=2))
+
+    if customer_memory:
+        print("\n--- CUSTOMER MEMORY ---")
+        print(customer_memory.model_dump_json(indent=2))
 
     if risk_assessment.risk_level == "red":
         print("\n--- WORKFLOW STOPPED ---")

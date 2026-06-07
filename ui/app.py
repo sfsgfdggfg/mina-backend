@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 import requests
-import streamlit as st
+import streamlit as st # type: ignore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
@@ -76,7 +76,7 @@ def render_summary(result: dict):
     equipment = result.get("equipment_decision") or {}
     risk = result.get("risk_assessment") or {}
     missing = result.get("missing_info") or {}
-
+    customer_memory = result.get("customer_memory") or {}
     result_type = result.get("result_type")
     result_label = get_result_label(result_type)
     action_text = get_action_text(result_type)
@@ -128,6 +128,15 @@ def render_summary(result: dict):
         st.markdown("### Eksik Bilgiler")
         for field in missing_fields:
             st.write(f"- {field}")
+    
+    
+    if customer_memory.get("matched"):
+        st.markdown("### Customer Memory")
+        st.success("Müşteri hafızası eşleşti.")
+
+        notes = customer_memory.get("notes_applied") or []
+        for note in notes:
+            st.write(f"- {note}")
 
 
 def render_draft(result: dict):

@@ -61,6 +61,14 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
             reason="Yüksek değerli yük için kapalı kasa önerilir.",
             confidence=0.75,
         )
+    
+    # Customer memory / explicit equipment preference
+    if shipment.equipment_type:
+        return EquipmentDecision(
+            selected_equipment=shipment.equipment_type,
+            reason="Ekipman tipi müşteri hafızası veya müşteri talebi üzerinden belirlendi.",
+            confidence=0.85,
+        )
 
     # Default
     return EquipmentDecision(

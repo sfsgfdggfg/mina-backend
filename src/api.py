@@ -72,6 +72,7 @@ def serialize_result(result: dict) -> dict:
     quote_draft = result.get("quote_draft")
     clarification_draft = result.get("clarification_draft")
     management_review_draft = result.get("management_review_draft")
+    customer_memory = result.get("customer_memory")
 
     return {
         "shipment": shipment.model_dump() if shipment else None,
@@ -83,6 +84,7 @@ def serialize_result(result: dict) -> dict:
         "quote_draft": quote_draft.model_dump() if quote_draft else None,
         "clarification_draft": clarification_draft.model_dump() if clarification_draft else None,
         "management_review_draft": management_review_draft.model_dump() if management_review_draft else None,
+        "customer_memory": customer_memory.model_dump() if customer_memory else None,
         "result_type": determine_result_type(result),
     }
 

@@ -109,4 +109,23 @@ Teşekkürler.
             "risk_level": "yellow",
         },
     },
+        {
+        "name": "Known customer Oğuz Gıda default equipment",
+        "email": """
+Merhaba,
+
+Oğuz Gıda için Adana'dan İstanbul'a içecek yükümüz için fiyat rica ederiz.
+Yük 24.06.2026 tarihinde hazır olacaktır.
+Toplam yaklaşık 18 ton.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Kapalı Kasa / Box Trailer",
+            "service_type": "FTL",
+            "risk_level": "green",
+            "customer_memory_matched": True,
+        },
+    },
 ]
