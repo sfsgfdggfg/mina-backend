@@ -167,6 +167,53 @@ def render_debug(result: dict):
     with st.expander("Teknik JSON Detayları"):
         st.json(result)
 
+def render_test_suite_runner():
+    st.markdown("---")
+    st.markdown("## Test Suite")
+
+    st.write(
+        "MINAI'nin temel senaryolarda doğru çalışıp çalışmadığını kontrol eder."
+    )
+
+    if st.button("Run Test Suite"):
+        with st.spinner("Test suite çalışıyor..."):
+            try:
+                response = requests.get(
+                    f"{API_BASE_URL}/run-test-suite",
+                    timeout=120,
+                )
+
+                response.raise_for_status()
+                report = response.json()
+
+                summary = report.get("summary", {})
+                results = report.get("results", [])
+
+                passed = summary.get("passed", 0)
+                failed = summary.get("failed", 0)
+                total = summary.get("total", 0)
+
+                if failed == 0:
+                    st.success(f"Test sonucu: {passed}/{total} passed, {failed} failed")
+                else:
+                    st.error(f"Test sonucu: {passed}/{total} passed, {failed} failed")
+
+                for index, test_result in enumerate(results, start=1):
+                    status = "PASS" if test_result.get("passed") else "FAIL"
+                    name = test_result.get("name")
+
+                    if test_result.get("passed"):
+                        st.write(f"✅ AI TEST {index}: {status} - {name}")
+                    else:
+                        st.write(f"❌ AI TEST {index}: {status} - {name}")
+
+                        failures = test_result.get("failures") or []
+                        for failure in failures:
+                            st.write(f"   - {failure}")
+
+            except requests.exceptions.RequestException as error:
+                st.error("Test suite API çağrısı başarısız oldu.")
+                st.code(str(error))
 
 st.title("MINAI Freight OS")
 st.subheader("AI Freight Operations Assistant")
@@ -217,3 +264,4 @@ if st.button("Process Email"):
             except requests.exceptions.RequestException as error:
                 st.error("API çağrısı başarısız oldu.")
                 st.code(str(error))
+render_test_suite_runner()
