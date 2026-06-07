@@ -21,13 +21,13 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
 
         if profile.time_sensitivity == "high":
             risk_reasons.append(
-                "Müşteri süre hassasiyetine sahip. Transit süre ve termin ayrıca kontrol edilmeli."
+                "[Customer Memory → Risk Engine] Müşteri süre hassasiyetine sahip. Transit süre ve termin ayrıca kontrol edilmeli."
             )
             requires_human_review = True
 
         if profile.price_sensitivity == "high":
             risk_reasons.append(
-                "Müşteri fiyat hassasiyetine sahip. Piyasa fiyatı ve marj ayrıca kontrol edilmeli."
+                "[Customer Memory → Risk Engine] Müşteri fiyat hassasiyetine sahip. Piyasa fiyatı ve marj ayrıca kontrol edilmeli."
             )
             requires_human_review = True
 

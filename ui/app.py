@@ -83,6 +83,8 @@ def render_customer_memory(customer_memory: dict):
     st.markdown("### Customer Memory")
 
     st.success(f"Customer Memory Match: {profile.get('customer_name', '-')}")
+    st.write(f"**Source:** {customer_memory.get('source') or '-'}")
+    st.write(f"**Matched By:** {customer_memory.get('matched_by') or '-'}")
 
     col1, col2 = st.columns(2)
 

@@ -77,6 +77,8 @@ class CustomerMemoryResult(BaseModel):
     matched: bool = False
     profile: Optional[CustomerMemoryProfile] = None
     notes_applied: List[str] = Field(default_factory=list)
+    source: str = "customer_memory"
+    matched_by: Optional[str] = None
 
 
 def find_customer_profile(customer_name: Optional[str]) -> Optional[CustomerMemoryProfile]:
@@ -129,17 +131,26 @@ def enrich_shipment_with_customer_memory(
     İleride email sender, domain, signature ve historical context ile güçlenecek.
     """
 
+    matched_by = None
+
     profile = find_customer_profile(shipment.customer_name)
+
+    if profile:
+        matched_by = "shipment.customer_name"
 
     if not profile and email_text:
         profile = find_customer_profile_in_text(email_text)
+        if profile:
+            matched_by = "email_text"
 
     if not profile:
         return CustomerMemoryResult(
-            matched=False,
-            profile=None,
-            notes_applied=[],
-        )
+    matched=False,
+    profile=None,
+    notes_applied=[],
+    source="customer_memory",
+    matched_by=None,
+)
 
     notes_applied = []
 
@@ -176,7 +187,9 @@ def enrich_shipment_with_customer_memory(
     notes_applied.extend(profile.operational_notes)
 
     return CustomerMemoryResult(
-        matched=True,
-        profile=profile,
-        notes_applied=notes_applied,
-    )
+    matched=True,
+    profile=profile,
+    notes_applied=notes_applied,
+    source="customer_memory",
+    matched_by=matched_by,
+)
