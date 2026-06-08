@@ -48,6 +48,9 @@ UI Result Screen
 ## Project Structure
 
 ```text
+data/
+└── customer_memory.json
+
 src/
 ├── ai/
 │   ├── email_parser.py
@@ -133,9 +136,13 @@ API docs:
 Available endpoints:
 
 ```text
-GET  /health
-POST /process-email
-GET  /run-test-suite
+GET    /health
+POST   /process-email
+GET    /run-test-suite
+GET    /customer-memory
+POST   /customer-memory
+PUT    /customer-memory
+PATCH  /customer-memory/status
 ```
 
 ---
@@ -160,6 +167,10 @@ The UI allows you to:
 * view recommended action and checklist
 * view generated draft
 * run automated test suite
+* list customer memory profiles
+* add new customer memory profiles
+* edit customer memory profiles
+* set customer profiles active or passive
 
 ---
 
@@ -227,6 +238,12 @@ The current test suite covers:
 
 MINAI can recognize known customers and enrich shipment data using customer-specific memory.
 
+Customer memory profiles are stored in:
+
+```text
+data/customer_memory.json
+```
+
 Current customer memory supports:
 
 * known customer recognition
@@ -235,7 +252,10 @@ Current customer memory supports:
 * default equipment
 * price sensitivity
 * time sensitivity
+* default pickup / delivery information
 * operational notes
+* active / passive status
+* audit metadata
 
 Example profiles:
 
@@ -267,6 +287,77 @@ Customer Memory Match
 Source
 Matched By
 Operational Notes
+Active / Passive status
+Audit information
+```
+
+---
+
+## Customer Memory Management
+
+The Streamlit UI includes a basic Customer Memory management module.
+
+Current UI capabilities:
+
+* list existing customer profiles
+* add new customer profiles
+* edit existing customer profiles
+* set profiles active or passive
+* prevent duplicate customer names
+* prevent duplicate aliases
+* prevent unsafe reserved customer names / aliases
+* show audit fields
+
+Customer profiles are not physically deleted from the UI.
+
+Instead, MINAI uses active/passive status:
+
+```text
+active = true
+→ customer can be matched and used for enrichment
+
+active = false
+→ customer remains visible in the list but is not used for matching/enrichment
+```
+
+Reason:
+
+* prevents accidental loss of customer information
+* preserves historical context
+* prepares the system for future audit trail support
+
+Current audit fields:
+
+```text
+created_at
+last_updated_at
+last_updated_by
+change_note
+```
+
+Reserved customer memory terms cannot be used as customer names or aliases:
+
+```text
+test
+demo
+deneme
+sample
+example
+dummy
+unknown
+customer
+company
+client
+müşteri
+firma
+```
+
+If test customer data is needed, use specific names such as:
+
+```text
+Sandbox Customer Alpha
+ACME Test Lojistik
+Dummy Customer 001
 ```
 
 ---
@@ -422,9 +513,16 @@ Completed:
 * equipment decision explanations
 * risk engine
 * customer memory v1
+* customer memory data file
 * customer recognition from email content
 * customer memory source tracking
 * customer sensitivity risk notes
+* customer memory UI editor
+* customer memory list view
+* customer memory active/passive policy
+* customer memory edit profile
+* customer memory audit notes
+* reserved customer memory terms protection
 * clarification draft generator
 * management review gate
 * quote draft generator
@@ -443,11 +541,11 @@ Completed:
 ## Next Suggested Task
 
 ```text
-TASK-040 — Customer Memory Data File
+TASK-049 — Customer Memory Backup / Export v1
 ```
 
 Purpose:
 
-* move customer memory from Python code into editable data file
-* make customer profiles easier to update
-* prepare future database migration
+* export customer memory data
+* create backup copy of customer_memory.json
+* prepare safer customer memory maintenance workflow
