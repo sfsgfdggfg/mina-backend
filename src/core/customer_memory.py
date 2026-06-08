@@ -245,8 +245,47 @@ def enrich_shipment_with_customer_memory(
         matched_by=matched_by,
     )
 
+RESERVED_CUSTOMER_MEMORY_TERMS = {
+    "test",
+    "demo",
+    "deneme",
+    "sample",
+    "example",
+    "dummy",
+    "sandbox",
+    "unknown",
+    "unknown customer",
+    "müşteri",
+    "firma",
+    "company",
+    "customer",
+    "client",
+}
+
 def normalize_alias(value: str) -> str:
     return value.strip().lower()
+
+def validate_customer_memory_terms(profile: CustomerMemoryProfile) -> None:
+    """
+    Prevents unsafe generic customer names or aliases.
+
+    Generic terms like Test, Demo, Deneme can confuse AI parser and customer memory matching.
+    """
+
+    customer_name = normalize_alias(profile.customer_name)
+
+    if customer_name in RESERVED_CUSTOMER_MEMORY_TERMS:
+        raise ValueError(
+            f"Reserved customer name cannot be used: {profile.customer_name}"
+        )
+
+    for alias in profile.aliases:
+        normalized_alias = normalize_alias(alias)
+
+        if normalized_alias in RESERVED_CUSTOMER_MEMORY_TERMS:
+            raise ValueError(
+                f"Reserved alias cannot be used: {alias}"
+            )
 
 def save_customer_profile(profile: CustomerMemoryProfile) -> CustomerMemoryProfile:
     """
@@ -261,6 +300,7 @@ def save_customer_profile(profile: CustomerMemoryProfile) -> CustomerMemoryProfi
     customer_memory = load_customer_memory()
 
     new_customer_name = normalize_alias(profile.customer_name)
+    validate_customer_memory_terms(profile)
 
     if not new_customer_name:
         raise ValueError("Customer name is required.")
@@ -384,6 +424,7 @@ def update_customer_profile(
 
     customer_memory = load_customer_memory()
     normalized_target = normalize_alias(customer_name)
+    validate_customer_memory_terms(updated_profile)
 
     profile_index = None
 

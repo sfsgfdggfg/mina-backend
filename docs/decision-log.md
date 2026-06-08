@@ -227,4 +227,19 @@ Kural:
 - active = true olan müşteri profilleri recognition ve enrichment süreçlerinde kullanılabilir.
 - active = false olan müşteri profilleri listede görünebilir ancak matching/enrichment için kullanılmaz.
 
+DEC-027 — Reserved Customer Memory Terms
 
+Customer Memory içinde Test, Demo, Deneme, Sample, Example, Dummy gibi generic müşteri adları veya alias değerleri aktif profil olarak kullanılmayacaktır.
+
+Gerekçe:
+- AI parser bazen belirsiz müşteri adlarını Test/Demo gibi generic değerlerle döndürebilir.
+- Bu değerler Customer Memory ile eşleşirse sistem yanlışlıkla müşteriyi tanınan müşteri kabul eder.
+- Bu durum risk seviyesini ve önerilen aksiyonu hatalı etkileyebilir.
+
+Kural:
+- Generic customer_name değerleri reddedilir.
+- Generic alias değerleri reddedilir.
+- Test amaçlı müşteri gerekiyorsa ayırt edici isim kullanılmalıdır:
+  - Sandbox Customer Alpha
+  - ACME Test Lojistik
+  - Dummy Customer 001
