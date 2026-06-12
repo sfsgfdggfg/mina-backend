@@ -562,6 +562,20 @@ def render_customer_memory_import_preview():
         st.error("Import validation API başarısız oldu.")
         st.code(str(error))
         return
+    
+    try:
+        dry_run_response = requests.post(
+            f"{API_BASE_URL}/customer-memory/import/dry-run",
+            json={"import_data": import_data},
+            timeout=30,
+        )
+        dry_run_response.raise_for_status()
+        dry_run_result = dry_run_response.json()
+
+    except requests.exceptions.RequestException as error:
+        st.error("Import dry run API başarısız oldu.")
+        st.code(str(error))
+        return
 
     profile_count = validation_result.get("profile_count", 0)
     customer_names = validation_result.get("customer_names", [])
@@ -591,6 +605,67 @@ def render_customer_memory_import_preview():
             st.write(f"- {warning}")
     else:
         st.success("Validation warning yok.")
+    
+        st.markdown("### Import Dry Run Report")
+
+    st.write(
+        f"Current profile count: {dry_run_result.get('current_profile_count', 0)}"
+    )
+
+    st.write(
+        f"Import profile count: {dry_run_result.get('profile_count', 0)}"
+    )
+
+    will_add = dry_run_result.get("will_add", [])
+    will_update = dry_run_result.get("will_update", [])
+    will_skip = dry_run_result.get("will_skip", [])
+    alias_conflicts = dry_run_result.get("alias_conflicts", [])
+    name_conflicts = dry_run_result.get("name_conflicts", [])
+
+    if will_add:
+        st.success("Will add:")
+        for name in will_add:
+            st.write(f"- {name}")
+    else:
+        st.info("Will add: none")
+
+    if will_update:
+        st.warning("Will update existing profiles:")
+        for name in will_update:
+            st.write(f"- {name}")
+    else:
+        st.info("Will update: none")
+
+    if will_skip:
+        st.warning("Will skip:")
+        for item in will_skip:
+            st.write(f"- {item}")
+    else:
+        st.success("Will skip: none")
+
+    if name_conflicts:
+        st.warning("Name conflicts:")
+        for item in name_conflicts:
+            st.write(
+                f"- Import: {item.get('import_customer_name')} | "
+                f"Existing: {item.get('existing_customer_name')}"
+            )
+    else:
+        st.success("Name conflict yok.")
+
+    if alias_conflicts:
+        st.error("Alias conflicts:")
+        for item in alias_conflicts:
+            st.write(
+                f"- Alias: {item.get('alias')} | "
+                f"Import customer: {item.get('import_customer_name')} | "
+                f"Existing customer: {item.get('existing_customer_name')}"
+            )
+    else:
+        st.success("Alias conflict yok.")
+
+    with st.expander("Dry Run Result"):
+        st.json(dry_run_result)
 
     with st.expander("Validation Result"):
         st.json(validation_result)

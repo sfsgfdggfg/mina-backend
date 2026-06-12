@@ -192,6 +192,119 @@ def validate_customer_memory_import_data(import_data: dict) -> dict:
         "reserved_warnings": reserved_warnings,
     }
 
+def build_customer_memory_import_dry_run(import_data: dict) -> dict:
+    validation_result = validate_customer_memory_import_data(import_data)
+
+    if not validation_result.get("valid"):
+        return {
+            "valid": False,
+            "profile_count": validation_result.get("profile_count", 0),
+            "errors": validation_result.get("errors", []),
+            "warnings": validation_result.get("warnings", []),
+            "new_profiles": [],
+            "existing_profiles": [],
+            "name_conflicts": [],
+            "alias_conflicts": [],
+            "will_add": [],
+            "will_update": [],
+            "will_skip": [],
+        }
+
+    imported_profiles = import_data.get("profiles", [])
+    current_profiles = load_customer_memory()
+
+    current_names = {}
+    current_aliases = {}
+
+    for profile in current_profiles:
+        normalized_name = normalize_import_value(profile.customer_name)
+
+        if normalized_name:
+            current_names[normalized_name] = profile.customer_name
+
+        for alias in profile.aliases:
+            normalized_alias = normalize_import_value(alias)
+
+            if normalized_alias:
+                current_aliases[normalized_alias] = {
+                    "alias": alias,
+                    "customer_name": profile.customer_name,
+                }
+
+    new_profiles = []
+    existing_profiles = []
+    name_conflicts = []
+    alias_conflicts = []
+    will_add = []
+    will_update = []
+    will_skip = []
+
+    for index, profile in enumerate(imported_profiles, start=1):
+        customer_name = str(profile.get("customer_name", "")).strip()
+        normalized_name = normalize_import_value(customer_name)
+        aliases = profile.get("aliases", [])
+
+        if not customer_name:
+            will_skip.append(
+                {
+                    "profile_index": index,
+                    "reason": "Customer name is empty.",
+                }
+            )
+            continue
+
+        if normalized_name in current_names:
+            existing_profiles.append(customer_name)
+            will_update.append(customer_name)
+        else:
+            new_profiles.append(customer_name)
+            will_add.append(customer_name)
+
+        if not isinstance(aliases, list):
+            will_skip.append(
+                {
+                    "profile_index": index,
+                    "customer_name": customer_name,
+                    "reason": "Aliases field is not a list.",
+                }
+            )
+            continue
+
+        for alias in aliases:
+            normalized_alias = normalize_import_value(alias)
+
+            if not normalized_alias:
+                continue
+
+            current_alias_match = current_aliases.get(normalized_alias)
+
+            if current_alias_match:
+                matched_customer_name = current_alias_match["customer_name"]
+
+                if normalize_import_value(matched_customer_name) != normalized_name:
+                    alias_conflicts.append(
+                        {
+                            "import_customer_name": customer_name,
+                            "alias": alias,
+                            "existing_customer_name": matched_customer_name,
+                        }
+                    )
+
+    return {
+        "valid": True,
+        "profile_count": len(imported_profiles),
+        "current_profile_count": len(current_profiles),
+        "errors": validation_result.get("errors", []),
+        "warnings": validation_result.get("warnings", []),
+        "new_profiles": new_profiles,
+        "existing_profiles": existing_profiles,
+        "name_conflicts": name_conflicts,
+        "alias_conflicts": alias_conflicts,
+        "will_add": will_add,
+        "will_update": will_update,
+        "will_skip": will_skip,
+    }
+
 @app.put("/customer-memory")
 def update_customer_memory_profile(request: CustomerMemoryUpdateRequest):
     profile = CustomerMemoryProfile(
@@ -358,6 +471,12 @@ def export_customer_memory():
             for profile in profiles
         ],
     }
+
+@app.post("/customer-memory/import/dry-run")
+def dry_run_customer_memory_import(
+    request: CustomerMemoryImportValidateRequest,
+):
+    return build_customer_memory_import_dry_run(request.import_data)
 
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]
