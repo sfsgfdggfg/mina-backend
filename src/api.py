@@ -75,6 +75,123 @@ class CustomerMemoryStatusUpdateRequest(BaseModel):
     customer_name: str
     active: bool
 
+class CustomerMemoryImportValidateRequest(BaseModel):
+    import_data: dict
+
+RESERVED_CUSTOMER_MEMORY_TERMS = {
+    "test",
+    "demo",
+    "deneme",
+    "sample",
+    "example",
+    "dummy",
+    "unknown",
+    "unknown customer",
+    "müşteri",
+    "firma",
+    "company",
+    "customer",
+    "client",
+}
+
+
+def normalize_import_value(value) -> str:
+    if value is None:
+        return ""
+
+    return str(value).strip().lower()
+
+
+def validate_customer_memory_import_data(import_data: dict) -> dict:
+    profiles = import_data.get("profiles")
+
+    errors = []
+    warnings = []
+
+    if profiles is None:
+        return {
+            "valid": False,
+            "profile_count": 0,
+            "customer_names": [],
+            "errors": ["Geçersiz export formatı: 'profiles' alanı bulunamadı."],
+            "warnings": [],
+        }
+
+    if not isinstance(profiles, list):
+        return {
+            "valid": False,
+            "profile_count": 0,
+            "customer_names": [],
+            "errors": ["Geçersiz export formatı: 'profiles' alanı liste olmalı."],
+            "warnings": [],
+        }
+
+    customer_names = []
+    seen_names = set()
+    seen_aliases = set()
+
+    duplicate_names = []
+    duplicate_aliases = []
+    reserved_warnings = []
+
+    for index, profile in enumerate(profiles, start=1):
+        if not isinstance(profile, dict):
+            errors.append(f"Profile #{index}: profil objesi geçerli değil.")
+            continue
+
+        customer_name = str(profile.get("customer_name", "")).strip()
+        aliases = profile.get("aliases", [])
+
+        customer_names.append(customer_name or f"Unnamed profile #{index}")
+
+        normalized_name = normalize_import_value(customer_name)
+
+        if normalized_name in RESERVED_CUSTOMER_MEMORY_TERMS:
+            reserved_warnings.append(
+                f"Profile #{index}: reserved customer name kullanıyor: {customer_name}"
+            )
+
+        if normalized_name:
+            if normalized_name in seen_names:
+                duplicate_names.append(customer_name)
+            seen_names.add(normalized_name)
+
+        if not isinstance(aliases, list):
+            errors.append(f"Profile #{index}: aliases alanı liste değil.")
+            aliases = []
+
+        for alias in aliases:
+            normalized_alias = normalize_import_value(alias)
+
+            if normalized_alias in RESERVED_CUSTOMER_MEMORY_TERMS:
+                reserved_warnings.append(
+                    f"Profile #{index}: reserved alias kullanıyor: {alias}"
+                )
+
+            if normalized_alias:
+                if normalized_alias in seen_aliases:
+                    duplicate_aliases.append(str(alias))
+                seen_aliases.add(normalized_alias)
+
+    for name in duplicate_names:
+        warnings.append(f"Duplicate customer name bulundu: {name}")
+
+    for alias in duplicate_aliases:
+        warnings.append(f"Duplicate alias bulundu: {alias}")
+
+    warnings.extend(reserved_warnings)
+
+    return {
+        "valid": len(errors) == 0,
+        "profile_count": len(profiles),
+        "customer_names": customer_names,
+        "errors": errors,
+        "warnings": warnings,
+        "duplicate_names": duplicate_names,
+        "duplicate_aliases": duplicate_aliases,
+        "reserved_warnings": reserved_warnings,
+    }
+
 @app.put("/customer-memory")
 def update_customer_memory_profile(request: CustomerMemoryUpdateRequest):
     profile = CustomerMemoryProfile(
@@ -193,6 +310,11 @@ def process_email(request: ProcessEmailRequest):
 
     return serialize_result(result)
 
+@app.post("/customer-memory/import/validate")
+def validate_customer_memory_import(
+    request: CustomerMemoryImportValidateRequest,
+):
+    return validate_customer_memory_import_data(request.import_data)
 
 @app.get("/run-test-suite")
 def run_test_suite():
