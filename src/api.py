@@ -224,6 +224,18 @@ def run_test_suite():
         "results": test_results,
     }
 
+@app.get("/customer-memory/export")
+def export_customer_memory():
+    profiles = load_customer_memory()
+
+    return {
+        "export_type": "customer_memory",
+        "profile_count": len(profiles),
+        "profiles": [
+            profile.model_dump()
+            for profile in profiles
+        ],
+    }
 
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]

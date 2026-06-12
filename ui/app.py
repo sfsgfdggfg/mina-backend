@@ -484,6 +484,42 @@ def render_customer_memory_edit_form(profile: dict):
                 st.error("Customer memory güncellemesi başarısız oldu.")
                 st.code(str(error))
 
+def render_customer_memory_export():
+    st.markdown("---")
+    st.markdown("## Customer Memory Export")
+
+    st.write(
+        "Customer memory verisini JSON formatında dışa aktarın."
+    )
+
+    if st.button("Export Customer Memory"):
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/customer-memory/export",
+                timeout=30,
+            )
+
+            response.raise_for_status()
+            export_data = response.json()
+
+            profile_count = export_data.get("profile_count", 0)
+
+            st.success(f"Customer memory export hazır. Profil sayısı: {profile_count}")
+
+            st.download_button(
+                label="Download customer_memory_export.json",
+                data=response.text,
+                file_name="customer_memory_export.json",
+                mime="application/json",
+            )
+
+            with st.expander("Export JSON Preview"):
+                st.json(export_data)
+
+        except requests.exceptions.RequestException as error:
+            st.error("Customer memory export başarısız oldu.")
+            st.code(str(error))
+
 def render_customer_memory_list():
     st.markdown("---")
     st.markdown("## Customer Memory Profiles")
@@ -780,3 +816,4 @@ if st.button("Process Email"):
 render_test_suite_runner()
 render_customer_memory_list()
 render_customer_memory_editor()
+render_customer_memory_export()
