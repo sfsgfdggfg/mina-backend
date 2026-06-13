@@ -604,3 +604,59 @@ def apply_customer_memory_import(import_data: dict, updated_by: str = "import") 
         "added": added,
         "updated": updated,
     }
+
+def list_customer_memory_backups() -> list[dict]:
+    """
+    Lists customer memory backup files.
+    """
+
+    backup_dir = Path("data/backups")
+
+    if not backup_dir.exists():
+        return []
+
+    backup_files = sorted(
+        backup_dir.glob("customer_memory_backup_*.json"),
+        reverse=True,
+    )
+
+    backups = []
+
+    for backup_file in backup_files:
+        stat = backup_file.stat()
+
+        backups.append(
+            {
+                "file_name": backup_file.name,
+                "path": str(backup_file),
+                "size_bytes": stat.st_size,
+                "modified_at": stat.st_mtime,
+            }
+        )
+
+    return backups
+
+
+def read_customer_memory_backup(file_name: str) -> dict:
+    """
+    Reads a backup file from data/backups safely.
+    """
+
+    backup_dir = Path("data/backups")
+    backup_path = backup_dir / file_name
+
+    if not backup_path.exists():
+        raise ValueError(f"Backup file not found: {file_name}")
+
+    if backup_path.parent.resolve() != backup_dir.resolve():
+        raise ValueError("Invalid backup file path.")
+
+    raw_content = backup_path.read_text(encoding="utf-8")
+    profiles = json.loads(raw_content)
+
+    return {
+        "export_type": "customer_memory_backup",
+        "file_name": file_name,
+        "profile_count": len(profiles) if isinstance(profiles, list) else 0,
+        "profiles": profiles,
+    }

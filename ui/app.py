@@ -717,6 +717,149 @@ def render_customer_memory_import_preview():
     with st.expander("Raw Import Preview"):
         st.json(import_data)
 
+def render_customer_memory_backup_restore_preview():
+    st.markdown("---")
+    st.markdown("## Customer Memory Backup / Restore Preview")
+
+    st.write(
+        "Import işlemleri öncesinde oluşturulan customer memory backup dosyalarını görüntüleyin. "
+        "Bu bölüm henüz gerçek restore yapmaz."
+    )
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/customer-memory/backups",
+            timeout=30,
+        )
+        response.raise_for_status()
+        backups_data = response.json()
+
+    except requests.exceptions.RequestException as error:
+        st.error("Backup listesi alınamadı.")
+        st.code(str(error))
+        return
+
+    backups = backups_data.get("backups", [])
+
+    if not backups:
+        st.info("Henüz customer memory backup dosyası yok.")
+        return
+
+    backup_options = [
+        backup.get("file_name")
+        for backup in backups
+    ]
+
+    selected_backup = st.selectbox(
+        "Select backup file",
+        backup_options,
+        key="customer_memory_backup_select",
+    )
+
+    selected_backup_data = next(
+        (
+            backup
+            for backup in backups
+            if backup.get("file_name") == selected_backup
+        ),
+        None,
+    )
+
+    if selected_backup_data:
+        st.write(f"Size: {selected_backup_data.get('size_bytes')} bytes")
+        st.write(f"Path: {selected_backup_data.get('path')}")
+
+    if not st.button("Preview Selected Backup"):
+        return
+
+    try:
+        backup_response = requests.get(
+            f"{API_BASE_URL}/customer-memory/backups/{selected_backup}",
+            timeout=30,
+        )
+        backup_response.raise_for_status()
+        backup_data = backup_response.json()
+
+    except requests.exceptions.RequestException as error:
+        st.error("Backup preview alınamadı.")
+        st.code(str(error))
+        return
+
+    st.success(
+        f"Backup preview hazır. Profil sayısı: {backup_data.get('profile_count', 0)}"
+    )
+
+    backup_import_data = {
+        "profiles": backup_data.get("profiles", [])
+    }
+
+    try:
+        dry_run_response = requests.post(
+            f"{API_BASE_URL}/customer-memory/import/dry-run",
+            json={"import_data": backup_import_data},
+            timeout=30,
+        )
+        dry_run_response.raise_for_status()
+        dry_run_result = dry_run_response.json()
+
+    except requests.exceptions.RequestException as error:
+        st.error("Backup dry run alınamadı.")
+        st.code(str(error))
+        return
+
+    st.markdown("### Restore Dry Run Report")
+
+    st.write(
+        f"Current profile count: {dry_run_result.get('current_profile_count', 0)}"
+    )
+
+    st.write(
+        f"Backup profile count: {dry_run_result.get('profile_count', 0)}"
+    )
+
+    will_add = dry_run_result.get("will_add", [])
+    will_update = dry_run_result.get("will_update", [])
+    will_skip = dry_run_result.get("will_skip", [])
+    alias_conflicts = dry_run_result.get("alias_conflicts", [])
+
+    if will_add:
+        st.success("Restore would add:")
+        for name in will_add:
+            st.write(f"- {name}")
+    else:
+        st.info("Restore would add: none")
+
+    if will_update:
+        st.warning("Restore would update existing profiles:")
+        for name in will_update:
+            st.write(f"- {name}")
+    else:
+        st.info("Restore would update: none")
+
+    if will_skip:
+        st.warning("Restore would skip:")
+        for item in will_skip:
+            st.write(f"- {item}")
+    else:
+        st.success("Restore would skip: none")
+
+    if alias_conflicts:
+        st.error("Alias conflicts:")
+        for item in alias_conflicts:
+            st.write(
+                f"- Alias: {item.get('alias')} | "
+                f"Backup customer: {item.get('import_customer_name')} | "
+                f"Existing customer: {item.get('existing_customer_name')}"
+            )
+    else:
+        st.success("Alias conflict yok.")
+
+    with st.expander("Backup Dry Run Result"):
+        st.json(dry_run_result)
+
+    with st.expander("Raw Backup Preview"):
+        st.json(backup_data)
+
 def render_customer_memory_list():
     st.markdown("---")
     st.markdown("## Customer Memory Profiles")
@@ -1015,3 +1158,4 @@ render_customer_memory_list()
 render_customer_memory_editor()
 render_customer_memory_export()
 render_customer_memory_import_preview()
+render_customer_memory_backup_restore_preview()

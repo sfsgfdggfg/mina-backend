@@ -8,6 +8,8 @@ from src.core.customer_memory import (
     set_customer_profile_active_status,
     update_customer_profile,
     apply_customer_memory_import,
+    list_customer_memory_backups,
+    read_customer_memory_backup,
 )
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
@@ -511,6 +513,17 @@ def apply_customer_memory_import_endpoint(
         "message": "Customer memory import applied successfully.",
         "result": result,
     }
+
+@app.get("/customer-memory/backups")
+def get_customer_memory_backups():
+    return {
+        "backups": list_customer_memory_backups()
+    }
+
+
+@app.get("/customer-memory/backups/{file_name}")
+def get_customer_memory_backup(file_name: str):
+    return read_customer_memory_backup(file_name)
 
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]
