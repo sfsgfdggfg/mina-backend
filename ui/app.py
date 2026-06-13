@@ -927,6 +927,84 @@ def render_customer_memory_backup_restore_preview():
     with st.expander("Raw Backup Preview", expanded=False):
         st.json(backup_data)
 
+def render_customer_memory_backup_cleanup_preview():
+    st.markdown("---")
+    st.markdown("## Customer Memory Backup Cleanup Preview")
+
+    st.write(
+        "Customer memory backup dosyaları için cleanup ön izlemesi. "
+        "Bu bölüm henüz hiçbir backup dosyasını silmez."
+    )
+
+    keep_latest = st.number_input(
+        "Keep latest backup count",
+        min_value=1,
+        max_value=100,
+        value=10,
+        step=1,
+        key="customer_memory_backup_keep_latest",
+    )
+
+    if not st.button("Preview Backup Cleanup"):
+        return
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/customer-memory/backups/cleanup-preview",
+            params={"keep_latest": keep_latest},
+            timeout=30,
+        )
+        response.raise_for_status()
+        cleanup_preview = response.json()
+
+    except requests.exceptions.RequestException as error:
+        st.error("Backup cleanup preview alınamadı.")
+        st.code(str(error))
+        return
+
+    total_backup_count = cleanup_preview.get("total_backup_count", 0)
+    keep_count = cleanup_preview.get("keep_count", 0)
+    cleanup_candidate_count = cleanup_preview.get("cleanup_candidate_count", 0)
+
+    st.success("Backup cleanup preview hazır.")
+
+    st.write(f"Total backup count: {total_backup_count}")
+    st.write(f"Backups to keep: {keep_count}")
+    st.write(f"Cleanup candidates: {cleanup_candidate_count}")
+
+    backups_to_keep = cleanup_preview.get("backups_to_keep", [])
+    cleanup_candidates = cleanup_preview.get("cleanup_candidates", [])
+
+    st.markdown("### Backups to Keep")
+
+    if backups_to_keep:
+        for backup in backups_to_keep:
+            st.write(
+                f"- {backup.get('file_name')} "
+                f"({backup.get('size_bytes')} bytes)"
+            )
+    else:
+        st.info("Keep listesi boş.")
+
+    st.markdown("### Cleanup Candidates")
+
+    if cleanup_candidates:
+        st.warning(
+            "Aşağıdaki dosyalar ileride cleanup için aday olabilir. "
+            "Bu görevde henüz silme yapılmaz."
+        )
+
+        for backup in cleanup_candidates:
+            st.write(
+                f"- {backup.get('file_name')} "
+                f"({backup.get('size_bytes')} bytes)"
+            )
+    else:
+        st.success("Cleanup candidate yok.")
+
+    with st.expander("Cleanup Preview Raw Result", expanded=False):
+        st.json(cleanup_preview)
+
 def render_customer_memory_list():
     st.markdown("---")
     st.markdown("## Customer Memory Profiles")
@@ -1226,3 +1304,4 @@ render_customer_memory_editor()
 render_customer_memory_export()
 render_customer_memory_import_preview()
 render_customer_memory_backup_restore_preview()
+render_customer_memory_backup_cleanup_preview()

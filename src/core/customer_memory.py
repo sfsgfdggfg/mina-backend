@@ -715,3 +715,31 @@ def restore_customer_memory_from_backup(
             for profile in restored_profiles
         ],
     }
+
+def build_customer_memory_backup_cleanup_preview(
+    keep_latest: int = 10,
+) -> dict:
+    """
+    Builds a cleanup preview for customer memory backup files.
+
+    No files are deleted in this function.
+    """
+
+    backups = list_customer_memory_backups()
+
+    if keep_latest < 1:
+        keep_latest = 1
+
+    backups_to_keep = backups[:keep_latest]
+    cleanup_candidates = backups[keep_latest:]
+
+    return {
+        "total_backup_count": len(backups),
+        "keep_latest": keep_latest,
+        "keep_count": len(backups_to_keep),
+        "cleanup_candidate_count": len(cleanup_candidates),
+        "backups_to_keep": backups_to_keep,
+        "cleanup_candidates": cleanup_candidates,
+        "cleanup_enabled": False,
+        "message": "Cleanup preview only. No backup files were deleted.",
+    }

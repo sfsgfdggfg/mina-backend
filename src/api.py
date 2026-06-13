@@ -11,6 +11,7 @@ from src.core.customer_memory import (
     list_customer_memory_backups,
     read_customer_memory_backup,
     restore_customer_memory_from_backup,
+    build_customer_memory_backup_cleanup_preview,
 )
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
@@ -523,6 +524,14 @@ def get_customer_memory_backups():
     return {
         "backups": list_customer_memory_backups()
     }
+
+@app.get("/customer-memory/backups/cleanup-preview")
+def get_customer_memory_backup_cleanup_preview(
+    keep_latest: int = 10,
+):
+    return build_customer_memory_backup_cleanup_preview(
+        keep_latest=keep_latest,
+    )
 
 @app.get("/customer-memory/backups/{file_name}")
 def get_customer_memory_backup(file_name: str):
