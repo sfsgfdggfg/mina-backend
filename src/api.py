@@ -7,6 +7,7 @@ from src.core.customer_memory import (
     save_customer_profile,
     set_customer_profile_active_status,
     update_customer_profile,
+    apply_customer_memory_import,
 )
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
@@ -477,6 +478,39 @@ def dry_run_customer_memory_import(
     request: CustomerMemoryImportValidateRequest,
 ):
     return build_customer_memory_import_dry_run(request.import_data)
+
+@app.post("/customer-memory/import/apply")
+def apply_customer_memory_import_endpoint(
+    request: CustomerMemoryImportValidateRequest,
+):
+    validation_result = validate_customer_memory_import_data(request.import_data)
+
+    if not validation_result.get("valid"):
+        return {
+            "success": False,
+            "message": "Import validation failed.",
+            "validation_result": validation_result,
+        }
+
+    dry_run_result = build_customer_memory_import_dry_run(request.import_data)
+
+    if dry_run_result.get("alias_conflicts"):
+        return {
+            "success": False,
+            "message": "Import blocked because alias conflicts were found.",
+            "dry_run_result": dry_run_result,
+        }
+
+    result = apply_customer_memory_import(
+        request.import_data,
+        updated_by="api_import",
+    )
+
+    return {
+        "success": True,
+        "message": "Customer memory import applied successfully.",
+        "result": result,
+    }
 
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]

@@ -669,6 +669,50 @@ def render_customer_memory_import_preview():
 
     with st.expander("Validation Result"):
         st.json(validation_result)
+    
+        st.markdown("### Apply Import")
+
+    can_apply_import = (
+        validation_result.get("valid")
+        and not dry_run_result.get("alias_conflicts")
+        and not dry_run_result.get("errors")
+    )
+
+    if not can_apply_import:
+        st.warning(
+            "Import uygulanamaz. Önce validation error veya alias conflict sorunlarını düzeltin."
+        )
+    else:
+        st.warning(
+            "Bu işlem mevcut customer_memory.json dosyasını günceller. "
+            "İşlem öncesi otomatik backup oluşturulur."
+        )
+
+        confirm_apply = st.checkbox(
+            "I understand this will update customer_memory.json",
+            key="confirm_customer_memory_import_apply",
+        )
+
+        if confirm_apply and st.button("Apply Customer Memory Import"):
+            try:
+                apply_response = requests.post(
+                    f"{API_BASE_URL}/customer-memory/import/apply",
+                    json={"import_data": import_data},
+                    timeout=30,
+                )
+                apply_response.raise_for_status()
+                apply_result = apply_response.json()
+
+                if apply_result.get("success"):
+                    st.success("Customer memory import başarıyla uygulandı.")
+                    st.json(apply_result)
+                else:
+                    st.error("Customer memory import uygulanamadı.")
+                    st.json(apply_result)
+
+            except requests.exceptions.RequestException as error:
+                st.error("Customer memory import apply API başarısız oldu.")
+                st.code(str(error))
 
     with st.expander("Raw Import Preview"):
         st.json(import_data)

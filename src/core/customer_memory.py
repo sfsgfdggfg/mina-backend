@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -503,3 +504,103 @@ def update_customer_profile(
         )
 
     return updated_profile
+
+def create_customer_memory_backup() -> str:
+    """
+    Creates a timestamped backup of data/customer_memory.json before import.
+    """
+
+    backup_dir = Path("data/backups")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = now_iso().replace(":", "-").replace("+", "_")
+    backup_path = backup_dir / f"customer_memory_backup_{timestamp}.json"
+
+    shutil.copyfile(CUSTOMER_MEMORY_FILE, backup_path)
+
+    return str(backup_path)
+
+
+def apply_customer_memory_import(import_data: dict, updated_by: str = "import") -> dict:
+    """
+    Applies validated customer memory import data.
+
+    Existing profiles are updated by customer_name.
+    New profiles are added.
+    A backup is created before writing.
+    """
+
+    profiles_data = import_data.get("profiles")
+
+    if not isinstance(profiles_data, list):
+        raise ValueError("Invalid import data: profiles must be a list.")
+
+    current_profiles = load_customer_memory()
+    backup_path = create_customer_memory_backup()
+
+    current_by_name = {
+        normalize_alias(profile.customer_name): profile
+        for profile in current_profiles
+        if normalize_alias(profile.customer_name)
+    }
+
+    imported_profiles = []
+    added = []
+    updated = []
+
+    for profile_data in profiles_data:
+        profile = CustomerMemoryProfile(**profile_data)
+        validate_customer_memory_terms(profile)
+
+        normalized_name = normalize_alias(profile.customer_name)
+
+        profile.last_updated_at = now_iso()
+        profile.last_updated_by = updated_by
+        profile.change_note = "Imported from customer memory JSON."
+
+        if normalized_name in current_by_name:
+            existing_profile = current_by_name[normalized_name]
+
+            if not profile.created_at:
+                profile.created_at = existing_profile.created_at
+
+            updated.append(profile.customer_name)
+        else:
+            if not profile.created_at:
+                profile.created_at = now_iso()
+
+            added.append(profile.customer_name)
+
+        imported_profiles.append(profile)
+
+    imported_names = {
+        normalize_alias(profile.customer_name)
+        for profile in imported_profiles
+    }
+
+    untouched_profiles = [
+        profile
+        for profile in current_profiles
+        if normalize_alias(profile.customer_name) not in imported_names
+    ]
+
+    final_profiles = untouched_profiles + imported_profiles
+
+    CUSTOMER_MEMORY_FILE.write_text(
+        json.dumps(
+            [profile.model_dump() for profile in final_profiles],
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "success": True,
+        "backup_path": backup_path,
+        "added_count": len(added),
+        "updated_count": len(updated),
+        "total_profile_count": len(final_profiles),
+        "added": added,
+        "updated": updated,
+    }
