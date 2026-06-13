@@ -721,9 +721,10 @@ def render_customer_memory_backup_restore_preview():
     st.markdown("---")
     st.markdown("## Customer Memory Backup / Restore Preview")
 
+
     st.write(
         "Import işlemleri öncesinde oluşturulan customer memory backup dosyalarını görüntüleyin. "
-        "Bu bölüm henüz gerçek restore yapmaz."
+        "Bu bölüm seçilen backup dosyasını preview eder ve istenirse restore uygular."
     )
 
     try:
@@ -769,43 +770,57 @@ def render_customer_memory_backup_restore_preview():
         st.write(f"Size: {selected_backup_data.get('size_bytes')} bytes")
         st.write(f"Path: {selected_backup_data.get('path')}")
 
-    if not st.button("Preview Selected Backup"):
-        return
+    preview_key = f"backup_preview_{selected_backup}"
+    dry_run_key = f"backup_dry_run_{selected_backup}"
 
-    try:
-        backup_response = requests.get(
-            f"{API_BASE_URL}/customer-memory/backups/{selected_backup}",
-            timeout=30,
-        )
-        backup_response.raise_for_status()
-        backup_data = backup_response.json()
+    if st.button(
+        "Preview Selected Backup",
+        key=f"preview_selected_backup_{selected_backup}",
+    ):
+        try:
+            backup_response = requests.get(
+                f"{API_BASE_URL}/customer-memory/backups/{selected_backup}",
+                timeout=30,
+            )
+            backup_response.raise_for_status()
+            backup_data = backup_response.json()
 
-    except requests.exceptions.RequestException as error:
-        st.error("Backup preview alınamadı.")
-        st.code(str(error))
+        except requests.exceptions.RequestException as error:
+            st.error("Backup preview alınamadı.")
+            st.code(str(error))
+            return
+
+        backup_import_data = {
+            "profiles": backup_data.get("profiles", [])
+        }
+
+        try:
+            dry_run_response = requests.post(
+                f"{API_BASE_URL}/customer-memory/import/dry-run",
+                json={"import_data": backup_import_data},
+                timeout=30,
+            )
+            dry_run_response.raise_for_status()
+            dry_run_result = dry_run_response.json()
+
+        except requests.exceptions.RequestException as error:
+            st.error("Backup dry run alınamadı.")
+            st.code(str(error))
+            return
+
+        st.session_state[preview_key] = backup_data
+        st.session_state[dry_run_key] = dry_run_result
+
+    backup_data = st.session_state.get(preview_key)
+    dry_run_result = st.session_state.get(dry_run_key)
+
+    if not backup_data or not dry_run_result:
+        st.info("Restore preview görmek için önce Preview Selected Backup butonuna basın.")
         return
 
     st.success(
         f"Backup preview hazır. Profil sayısı: {backup_data.get('profile_count', 0)}"
     )
-
-    backup_import_data = {
-        "profiles": backup_data.get("profiles", [])
-    }
-
-    try:
-        dry_run_response = requests.post(
-            f"{API_BASE_URL}/customer-memory/import/dry-run",
-            json={"import_data": backup_import_data},
-            timeout=30,
-        )
-        dry_run_response.raise_for_status()
-        dry_run_result = dry_run_response.json()
-
-    except requests.exceptions.RequestException as error:
-        st.error("Backup dry run alınamadı.")
-        st.code(str(error))
-        return
 
     st.markdown("### Restore Dry Run Report")
 
@@ -854,10 +869,62 @@ def render_customer_memory_backup_restore_preview():
     else:
         st.success("Alias conflict yok.")
 
-    with st.expander("Backup Dry Run Result"):
+    st.markdown("### Apply Restore")
+
+    can_restore = (
+        dry_run_result.get("valid")
+        and not dry_run_result.get("alias_conflicts")
+        and not dry_run_result.get("errors")
+    )
+
+    if not can_restore:
+        st.warning(
+            "Restore uygulanamaz. Önce validation error veya alias conflict sorunlarını düzeltin."
+        )
+    else:
+        st.warning(
+            "Bu işlem mevcut customer_memory.json dosyasını seçilen backup ile değiştirir. "
+            "İşlem öncesi mevcut dosyanın yeni bir backup'ı otomatik oluşturulur."
+        )
+
+        confirm_restore = st.checkbox(
+            "I understand this will replace current customer_memory.json with the selected backup",
+            key=f"confirm_customer_memory_restore_apply_{selected_backup}",
+        )
+
+        if confirm_restore and st.button(
+            "Restore Selected Backup",
+            key=f"restore_selected_backup_{selected_backup}",
+        ):
+            try:
+                restore_response = requests.post(
+                    f"{API_BASE_URL}/customer-memory/backups/restore",
+                    json={"file_name": selected_backup},
+                    timeout=30,
+                )
+                restore_response.raise_for_status()
+                restore_result = restore_response.json()
+
+                if restore_result.get("success"):
+                    st.success("Customer memory restore başarıyla uygulandı.")
+                    st.json(restore_result)
+
+                    # Restore sonrası eski preview artık geçersiz olabileceği için temizliyoruz.
+                    st.session_state.pop(preview_key, None)
+                    st.session_state.pop(dry_run_key, None)
+
+                else:
+                    st.error("Customer memory restore uygulanamadı.")
+                    st.json(restore_result)
+
+            except requests.exceptions.RequestException as error:
+                st.error("Customer memory restore API başarısız oldu.")
+                st.code(str(error))
+
+    with st.expander("Backup Dry Run Result", expanded=True):
         st.json(dry_run_result)
 
-    with st.expander("Raw Backup Preview"):
+    with st.expander("Raw Backup Preview", expanded=False):
         st.json(backup_data)
 
 def render_customer_memory_list():

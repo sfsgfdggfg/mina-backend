@@ -10,6 +10,7 @@ from src.core.customer_memory import (
     apply_customer_memory_import,
     list_customer_memory_backups,
     read_customer_memory_backup,
+    restore_customer_memory_from_backup,
 )
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
@@ -80,6 +81,9 @@ class CustomerMemoryStatusUpdateRequest(BaseModel):
 
 class CustomerMemoryImportValidateRequest(BaseModel):
     import_data: dict
+
+class CustomerMemoryRestoreRequest(BaseModel):
+    file_name: str
 
 RESERVED_CUSTOMER_MEMORY_TERMS = {
     "test",
@@ -520,10 +524,48 @@ def get_customer_memory_backups():
         "backups": list_customer_memory_backups()
     }
 
-
 @app.get("/customer-memory/backups/{file_name}")
 def get_customer_memory_backup(file_name: str):
     return read_customer_memory_backup(file_name)
+
+@app.post("/customer-memory/backups/restore")
+def restore_customer_memory_backup(
+    request: CustomerMemoryRestoreRequest,
+):
+    backup_data = read_customer_memory_backup(request.file_name)
+
+    backup_import_data = {
+        "profiles": backup_data.get("profiles", [])
+    }
+
+    validation_result = validate_customer_memory_import_data(backup_import_data)
+
+    if not validation_result.get("valid"):
+        return {
+            "success": False,
+            "message": "Restore validation failed.",
+            "validation_result": validation_result,
+        }
+
+    dry_run_result = build_customer_memory_import_dry_run(backup_import_data)
+
+    if dry_run_result.get("alias_conflicts"):
+        return {
+            "success": False,
+            "message": "Restore blocked because alias conflicts were found.",
+            "dry_run_result": dry_run_result,
+        }
+
+    result = restore_customer_memory_from_backup(
+        request.file_name,
+        updated_by="api_restore",
+    )
+
+    return {
+        "success": True,
+        "message": "Customer memory restored successfully.",
+        "result": result,
+    }
 
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]

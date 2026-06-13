@@ -660,3 +660,58 @@ def read_customer_memory_backup(file_name: str) -> dict:
         "profile_count": len(profiles) if isinstance(profiles, list) else 0,
         "profiles": profiles,
     }
+
+def restore_customer_memory_from_backup(
+    file_name: str,
+    updated_by: str = "restore",
+) -> dict:
+    """
+    Restores customer memory from a selected backup file.
+
+    A new backup of the current customer_memory.json is created before restore.
+    """
+
+    backup_data = read_customer_memory_backup(file_name)
+
+    profiles_data = backup_data.get("profiles")
+
+    if not isinstance(profiles_data, list):
+        raise ValueError("Invalid backup data: profiles must be a list.")
+
+    # Backup current live file before restore
+    pre_restore_backup_path = create_customer_memory_backup()
+
+    restored_profiles = []
+
+    for profile_data in profiles_data:
+        profile = CustomerMemoryProfile(**profile_data)
+        validate_customer_memory_terms(profile)
+
+        profile.last_updated_at = now_iso()
+        profile.last_updated_by = updated_by
+        profile.change_note = f"Restored from backup: {file_name}"
+
+        if not profile.created_at:
+            profile.created_at = now_iso()
+
+        restored_profiles.append(profile)
+
+    CUSTOMER_MEMORY_FILE.write_text(
+        json.dumps(
+            [profile.model_dump() for profile in restored_profiles],
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "success": True,
+        "restored_from": file_name,
+        "pre_restore_backup_path": pre_restore_backup_path,
+        "restored_profile_count": len(restored_profiles),
+        "restored_profiles": [
+            profile.customer_name
+            for profile in restored_profiles
+        ],
+    }
