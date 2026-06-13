@@ -362,6 +362,321 @@ Dummy Customer 001
 
 ---
 
+## Customer Memory Maintenance
+
+MINAI includes customer memory maintenance tools for safer data management.
+
+These tools help operators export, validate, import, backup, preview, and restore customer memory data.
+
+---
+
+### Customer Memory Export
+
+Customer memory can be exported from the Streamlit UI.
+
+The export includes:
+
+```text
+export_type
+profile_count
+profiles
+```
+
+API endpoint:
+
+```text
+GET /customer-memory/export
+```
+
+UI behavior:
+
+```text
+Customer Memory Export
+↓
+Export Customer Memory
+↓
+Download customer_memory_export.json
+↓
+JSON Preview
+```
+
+Purpose:
+
+* create a portable customer memory backup
+* inspect current customer memory data
+* prepare data for import / restore testing
+
+---
+
+### Customer Memory Import Preview
+
+Exported customer memory JSON files can be uploaded for preview before import.
+
+This preview does not change:
+
+```text
+data/customer_memory.json
+```
+
+UI behavior:
+
+```text
+Upload customer_memory_export.json
+↓
+Show profile count
+↓
+Show customer names
+↓
+Show raw import preview
+```
+
+---
+
+### Customer Memory Import Validation API
+
+Import validation is handled by the backend.
+
+API endpoint:
+
+```text
+POST /customer-memory/import/validate
+```
+
+Validation checks:
+
+* valid export format
+* profiles field exists
+* profiles field is a list
+* reserved customer names
+* reserved aliases
+* duplicate customer names inside import file
+* duplicate aliases inside import file
+
+Example blocked reserved terms:
+
+```text
+test
+demo
+deneme
+sample
+example
+dummy
+unknown
+customer
+company
+client
+müşteri
+firma
+```
+
+---
+
+### Customer Memory Import Dry Run
+
+Before applying an import, MINAI compares the uploaded JSON with the current customer memory file.
+
+API endpoint:
+
+```text
+POST /customer-memory/import/dry-run
+```
+
+Dry run report shows:
+
+```text
+current_profile_count
+profile_count
+will_add
+will_update
+will_skip
+alias_conflicts
+```
+
+Meaning:
+
+```text
+will_add
+→ profiles that do not exist yet and would be added
+
+will_update
+→ profiles that already exist and would be updated
+
+will_skip
+→ invalid or incomplete profiles that would not be imported
+
+alias_conflicts
+→ aliases that conflict with another existing customer profile
+```
+
+---
+
+### Customer Memory Import Apply
+
+Validated customer memory data can be applied from the UI.
+
+API endpoint:
+
+```text
+POST /customer-memory/import/apply
+```
+
+Safety rules:
+
+* import must pass backend validation
+* import must pass dry run conflict checks
+* alias conflicts block import
+* UI requires checkbox confirmation
+* a backup is automatically created before import
+
+Import behavior:
+
+```text
+Existing customer profile
+→ update existing profile
+
+New customer profile
+→ add new profile
+
+Profiles not included in import file
+→ remain unchanged
+```
+
+Backup location:
+
+```text
+data/backups/
+```
+
+---
+
+### Customer Memory Backup List
+
+Whenever an import or restore is applied, MINAI creates a timestamped backup.
+
+Backup files are stored in:
+
+```text
+data/backups/
+```
+
+API endpoint:
+
+```text
+GET /customer-memory/backups
+```
+
+Backup list includes:
+
+```text
+file_name
+path
+size_bytes
+modified_at
+```
+
+---
+
+### Customer Memory Restore Preview
+
+Backup files can be previewed before restore.
+
+API endpoint:
+
+```text
+GET /customer-memory/backups/{file_name}
+```
+
+The UI also runs a restore dry run by using:
+
+```text
+POST /customer-memory/import/dry-run
+```
+
+Restore preview shows:
+
+```text
+Current profile count
+Backup profile count
+Restore would add
+Restore would update
+Restore would skip
+Alias conflicts
+```
+
+No data is changed during preview.
+
+---
+
+### Customer Memory Restore Apply
+
+A selected backup file can be restored from the UI.
+
+API endpoint:
+
+```text
+POST /customer-memory/backups/restore
+```
+
+Safety rules:
+
+* restore can only use files from `data/backups`
+* selected backup is validated before restore
+* alias conflicts block restore
+* UI requires checkbox confirmation
+* current customer memory is backed up again before restore
+
+Restore behavior:
+
+```text
+Selected backup file
+↓
+Validate
+↓
+Dry run
+↓
+Checkbox confirmation
+↓
+Create backup of current live customer_memory.json
+↓
+Replace customer_memory.json with selected backup content
+```
+
+Result includes:
+
+```text
+restored_from
+pre_restore_backup_path
+restored_profile_count
+restored_profiles
+```
+
+---
+
+### Current Maintenance Flow
+
+```text
+Export
+↓
+Import Preview
+↓
+Backend Validation
+↓
+Dry Run
+↓
+Apply Import
+↓
+Automatic Backup
+↓
+Backup List
+↓
+Restore Preview
+↓
+Restore Apply
+```
+
+This gives MINAI a safer customer memory maintenance workflow before connecting real customer data sources.
+
+
 ## Decision Explanation and Action Recommendation
 
 MINAI explains why it made important operational decisions.
