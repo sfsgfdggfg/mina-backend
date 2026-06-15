@@ -133,6 +133,7 @@ Teşekkürler.
             "risk_level": "green",
             "customer_memory_matched": True,
             "action_type": "quote_ready",
+            "expected_supplier_name": "Anatolia Domestic",
         },
     },
         {
@@ -154,6 +155,7 @@ Teşekkürler.
             "risk_level": "green",
             "customer_memory_matched": True,
             "action_type": "quote_ready",
+            "expected_supplier_name": "Anatolia Domestic",
         },
     },
         {

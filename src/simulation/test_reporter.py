@@ -20,6 +20,8 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
     risk_assessment = result["risk_assessment"]
     missing_info = result.get("missing_info")
     action_recommendation = result.get("action_recommendation")
+    supplier_selection = result.get("supplier_selection")
+    supplier_quote = result.get("supplier_quote")
 
     actual_result_type = determine_result_type(result)
 
@@ -68,6 +70,36 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
         if actual_matched != expected_customer_memory_matched:
             failures.append(
                 f"customer_memory_matched expected {expected_customer_memory_matched}, got {actual_matched}"
+            )
+
+    expected_supplier_name = expected.get("expected_supplier_name")
+    if expected_supplier_name:
+        selected_suppliers = (
+            supplier_selection.get("selected_suppliers", [])
+            if isinstance(supplier_selection, dict)
+            else []
+        )
+
+        actual_selected_supplier = (
+            selected_suppliers[0].get("supplier_name")
+            if selected_suppliers
+            else None
+        )
+
+        if actual_selected_supplier != expected_supplier_name:
+            failures.append(
+                f"selected supplier expected {expected_supplier_name}, got {actual_selected_supplier}"
+            )
+
+        actual_quote_supplier = (
+            supplier_quote.supplier_name
+            if supplier_quote
+            else None
+        )
+
+        if actual_quote_supplier != expected_supplier_name:
+            failures.append(
+                f"supplier_quote supplier expected {expected_supplier_name}, got {actual_quote_supplier}"
             )
 
     expected_missing_fields = expected.get("missing_fields")
