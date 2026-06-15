@@ -297,7 +297,94 @@ action_type = management_review
 
 ---
 
-## 14. Critical Missing Information Önceliği
+---
+
+## 14. Supplier Selection Step
+
+Supplier Selection adımı, Risk Assessment sonrasında ve Supplier Quote üretiminden önce çalışır.
+
+Bu adımın amacı, fiyat simülasyonuna veya supplier teklif toplama sürecine geçmeden önce operasyonel olarak en uygun supplier adaylarını belirlemektir.
+
+Güncel workflow akışı:
+
+```text
+1. Email parsing
+2. Customer Memory enrichment
+3. Missing information check
+4. Equipment decision
+5. Risk assessment
+6. Supplier selection
+7. Supplier quote simulation
+8. Customer quote calculation
+9. Quote draft generation
+10. Action recommendation
+```
+
+Supplier Selection Engine şu bilgileri kullanır:
+
+```text
+- Shipment data
+- Equipment decision
+- Risk assessment
+- Service type
+- Delivery country / route
+- Equipment requirement
+```
+
+Supplier seçimi yalnızca en düşük fiyat kriterine göre yapılmaz.
+
+Sistem aşağıdaki faktörleri birlikte değerlendirir:
+
+```text
+- Route uygunluğu
+- Ekipman uygunluğu
+- Servis tipi uygunluğu
+- Risk seviyesi
+- Supplier güvenilirliği
+- Fiyat skoru
+- Hız / transit uygunluğu
+```
+
+Supplier Selection çıktısı şu yapıdadır:
+
+```json
+{
+  "selected_suppliers": [
+    {
+      "supplier_name": "Anatolia Road",
+      "priority": 1,
+      "total_score": 0.892,
+      "route_score": 1.0,
+      "equipment_score": 1.0,
+      "risk_score": 0.9,
+      "price_score": 0.76,
+      "speed_score": 0.84,
+      "reason": "güzergah uygun; ekipman / servis tipi uygun; risk profiline uygun ve güven skoru yüksek"
+    }
+  ],
+  "rejected_suppliers": [],
+  "selection_strategy": "route + equipment + risk + price + speed weighted scoring",
+  "source": "supplier_selection_engine"
+}
+```
+
+Supplier Selection v1 demo supplier profilleriyle çalışır.
+
+Gerçek supplier database, route capability matrix, supplier performans geçmişi ve müşteri-supplier ilişki skorları sonraki geliştirme görevlerinde eklenecektir.
+
+Operasyonel prensip:
+
+```text
+- ADR yüklerde ADR uzmanı supplier önceliklendirilir.
+- Reefer yüklerde soğuk zincir kabiliyeti olmayan supplier elenir.
+- Lowbed / ağır yük taleplerinde proje yükü kabiliyeti olmayan supplier elenir.
+- Parsiyel taleplerde LTL / parsiyel network sağlayabilen supplier önceliklendirilir.
+```
+
+Supplier Selection Engine en fazla 3 uygun supplier adayı önerir.
+
+
+## 15. Critical Missing Information Önceliği
 
 Critical missing information varsa risk seviyesinden bağımsız olarak fiyat üretilmez.
 
@@ -314,7 +401,7 @@ Bu durumda sistem quote draft üretmez.
 
 ---
 
-## 15. Management Review Gate
+## 16. Management Review Gate
 
 Red risk durumunda sistem yönetici incelemesi ister.
 
@@ -336,7 +423,7 @@ ve internal management review draft hazırlanır.
 
 ---
 
-## 16. Quote Generation Gate
+## 17. Quote Generation Gate
 
 Aşağıdaki şartlarda quote draft üretilebilir:
 
@@ -351,7 +438,7 @@ Green risk varsa quote ready olarak ilerler.
 
 ---
 
-## 17. Action Recommendation Engine
+## 18. Action Recommendation Engine
 
 Workflow sonucunda sistem kullanıcıya bir sonraki operasyonel aksiyonu önerir.
 
@@ -373,7 +460,7 @@ unknown
 
 ---
 
-## 18. Action Recommendation Mapping
+## 19. Action Recommendation Mapping
 
 Genel mapping:
 
@@ -393,7 +480,7 @@ Red risk
 
 ---
 
-## 19. Draft Generator Davranışı
+## 20. Draft Generator Davranışı
 
 Workflow sonucu hangi draft’ın üretileceğini belirler.
 
@@ -415,7 +502,7 @@ Aynı anda yalnızca ilgili ana draft kullanılmalıdır.
 
 ---
 
-## 20. Human Approval Policy
+## 21. Human Approval Policy
 
 MINAI nihai müşteri teklifini koşulsuz olarak göndermez.
 
@@ -432,7 +519,7 @@ Son karar ve gönderim insan onayına bağlıdır.
 
 ---
 
-## 21. Workflow Öncelik Sırası
+## 22. Workflow Öncelik Sırası
 
 Workflow Engine karar önceliği:
 
@@ -467,7 +554,7 @@ Quote Ready
 
 ---
 
-## 22. Customer Memory Maintenance Workflow
+## 23. Customer Memory Maintenance Workflow
 
 Customer Memory bakım işlemleri ana shipment workflow’undan ayrıdır.
 
@@ -491,7 +578,7 @@ Ancak Customer Memory verisi shipment workflow’u içinde recognition ve enrich
 
 ---
 
-## 23. Import Workflow
+## 24. Import Workflow
 
 Customer Memory import süreci:
 
@@ -528,7 +615,7 @@ Profiles not included in import
 
 ---
 
-## 24. Restore Workflow
+## 25. Restore Workflow
 
 Customer Memory restore süreci:
 
@@ -554,7 +641,7 @@ Restore işlemi yalnızca `data/backups/` içindeki sistem backup dosyalarından
 
 ---
 
-## 25. Backup Cleanup Workflow
+## 26. Backup Cleanup Workflow
 
 Backup cleanup süreci:
 
@@ -584,7 +671,7 @@ Son N backup korunur. Daha eski backup dosyaları cleanup candidate olarak değe
 
 ---
 
-## 26. Error Handling İlkeleri
+## 27. Error Handling İlkeleri
 
 Workflow Engine ve API tarafında hatalar kullanıcıya anlaşılır şekilde dönmelidir.
 
@@ -598,7 +685,7 @@ Genel kurallar:
 
 ---
 
-## 27. Test Politikası
+## 28. Test Politikası
 
 Her önemli değişiklikten sonra şu komut çalıştırılır:
 
@@ -621,7 +708,7 @@ python -m py_compile ui/app.py
 
 ---
 
-## 28. Current Workflow Status
+## 29. Current Workflow Status
 
 Tamamlanan workflow bileşenleri:
 
@@ -632,6 +719,7 @@ Tamamlanan workflow bileşenleri:
 * missing information engine
 * equipment decision engine
 * operational risk engine
+* supplier selection workflow
 * clarification gate
 * management review gate
 * quote generation gate
@@ -640,11 +728,10 @@ Tamamlanan workflow bileşenleri:
 
 ---
 
-## 29. Next Workflow Priorities
+## 30. Next Workflow Priorities
 
 Sonraki workflow geliştirme alanları:
 
-* supplier selection workflow
 * route-based supplier priority
 * cost breakdown workflow
 * margin approval workflow
@@ -652,3 +739,5 @@ Sonraki workflow geliştirme alanları:
 * customer-specific quote behavior
 * booking workflow
 * document control workflow
+
+
