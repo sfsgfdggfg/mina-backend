@@ -206,3 +206,195 @@ RULE-034
 Makine yüklerinde ölçü bilgisi eksikse sistem fiyat üretmez.
 
 Müşteriden ölçü ve ağırlık bilgisi ister.
+
+
+## RULE-031
+
+Public email domain kullanan kontaklarda müşteri şirketi otomatik domain üzerinden belirlenmez.
+
+Örnek public domainler:
+
+* gmail.com
+* hotmail.com
+* outlook.com
+* yahoo.com
+* icloud.com
+
+Bu domainler müşteri şirketi olarak kullanılmaz.
+
+---
+
+## RULE-032
+
+Çok düzenli müşterilerde kişi adı / email ön eki müşteri tanıma için güçlü sinyal olabilir.
+
+Örnek:
+
+```text
+selman@temsa.com
+→ Selman bilinen kontaksa
+→ Customer = TEMSA
+```
+
+Ancak bu kural yalnızca müşteri hafızası veya geçmiş kayıtlar ile destekleniyorsa uygulanır.
+
+---
+
+## RULE-033
+
+Road Freight fiyatı supplier’dan gelen güncel fiyatlara dayanır.
+
+Geçmiş fiyatlar karar destek verisidir; ana fiyat kaynağı değildir.
+
+Geçmiş fiyatlar şu amaçlarla kullanılabilir:
+
+* referans
+* anomali tespiti
+* route davranışı analizi
+* müşteri / tedarikçi alışkanlığı analizi
+
+Ancak geçmiş fiyat tek başına otomatik satış fiyatı üretmek için kullanılmaz.
+
+---
+
+## RULE-034
+
+Critical missing information varsa sistem fiyat / teklif üretmez.
+
+Bu durumda quote draft yerine clarification email hazırlanır.
+
+Critical missing information örnekleri:
+
+* Makine yükünde ölçü eksikliği
+* Makine yükünde ağırlık eksikliği
+* ADR bilgisi belirsizliği
+* Pickup / delivery bilgisinin operasyonu başlatmaya yetmeyecek kadar eksik olması
+* Ürün cinsinin ekipman kararını doğrudan etkilediği durumlarda commodity eksikliği
+
+---
+
+## RULE-035
+
+Customer Memory profilleri yalnızca active = true ise recognition ve enrichment süreçlerinde kullanılabilir.
+
+active = false olan profiller:
+
+* UI’da görünür
+* geçmiş bilgi olarak saklanır
+* matching için kullanılmaz
+* enrichment için kullanılmaz
+
+---
+
+## RULE-036
+
+Customer Memory içindeki bilgi, müşterinin mailde açıkça verdiği bilginin üzerine yazmaz.
+
+Öncelik sırası:
+
+1. Müşterinin güncel mailde verdiği açık bilgi
+2. Customer Memory varsayımı
+3. AI çıkarımı
+4. Clarification request
+
+Örnek:
+
+Müşteri mailde ekipmanı açıkça “reefer” olarak yazmışsa, Customer Memory’de default equipment “tenteli” olsa bile reefer dikkate alınır.
+
+---
+
+## RULE-037
+
+Customer Memory kaynaklı varsayımlar kullanıcıya görünür şekilde açıklanır.
+
+Sistem şu bilgileri göstermelidir:
+
+* Customer Memory matched / not matched
+* Source
+* Matched By
+* Applied Notes
+* Kullanılan varsayımlar
+
+Amaç:
+Operasyon personeli AI’ın hangi bilgiyi nereden aldığını görebilmelidir.
+
+---
+
+## RULE-038
+
+Test, Demo, Deneme, Sample, Example, Dummy gibi generic değerler müşteri adı veya alias olarak kullanılamaz.
+
+Gerekçe:
+Bu değerler AI parser tarafından belirsiz müşteri adı olarak üretilebilir.
+Customer Memory içinde eşleşirse sistem müşteriyi yanlışlıkla tanınan müşteri kabul edebilir.
+
+Geçerli test müşteri örnekleri:
+
+* Sandbox Customer Alpha
+* ACME Test Lojistik
+* Dummy Customer 001
+
+---
+
+## RULE-039
+
+AI parser çıktıları doğrudan operasyon kararına bağlanmaz.
+
+Parser çıktıları önce normalization layer üzerinden geçirilir.
+
+Amaç:
+
+* farklı dillerdeki değerleri standartlaştırmak
+* ekipman / ülke / yük tipi isimlerini canonical hale getirmek
+* workflow kararlarını daha tutarlı hale getirmek
+
+Örnek dönüşümler:
+
+```text
+machine → Makine
+Turkey → Türkiye
+Germany → Almanya
+full truck / komple → FTL
+partial / parsiyel → LTL
+```
+
+---
+
+## RULE-040
+
+Risk seviyesi aksiyon önerisini belirler.
+
+Genel davranış:
+
+```text
+Green
+→ quote_ready
+
+Yellow
+→ quote_with_review
+
+Red
+→ management_review
+
+Critical missing information
+→ clarification
+```
+
+Critical missing information varsa risk seviyesi yellow olsa bile fiyat üretimi durdurulur ve clarification email hazırlanır.
+
+---
+
+## RULE-041
+
+AI müşteriyle doğrudan nihai teklif paylaşmaz.
+
+AI’ın görevi:
+
+* talebi analiz etmek
+* eksik bilgi varsa sormak
+* ekipman ve risk değerlendirmesi yapmak
+* quote / clarification / management review draft üretmek
+* önerilen aksiyonu göstermek
+
+Son gönderim insan onayına bağlıdır.
+
