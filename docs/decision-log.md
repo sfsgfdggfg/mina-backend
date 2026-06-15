@@ -439,3 +439,55 @@ Kural:
 * Önce sabit route'lar yazılır.
 * Sonra dinamik route'lar yazılır.
 * Hatalı backup dosya adlarında 500 yerine uygun HTTPException döndürülür.
+
+ ## DEC-035 — Supplier Selection Engine v1
+
+**Status:** Accepted
+**Date:** 2026-06-15
+
+### Decision
+
+MINAI Freight OS içine ilk versiyon Supplier Selection Engine eklenmiştir.
+
+Sistem artık teklif sürecinde doğrudan demo supplier fiyatına geçmeden önce, talebe uygun tedarikçileri seçer ve seçim gerekçelerini üretir.
+
+Supplier seçimi şu kriterlere göre yapılır:
+
+* Route uygunluğu
+* Ekipman uygunluğu
+* Servis tipi uygunluğu
+* Risk seviyesi
+* Güvenilirlik skoru
+* Fiyat skoru
+* Hız skoru
+
+### Rationale
+
+Freight forwarding operasyonlarında doğru tedarikçi seçimi sadece en ucuz fiyatla yapılamaz. Hatta uygunluk, ekipman kabiliyeti, yük riski, geçmiş güvenilirlik ve hız gibi operasyonel faktörler de dikkate alınmalıdır.
+
+Bu nedenle sistemde supplier selection ayrı bir karar katmanı olarak konumlandırılmıştır.
+
+### Implementation
+
+Yeni dosya:
+
+```text
+src/core/supplier_selection.py
+```
+
+Pipeline bağlantısı:
+
+```text
+Email → Shipment Parsing → Customer Memory → Missing Info → Equipment Decision → Risk Assessment → Supplier Selection → Supplier Quote → Customer Quote → Quote Draft
+```
+
+API response içine `supplier_selection` alanı eklenmiştir.
+
+UI tarafında Supplier Selection sonucu görünür hale getirilmiştir.
+
+### Consequences
+
+* Sistem artık seçilen supplier adaylarını gerekçeleriyle birlikte gösterebilir.
+* Supplier seçimi ileride gerçek supplier database, route capability, geçmiş performans ve müşteri ilişkisi skorlarıyla geliştirilebilir.
+* Mevcut v1 demo supplier listesi ile çalışır; gerçek operasyon verisi henüz bağlı değildir.
+
