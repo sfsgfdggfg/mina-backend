@@ -1,0 +1,177 @@
+[
+  {
+    "supplier_name": "Anatolia Road",
+    "active": true,
+    "role": "primary",
+    "route_regions": [
+      "western_europe"
+    ],
+    "countries": [
+      "Almanya",
+      "Avusturya",
+      "Belçika",
+      "Hollanda",
+      "Fransa"
+    ],
+    "service_types": [
+      "FTL"
+    ],
+    "equipment_types": [
+      "Tenteli / Curtainsider",
+      "Mega Trailer",
+      "Kapalı Kasa / Box Trailer"
+    ],
+    "special_capabilities": [],
+    "priority_routes": [
+      "Türkiye-Almanya",
+      "Türkiye-Avusturya"
+    ],
+    "reliability_score": 0.9,
+    "price_score": 0.76,
+    "speed_score": 0.84,
+    "notes": "Türkiye - Batı Avrupa hattında güçlü genel karayolu tedarikçisi."
+  },
+  {
+    "supplier_name": "EuroBridge Logistics",
+    "active": true,
+    "role": "backup",
+    "route_regions": [
+      "western_europe",
+      "central_europe"
+    ],
+    "countries": [
+      "Almanya",
+      "Romanya",
+      "Fransa",
+      "Belçika",
+      "Hollanda"
+    ],
+    "service_types": [
+      "FTL",
+      "LTL"
+    ],
+    "equipment_types": [
+      "Tenteli / Curtainsider",
+      "Mega Trailer"
+    ],
+    "special_capabilities": [],
+    "priority_routes": [
+      "Türkiye-Almanya",
+      "Türkiye-Fransa"
+    ],
+    "reliability_score": 0.8,
+    "price_score": 0.9,
+    "speed_score": 0.78,
+    "notes": "Fiyat rekabeti güçlü, Avrupa geneli alternatif tedarikçi."
+  },
+  {
+    "supplier_name": "ColdChain Europe",
+    "active": true,
+    "role": "specialist",
+    "route_regions": [
+      "western_europe"
+    ],
+    "countries": [
+      "Almanya",
+      "Avusturya",
+      "Belçika",
+      "Hollanda",
+      "Fransa"
+    ],
+    "service_types": [
+      "FTL",
+      "LTL"
+    ],
+    "equipment_types": [
+      "Reefer"
+    ],
+    "special_capabilities": [
+      "reefer",
+      "temperature_controlled",
+      "cold_chain"
+    ],
+    "priority_routes": [
+      "Türkiye-Almanya",
+      "Türkiye-Avusturya",
+      "Türkiye-Hollanda"
+    ],
+    "reliability_score": 0.88,
+    "price_score": 0.7,
+    "speed_score": 0.82,
+    "notes": "Sıcaklık kontrollü taşımalarda uzman."
+  },
+  {
+    "supplier_name": "ADR Secure Logistics",
+    "active": true,
+    "role": "specialist",
+    "route_regions": [
+      "western_europe",
+      "central_europe"
+    ],
+    "countries": [
+      "Almanya",
+      "Avusturya",
+      "Romanya",
+      "Fransa",
+      "Belçika"
+    ],
+    "service_types": [
+      "FTL"
+    ],
+    "equipment_types": [
+      "Special ADR Equipment",
+      "Tenteli / Curtainsider"
+    ],
+    "special_capabilities": [
+      "adr",
+      "class_1",
+      "class_7"
+    ],
+    "priority_routes": [
+      "Türkiye-Almanya",
+      "Türkiye-Avusturya"
+    ],
+    "reliability_score": 0.93,
+    "price_score": 0.62,
+    "speed_score": 0.76,
+    "notes": "ADR ve yüksek riskli yüklerde uzman tedarikçi."
+  },
+  {
+    "supplier_name": "Local LTL Network",
+    "active": true,
+    "role": "specialist",
+    "route_regions": [
+      "western_europe",
+      "central_europe",
+      "domestic"
+    ],
+    "countries": [
+      "Almanya",
+      "Avusturya",
+      "Romanya",
+      "Fransa",
+      "Belçika",
+      "Hollanda",
+      "Türkiye"
+    ],
+    "service_types": [
+      "LTL"
+    ],
+    "equipment_types": [
+      "Tenteli / Curtainsider"
+    ],
+    "special_capabilities": [
+      "ltl",
+      "partial",
+      "parsiyel"
+    ],
+    "priority_routes": [
+      "Türkiye-Almanya",
+      "Türkiye-Romanya"
+    ],
+    "reliability_score": 0.78,
+    "price_score": 0.88,
+    "speed_score": 0.74,
+    "notes": "Parsiyel / LTL talepler için demo network."
+  }
+]
