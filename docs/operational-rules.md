@@ -398,3 +398,27 @@ AI’ın görevi:
 
 Son gönderim insan onayına bağlıdır.
 
+## RULE-042 — Supplier Selection Is Not Price-Only
+
+Supplier seçimi yalnızca en düşük fiyat kriterine göre yapılmamalıdır.
+
+Sistem supplier seçerken aşağıdaki faktörleri birlikte değerlendirmelidir:
+
+1. Route uygunluğu
+2. Ekipman uygunluğu
+3. Servis tipi uygunluğu
+4. Yükün risk seviyesi
+5. Supplier güvenilirliği
+6. Fiyat rekabetçiliği
+7. Hız / transit uygunluğu
+
+Riskli taşımalarda güvenilirlik ve operasyonel uygunluk, fiyatın önüne geçebilir.
+
+Örnekler:
+
+* ADR veya yüksek riskli yüklerde uzman supplier önceliklendirilmelidir.
+* Reefer yüklerde soğuk zincir kabiliyeti olmayan supplier elenmelidir.
+* Lowbed / ağır yük taleplerinde proje yükü kabiliyeti olmayan supplier seçilmemelidir.
+* Parsiyel taleplerde LTL / parsiyel network sağlayabilen supplier önceliklendirilmelidir.
+
+Supplier Selection Engine en fazla 3 uygun supplier adayı önermelidir.
