@@ -741,3 +741,68 @@ Sonraki workflow geliştirme alanları:
 * document control workflow
 
 
+## Supplier Capability Matrix Data Source
+
+Supplier Selection Engine, supplier adaylarını belirlerken supplier capability datasını kullanır.
+
+İlk versiyonda bu data aşağıdaki JSON dosyasından okunur:
+
+```text
+data/supplier_capabilities.json
+```
+
+Bu yapı, supplier seçim mantığını kod içindeki sabit listeden ayırmak için oluşturulmuştur.
+
+### Data Fields
+
+Supplier capability datası şu alanları içerir:
+
+```text
+- supplier_name
+- active
+- role
+- route_regions
+- countries
+- service_types
+- equipment_types
+- special_capabilities
+- priority_routes
+- reliability_score
+- price_score
+- speed_score
+- notes
+```
+
+### Workflow Usage
+
+Supplier Selection Step sırasında sistem:
+
+```text
+1. Shipment datasını okur
+2. Equipment decision sonucunu okur
+3. Risk assessment sonucunu okur
+4. Supplier capability datasını yükler
+5. Route, ekipman, servis tipi ve risk uygunluğuna göre supplier adaylarını skorlar
+6. En fazla 3 supplier adayı önerir
+```
+
+### Current Limitation
+
+Bu yapı şu anda demo JSON datası ile çalışır.
+
+Gerçek ürün aşamasında supplier capability datası:
+
+```text
+- database tablosuna
+- kullanıcı tarafından yönetilen supplier ekranına
+- route capability matrix yapısına
+- supplier performance history modeline
+```
+
+dönüştürülebilir.
+
+### Safety Note
+
+Kritik operasyonel sinyaller için yalnızca AI parser çıktısına güvenilmez.
+
+ADR Class 1 ve ADR Class 7 gibi yüksek riskli ifadeler ham email metni üzerinden ayrıca kontrol edilir.
