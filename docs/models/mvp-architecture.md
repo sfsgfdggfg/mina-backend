@@ -1,329 +1,385 @@
 # MINAI Freight OS
 
-# MVP Architecture v1
+# MVP Architecture v2
 
-## Purpose
+## 1. Amaç
 
-Bu doküman MINAI Freight OS MVP v1’in teknik mimarisini tanımlar.
+Bu doküman MINAI Freight OS MVP mimarisini tanımlar.
 
-MVP amacı:
-
-* Gelen müşteri mailini almak
-* Müşteriyi tanımak
-* Shipment bilgilerini çıkarmak
-* Eksik bilgi ve riskleri analiz etmek
-* Uygun ekipman kararını vermek
-* Tedarikçi seçimi yapmak
-* Supplier quote toplamak
-* Müşteriye quote email taslağı oluşturmak
-* İnsan onayı ile teklif gönderimine hazır hale getirmek
-
----
-
-# 1. MVP Scope
-
-## Included
-
-MVP v1 kapsamında olacaklar:
-
-* Road Freight
-* Email → Quote workflow
-* Semi-auto çalışma
-* Human approval
-* Customer Recognition
-* Shipment Extraction
-* Equipment Decision
-* Risk Assessment
-* Supplier Selection
-* Supplier Quote Parsing
-* Quote Draft Generation
-* Simulation environment
-
----
-
-## Not Included
-
-MVP v1 kapsamında olmayacaklar:
-
-* Sea Freight
-* Air Freight
-* Maersk / MSC portal automation
-* WhatsApp automation
-* Phone call automation
-* Full autonomous sending
-* Historical price prediction
-* ERP integration
-
----
-
-# 2. High-Level Architecture
+MINAI Freight OS’in ilk MVP hedefi:
 
 ```text
-Email Source
-    ↓
-Email Ingestion Service
-    ↓
-AI Processing Layer
-    ↓
-Core Rule Engine
-    ↓
-Workflow Engine
-    ↓
-Database
-    ↓
-Quote Draft Generator
-    ↓
-Human Review
+Customer Email
+↓
+Shipment Analysis
+↓
+Missing Info / Equipment / Risk Decision
+↓
+Quote / Clarification / Management Review Draft
+↓
+Human Approval
 ```
 
+Sistem tam otonom çalışmak için değil, operasyon personeline karar desteği vermek için tasarlanmıştır.
+
 ---
 
-# 3. Recommended Tech Stack
+## 2. MVP Kapsamı
 
-## Backend
+MVP kapsamı şu ana akışla sınırlıdır:
 
 ```text
-Python
+Email → Analysis → Draft
+```
+
+MVP’nin ana çıktıları:
+
+* quote draft
+* clarification email draft
+* management review draft
+* action recommendation
+* customer memory enrichment
+* operational risk visibility
+
+---
+
+## 3. MVP Dışı Konular
+
+Aşağıdaki başlıklar MVP kapsamı dışındadır:
+
+* gerçek booking açma
+* invoice oluşturma
+* gerçek supplier portal entegrasyonu
+* gerçek email gönderimi
+* ERP entegrasyonu
+* CRM entegrasyonu
+* otomatik müşteri fiyat gönderimi
+* tam otonom operasyon
+* historical pricing ile otomatik fiyat oluşturma
+* gerçek database migration
+
+Bu konular ileride ayrı fazlarda ele alınacaktır.
+
+---
+
+## 4. Ana Mimari
+
+Mevcut MVP mimarisi:
+
+```text
+Customer Email
+↓
+AI Parser
+↓
+Normalization Layer
+↓
+Customer Memory
+↓
+Missing Info Engine
+↓
+Equipment Decision Engine
+↓
+Risk Engine
+↓
+Workflow Pipeline
+↓
+Pricing Simulation
+↓
+Draft Generator
+↓
+Action Recommendation
+↓
 FastAPI
-Pydantic
-```
-
-Reason:
-
-* Hızlı geliştirme
-* OpenAI entegrasyonu kolay
-* API-first yapı
-* Tip güvenliği için Pydantic uygun
-
----
-
-## AI Layer
-
-```text
-OpenAI API
-Structured Outputs
-Prompt Templates
-```
-
-Kullanım alanları:
-
-* Email parsing
-* Shipment extraction
-* Missing info detection
-* RFQ drafting
-* Quote email drafting
-
----
-
-## Database
-
-```text
-PostgreSQL
-```
-
-İlk aşamada yeterlidir.
-
-İleride:
-
-```text
-pgvector
-```
-
-eklenerek müşteri ve mail geçmişi için semantic search yapılabilir.
-
----
-
-## Workflow
-
-MVP v1’de workflow önce Python içinde yazılacaktır.
-
-İleride opsiyonel:
-
-```text
-n8n
-Temporal
-LangGraph
-```
-
-değerlendirilebilir.
-
-PM kararı:
-
-MVP v1 için workflow sistemi fazla karmaşıklaştırılmayacaktır.
-
----
-
-## Frontend
-
-İlk aşamada şart değildir.
-
-MVP v1 için yeterli seçenekler:
-
-```text
-Terminal output
-Simple local dashboard
-Streamlit
-Basic React UI
-```
-
-Öncelik backend ve workflow doğrulamasıdır.
-
----
-
-## Development Environment
-
-```text
-GitHub
-GitHub Codespaces
-VS Code environment
+↓
+Streamlit UI
 ```
 
 ---
 
-# 4. Main Components
-
-## 4.1 Email Ingestion Service
-
-Görev:
-
-* Gelen email’i sisteme almak
-* Sender bilgilerini çıkarmak
-* Subject ve body bilgisini kaydetmek
-* Thread bilgisini saklamak
-
-MVP v1’de iki mod desteklenebilir:
+## 5. Proje Klasör Yapısı
 
 ```text
-Simulation Mode
-Manual Email Input Mode
-```
+data/
+├── customer_memory.json
+└── backups/
 
-Production’da:
+docs/
+├── decision-log.md
+├── operational-rules.md
+├── workflow-engine.md
+├── database-schema.md
+└── mvp-architecture.md
 
-```text
-Outlook Graph API
-Gmail API
-```
+src/
+├── ai/
+│   ├── email_parser.py
+│   ├── quote_generator.py
+│   ├── clarification_generator.py
+│   └── approval_generator.py
+│
+├── core/
+│   ├── models.py
+│   ├── normalization.py
+│   ├── missing_info.py
+│   ├── equipment.py
+│   ├── risk.py
+│   ├── pricing.py
+│   ├── customer_memory.py
+│   └── action_recommendation.py
+│
+├── simulation/
+│   ├── ai_email_test_cases.py
+│   ├── scenario_generator.py
+│   ├── supplier_simulator.py
+│   └── test_reporter.py
+│
+├── workflow/
+│   └── pipeline.py
+│
+├── api.py
+├── config.py
+└── main.py
 
-eklenebilir.
-
----
-
-## 4.2 Customer Recognition Service
-
-Görev:
-
-Email’in hangi müşteriye ait olduğunu belirlemek.
-
-Sıralama:
-
-```text
-1. Known contact match
-2. Known local-part / person match
-3. Company domain match
-4. Signature recognition
-5. Historical context search
-6. Manual assignment
-```
-
-Public domainler:
-
-```text
-gmail.com
-hotmail.com
-outlook.com
-yahoo.com
-icloud.com
-```
-
-şirket domain’i olarak kullanılmaz.
-
----
-
-## 4.3 Shipment Extraction Service
-
-Görev:
-
-Düzensiz mail metninden shipment objesi oluşturmak.
-
-Input:
-
-```text
-email body
-subject
-customer context
-historical context
-```
-
-Output:
-
-```text
-Shipment object
-confidence score
-missing fields
-assumptions
+ui/
+└── app.py
 ```
 
 ---
 
-## 4.4 Missing Information Service
+## 6. Backend Architecture
 
-Görev:
+Backend Python tabanlıdır.
 
-Shipment için kritik eksik bilgi var mı kontrol etmek.
-
-Road Freight için kritik alanlar:
+Ana backend bileşenleri:
 
 ```text
-pickup location
-delivery location
-piece count
-dimensions
-commodity
-cargo ready date
+AI Parser
+Core Engines
+Workflow Pipeline
+Simulation Layer
+FastAPI API Layer
 ```
 
-Eksik bilgi varsa:
+Backend’in merkezi orkestrasyon noktası:
 
 ```text
-needs_clarification
+src/workflow/pipeline.py
 ```
 
-statüsü oluşur.
+Ana fonksiyon:
+
+```text
+process_shipment()
+```
 
 ---
 
-## 4.5 Equipment Decision Service
+## 7. AI Parser Layer
 
-Görev:
+AI Parser müşteri mailinden structured shipment bilgisi çıkarır.
 
-Yük için doğru ekipmanı belirlemek.
+Dosya:
 
-Default:
+```text
+src/ai/email_parser.py
+```
+
+Görevleri:
+
+* müşteri mailini okumak
+* POL / POD çıkarmak
+* weight / volume / dimensions çıkarmak
+* commodity çıkarmak
+* shipment type sinyallerini okumak
+* ADR / temperature / equipment sinyallerini okumak
+* müşteri adı bilgisini çıkarmak
+
+Parser çıktısı doğrudan operasyon kararına bağlanmaz.
+
+Parser sonrası normalization layer çalışır.
+
+---
+
+## 8. Normalization Layer
+
+Normalization Layer farklı dillerde ve formatlarda gelen değerleri canonical değerlere çevirir.
+
+Dosya:
+
+```text
+src/core/normalization.py
+```
+
+Örnek dönüşümler:
+
+```text
+machine → Makine
+Turkey → Türkiye
+Germany → Almanya
+full truck / komple → FTL
+partial / parsiyel → LTL
+```
+
+Amaç:
+
+* AI parser çıktısını standartlaştırmak
+* workflow kararlarını daha tutarlı hale getirmek
+* test edilebilirliği artırmak
+
+---
+
+## 9. Customer Memory Architecture
+
+Customer Memory sistemi CRM değildir.
+
+Amacı:
+
+```text
+Known customer → operational defaults / assumptions / notes
+```
+
+Current storage:
+
+```text
+data/customer_memory.json
+```
+
+Customer Memory destekleri:
+
+* known customer recognition
+* aliases
+* active / passive status
+* default commodity
+* default equipment
+* default pickup / delivery
+* price sensitivity
+* time sensitivity
+* operational notes
+* audit metadata
+
+Audit alanları:
+
+```text
+created_at
+last_updated_at
+last_updated_by
+change_note
+```
+
+---
+
+## 10. Customer Memory Matching
+
+Customer Memory iki kaynaktan eşleşebilir:
+
+```text
+shipment.customer_name
+email_text
+```
+
+Eşleşme sonucu:
+
+```text
+matched
+profile
+source
+matched_by
+notes_applied
+```
+
+Sadece `active = true` olan profiller matching/enrichment için kullanılabilir.
+
+---
+
+## 11. Customer Memory Safety
+
+Reserved customer memory terms engellenir.
+
+Örnek engellenen değerler:
+
+```text
+test
+demo
+deneme
+sample
+example
+dummy
+unknown
+customer
+company
+client
+müşteri
+firma
+```
+
+Gerekçe:
+
+AI parser belirsiz müşteri adlarında generic değer üretebilir. Bu değerler Customer Memory ile eşleşirse sistem müşteriyi yanlışlıkla tanınan müşteri kabul edebilir.
+
+---
+
+## 12. Missing Info Engine
+
+Dosya:
+
+```text
+src/core/missing_info.py
+```
+
+Görevi:
+
+* kritik eksik bilgileri tespit etmek
+* workflow’un devam edip edemeyeceğine karar vermek
+* clarification gerekip gerekmediğini belirlemek
+
+Critical missing information varsa sistem quote üretmez.
+
+Bu durumda:
+
+```text
+result_type = clarification
+```
+
+---
+
+## 13. Equipment Decision Engine
+
+Dosya:
+
+```text
+src/core/equipment.py
+```
+
+Görevi:
+
+* yük bilgisine göre uygun ekipmanı belirlemek
+* nedenini açıklamak
+* güven seviyesini belirtmek
+* UI’da karar açıklaması göstermek
+
+Örnek ekipmanlar:
 
 ```text
 Tenteli / Curtainsider
-```
-
-Override tetikleyicileri:
-
-```text
-temperature controlled → Reefer
-height > 2.85m → Mega / Lowbed
-width > 2.50m → Platform / Lowbed
-single piece >= 26t → Lowbed / Heavy Haul
-top loading → Open Trailer
-high value cargo → Box Trailer
-ADR class 1 / 7 → Special ADR equipment
+Mega Trailer
+Reefer
+Kapalı Kasa / Box Trailer
+Platform
+Lowbed
+Special ADR Equipment
 ```
 
 ---
 
-## 4.6 Risk Assessment Service
+## 14. Risk Engine
 
-Görev:
+Dosya:
 
-Shipment risk seviyesini hesaplamak.
+```text
+src/core/risk.py
+```
+
+Risk Engine teknik risk motoru değil, Operational Risk Engine’dir.
 
 Risk seviyeleri:
 
@@ -333,383 +389,459 @@ yellow
 red
 ```
 
-Green:
+Genel davranış:
 
 ```text
-AI quote draft hazırlayabilir.
-İnsan onayı yine gerekir.
-```
+green
+→ quote_ready
 
-Yellow:
+yellow
+→ quote_with_review
 
-```text
-Operasyon personeli incelemesi gerekir.
-```
-
-Red:
-
-```text
-Yönetici / senior onayı gerekir.
+red
+→ management_review
 ```
 
 ---
 
-## 4.7 Supplier Selection Service
+## 15. Workflow Pipeline
 
-Görev:
-
-Shipment için en uygun maksimum 3 tedarikçiyi seçmek.
-
-Input:
+Dosya:
 
 ```text
-route
-equipment_type
-service_type
-customer sensitivity
-supplier capabilities
-supplier route priority
-supplier score
+src/workflow/pipeline.py
 ```
 
-Output:
+Workflow sırası:
 
 ```text
-selected_suppliers[]
-```
-
-Kural:
-
-```text
-RFQ max 3 supplier
-```
-
----
-
-## 4.8 RFQ Generator
-
-Görev:
-
-Tedarikçiye gönderilecek fiyat talep mailini oluşturmak.
-
-RFQ içeriği:
-
-```text
-pickup location
-delivery location
-cargo details
-dimensions
-weight
-equipment requirement
-ready date
-delivery expectation
-special notes
-```
-
----
-
-## 4.9 Supplier Quote Parser
-
-Görev:
-
-Tedarikçiden gelen cevaplardan fiyat bilgisini çıkarmak.
-
-Extracted fields:
-
-```text
-quoted_cost
-currency
-validity
-transit time
-equipment
-notes
-```
-
----
-
-## 4.10 Customer Quote Calculator
-
-Görev:
-
-Müşteriye verilecek satış fiyatını hesaplamak.
-
-MVP formülü:
-
-```text
-supplier_cost + margin = final_price
-```
-
-Margin tipleri:
-
-```text
-percentage
-fixed
-manual
-```
-
-Historical pricing MVP’de otomatik fiyatlama için kullanılmaz.
-
----
-
-## 4.11 Quote Draft Generator
-
-Görev:
-
-Müşteriye gönderilecek teklif maili taslağını oluşturmak.
-
-Output:
-
-```text
-email_subject
-email_body
-```
-
-Teklif maili insan onayı olmadan gönderilmez.
-
----
-
-## 4.12 Human Review Layer
-
-Görev:
-
-Operasyon personelinin AI çıktısını kontrol etmesini sağlamak.
-
-Aksiyonlar:
-
-```text
-approve
-edit
-reject
-request more info
-```
-
----
-
-# 5. MVP Runtime Modes
-
-## 5.1 Simulation Mode
-
-Amaç:
-
-Gerçek müşteri veya tedarikçi olmadan sistemi test etmek.
-
-Akış:
-
-```text
-Fake customer email
+Customer Memory Enrichment
 ↓
-AI parsing
+Missing Information Check
 ↓
-Fake supplier response
+Equipment Decision
 ↓
-Quote draft
+Risk Assessment
+↓
+Workflow Gate
+↓
+Pricing / Draft / Action Recommendation
+```
+
+Ana result type değerleri:
+
+```text
+quote
+clarification
+management_review
 ```
 
 ---
 
-## 5.2 Manual Input Mode
+## 16. Workflow Gate Logic
 
-Amaç:
-
-Gerçek bir email metnini elle sisteme yapıştırarak test etmek.
-
-Akış:
+Genel karar mantığı:
 
 ```text
-User pastes email
+Red risk
 ↓
-System processes email
+Management Review
+
+Critical missing information
 ↓
-Output shown
+Clarification
+
+Yellow risk
+↓
+Quote with Review
+
+Green risk
+↓
+Quote Ready
 ```
 
+Critical missing information varsa fiyat üretimi durur.
+
+Red risk varsa yönetici incelemesi gerekir.
+
+Yellow risk varsa quote draft üretilebilir ancak review önerilir.
+
+Green risk varsa quote ready olur.
+
 ---
 
-## 5.3 Live Email Mode
+## 17. Pricing Simulation
 
-MVP sonrası.
+MVP’de gerçek supplier fiyat sistemi yoktur.
 
-Akış:
+Şu an fiyat simülasyonu kullanılır.
+
+Dosyalar:
 
 ```text
-Outlook/Gmail connector
-↓
-Inbound email
-↓
-Workflow engine
-```
-
----
-
-# 6. Suggested Folder Structure
-
-```text
-src/
-
-├── main.py
-├── config.py
-
-├── ai/
-│   ├── email_parser.py
-│   ├── quote_generator.py
-│   ├── prompts.py
-
-├── core/
-│   ├── models.py
-│   ├── rules.py
-│   ├── pricing.py
-│   ├── risk.py
-│   ├── equipment.py
-
-├── workflow/
-│   ├── pipeline.py
-│   ├── customer_recognition.py
-│   ├── supplier_selection.py
-
-├── simulation/
-│   ├── email_generator.py
-│   ├── supplier_simulator.py
-
-├── db/
-│   ├── database.py
-│   ├── models.py
-│   ├── migrations/
-
-└── utils/
-    ├── logger.py
-```
-
----
-
-# 7. MVP Development Order
-
-## Step 1 — Simulation Pipeline
-
-```text
-Fake email
-↓
-Shipment extraction
-↓
-Equipment decision
-↓
-Risk assessment
-↓
-Quote draft
-```
-
----
-
-## Step 2 — Structured AI Parser
-
-```text
-Email body
-↓
-Pydantic ShipmentExtraction model
-```
-
----
-
-## Step 3 — Rule Engines
-
-```text
-Missing info
-Equipment
-Risk
-```
-
----
-
-## Step 4 — Supplier Simulation
-
-```text
-Selected supplier
-↓
-Fake supplier quote
-```
-
----
-
-## Step 5 — Quote Draft
-
-```text
-Supplier cost
-+ margin
-↓
-Customer quote email
-```
-
----
-
-## Step 6 — Database Integration
-
-Veriler PostgreSQL’e kaydedilir.
-
----
-
-## Step 7 — Manual Review Screen
-
-Basit bir onay ekranı eklenir.
-
----
-
-# 8. AI Model Strategy
-
-MVP v1’de model seçimi görev bazlı yapılacaktır.
-
-| Task                | Model Type               |
-| ------------------- | ------------------------ |
-| Email extraction    | small / cost-efficient   |
-| Equipment reasoning | rules first, AI assist   |
-| Risk reasoning      | rules first, AI assist   |
-| Quote drafting      | medium                   |
-| Complex edge cases  | stronger model if needed |
-
-PM kuralı:
-
-```text
-Önce deterministic rules.
-Sonra AI reasoning.
-```
-
----
-
-# 9. Key Architecture Principle
-
-MINAI yalnızca LLM wrapper olmayacaktır.
-
-Sistem şu yapı üzerine kurulacaktır:
-
-```text
-AI Extraction
-+
-Rule Engine
-+
-Customer Memory
-+
-Supplier Intelligence
-+
-Risk Engine
-+
-Human Approval
-```
-
----
-
-# 10. Next Step
-
-Bu dokümandan sonra ilk kod aşamasına geçilecektir.
-
-İlk kod hedefi:
-
-```text
-Simulation Pipeline v1
+src/simulation/supplier_simulator.py
+src/core/pricing.py
 ```
 
 Amaç:
 
+* pipeline’ın uçtan uca çalışmasını sağlamak
+* quote draft üretimini test etmek
+* ileride gerçek supplier fiyat sistemine zemin hazırlamak
+
+Gerçek fiyat kaynağı ileride supplier maili, portal, API veya rate sheet olabilir.
+
+---
+
+## 18. Draft Generators
+
+Draft generator dosyaları:
+
 ```text
-Tek komutla:
-fake email → shipment extraction → risk/equipment decision → quote draft
+src/ai/quote_generator.py
+src/ai/clarification_generator.py
+src/ai/approval_generator.py
 ```
 
-çalıştırmak.
+Üretilen draft türleri:
+
+```text
+quote_draft
+clarification_draft
+management_review_draft
+```
+
+AI nihai maili doğrudan göndermez.
+
+Draft insan onayına sunulur.
+
+---
+
+## 19. Action Recommendation Engine
+
+Dosya:
+
+```text
+src/core/action_recommendation.py
+```
+
+Görevi:
+
+* workflow sonucunu operasyon personeline aksiyon olarak çevirmek
+* priority belirlemek
+* checklist üretmek
+* UI’da bir sonraki adımı göstermek
+
+Action type değerleri:
+
+```text
+quote_ready
+quote_with_review
+clarification
+management_review
+unknown
+```
+
+---
+
+## 20. API Architecture
+
+API framework:
+
+```text
+FastAPI
+```
+
+Ana dosya:
+
+```text
+src/api.py
+```
+
+Mevcut endpoint grupları:
+
+```text
+Health
+Email Processing
+Test Suite
+Customer Memory CRUD
+Customer Memory Export / Import
+Customer Memory Backup / Restore
+Customer Memory Cleanup
+```
+
+Temel endpointler:
+
+```text
+GET  /health
+POST /process-email
+GET  /run-test-suite
+```
+
+Customer Memory endpointleri:
+
+```text
+GET    /customer-memory
+POST   /customer-memory
+PUT    /customer-memory
+PATCH  /customer-memory/status
+```
+
+Maintenance endpointleri:
+
+```text
+GET  /customer-memory/export
+POST /customer-memory/import/validate
+POST /customer-memory/import/dry-run
+POST /customer-memory/import/apply
+GET  /customer-memory/backups
+GET  /customer-memory/backups/cleanup-preview
+POST /customer-memory/backups/cleanup
+POST /customer-memory/backups/restore
+GET  /customer-memory/backups/{file_name}
+```
+
+---
+
+## 21. UI Architecture
+
+UI framework:
+
+```text
+Streamlit
+```
+
+Ana dosya:
+
+```text
+ui/app.py
+```
+
+UI görevleri:
+
+* email paste / process
+* ready test email seçimi
+* result summary
+* customer memory match gösterimi
+* missing info gösterimi
+* equipment decision explanation
+* risk assessment
+* action recommendation checklist
+* generated draft gösterimi
+* automated test suite runner
+* customer memory list
+* customer memory add / edit
+* active / passive update
+* export / import / backup / restore / cleanup işlemleri
+
+---
+
+## 22. Customer Memory Maintenance Architecture
+
+Customer Memory maintenance ana shipment workflow’undan ayrıdır.
+
+Maintenance akışı:
+
+```text
+Export
+↓
+Import Preview
+↓
+Backend Validation
+↓
+Dry Run
+↓
+Apply Import
+↓
+Automatic Backup
+↓
+Backup List
+↓
+Restore Preview
+↓
+Restore Apply
+↓
+Cleanup Preview
+↓
+Cleanup Apply
+```
+
+Bu işlemler Customer Memory verisini yönetir.
+
+Shipment workflow ise Customer Memory verisini recognition ve enrichment için kullanır.
+
+---
+
+## 23. Backup Architecture
+
+Backup klasörü:
+
+```text
+data/backups/
+```
+
+Backup dosya formatı:
+
+```text
+customer_memory_backup_<timestamp>.json
+```
+
+Backup şu işlemlerden önce alınır:
+
+* import apply
+* restore apply
+
+Cleanup policy:
+
+```text
+keep_latest = 10
+```
+
+Son N backup korunur, daha eski backup dosyaları cleanup candidate olur.
+
+---
+
+## 24. Testing Architecture
+
+Ana test komutu:
+
+```bash
+python -m src.main
+```
+
+Beklenen sonuç:
+
+```text
+10 passed, 0 failed
+```
+
+Test case dosyası:
+
+```text
+src/simulation/ai_email_test_cases.py
+```
+
+Test edilen ana senaryolar:
+
+* standard textile FTL
+* machine missing dimensions
+* temperature controlled food
+* ADR Class 7
+* partial shipment request
+* machine height 2.90m
+* known customer Oğuz Gıda
+* customer recognition from email content
+* Beta Enerji transformer
+* Temsa time sensitive automotive
+
+---
+
+## 25. Development / Runtime Architecture
+
+API çalıştırma:
+
+```bash
+uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+```
+
+UI çalıştırma:
+
+```bash
+streamlit run ui/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+```
+
+Syntax kontrol:
+
+```bash
+python -m py_compile src/api.py
+python -m py_compile ui/app.py
+```
+
+Test:
+
+```bash
+python -m src.main
+```
+
+---
+
+## 26. Human Approval Architecture
+
+MINAI tam otonom çalışmaz.
+
+AI’ın görevi:
+
+* analiz etmek
+* eksik bilgi tespit etmek
+* risk belirlemek
+* ekipman önermek
+* draft üretmek
+* aksiyon önermek
+
+Son gönderim ve operasyonel karar insan onayına bağlıdır.
+
+---
+
+## 27. Current MVP Status
+
+Tamamlanan ana bileşenler:
+
+* AI structured email parser
+* normalization layer
+* missing info engine
+* equipment decision engine
+* equipment decision explanation
+* operational risk engine
+* workflow pipeline
+* quote draft generator
+* clarification draft generator
+* management review draft generator
+* action recommendation engine
+* automated test suite
+* FastAPI backend
+* Streamlit UI
+* Customer Memory v1
+* Customer Memory CRUD
+* Customer Memory active/passive
+* Customer Memory audit metadata
+* Customer Memory reserved terms
+* Customer Memory export
+* Customer Memory import preview
+* Customer Memory import validation API
+* Customer Memory import dry run
+* Customer Memory import apply
+* Customer Memory backup list
+* Customer Memory restore preview
+* Customer Memory restore apply
+* Customer Memory backup cleanup preview
+* Customer Memory backup cleanup apply
+* README / docs güncellemeleri
+
+---
+
+## 28. Current Technical Risks
+
+Mevcut teknik dikkat noktaları:
+
+* Streamlit / Codespaces port forwarding bazen stale link üretebilir.
+* Customer Memory backup cleanup gerçek dosya silme yaptığı için dikkatli kullanılmalıdır.
+* JSON storage ileride database’e taşınmalıdır.
+* API endpoint sıralamasında dinamik route’lar sabit route’lardan sonra gelmelidir.
+* Test suite her değişiklikten sonra çalıştırılmalıdır.
+
+---
+
+## 29. Next Architecture Priorities
+
+Sıradaki mimari öncelikler:
+
+1. Supplier Selection Engine
+2. Supplier Route Capability Model
+3. Cost Breakdown Engine
+4. Margin Rules Engine
+5. Quote Comparison Workflow
+6. Customer-specific Pricing Behavior
+7. Booking Workflow
+8. Document Checklist Workflow
+9. Real database migration plan
+10. Email inbox integration planning
