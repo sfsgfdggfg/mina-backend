@@ -243,3 +243,199 @@ Kural:
   - Sandbox Customer Alpha
   - ACME Test Lojistik
   - Dummy Customer 001
+
+## DEC-028 — Customer Memory Audit Metadata
+
+Customer Memory profillerinde değişiklik geçmişini takip edebilmek için audit metadata tutulacaktır.
+
+Audit alanları:
+
+* created_at
+* last_updated_at
+* last_updated_by
+* change_note
+
+Gerekçe:
+
+* Müşteri hafızasında yapılan değişikliklerin izlenebilir olması gerekir.
+* Yanlış varsayım, yanlış ekipman veya yanlış müşteri eşleşmesi gibi durumlarda hangi değişikliğin ne zaman yapıldığı görülebilmelidir.
+* İleride daha gelişmiş audit trail sistemi için temel oluşturur.
+
+Kural:
+
+* Yeni oluşturulan müşteri profillerinde created_at ve last_updated_at set edilir.
+* Güncellenen profillerde last_updated_at, last_updated_by ve change_note güncellenir.
+* Import / restore gibi toplu işlemler de audit alanlarını günceller.
+
+---
+
+## DEC-029 — Customer Memory Export / Import Safety Policy
+
+Customer Memory verisi dışa aktarılabilir ve tekrar içe aktarılabilir olacaktır.
+
+Ancak import işlemi doğrudan uygulanmayacaktır.
+
+Import süreci şu sırayla çalışacaktır:
+
+1. Import Preview
+2. Backend Validation
+3. Dry Run
+4. Kullanıcı Onayı
+5. Apply Import
+
+Gerekçe:
+
+* Customer Memory operasyonel kararları etkileyen kritik bir veri kaynağıdır.
+* Hatalı import, müşteri tanıma ve ekipman/risk kararlarını bozabilir.
+* Bu nedenle gerçek import öncesinde validasyon ve dry run zorunludur.
+
+Kural:
+
+* Import dosyasında profiles alanı bulunmalıdır.
+* profiles alanı liste olmalıdır.
+* Reserved customer name / alias değerleri engellenir.
+* Duplicate customer name ve duplicate alias kontrol edilir.
+* Alias conflict varsa import uygulanmaz.
+* UI üzerinde checkbox confirmation olmadan import uygulanmaz.
+
+---
+
+## DEC-030 — Customer Memory Import Apply Policy
+
+Customer Memory import apply işlemi mevcut veriyi tamamen silip yeniden oluşturmayacaktır.
+
+Import davranışı:
+
+* Mevcut müşteri profili varsa update edilir.
+* Yeni müşteri profili varsa add edilir.
+* Import dosyasında bulunmayan mevcut profiller korunur.
+
+Gerekçe:
+
+* Import işlemi bakım aracı olarak kullanılacaktır.
+* Kısmi importlarda mevcut müşteri hafızasının yanlışlıkla kaybolması önlenmelidir.
+* Operasyonel veri güvenliği korunmalıdır.
+
+Kural:
+
+* Import apply öncesi otomatik backup alınır.
+* Import validation başarısızsa işlem uygulanmaz.
+* Alias conflict varsa işlem uygulanmaz.
+* Başarılı import sonrası added / updated raporu döner.
+
+---
+
+## DEC-031 — Customer Memory Backup Policy
+
+Customer Memory üzerinde import veya restore gibi veri değiştiren işlemler yapılmadan önce otomatik backup alınacaktır.
+
+Backup dosyaları şu klasörde tutulacaktır:
+
+```text
+data/backups/
+```
+
+Gerekçe:
+
+* Import veya restore sırasında veri bozulursa geri dönüş yolu olmalıdır.
+* Customer Memory operasyonel kararları etkilediği için geri alınabilirlik zorunludur.
+* Kullanıcı hataları veya yanlış import dosyaları kalıcı veri kaybına yol açmamalıdır.
+
+Kural:
+
+* Import apply öncesi backup alınır.
+* Restore apply öncesi mevcut canlı dosyanın backup'ı alınır.
+* Backup dosyaları timestamp içerecek şekilde adlandırılır.
+* Backup dosyaları UI üzerinden listelenebilir.
+
+---
+
+## DEC-032 — Customer Memory Restore Policy
+
+Customer Memory restore işlemi sadece sistem tarafından oluşturulmuş backup dosyalarından yapılacaktır.
+
+Restore süreci:
+
+1. Backup listesi görüntülenir.
+2. Seçilen backup preview edilir.
+3. Restore dry run çalıştırılır.
+4. Alias conflict kontrol edilir.
+5. Kullanıcı checkbox ile onay verir.
+6. Mevcut canlı customer_memory.json için yeni backup alınır.
+7. Seçilen backup canlı dosyanın yerine yazılır.
+
+Gerekçe:
+
+* Restore işlemi yüksek etkili bir veri operasyonudur.
+* Yanlış backup seçimi veya hatalı veri dosyası sistemin müşteri tanıma davranışını bozabilir.
+* Restore öncesi dry run ve confirmation zorunlu olmalıdır.
+
+Kural:
+
+* Restore sadece data/backups içindeki dosyalardan yapılır.
+* Alias conflict varsa restore engellenir.
+* Validation başarısızsa restore engellenir.
+* Restore öncesi mevcut customer_memory.json yeniden yedeklenir.
+
+---
+
+## DEC-033 — Customer Memory Backup Cleanup Policy
+
+Customer Memory backup dosyaları sonsuza kadar büyümeyecek şekilde yönetilecektir.
+
+İlk cleanup politikası:
+
+```text
+Son N backup saklanır.
+Daha eski backup dosyaları cleanup candidate olarak gösterilir.
+```
+
+Varsayılan değer:
+
+```text
+keep_latest = 10
+```
+
+Gerekçe:
+
+* Backup klasörü zaman içinde kontrolsüz büyümemelidir.
+* Silme işlemi riskli olduğu için önce cleanup preview gösterilmelidir.
+* Sadece preview tarafından aday gösterilen eski dosyalar silinebilir.
+
+Kural:
+
+* Backup cleanup önce preview üretir.
+* Cleanup apply kullanıcı onayı olmadan çalışmaz.
+* Son N backup korunur.
+* Sadece cleanup candidate dosyalar silinir.
+* Silinen ve silinemeyen dosyalar raporlanır.
+
+---
+
+## DEC-034 — API Endpoint Order Policy
+
+FastAPI içinde sabit endpointler, dinamik path endpointlerinden önce tanımlanacaktır.
+
+Örnek:
+
+```text
+/customer-memory/backups/cleanup-preview
+```
+
+şu endpointten önce gelmelidir:
+
+```text
+/customer-memory/backups/{file_name}
+```
+
+Gerekçe:
+
+* FastAPI route eşleşmesinde dinamik path endpointleri sabit endpointleri yakalayabilir.
+* cleanup-preview gibi sabit path değerleri yanlışlıkla file_name gibi algılanabilir.
+* Bu durum 404 veya 500 hatalarına neden olabilir.
+
+Kural:
+
+* Önce sabit route'lar yazılır.
+* Sonra dinamik route'lar yazılır.
+* Hatalı backup dosya adlarında 500 yerine uygun HTTPException döndürülür.
