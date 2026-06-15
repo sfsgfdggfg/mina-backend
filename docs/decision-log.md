@@ -491,3 +491,64 @@ UI tarafında Supplier Selection sonucu görünür hale getirilmiştir.
 * Supplier seçimi ileride gerçek supplier database, route capability, geçmiş performans ve müşteri ilişkisi skorlarıyla geliştirilebilir.
 * Mevcut v1 demo supplier listesi ile çalışır; gerçek operasyon verisi henüz bağlı değildir.
 
+## DEC-036 — Supplier Capability Matrix v1
+
+**Status:** Accepted
+**Date:** 2026-06-15
+
+### Decision
+
+Supplier Selection Engine için supplier kabiliyet verileri kod içindeki sabit listeden çıkarılmış ve ayrı bir JSON veri kaynağına taşınmıştır.
+
+Yeni veri kaynağı:
+
+```text
+data/supplier_capabilities.json
+```
+
+Supplier Selection Engine artık supplier profillerini bu dosyadan okuyarak çalışır.
+
+### Rationale
+
+Supplier kabiliyetleri ürün kodunun içine gömülü kalmamalıdır. Route, ekipman, servis tipi, özel kabiliyet, güvenilirlik, fiyat ve hız skorları ileride operasyon ekibi tarafından yönetilebilir veri alanları haline gelmelidir.
+
+Bu ayrım, sistemi gerçek supplier database / route capability matrix yapısına hazırlamak için yapılmıştır.
+
+### Implementation
+
+Güncellenen modül:
+
+```text
+src/core/supplier_selection.py
+```
+
+Yeni veri dosyası:
+
+```text
+data/supplier_capabilities.json
+```
+
+Supplier profilleri şu bilgileri içerir:
+
+```text
+- supplier_name
+- active
+- role
+- route_regions
+- countries
+- service_types
+- equipment_types
+- special_capabilities
+- priority_routes
+- reliability_score
+- price_score
+- speed_score
+- notes
+```
+
+### Consequences
+
+* Supplier selection verisi artık koddan ayrılmıştır.
+* Yeni supplier eklemek için ileride kod değişikliği gerekmeyebilir.
+* Gerçek ürün aşamasında bu JSON yapısı database tablosuna dönüşebilir.
+* Mevcut versiyon hâlâ demo veri ile çalışır.
