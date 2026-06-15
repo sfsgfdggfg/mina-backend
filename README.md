@@ -15,6 +15,18 @@ MVP kapsamı:
 * Teklif, eksik bilgi veya yönetici onayı taslağı üretir
 * FastAPI backend ve Streamlit UI ile çalışır
 
+MINAI tam otonom karar verici değildir.
+
+AI’ın görevi:
+
+* talebi analiz etmek
+* eksik bilgiyi tespit etmek
+* ekipman ve risk kararı önermek
+* draft üretmek
+* operasyon personeline aksiyon önermek
+
+Son gönderim ve operasyonel karar insan onayına bağlıdır.
+
 ---
 
 ## Current MVP Flow
@@ -49,7 +61,20 @@ UI Result Screen
 
 ```text
 data/
-└── customer_memory.json
+├── customer_memory.json
+└── backups/
+
+docs/
+├── decision-log.md
+├── operational-rules.md
+├── product-blueprint.md
+└── models/
+    ├── customer-intelligence-model.md
+    ├── database-schema.md
+    ├── mvp-architecture.md
+    ├── risk-engine.md
+    ├── supplier-intelligence-model.md
+    └── workflow-engine.md
 
 src/
 ├── ai/
@@ -83,9 +108,34 @@ src/
 
 ui/
 └── app.py
+```
 
+---
+
+## Documentation
+
+Main documentation files:
+
+```text
+docs/decision-log.md
+docs/operational-rules.md
+docs/product-blueprint.md
+docs/models/workflow-engine.md
+docs/models/database-schema.md
+docs/models/mvp-architecture.md
+docs/models/customer-intelligence-model.md
+docs/models/supplier-intelligence-model.md
+docs/models/risk-engine.md
+```
+
+Documentation structure rule:
+
+```text
 docs/
-└── ...
+→ kararlar, operasyon kuralları ve ürün dokümanları
+
+docs/models/
+→ mimari, workflow, veri modeli ve engine dokümanları
 ```
 
 ---
@@ -109,7 +159,9 @@ OPENAI_MODEL=gpt-4o-mini
 
 Important:
 
-`.env` must not be committed to GitHub.
+```text
+.env must not be committed to GitHub.
+```
 
 ---
 
@@ -118,7 +170,7 @@ Important:
 Start FastAPI:
 
 ```bash
-uvicorn src.api:app --reload
+uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Backend will run on:
@@ -130,19 +182,13 @@ http://127.0.0.1:8000
 API docs:
 
 ```text
-/docs
+http://127.0.0.1:8000/docs
 ```
 
-Available endpoints:
+Health check:
 
 ```text
-GET    /health
-POST   /process-email
-GET    /run-test-suite
-GET    /customer-memory
-POST   /customer-memory
-PUT    /customer-memory
-PATCH  /customer-memory/status
+GET /health
 ```
 
 ---
@@ -152,7 +198,15 @@ PATCH  /customer-memory/status
 Open a second terminal and run:
 
 ```bash
-streamlit run ui/app.py
+streamlit run ui/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+```
+
+If using GitHub Codespaces:
+
+```text
+Do not manually open localhost:8501.
+
+Use the Codespaces Ports tab and open the forwarded 8501 URL.
 ```
 
 The UI allows you to:
@@ -171,6 +225,65 @@ The UI allows you to:
 * add new customer memory profiles
 * edit customer memory profiles
 * set customer profiles active or passive
+* export customer memory data
+* import customer memory JSON preview
+* validate import files through backend API
+* run import dry run
+* apply customer memory import with confirmation
+* list customer memory backup files
+* preview backup restore
+* apply backup restore with confirmation
+* preview backup cleanup
+* apply backup cleanup with confirmation
+
+---
+
+## API Endpoints
+
+Core endpoints:
+
+```text
+GET    /health
+POST   /process-email
+GET    /run-test-suite
+```
+
+Customer Memory CRUD endpoints:
+
+```text
+GET    /customer-memory
+POST   /customer-memory
+PUT    /customer-memory
+PATCH  /customer-memory/status
+```
+
+Customer Memory maintenance endpoints:
+
+```text
+GET    /customer-memory/export
+
+POST   /customer-memory/import/validate
+POST   /customer-memory/import/dry-run
+POST   /customer-memory/import/apply
+
+GET    /customer-memory/backups
+GET    /customer-memory/backups/cleanup-preview
+POST   /customer-memory/backups/cleanup
+POST   /customer-memory/backups/restore
+GET    /customer-memory/backups/{file_name}
+```
+
+Important API routing rule:
+
+```text
+Static routes must be defined before dynamic routes.
+
+Example:
+GET /customer-memory/backups/cleanup-preview
+
+must be defined before:
+GET /customer-memory/backups/{file_name}
+```
 
 ---
 
@@ -217,9 +330,20 @@ Expected result:
 
 ---
 
+## Syntax Check
+
+Before accepting major changes:
+
+```bash
+python -m py_compile src/api.py
+python -m py_compile ui/app.py
+```
+
+---
+
 ## Example Test Scenarios
 
-The current test suite covers:
+The current automated test suite covers:
 
 1. Standard textile FTL
 2. Machine missing dimensions
@@ -234,6 +358,137 @@ The current test suite covers:
 
 ---
 
+## Core Workflow Behavior
+
+### Quote
+
+If information is sufficient and risk is not red:
+
+```text
+result_type = quote
+```
+
+MINAI generates a customer quote draft.
+
+If risk is yellow, MINAI can still create a quote draft but recommends operational review before sending.
+
+---
+
+### Clarification
+
+If critical information is missing:
+
+```text
+result_type = clarification
+```
+
+MINAI stops quote generation and creates a missing information email draft.
+
+Examples of critical missing information:
+
+* machine shipment with missing dimensions
+* machine shipment with missing weight
+* unclear ADR information
+* pickup / delivery information too incomplete to start operation
+* commodity missing when commodity directly affects equipment decision
+* abnormal pallet weight without dimensions
+
+---
+
+### Management Review
+
+If risk level is red:
+
+```text
+result_type = management_review
+```
+
+MINAI stops quote generation and creates an internal management review draft.
+
+Examples:
+
+* ADR Class 1
+* ADR Class 7
+* high regulatory risk
+* serious operational risk
+* management approval required scenarios
+
+---
+
+## Decision Explanation and Action Recommendation
+
+MINAI explains why it made important operational decisions.
+
+For equipment decisions, the system returns:
+
+```text
+selected_equipment
+reason
+confidence
+source
+explanation
+```
+
+Example:
+
+```text
+Equipment: Reefer
+Reason: Sıcaklık kontrollü yük tespit edildi.
+Explanation: Tenteli araç sıcaklık kontrolü sağlayamayacağı için Reefer seçildi.
+```
+
+MINAI also recommends the next operational action.
+
+Possible action types:
+
+```text
+quote_ready
+quote_with_review
+clarification
+management_review
+unknown
+```
+
+General mapping:
+
+```text
+Green + quote
+→ quote_ready
+
+Yellow + quote
+→ quote_with_review
+
+Critical missing information
+→ clarification
+
+Red risk
+→ management_review
+```
+
+The UI shows:
+
+```text
+Önerilen Aksiyon
+Priority
+Action Type
+Source
+Checklist
+```
+
+Example:
+
+```text
+Action Type: clarification
+Priority: high
+Title: Müşteriden Eksik Bilgi İste
+Checklist:
+- Eksik bilgi mail taslağını kontrol et.
+- Müşteriden ölçü / ürün / adres / hazır tarih gibi kritik bilgileri iste.
+- Bilgi gelmeden fiyat paylaşma.
+```
+
+---
+
 ## Customer Memory
 
 MINAI can recognize known customers and enrich shipment data using customer-specific memory.
@@ -244,7 +499,7 @@ Customer memory profiles are stored in:
 data/customer_memory.json
 ```
 
-Current customer memory supports:
+Current Customer Memory supports:
 
 * known customer recognition
 * customer aliases
@@ -295,7 +550,7 @@ Audit information
 
 ## Customer Memory Management
 
-The Streamlit UI includes a basic Customer Memory management module.
+The Streamlit UI includes a Customer Memory management module.
 
 Current UI capabilities:
 
@@ -335,7 +590,7 @@ last_updated_by
 change_note
 ```
 
-Reserved customer memory terms cannot be used as customer names or aliases:
+Reserved Customer Memory terms cannot be used as customer names or aliases:
 
 ```text
 test
@@ -345,6 +600,7 @@ sample
 example
 dummy
 unknown
+unknown customer
 customer
 company
 client
@@ -366,7 +622,18 @@ Dummy Customer 001
 
 MINAI includes customer memory maintenance tools for safer data management.
 
-These tools help operators export, validate, import, backup, preview, and restore customer memory data.
+These tools help operators:
+
+* export customer memory data
+* validate imported customer memory files
+* preview imports before applying
+* apply imports safely
+* automatically create backups
+* list backup files
+* preview restore operations
+* apply restore operations safely
+* preview backup cleanup
+* apply backup cleanup with confirmation
 
 ---
 
@@ -652,6 +919,69 @@ restored_profiles
 
 ---
 
+### Customer Memory Backup Cleanup Preview
+
+Backup cleanup preview shows which backup files would be kept and which backup files would be cleanup candidates.
+
+API endpoint:
+
+```text
+GET /customer-memory/backups/cleanup-preview
+```
+
+Default policy:
+
+```text
+keep_latest = 10
+```
+
+Preview result includes:
+
+```text
+total_backup_count
+keep_latest
+keep_count
+cleanup_candidate_count
+backups_to_keep
+cleanup_candidates
+```
+
+No files are deleted during preview.
+
+---
+
+### Customer Memory Backup Cleanup Apply
+
+Backup cleanup apply deletes old backup files after confirmation.
+
+API endpoint:
+
+```text
+POST /customer-memory/backups/cleanup
+```
+
+Safety rules:
+
+* latest selected number of backups are preserved
+* only cleanup candidate files are deleted
+* UI requires checkbox confirmation
+* deleted files are reported
+* failed deletions are reported
+
+Cleanup result includes:
+
+```text
+success
+keep_latest
+deleted_count
+failed_count
+deleted_files
+failed_files
+message
+```
+
+---
+
 ### Current Maintenance Flow
 
 ```text
@@ -672,106 +1002,39 @@ Backup List
 Restore Preview
 ↓
 Restore Apply
+↓
+Cleanup Preview
+↓
+Cleanup Apply
 ```
 
 This gives MINAI a safer customer memory maintenance workflow before connecting real customer data sources.
 
-
-## Decision Explanation and Action Recommendation
-
-MINAI explains why it made important operational decisions.
-
-For equipment decisions, the system returns:
-
-```text
-selected_equipment
-reason
-confidence
-source
-explanation
-```
-
-Example:
-
-```text
-Equipment: Reefer
-Reason: Sıcaklık kontrollü yük tespit edildi.
-Explanation: Tenteli araç sıcaklık kontrolü sağlayamayacağı için Reefer seçildi.
-```
-
-MINAI also recommends the next operational action.
-
-Possible action types:
-
-```text
-quote_ready
-quote_with_review
-clarification
-management_review
-unknown
-```
-
-The UI shows:
-
-```text
-Önerilen Aksiyon
-Priority
-Action Type
-Source
-Checklist
-```
-
-Example:
-
-```text
-Action Type: clarification
-Priority: high
-Title: Müşteriden Eksik Bilgi İste
-Checklist:
-- Eksik bilgi mail taslağını kontrol et.
-- Müşteriden ölçü / ürün / adres / hazır tarih gibi kritik bilgileri iste.
-- Bilgi gelmeden fiyat paylaşma.
-```
-
 ---
 
-## Current System Behavior
+## Data Safety Notes
 
-### Quote
+Customer Memory affects operational decisions.
 
-If information is sufficient and risk is not red:
+Therefore:
 
-```text
-result_type = quote
-```
+* Customer Memory changes should be tested
+* import and restore require validation
+* import and restore require dry run
+* import and restore create backups
+* cleanup requires preview and confirmation
+* backup files should be handled carefully
+* `.env` must never be committed
 
-MINAI generates a customer quote draft.
-
-If risk is yellow, MINAI still creates a quote draft but recommends operational review before sending.
-
----
-
-### Clarification
-
-If critical information is missing:
+Recommended policy:
 
 ```text
-result_type = clarification
+Customer Memory source file:
+data/customer_memory.json
+
+Backup files:
+data/backups/
 ```
-
-MINAI stops quote generation and creates a missing information email draft.
-
----
-
-### Management Review
-
-If risk level is red:
-
-```text
-result_type = management_review
-```
-
-MINAI stops quote generation and creates an internal management review draft.
 
 ---
 
@@ -787,6 +1050,13 @@ Before accepting the change, test result should be:
 
 ```text
 10 passed, 0 failed
+```
+
+For important API/UI changes, also run:
+
+```bash
+python -m py_compile src/api.py
+python -m py_compile ui/app.py
 ```
 
 ---
@@ -850,17 +1120,45 @@ Completed:
 * UI test suite runner
 * UI operation summary
 * UI action recommendation checklist
+* customer memory export
+* customer memory import preview
+* customer memory import validation API
+* customer memory import dry run
+* customer memory import apply
+* customer memory backup list
+* customer memory restore preview
+* customer memory restore apply
+* customer memory backup cleanup preview
+* customer memory backup cleanup apply
+* documentation structure cleanup
+* workflow engine documentation
+* database schema documentation
+* MVP architecture documentation update
+
+---
+
+## Current Technical Risks
+
+Current technical risks / attention points:
+
+* Streamlit / Codespaces port forwarding can produce stale links.
+* Customer Memory backup cleanup deletes real files and should be used carefully.
+* JSON storage should eventually move to a real database.
+* FastAPI dynamic routes must be placed after static routes.
+* Every important change must be checked with the automated test suite.
 
 ---
 
 ## Next Suggested Task
 
 ```text
-TASK-049 — Customer Memory Backup / Export v1
+TASK-059 — Supplier Selection Engine v1
 ```
 
 Purpose:
 
-* export customer memory data
-* create backup copy of customer_memory.json
-* prepare safer customer memory maintenance workflow
+* define supplier selection inputs
+* create route-based supplier capability model
+* compare suppliers by operational, commercial, and relationship factors
+* avoid choosing supplier only by cheapest price
+* prepare future supplier quote comparison workflow
