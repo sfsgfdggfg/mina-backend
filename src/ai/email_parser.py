@@ -1,3 +1,4 @@
+import re
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from openai import OpenAI
@@ -129,6 +130,31 @@ def parse_email_to_shipment(email_text: str) -> Shipment:
     return shipment
 
 
+def _apply_email_text_safety_overrides(shipment, email_text: str):
+    """
+    Critical logistics signals should not depend only on AI extraction.
+    If the raw email clearly contains ADR Class 1 or Class 7, force ADR flags.
+    """
+
+    text = (email_text or "").lower()
+
+    adr_match = re.search(r"\badr\b[^0-9]{0,20}\b(1|7)\b", text)
+    class_match = re.search(r"\bclass\s*(1|7)\b", text)
+
+    match = adr_match or class_match
+
+    if match:
+        adr_class = match.group(1)
+
+        shipment.is_adr = True
+        shipment.adr_class = adr_class
+
+        if not shipment.commodity:
+            shipment.commodity = f"ADR Class {adr_class}"
+
+    return shipment
+
+
 def parse_email_with_ai(email_text: str) -> Shipment:
     """
     OpenAI structured email parser.
@@ -208,4 +234,5 @@ def parse_email_with_ai(email_text: str) -> Shipment:
         packages=packages,
     )
 
+    shipment = _apply_email_text_safety_overrides(shipment, email_text)
     return normalize_shipment(shipment)

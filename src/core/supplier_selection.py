@@ -1,81 +1,9 @@
 from __future__ import annotations
 
+import json
 import unicodedata
+from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-
-SUPPLIER_PROFILES: List[Dict[str, Any]] = [
-    {
-        "supplier_name": "Anatolia Road",
-        "supported_countries": ["almanya", "avusturya", "belcika", "hollanda", "fransa"],
-        "supported_equipment": ["tenteli", "curtainsider", "mega", "box"],
-        "supported_service_types": ["FTL"],
-        "reliability_score": 0.90,
-        "price_score": 0.76,
-        "speed_score": 0.84,
-        "notes": "Türkiye - Batı Avrupa hattında güçlü genel karayolu tedarikçisi.",
-    },
-    {
-        "supplier_name": "EuroBridge Logistics",
-        "supported_countries": ["almanya", "romanya", "fransa", "belcika", "hollanda"],
-        "supported_equipment": ["tenteli", "curtainsider", "mega"],
-        "supported_service_types": ["FTL", "LTL"],
-        "reliability_score": 0.80,
-        "price_score": 0.90,
-        "speed_score": 0.78,
-        "notes": "Fiyat rekabeti güçlü, Avrupa geneli alternatif tedarikçi.",
-    },
-    {
-        "supplier_name": "Balkan Express",
-        "supported_countries": ["romanya", "bulgaristan", "macaristan", "avusturya"],
-        "supported_equipment": ["tenteli", "curtainsider", "mega", "lowbed"],
-        "supported_service_types": ["FTL"],
-        "reliability_score": 0.84,
-        "price_score": 0.82,
-        "speed_score": 0.80,
-        "notes": "Balkan ve Doğu Avrupa hattında güçlü.",
-    },
-    {
-        "supplier_name": "ColdChain Europe",
-        "supported_countries": ["almanya", "avusturya", "belcika", "hollanda", "fransa"],
-        "supported_equipment": ["reefer", "frigo", "coldchain"],
-        "supported_service_types": ["FTL", "LTL"],
-        "reliability_score": 0.88,
-        "price_score": 0.70,
-        "speed_score": 0.82,
-        "notes": "Sıcaklık kontrollü taşımalarda uzman.",
-    },
-    {
-        "supplier_name": "ADR Secure Logistics",
-        "supported_countries": ["almanya", "avusturya", "romanya", "fransa", "belcika"],
-        "supported_equipment": ["adr", "special adr equipment", "tenteli"],
-        "supported_service_types": ["FTL"],
-        "reliability_score": 0.93,
-        "price_score": 0.62,
-        "speed_score": 0.76,
-        "notes": "ADR ve yüksek riskli yüklerde uzman tedarikçi.",
-    },
-    {
-        "supplier_name": "Project Heavy Haul",
-        "supported_countries": ["almanya", "avusturya", "romanya", "fransa", "belcika", "hollanda"],
-        "supported_equipment": ["lowbed", "project", "heavy", "mega"],
-        "supported_service_types": ["FTL"],
-        "reliability_score": 0.91,
-        "price_score": 0.58,
-        "speed_score": 0.72,
-        "notes": "Lowbed, ağır yük ve proje tipi taşımalarda uygun.",
-    },
-    {
-        "supplier_name": "Local LTL Network",
-        "supported_countries": ["almanya", "avusturya", "romanya", "fransa", "belcika", "hollanda", "turkiye"],
-        "supported_equipment": ["ltl", "partial", "parsiyel", "tenteli", "curtainsider"],
-        "supported_service_types": ["LTL"],
-        "reliability_score": 0.78,
-        "price_score": 0.88,
-        "speed_score": 0.74,
-        "notes": "Parsiyel / LTL talepler için demo network.",
-    },
-]
 
 
 def _normalize(value: Optional[str]) -> str:
@@ -87,6 +15,47 @@ def _normalize(value: Optional[str]) -> str:
     value = unicodedata.normalize("NFKD", value)
     value = "".join(char for char in value if not unicodedata.combining(char))
     return value
+
+
+SUPPLIER_CAPABILITIES_PATH = Path(__file__).resolve().parents[2] / "data" / "supplier_capabilities.json"
+
+
+def _load_supplier_profiles(path: Path = SUPPLIER_CAPABILITIES_PATH) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+
+    raw_suppliers = json.loads(path.read_text(encoding="utf-8"))
+
+    profiles: List[Dict[str, Any]] = []
+
+    for raw in raw_suppliers:
+        if not raw.get("active", True):
+            continue
+
+        profiles.append(
+            {
+                "supplier_name": raw["supplier_name"],
+                "active": raw.get("active", True),
+                "role": raw.get("role", "backup"),
+                "supported_countries": [
+                    _normalize(country)
+                    for country in raw.get("countries", [])
+                ],
+                "supported_equipment": raw.get("equipment_types", []),
+                "supported_service_types": raw.get("service_types", []),
+                "special_capabilities": raw.get("special_capabilities", []),
+                "priority_routes": raw.get("priority_routes", []),
+                "reliability_score": raw.get("reliability_score", 0.70),
+                "price_score": raw.get("price_score", 0.70),
+                "speed_score": raw.get("speed_score", 0.70),
+                "notes": raw.get("notes", ""),
+            }
+        )
+
+    return profiles
+
+
+SUPPLIER_PROFILES: List[Dict[str, Any]] = _load_supplier_profiles()
 
 
 def _get_equipment_text(shipment: Any, equipment_decision: Optional[Any]) -> str:
@@ -256,4 +225,5 @@ def select_suppliers_for_shipment(
         "rejected_suppliers": rejected_suppliers,
         "selection_strategy": "route + equipment + risk + price + speed weighted scoring",
         "source": "supplier_selection_engine",
+        "data_source": "data/supplier_capabilities.json",
     }
