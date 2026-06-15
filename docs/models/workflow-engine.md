@@ -2,325 +2,246 @@
 
 # Workflow Engine v1
 
-## Purpose
+## 1. Amaç
 
-Bu doküman MINAI Freight OS’un MVP v1 için temel operasyon akışlarını tanımlar.
+Workflow Engine, MINAI Freight OS içinde müşteri talebinin hangi operasyonel yola gideceğini belirleyen karar katmanıdır.
 
-MVP kapsamı:
+Bu motorun görevi fiyat hesaplamak değildir.
 
-* Email → Quote
-* Road Freight odaklı
-* Semi-auto çalışma
-* İnsan onaylı teklif gönderimi
-* Customer Recognition
-* Shipment Extraction
-* Equipment Decision
-* Risk Assessment
-* Supplier Selection
-* Quote Drafting
+Ana görevi:
+
+* AI parser çıktısını almak
+* normalize edilmiş shipment bilgisini kullanmak
+* müşteri hafızasını dikkate almak
+* eksik bilgi kontrolü yapmak
+* ekipman kararını almak
+* operasyonel risk seviyesini değerlendirmek
+* quote / clarification / management review kararını vermek
+* kullanıcıya önerilen aksiyonu sunmaktır
 
 ---
 
-# 1. Core Workflow
+## 2. Genel Akış
 
 ```text
-Inbound Email
+Customer Email
 ↓
-Customer Recognition
+AI Email Parser
 ↓
-Shipment Extraction
+Normalization Layer
 ↓
-Missing Information Check
+Customer Memory Recognition / Enrichment
 ↓
-Equipment Decision
+Missing Information Engine
 ↓
-Risk Assessment
+Equipment Decision Engine
 ↓
-Supplier Selection
+Operational Risk Engine
 ↓
-RFQ / Supplier Quote Collection
+Workflow Gate
 ↓
-Customer Quote Calculation
+Action Recommendation Engine
 ↓
-Quote Draft Generation
+Draft Generator
 ↓
-Human Review
-↓
-Send Quote Email
+Human Review / Approval
 ```
 
 ---
 
-# 2. Workflow Statuses
+## 3. Workflow Engine’in Konumu
 
-Shipment kayıtları aşağıdaki statülerde ilerler:
+Workflow Engine şu dosyada çalışır:
 
 ```text
-new
-parsed
-needs_clarification
-ready_for_supplier_selection
-rfq_sent
-supplier_quotes_received
-quote_draft_created
-pending_approval
-approved
-sent
-rejected
-cancelled
+src/workflow/pipeline.py
+```
+
+Ana fonksiyon:
+
+```text
+process_shipment()
+```
+
+Bu fonksiyon sistemin operasyonel orkestrasyon noktasıdır.
+
+---
+
+## 4. Input
+
+Workflow Engine’in ana inputları:
+
+```text
+shipment
+email_text
+```
+
+`shipment`, AI parser ve normalization layer sonrası oluşan yapılandırılmış taşıma bilgisidir.
+
+`email_text`, müşteri mailinin ham metnidir. Customer Memory recognition için kullanılabilir.
+
+---
+
+## 5. Output
+
+Workflow Engine tek bir sonuç objesi üretir.
+
+Ana output alanları:
+
+```text
+result_type
+shipment
+customer_memory
+missing_info
+equipment_decision
+risk_assessment
+supplier_quote
+customer_quote
+quote_draft
+clarification_draft
+management_review_draft
+action_recommendation
 ```
 
 ---
 
-# 3. Customer Recognition Flow
+## 6. Result Type Değerleri
 
-Amaç:
-
-Gelen mailin hangi müşteriye ait olduğunu tespit etmek.
-
-## Step 1 — Known Contact Match
+Workflow Engine şu ana result type değerlerini üretebilir:
 
 ```text
-IF sender_email exists in customer_contacts
-THEN customer = matched customer
+quote
+clarification
+management_review
 ```
 
-## Step 2 — Known Person / Local Part Match
+---
+
+## 7. Customer Memory Aşaması
+
+Workflow önce müşteri hafızasını kontrol eder.
+
+Customer Memory şu iki kaynaktan eşleşebilir:
 
 ```text
-IF sender email local part or sender name is known
-THEN customer = related customer
+shipment.customer_name
+email_text
+```
+
+Eşleşme bulunursa sistem aşağıdaki alanlarda enrichment yapabilir:
+
+* customer_name
+* default commodity
+* default equipment
+* default pickup
+* default delivery
+* operational notes
+* price sensitivity
+* time sensitivity
+
+Ancak müşteri mailde açık bilgi verdiyse Customer Memory bu bilgiyi ezmez.
+
+Öncelik sırası:
+
+```text
+1. Müşterinin güncel mailde verdiği açık bilgi
+2. Customer Memory varsayımı
+3. AI çıkarımı
+4. Clarification request
+```
+
+---
+
+## 8. Active / Passive Customer Memory Kuralı
+
+Customer Memory profili sadece şu durumda matching ve enrichment için kullanılabilir:
+
+```text
+active = true
+```
+
+`active = false` olan profiller:
+
+* UI’da görünür
+* geçmiş bilgi olarak saklanır
+* matching için kullanılmaz
+* enrichment için kullanılmaz
+
+---
+
+## 9. Missing Information Gate
+
+Workflow Engine fiyat üretmeden önce eksik bilgi kontrolü yapar.
+
+Eksik bilgi kontrolü şu modülde yapılır:
+
+```text
+src/core/missing_info.py
+```
+
+Critical missing information varsa sistem quote üretmez.
+
+Bu durumda:
+
+```text
+result_type = clarification
+```
+
+ve clarification email draft hazırlanır.
+
+---
+
+## 10. Critical Missing Information Örnekleri
+
+Aşağıdaki durumlar fiyat üretimini durdurabilir:
+
+* Makine yükünde ölçü eksikliği
+* Makine yükünde ağırlık eksikliği
+* ADR bilgisinin belirsiz olması
+* Pickup / delivery bilgisinin operasyonu başlatmaya yetmeyecek kadar eksik olması
+* Commodity bilgisinin ekipman kararını doğrudan etkilediği durumlarda eksik olması
+* Anormal palet ağırlığı ve ölçü bilgisinin olmaması
+
+---
+
+## 11. Equipment Decision Gate
+
+Eksik bilgi kontrolünden sonra sistem ekipman kararı verir.
+
+Ekipman karar modülü:
+
+```text
+src/core/equipment.py
+```
+
+Ekipman kararı aşağıdaki bilgileri içermelidir:
+
+```text
+selected_equipment
+reason
+confidence
+source
+explanation
 ```
 
 Örnek:
 
 ```text
-selman@temsa.com
+Temperature controlled food
 ↓
-Selman bilinen kontak
-↓
-Customer = TEMSA
-```
-
-## Step 3 — Company Domain Match
-
-```text
-IF email_domain is not public domain
-AND domain exists in customer_domains
-THEN customer = matched customer
-```
-
-Public domain örnekleri:
-
-```text
-gmail.com
-hotmail.com
-outlook.com
-yahoo.com
-icloud.com
-```
-
-Bu domainler müşteri şirket domain’i olarak kullanılmaz.
-
-## Step 4 — Email Signature Recognition
-
-```text
-IF signature contains known company name
-THEN suggest customer match
-```
-
-## Step 5 — Historical Context Search
-
-```text
-Search previous email threads
-↓
-Find same sender / same company / same route pattern
-↓
-Suggest possible customer
-```
-
-## Step 6 — Manual Assignment
-
-```text
-IF confidence is low
-THEN ask user to assign customer manually
+selected_equipment = Reefer
+reason = Sıcaklık kontrollü yük tespit edildi.
 ```
 
 ---
 
-# 4. Shipment Extraction Flow
+## 12. Risk Assessment Gate
 
-Amaç:
-
-Düzensiz müşteri mailinden yapılandırılmış shipment bilgisi çıkarmak.
-
-## Extracted Fields
+Risk değerlendirmesi şu modülde yapılır:
 
 ```text
-transport_mode
-direction
-service_type
-pickup_country
-pickup_city
-pickup_area
-pickup_postcode
-delivery_country
-delivery_city
-delivery_area
-delivery_postcode
-commodity
-piece_count
-gross_weight
-dimensions
-cargo_ready_date
-required_delivery_date
-equipment_type
-special_requirements
+src/core/risk.py
 ```
-
-## AI Output
-
-AI her extraction sonucunda güven skoru üretir.
-
-```text
-ai_confidence_score
-```
-
----
-
-# 5. Missing Information Flow
-
-Amaç:
-
-Fiyat çalışmak için kritik eksik bilgi olup olmadığını belirlemek.
-
-## Road Freight Pricing Required Fields
-
-```text
-pickup location
-delivery location
-piece count
-dimensions
-commodity
-cargo ready date
-```
-
-## Optional Fields
-
-```text
-gross weight
-incoterm
-required delivery date
-```
-
-## Behavior
-
-```text
-IF critical field missing
-THEN status = needs_clarification
-
-IF non-critical field missing
-THEN continue with assumption or customer memory
-```
-
----
-
-# 6. Clarification Flow
-
-Amaç:
-
-Eksik kritik bilgi varsa müşteriye net ve kısa bilgi talep maili hazırlamak.
-
-## Example Behavior
-
-```text
-Missing:
-- dimensions
-- commodity
-
-AI generates clarification email
-Human reviews
-Email sent
-```
-
-Clarification maili insan onayı olmadan gönderilmez.
-
----
-
-# 7. Equipment Decision Flow
-
-Amaç:
-
-Yük için uygun ekipmanı belirlemek.
-
-## Default Rule
-
-```text
-IF no special requirement
-THEN equipment_type = Curtainsider / Tenteli
-```
-
-## Override Triggers
-
-### Reefer
-
-```text
-IF temperature controlled
-OR frozen
-OR chilled
-OR +4°C
-OR -18°C
-THEN equipment_type = Reefer
-```
-
-### Mega / Lowbed
-
-```text
-IF height > 2.85m AND height <= 3.00m
-THEN equipment_type = Mega
-
-IF height > 3.00m
-THEN equipment_type = Lowbed / Project Cargo
-```
-
-### Lowbed / Heavy Haul
-
-```text
-IF single piece weight >= 26 tons
-THEN equipment_type = Lowbed / Heavy Haul
-```
-
-### Open Trailer
-
-```text
-IF crane loading
-OR overhead crane
-OR top loading
-THEN equipment_type = Open Trailer
-```
-
-### Box Trailer
-
-```text
-IF high value cargo
-OR theft risk cargo
-THEN equipment_type = Box Trailer
-```
-
-### Platform / Lowbed
-
-```text
-IF width > 2.50m
-THEN equipment_type = Platform / Lowbed
-```
-
----
-
-# 8. Risk Assessment Flow
-
-Amaç:
-
-Shipment’ın operasyonel risk seviyesini belirlemek.
 
 Risk seviyeleri:
 
@@ -330,346 +251,404 @@ yellow
 red
 ```
 
-## Green
+Risk motoru teknik risk motoru değildir.
 
-Standart operasyon.
+Bu motor Operational Risk Engine olarak çalışır.
 
-```text
-AI can prepare quote draft
-Human approval still required before sending
-```
-
-## Yellow
-
-Operasyonel dikkat gerektirir.
-
-```text
-Human review required
-```
-
-Örnekler:
-
-```text
-new customer
-tight delivery deadline
-cross-docking
-holiday period
-machine cargo with incomplete details
-```
-
-## Red
-
-Yönetim veya senior operasyon onayı gerekir.
-
-Örnekler:
-
-```text
-ADR Class 1
-ADR Class 7
-Lithium batteries
-war zone / embargo region
-penalty clause
-guaranteed transit commitment
-heavy lift / oversize
-letter of credit with strict document terms
-```
+Yani amaç yalnızca yükün teknik uygunluğunu değil, operasyonel dikkat seviyesini belirlemektir.
 
 ---
 
-# 9. Supplier Selection Flow
+## 13. Risk Seviyelerine Göre Davranış
 
-Amaç:
-
-Shipment için en uygun maksimum 3 tedarikçiyi seçmek.
-
-## Input
+### Green
 
 ```text
-origin country / region
-destination country / region
-service_type
-equipment_type
-customer sensitivity
-risk level
-supplier capability
-supplier score
-```
-
-## Supplier Filter
-
-```text
-Filter by route
-Filter by equipment capability
-Filter by service type
-Filter by active status
-```
-
-## Supplier Scoring
-
-Tedarikçi seçimi sadece fiyata göre yapılmaz.
-
-Skor bileşenleri:
-
-```text
-operational_score
-commercial_score
-relationship_score
-response_speed_score
-on_time_score
-damage_score
-flexibility_score
-```
-
-## Customer Sensitivity Adjustment
-
-```text
-IF customer is time_sensitive
-THEN operational_score weight increases
-
-IF customer is price_sensitive
-THEN commercial_score weight increases
-```
-
-## Output
-
-```text
-Max 3 suppliers selected
-```
-
----
-
-# 10. RFQ Flow
-
-Amaç:
-
-Seçilen tedarikçilere fiyat talep maili hazırlamak.
-
-## RFQ Email Includes
-
-```text
-pickup location
-delivery location
-cargo details
-piece count
-dimensions
-weight
-equipment requirement
-ready date
-delivery expectation
-special notes
-```
-
-## Behavior
-
-```text
-AI prepares RFQ email
-Human can review
-System sends RFQ
-```
-
-MVP v1’de RFQ gönderimi insan onaylı olabilir.
-
----
-
-# 11. Supplier Quote Collection Flow
-
-Amaç:
-
-Tedarikçiden gelen fiyatları shipment ile ilişkilendirmek.
-
-## Process
-
-```text
-Supplier replies by email
+risk_level = green
 ↓
-AI detects quoted price
+quote hazırlanabilir
 ↓
-AI detects currency
+action_type = quote_ready
+```
+
+### Yellow
+
+```text
+risk_level = yellow
 ↓
-AI detects validity
+quote hazırlanabilir
 ↓
-AI detects equipment / transit note
+ancak insan kontrolü önerilir
 ↓
-Record saved to supplier_quotes
+action_type = quote_with_review
+```
+
+### Red
+
+```text
+risk_level = red
+↓
+quote süreci durdurulur
+↓
+management review draft hazırlanır
+↓
+action_type = management_review
 ```
 
 ---
 
-# 12. Customer Quote Calculation Flow
+## 14. Critical Missing Information Önceliği
 
-Amaç:
+Critical missing information varsa risk seviyesinden bağımsız olarak fiyat üretilmez.
 
-Müşteriye verilecek satış fiyatını oluşturmak.
-
-## Input
+Örnek:
 
 ```text
-selected supplier quote
-customer margin rules
-manual margin override
-currency
-risk notes
+Machine shipment
+Dimensions missing
+↓
+result_type = clarification
 ```
 
-## MVP Pricing Rule
-
-```text
-supplier_cost
-+ margin
-= final_price
-```
-
-Margin yapısı şirket veya müşteri bazlı değişebilir.
-
-MVP v1’de:
-
-```text
-margin_type:
-- percentage
-- fixed
-- manual
-```
-
-desteklenir.
-
-Historical pricing MVP’de otomatik fiyat üretimi için kullanılmaz.
+Bu durumda sistem quote draft üretmez.
 
 ---
 
-# 13. Quote Draft Generation Flow
+## 15. Management Review Gate
 
-Amaç:
+Red risk durumunda sistem yönetici incelemesi ister.
 
-Müşteriye gönderilecek teklif maili taslağını hazırlamak.
+Örnek red riskler:
 
-## Quote Draft Includes
+* ADR Class 1
+* ADR Class 7
+* savaş / ambargo / siyasi risk bölgeleri
+* yüksek seviyeli regülasyon veya güvenlik riski
+* operasyonel olarak yönetim onayı gerektiren durumlar
 
-```text
-route
-cargo summary
-equipment type
-price
-currency
-validity
-transit time if available
-service conditions
-risk / assumption notes if needed
-```
-
-## Output
+Bu durumda:
 
 ```text
-quote_drafts.email_subject
-quote_drafts.email_body
+result_type = management_review
 ```
+
+ve internal management review draft hazırlanır.
 
 ---
 
-# 14. Human Approval Flow
+## 16. Quote Generation Gate
 
-Amaç:
-
-AI tarafından hazırlanan teklifin insan tarafından kontrol edilmesini sağlamak.
-
-## Actions
+Aşağıdaki şartlarda quote draft üretilebilir:
 
 ```text
-approve
-edit
-reject
-request more info
+critical missing information yok
+red risk yok
 ```
 
-## Behavior
+Yellow risk varsa quote üretilebilir ama kullanıcıya review önerilir.
 
-```text
-IF approved
-THEN quote_status = approved
-
-IF sent
-THEN quote_status = sent
-```
-
-Müşteriye teklif maili insan onayı olmadan gönderilmez.
+Green risk varsa quote ready olarak ilerler.
 
 ---
 
-# 15. Audit Flow
+## 17. Action Recommendation Engine
 
-Amaç:
+Workflow sonucunda sistem kullanıcıya bir sonraki operasyonel aksiyonu önerir.
 
-Sistemin önemli kararlarını kayıt altına almak.
-
-Loglanan olaylar:
+Modül:
 
 ```text
-customer matched
-shipment parsed
-risk detected
-supplier selected
-quote created
-quote approved
-quote sent
+src/core/action_recommendation.py
 ```
 
-Her olay `audit_logs` tablosuna yazılır.
-
----
-
-# 16. MVP Workflow Summary
+Action type değerleri:
 
 ```text
-1. Email arrives
-2. Customer is identified
-3. Shipment is extracted
-4. Missing info is checked
-5. Equipment decision is made
-6. Risk level is calculated
-7. Suppliers are selected
-8. Supplier quotes are collected
-9. Customer quote is calculated
-10. Quote draft is generated
-11. Human approves
-12. Quote email is sent
+quote_ready
+quote_with_review
+clarification
+management_review
+unknown
 ```
 
 ---
 
-# 17. Not Included in MVP v1
+## 18. Action Recommendation Mapping
+
+Genel mapping:
 
 ```text
-Full automation
-Carrier portal automation
-Sea freight pricing
-Air freight pricing
-Historical price prediction
-Automatic sending without approval
-WhatsApp automation
-Phone call automation
+Green + quote
+→ quote_ready
+
+Yellow + quote
+→ quote_with_review
+
+Critical missing information
+→ clarification
+
+Red risk
+→ management_review
 ```
 
 ---
 
-# 18. Next Step
+## 19. Draft Generator Davranışı
 
-Bu workflow onaylandıktan sonra sıradaki doküman:
-
-```text
-docs/models/mvp-architecture.md
-```
-
-olacaktır.
-
-MVP Architecture dokümanında:
+Workflow sonucu hangi draft’ın üretileceğini belirler.
 
 ```text
-FastAPI
-OpenAI
-PostgreSQL
-Email connector
-Workflow pipeline
-Simulation environment
+result_type = quote
+↓
+quote_draft
+
+result_type = clarification
+↓
+clarification_draft
+
+result_type = management_review
+↓
+management_review_draft
 ```
 
-tasarlanacaktır.
+Aynı anda yalnızca ilgili ana draft kullanılmalıdır.
 
+---
+
+## 20. Human Approval Policy
+
+MINAI nihai müşteri teklifini koşulsuz olarak göndermez.
+
+AI’ın görevi:
+
+* talebi analiz etmek
+* eksik bilgiyi tespit etmek
+* ekipman önerisi yapmak
+* risk seviyesini belirlemek
+* draft üretmek
+* aksiyon önermek
+
+Son karar ve gönderim insan onayına bağlıdır.
+
+---
+
+## 21. Workflow Öncelik Sırası
+
+Workflow Engine karar önceliği:
+
+```text
+1. Red risk var mı?
+2. Critical missing information var mı?
+3. Yellow risk var mı?
+4. Green quote ready mi?
+```
+
+Ancak pratik uygulamada critical missing information kontrolü, quote üretimini durdurduğu için her zaman ayrıca dikkate alınır.
+
+Önerilen mantık:
+
+```text
+Red risk
+↓
+Management Review
+
+Critical missing information
+↓
+Clarification
+
+Yellow risk
+↓
+Quote with Review
+
+Green risk
+↓
+Quote Ready
+```
+
+---
+
+## 22. Customer Memory Maintenance Workflow
+
+Customer Memory bakım işlemleri ana shipment workflow’undan ayrıdır.
+
+Maintenance workflow şunları içerir:
+
+* export
+* import preview
+* backend validation
+* dry run
+* import apply
+* automatic backup
+* backup list
+* restore preview
+* restore apply
+* cleanup preview
+* cleanup apply
+
+Bu işlemler müşteri talebi işleme pipeline’ının parçası değildir.
+
+Ancak Customer Memory verisi shipment workflow’u içinde recognition ve enrichment için kullanılır.
+
+---
+
+## 23. Import Workflow
+
+Customer Memory import süreci:
+
+```text
+Upload JSON
+↓
+Import Preview
+↓
+Backend Validation
+↓
+Dry Run
+↓
+Checkbox Confirmation
+↓
+Apply Import
+↓
+Automatic Backup
+↓
+Updated customer_memory.json
+```
+
+Import apply davranışı:
+
+```text
+Existing profile
+→ update
+
+New profile
+→ add
+
+Profiles not included in import
+→ remain unchanged
+```
+
+---
+
+## 24. Restore Workflow
+
+Customer Memory restore süreci:
+
+```text
+Select Backup
+↓
+Preview Backup
+↓
+Restore Dry Run
+↓
+Validation
+↓
+Alias Conflict Check
+↓
+Checkbox Confirmation
+↓
+Backup Current Live File
+↓
+Restore Selected Backup
+```
+
+Restore işlemi yalnızca `data/backups/` içindeki sistem backup dosyalarından yapılır.
+
+---
+
+## 25. Backup Cleanup Workflow
+
+Backup cleanup süreci:
+
+```text
+Select keep_latest value
+↓
+Cleanup Preview
+↓
+Show Backups to Keep
+↓
+Show Cleanup Candidates
+↓
+Checkbox Confirmation
+↓
+Apply Cleanup
+↓
+Deleted Files Report
+```
+
+Varsayılan politika:
+
+```text
+keep_latest = 10
+```
+
+Son N backup korunur. Daha eski backup dosyaları cleanup candidate olarak değerlendirilir.
+
+---
+
+## 26. Error Handling İlkeleri
+
+Workflow Engine ve API tarafında hatalar kullanıcıya anlaşılır şekilde dönmelidir.
+
+Genel kurallar:
+
+* Yanlış müşteri hafızası girdisi → 400
+* Backup dosyası bulunamadı → 404
+* Sistemsel beklenmeyen hata → 500
+* Validation başarısızsa işlem uygulanmaz
+* Alias conflict varsa import / restore engellenir
+
+---
+
+## 27. Test Politikası
+
+Her önemli değişiklikten sonra şu komut çalıştırılır:
+
+```bash
+python -m src.main
+```
+
+Beklenen sonuç:
+
+```text
+10 passed, 0 failed
+```
+
+Ayrıca kritik dosyalar için syntax kontrolü yapılabilir:
+
+```bash
+python -m py_compile src/api.py
+python -m py_compile ui/app.py
+```
+
+---
+
+## 28. Current Workflow Status
+
+Tamamlanan workflow bileşenleri:
+
+* AI structured parser
+* normalization layer
+* customer memory recognition
+* customer memory enrichment
+* missing information engine
+* equipment decision engine
+* operational risk engine
+* clarification gate
+* management review gate
+* quote generation gate
+* action recommendation engine
+* customer memory maintenance workflow
+
+---
+
+## 29. Next Workflow Priorities
+
+Sonraki workflow geliştirme alanları:
+
+* supplier selection workflow
+* route-based supplier priority
+* cost breakdown workflow
+* margin approval workflow
+* supplier quote comparison workflow
+* customer-specific quote behavior
+* booking workflow
+* document control workflow
