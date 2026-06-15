@@ -1,5 +1,28 @@
 from src.core.models import Shipment, EquipmentDecision
 
+def _has_meaningful_text(value):
+    if value is None:
+        return False
+
+    if not isinstance(value, str):
+        return bool(value)
+
+    normalized = value.strip().lower()
+
+    null_like_values = {
+        "",
+        "null",
+        "/null/",
+        "none",
+        "n/a",
+        "na",
+        "-",
+        "belirtilmemiş",
+        "unknown",
+    }
+
+    return normalized not in null_like_values
+
 
 def decide_equipment(shipment: Shipment) -> EquipmentDecision:
     """
@@ -10,7 +33,7 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
     """
 
     # Reefer trigger
-    if shipment.is_temperature_controlled or shipment.temperature_requirement:
+    if shipment.is_temperature_controlled or _has_meaningful_text(shipment.temperature_requirement):
         return EquipmentDecision(
             selected_equipment="Reefer",
             reason="Sıcaklık kontrollü yük tespit edildi.",
