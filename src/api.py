@@ -581,6 +581,7 @@ def serialize_result(result: dict) -> dict:
     missing_info = result.get("missing_info")
     equipment_decision = result.get("equipment_decision")
     risk_assessment = result.get("risk_assessment")
+    supplier_selection = result.get("supplier_selection")
     supplier_quote = result.get("supplier_quote")
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
@@ -594,6 +595,7 @@ def serialize_result(result: dict) -> dict:
         "missing_info": missing_info.model_dump() if missing_info else None,
         "equipment_decision": equipment_decision.model_dump() if equipment_decision else None,
         "risk_assessment": risk_assessment.model_dump() if risk_assessment else None,
+        "supplier_selection": supplier_selection,
         "supplier_quote": supplier_quote.model_dump() if supplier_quote else None,
         "customer_quote": customer_quote.model_dump() if customer_quote else None,
         "quote_draft": quote_draft.model_dump() if quote_draft else None,

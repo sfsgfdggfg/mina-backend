@@ -222,6 +222,31 @@ def render_draft(result: dict):
 
     if result_type == "quote":
         title = "Teklif Mail Taslağı"
+        supplier_selection = result.get("supplier_selection")
+        if supplier_selection:
+            st.subheader("Supplier Selection")
+
+            selected_suppliers = supplier_selection.get("selected_suppliers", [])
+
+            if selected_suppliers:
+                for supplier in selected_suppliers:
+                    priority = supplier.get("priority", "-")
+                    name = supplier.get("supplier_name", "Unknown Supplier")
+                    total_score = supplier.get("total_score", "-")
+                    reason = supplier.get("reason", "")
+
+                    with st.expander(f"{priority}. {name} — Score: {total_score}"):
+                        st.write(reason)
+                        st.json({
+                            "route_score": supplier.get("route_score"),
+                            "equipment_score": supplier.get("equipment_score"),
+                            "risk_score": supplier.get("risk_score"),
+                            "price_score": supplier.get("price_score"),
+                            "speed_score": supplier.get("speed_score"),
+                        })
+            else:
+                st.info("Uygun supplier bulunamadı.")
+
         draft = result.get("quote_draft")
 
     elif result_type == "clarification":
