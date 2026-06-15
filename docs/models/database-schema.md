@@ -1,611 +1,782 @@
+
 # MINAI Freight OS
 
 # Database Schema v1
 
-## Purpose
+## 1. Amaç
 
-Bu doküman MINAI Freight OS’un ilk MVP veri modelini tanımlar.
+Bu doküman MINAI Freight OS içinde kullanılan temel veri modellerini tanımlar.
 
-MVP kapsamı:
+Mevcut MVP’de tüm veriler gerçek bir relational database içinde tutulmamaktadır.
 
-* Email → Quote
-* Road Freight odaklı
-* Semi-auto çalışma
-* İnsan onaylı teklif gönderimi
-* Customer Intelligence
-* Supplier Intelligence
-* Risk Assessment
-* Equipment Decision
-* Quote Drafting
-
----
-
-# 1. Core Design Principles
-
-## 1.1 Customer = Company
-
-Müşteri kişi değil, şirkettir.
-
-Örnek:
-
-* [selman@temsa.com](mailto:selman@temsa.com)
-* [ayse@temsa.com](mailto:ayse@temsa.com)
-* [mehmet@temsa.com](mailto:mehmet@temsa.com)
-
-hepsi aynı `customer` kaydına bağlı olabilir.
-
----
-
-## 1.2 Contact Person ≠ Customer
-
-Kişiler `customer_contacts` tablosunda tutulur.
-
-Her kişi bir müşteriye bağlıdır.
-
----
-
-## 1.3 Public Email Domains Are Not Company Domains
-
-Aşağıdaki domainler müşteri şirket domain’i olarak kullanılmaz:
-
-* gmail.com
-* hotmail.com
-* outlook.com
-* yahoo.com
-* icloud.com
-
-Bu domainlerden gelen maillerde sistem müşteri eşleştirmesini:
-
-1. Bilinen kontak
-2. Mail imzası
-3. Geçmiş yazışma
-4. Manuel kullanıcı eşleştirmesi
-
-ile yapar.
-
----
-
-## 1.4 Shipment Is the Operational Core
-
-Her müşteri talebi bir `shipment` kaydına dönüşür.
-
-Shipment kaydı:
-
-* müşteri
-* kontak kişi
-* yükleme bilgileri
-* teslimat bilgileri
-* ürün bilgisi
-* ekipman kararı
-* risk seviyesi
-* teklif durumu
-
-bilgilerini taşır.
-
----
-
-## 1.5 Quote History Is Stored but Not Used for Automatic Pricing in MVP
-
-Geçmiş fiyatlar saklanır.
-
-MVP v1’de geçmiş fiyatlar:
-
-* otomatik fiyat üretmek için kullanılmaz
-* referans / benchmark / anomali kontrolü için ileride kullanılabilir
-
----
-
-# 2. Tables Overview
-
-MVP v1 için ana tablolar:
-
-* customers
-* customer_contacts
-* customer_domains
-* customer_locations
-* customer_products
-* suppliers
-* supplier_contacts
-* supplier_routes
-* supplier_capabilities
-* supplier_scores
-* emails
-* shipments
-* shipment_packages
-* shipment_risks
-* supplier_quotes
-* customer_quotes
-* quote_drafts
-* audit_logs
-
----
-
-# 3. customers
-
-Müşteri şirket kayıtları.
-
-| Field             | Type      | Description                 |
-| ----------------- | --------- | --------------------------- |
-| id                | UUID      | Primary key                 |
-| company_name      | TEXT      | Şirket adı                  |
-| company_code      | TEXT      | Kısa kod / internal code    |
-| industry          | TEXT      | Sektör                      |
-| country           | TEXT      | Ana ülke                    |
-| default_language  | TEXT      | TR / EN vb.                 |
-| price_sensitivity | TEXT      | low / medium / high         |
-| time_sensitivity  | TEXT      | low / medium / high         |
-| customer_status   | TEXT      | active / passive / prospect |
-| notes             | TEXT      | Operasyonel notlar          |
-| created_at        | TIMESTAMP | Oluşturma tarihi            |
-| updated_at        | TIMESTAMP | Güncelleme tarihi           |
-
----
-
-# 4. customer_contacts
-
-Müşteri firmaya bağlı kişiler.
-
-| Field                  | Type      | Description        |
-| ---------------------- | --------- | ------------------ |
-| id                     | UUID      | Primary key        |
-| customer_id            | UUID      | FK → customers.id  |
-| name                   | TEXT      | Kişi adı           |
-| email                  | TEXT      | Mail adresi        |
-| email_local_part       | TEXT      | @ öncesi kısım     |
-| email_domain           | TEXT      | Mail domain        |
-| is_public_email_domain | BOOLEAN   | Gmail/Hotmail vb.  |
-| title                  | TEXT      | Ünvan              |
-| phone                  | TEXT      | Telefon            |
-| is_primary_contact     | BOOLEAN   | Ana kontak mı      |
-| recognition_confidence | FLOAT     | Tanıma güven skoru |
-| created_at             | TIMESTAMP | Oluşturma tarihi   |
-| updated_at             | TIMESTAMP | Güncelleme tarihi  |
-
-Example:
+Şu anki yapı:
 
 ```text
-email: selman@temsa.com
-email_local_part: selman
-email_domain: temsa.com
-customer_id: TEMSA
+Customer Memory
+→ data/customer_memory.json
+
+Workflow Result
+→ runtime response object
+
+Test Cases
+→ src/simulation/ai_email_test_cases.py
+
+Backup Files
+→ data/backups/
+```
+
+Ancak sistem büyüdükçe bu modeller ileride database tablolarına taşınacaktır.
+
+Bu dokümanın amacı:
+
+* hangi verilerin tutulacağını netleştirmek
+* entity ilişkilerini tanımlamak
+* ileride PostgreSQL / SQLite / başka database’e geçişi kolaylaştırmak
+* AI workflow kararlarının izlenebilir olmasını sağlamaktır
+
+---
+
+## 2. Temel Veri Alanları
+
+MINAI Freight OS’in ana veri grupları:
+
+```text
+Shipment
+Customer Memory
+Customer Memory Audit
+Equipment Decision
+Missing Information
+Risk Assessment
+Supplier Quote
+Customer Quote
+Generated Draft
+Action Recommendation
+Test Case
+Import / Export / Backup Metadata
 ```
 
 ---
 
-# 5. customer_domains
+## 3. Shipment Schema
 
-Şirket domain kayıtları.
+Shipment, müşteri mailinden çıkarılan operasyon talebidir.
 
-| Field       | Type      | Description             |
-| ----------- | --------- | ----------------------- |
-| id          | UUID      | Primary key             |
-| customer_id | UUID      | FK → customers.id       |
-| domain      | TEXT      | temsa.com, temsa.com.tr |
-| is_verified | BOOLEAN   | Doğrulandı mı           |
-| created_at  | TIMESTAMP | Oluşturma tarihi        |
-
-Important:
-
-Public domainler bu tabloda tutulmaz.
-
----
-
-# 6. customer_locations
-
-Müşterinin düzenli yükleme / teslimat adresleri.
-
-| Field               | Type      | Description                                 |
-| ------------------- | --------- | ------------------------------------------- |
-| id                  | UUID      | Primary key                                 |
-| customer_id         | UUID      | FK → customers.id                           |
-| location_name       | TEXT      | Fabrika, depo, merkez vb.                   |
-| location_type       | TEXT      | factory / warehouse / office / port / other |
-| country             | TEXT      | Ülke                                        |
-| city                | TEXT      | Şehir                                       |
-| area                | TEXT      | OSB / bölge                                 |
-| postcode            | TEXT      | Posta kodu                                  |
-| address_text        | TEXT      | Açık adres                                  |
-| is_default_pickup   | BOOLEAN   | Varsayılan yükleme adresi                   |
-| is_default_delivery | BOOLEAN   | Varsayılan teslim adresi                    |
-| usage_frequency     | INTEGER   | Kullanım sıklığı                            |
-| notes               | TEXT      | Operasyonel not                             |
-| created_at          | TIMESTAMP | Oluşturma tarihi                            |
-| updated_at          | TIMESTAMP | Güncelleme tarihi                           |
-
----
-
-# 7. customer_products
-
-Müşterinin düzenli taşıttığı ürünler.
-
-| Field                    | Type      | Description                      |
-| ------------------------ | --------- | -------------------------------- |
-| id                       | UUID      | Primary key                      |
-| customer_id              | UUID      | FK → customers.id                |
-| product_name             | TEXT      | Ürün adı                         |
-| product_category         | TEXT      | Gıda, tekstil, makine vb.        |
-| typical_weight_min       | FLOAT     | Tipik minimum ağırlık            |
-| typical_weight_max       | FLOAT     | Tipik maksimum ağırlık           |
-| typical_dimensions_text  | TEXT      | Tipik ölçü açıklaması            |
-| default_equipment_type   | TEXT      | Tenteli, kapalı kasa, reefer vb. |
-| is_adr                   | BOOLEAN   | ADR bilgisi                      |
-| is_temperature_sensitive | BOOLEAN   | Sıcaklık hassasiyeti             |
-| is_fragile               | BOOLEAN   | Hassas ürün                      |
-| confidence_score         | FLOAT     | Bu bilginin güven skoru          |
-| notes                    | TEXT      | Operasyonel not                  |
-| created_at               | TIMESTAMP | Oluşturma tarihi                 |
-| updated_at               | TIMESTAMP | Güncelleme tarihi                |
-
-Example:
+Logical entity:
 
 ```text
-Customer: Oğuz Gıda
-Product: Meşrubat
-Default Equipment: Kapalı Kasa
+Shipment
 ```
+
+Önerilen alanlar:
+
+| Field                   |          Type |    Required | Description                   |
+| ----------------------- | ------------: | ----------: | ----------------------------- |
+| id                      | string / uuid |      future | Shipment unique id            |
+| customer_name           |        string |          no | Müşteri adı                   |
+| pol                     |        string |         yes | Pickup / loading location     |
+| pod                     |        string |         yes | Delivery location             |
+| pickup_address          |        string |          no | Detaylı pickup adresi         |
+| delivery_address        |        string |          no | Detaylı delivery adresi       |
+| commodity               |        string | conditional | Mal cinsi                     |
+| weight_kg               |        number | conditional | Brüt ağırlık                  |
+| volume_cbm              |        number |          no | Hacim                         |
+| pieces                  |        number |          no | Parça / palet adedi           |
+| dimensions              |   list / json | conditional | Ölçüler                       |
+| shipment_type           |        string |         yes | FTL / LTL                     |
+| transport_mode          |        string |         yes | road / air / sea / multimodal |
+| equipment_type          |        string |          no | Müşteri talep etmişse         |
+| ready_date              | string / date |          no | Hazır tarih                   |
+| expected_delivery_date  | string / date |          no | Beklenen teslim tarihi        |
+| incoterm                |        string |          no | Belirtilmişse                 |
+| adr_class               |        string |          no | ADR sınıfı                    |
+| temperature_requirement |        string |          no | +4, -18 vb.                   |
+| notes                   |        string |          no | Ek açıklamalar                |
+| source_email_text       |          text |      future | Ham müşteri maili             |
+| created_at              |      datetime |      future | Kayıt tarihi                  |
+
+---
+
+## 4. Shipment Type Rules
+
+Shipment type değerleri:
 
 ```text
-Customer: Beta Enerji
-Product: Elektrik Transformatörü
-Default Equipment: Tenteli
+FTL
+LTL
+Unknown
+```
+
+Road Freight için varsayılan:
+
+```text
+FTL
+```
+
+LTL yalnızca müşteri açıkça parsiyel / partial / yarım parsiyel gibi ifade kullanırsa atanır.
+
+---
+
+## 5. Customer Memory Profile Schema
+
+Customer Memory müşteri kartı değildir.
+
+Amacı CRM gibi tam müşteri yönetimi değil, operasyonel varsayımlar üretmektir.
+
+Current storage:
+
+```text
+data/customer_memory.json
+```
+
+Logical entity:
+
+```text
+CustomerMemoryProfile
+```
+
+Alanlar:
+
+| Field             |         Type | Required | Description                       |
+| ----------------- | -----------: | -------: | --------------------------------- |
+| customer_name     |       string |      yes | Ana müşteri adı                   |
+| active            |      boolean |      yes | Matching/enrichment için aktif mi |
+| aliases           | list[string] |       no | Alternatif müşteri isimleri       |
+| default_commodity |       string |       no | Varsayılan ürün                   |
+| default_equipment |       string |       no | Varsayılan ekipman                |
+| price_sensitivity |       string |      yes | low / medium / high               |
+| time_sensitivity  |       string |      yes | low / medium / high               |
+| default_pickup    |       string |       no | Varsayılan yükleme adresi         |
+| default_delivery  |       string |       no | Varsayılan teslim adresi          |
+| operational_notes | list[string] |       no | Operasyonel notlar                |
+| created_at        |     datetime |      yes | İlk oluşturma zamanı              |
+| last_updated_at   |     datetime |      yes | Son güncelleme zamanı             |
+| last_updated_by   |       string |      yes | Değişikliği yapan kaynak          |
+| change_note       |       string |       no | Değişiklik açıklaması             |
+
+---
+
+## 6. Customer Memory Active / Passive Rule
+
+Customer Memory profilleri fiziksel olarak silinmez.
+
+Bunun yerine:
+
+```text
+active = true
+→ recognition ve enrichment için kullanılabilir
+
+active = false
+→ UI’da görünür ama matching/enrichment için kullanılmaz
+```
+
+Amaç:
+
+* yanlışlıkla veri kaybını önlemek
+* geçmiş operasyonel bağlamı korumak
+* ileride audit trail için zemin hazırlamak
+
+---
+
+## 7. Customer Memory Reserved Terms
+
+Aşağıdaki generic değerler müşteri adı veya alias olarak kullanılmaz:
+
+```text
+test
+demo
+deneme
+sample
+example
+dummy
+unknown
+unknown customer
+customer
+company
+client
+müşteri
+firma
+```
+
+Gerekçe:
+
+AI parser belirsiz müşteri adlarında bu tip değerler üretebilir. Bu değerler Customer Memory ile eşleşirse sistem yanlış müşteriyi tanınan müşteri kabul edebilir.
+
+---
+
+## 8. Customer Memory Match Result Schema
+
+Workflow sırasında Customer Memory lookup sonucu ayrı bir obje olarak tutulur.
+
+Logical entity:
+
+```text
+CustomerMemoryResult
+```
+
+Alanlar:
+
+| Field         |                         Type | Description                                |
+| ------------- | ---------------------------: | ------------------------------------------ |
+| matched       |                      boolean | Eşleşme bulundu mu                         |
+| profile       | CustomerMemoryProfile / null | Eşleşen profil                             |
+| source        |                       string | shipment.customer_name / email_text / none |
+| matched_by    |                       string | customer_name / alias / none               |
+| notes_applied |                 list[string] | Workflow’a uygulanan notlar                |
+
+---
+
+## 9. Missing Information Schema
+
+Eksik bilgi kontrolü workflow gate olarak çalışır.
+
+Logical entity:
+
+```text
+MissingInformationResult
+```
+
+Alanlar:
+
+| Field                  |         Type | Description                               |
+| ---------------------- | -----------: | ----------------------------------------- |
+| can_continue           |      boolean | Workflow quote üretmeye devam edebilir mi |
+| missing_fields         | list[string] | Eksik alanlar                             |
+| reasons                | list[string] | Eksik bilginin açıklaması                 |
+| requires_clarification |      boolean | Müşteriden bilgi istenecek mi             |
+
+Critical missing information varsa quote üretilmez.
+
+Bu durumda:
+
+```text
+result_type = clarification
 ```
 
 ---
 
-# 8. suppliers
+## 10. Equipment Decision Schema
 
-Tedarikçi / nakliyeci / acente kayıtları.
+Equipment Decision Engine’in çıktısıdır.
 
-| Field         | Type      | Description                           |
-| ------------- | --------- | ------------------------------------- |
-| id            | UUID      | Primary key                           |
-| company_name  | TEXT      | Tedarikçi adı                         |
-| supplier_type | TEXT      | carrier / haulier / agent / forwarder |
-| country       | TEXT      | Ülke                                  |
-| active        | BOOLEAN   | Aktif mi                              |
-| notes         | TEXT      | Operasyonel notlar                    |
-| created_at    | TIMESTAMP | Oluşturma tarihi                      |
-| updated_at    | TIMESTAMP | Güncelleme tarihi                     |
+Logical entity:
 
----
+```text
+EquipmentDecision
+```
 
-# 9. supplier_contacts
+Alanlar:
 
-Tedarikçi kontak kişileri.
+| Field              |   Type | Description                          |
+| ------------------ | -----: | ------------------------------------ |
+| selected_equipment | string | Seçilen ekipman                      |
+| reason             | string | Ana karar nedeni                     |
+| confidence         | string | low / medium / high                  |
+| source             | string | rule / customer_memory / ai / manual |
+| explanation        | string | UI’da gösterilecek açıklama          |
 
-| Field              | Type      | Description                    |
-| ------------------ | --------- | ------------------------------ |
-| id                 | UUID      | Primary key                    |
-| supplier_id        | UUID      | FK → suppliers.id              |
-| name               | TEXT      | Kişi adı                       |
-| email              | TEXT      | Mail                           |
-| phone              | TEXT      | Telefon                        |
-| role               | TEXT      | Pricing / operasyon / yönetici |
-| is_primary_contact | BOOLEAN   | Ana kontak mı                  |
-| created_at         | TIMESTAMP | Oluşturma tarihi               |
+Örnek ekipman değerleri:
 
----
-
-# 10. supplier_routes
-
-Tedarikçilerin güçlü olduğu hatlar.
-
-| Field               | Type      | Description       |
-| ------------------- | --------- | ----------------- |
-| id                  | UUID      | Primary key       |
-| supplier_id         | UUID      | FK → suppliers.id |
-| origin_country      | TEXT      | Çıkış ülkesi      |
-| origin_region       | TEXT      | Bölge / şehir     |
-| destination_country | TEXT      | Varış ülkesi      |
-| destination_region  | TEXT      | Bölge / şehir     |
-| service_type        | TEXT      | FTL / LTL         |
-| priority_rank       | INTEGER   | Öncelik sırası    |
-| active              | BOOLEAN   | Aktif mi          |
-| notes               | TEXT      | Hat notları       |
-| created_at          | TIMESTAMP | Oluşturma tarihi  |
-
-Business Rule:
-
-RFQ maksimum 3 tedarikçiye gönderilir.
-
-Bu tablo supplier shortlist için kullanılır.
+```text
+Tenteli / Curtainsider
+Mega Trailer
+Reefer
+Kapalı Kasa / Box Trailer
+Platform
+Lowbed
+Special ADR Equipment
+```
 
 ---
 
-# 11. supplier_capabilities
+## 11. Risk Assessment Schema
 
-Tedarikçi kabiliyetleri.
+Risk Assessment Engine teknik risk motoru değil, Operational Risk Engine’dir.
 
-| Field         | Type    | Description       |
-| ------------- | ------- | ----------------- |
-| id            | UUID    | Primary key       |
-| supplier_id   | UUID    | FK → suppliers.id |
-| curtainsider  | BOOLEAN | Tenteli           |
-| box_trailer   | BOOLEAN | Kapalı kasa       |
-| reefer        | BOOLEAN | Frigorifik        |
-| mega          | BOOLEAN | Mega dorse        |
-| lowbed        | BOOLEAN | Lowbed            |
-| open_trailer  | BOOLEAN | Açık kasa         |
-| adr           | BOOLEAN | ADR               |
-| heavy_lift    | BOOLEAN | Ağır yük          |
-| project_cargo | BOOLEAN | Proje kargo       |
-| express       | BOOLEAN | Express           |
-| notes         | TEXT    | Notlar            |
+Logical entity:
 
----
+```text
+RiskAssessment
+```
 
-# 12. supplier_scores
+Alanlar:
 
-Tedarikçi performans skorları.
+| Field                      |         Type | Description                   |
+| -------------------------- | -----------: | ----------------------------- |
+| risk_level                 |       string | green / yellow / red          |
+| risk_reasons               | list[string] | Risk nedenleri                |
+| requires_human_review      |      boolean | İnsan kontrolü gerekli mi     |
+| requires_management_review |      boolean | Yönetim incelemesi gerekli mi |
 
-| Field                | Type      | Description        |
-| -------------------- | --------- | ------------------ |
-| id                   | UUID      | Primary key        |
-| supplier_id          | UUID      | FK → suppliers.id  |
-| operational_score    | FLOAT     | Operasyon kalitesi |
-| commercial_score     | FLOAT     | Fiyat seviyesi     |
-| relationship_score   | FLOAT     | İlişki / sadakat   |
-| response_speed_score | FLOAT     | Cevap hızı         |
-| on_time_score        | FLOAT     | Zamanında teslim   |
-| damage_score         | FLOAT     | Hasarsızlık        |
-| flexibility_score    | FLOAT     | Problem çözme      |
-| last_updated         | TIMESTAMP | Güncelleme tarihi  |
+Risk seviyeleri:
 
-Supplier selection sadece en düşük fiyat mantığıyla çalışmaz.
+```text
+green
+→ quote_ready
+
+yellow
+→ quote_with_review
+
+red
+→ management_review
+```
 
 ---
 
-# 13. emails
+## 12. Supplier Quote Schema
 
-Sisteme giren müşteri ve tedarikçi mailleri.
+MVP’de supplier quote simüle edilmektedir.
 
-| Field               | Type      | Description              |
-| ------------------- | --------- | ------------------------ |
-| id                  | UUID      | Primary key              |
-| external_email_id   | TEXT      | Outlook/Gmail message id |
-| thread_id           | TEXT      | Mail thread id           |
-| sender_email        | TEXT      | Gönderen                 |
-| sender_name         | TEXT      | Gönderen adı             |
-| subject             | TEXT      | Konu                     |
-| body_text           | TEXT      | Mail içeriği             |
-| received_at         | TIMESTAMP | Geliş zamanı             |
-| direction           | TEXT      | inbound / outbound       |
-| related_customer_id | UUID      | FK → customers.id        |
-| related_supplier_id | UUID      | FK → suppliers.id        |
-| related_shipment_id | UUID      | FK → shipments.id        |
-| ai_processed        | BOOLEAN   | AI işledi mi             |
-| created_at          | TIMESTAMP | Kayıt tarihi             |
+İleride gerçek supplier maili, portal veya API verisi ile doldurulacaktır.
 
----
+Logical entity:
 
-# 14. shipments
+```text
+SupplierQuote
+```
 
-Ana operasyon talebi.
+Alanlar:
 
-| Field                     | Type      | Description                                                   |
-| ------------------------- | --------- | ------------------------------------------------------------- |
-| id                        | UUID      | Primary key                                                   |
-| customer_id               | UUID      | FK → customers.id                                             |
-| contact_id                | UUID      | FK → customer_contacts.id                                     |
-| source_email_id           | UUID      | FK → emails.id                                                |
-| transport_mode            | TEXT      | road / sea / air                                              |
-| direction                 | TEXT      | import / export / cross_trade / unknown                       |
-| service_type              | TEXT      | FTL / LTL / unknown                                           |
-| pickup_country            | TEXT      | Yükleme ülkesi                                                |
-| pickup_city               | TEXT      | Yükleme şehri                                                 |
-| pickup_area               | TEXT      | OSB / bölge                                                   |
-| pickup_postcode           | TEXT      | Posta kodu                                                    |
-| pickup_address_text       | TEXT      | Açık adres                                                    |
-| delivery_country          | TEXT      | Teslim ülkesi                                                 |
-| delivery_city             | TEXT      | Teslim şehri                                                  |
-| delivery_area             | TEXT      | Bölge                                                         |
-| delivery_postcode         | TEXT      | Posta kodu                                                    |
-| delivery_address_text     | TEXT      | Açık adres                                                    |
-| commodity                 | TEXT      | Ürün cinsi                                                    |
-| gross_weight              | FLOAT     | Brüt ağırlık                                                  |
-| weight_is_approximate     | BOOLEAN   | Ağırlık yaklaşık mı                                           |
-| piece_count               | INTEGER   | Parça adedi                                                   |
-| equipment_type            | TEXT      | Tenteli, reefer, lowbed vb.                                   |
-| equipment_confidence      | FLOAT     | Ekipman kararı güven skoru                                    |
-| cargo_ready_date          | DATE      | Yük hazır tarihi                                              |
-| required_delivery_date    | DATE      | Beklenen teslim tarihi                                        |
-| incoterm                  | TEXT      | Zorunlu değil                                                 |
-| is_adr                    | BOOLEAN   | ADR mi                                                        |
-| adr_class                 | TEXT      | ADR sınıfı                                                    |
-| is_temperature_controlled | BOOLEAN   | Sıcaklık kontrollü mü                                         |
-| temperature_requirement   | TEXT      | +4 / -18 vb.                                                  |
-| is_high_value             | BOOLEAN   | Yüksek değerli mi                                             |
-| is_oversized              | BOOLEAN   | Gabari dışı mı                                                |
-| is_heavy_single_piece     | BOOLEAN   | Tek parça ağır mı                                             |
-| risk_level                | TEXT      | green / yellow / red                                          |
-| status                    | TEXT      | new / parsed / rfq_sent / quoted / approved / sent / rejected |
-| ai_confidence_score       | FLOAT     | Genel AI güven skoru                                          |
-| created_at                | TIMESTAMP | Oluşturma tarihi                                              |
-| updated_at                | TIMESTAMP | Güncelleme tarihi                                             |
+| Field          |     Type | Description                       |
+| -------------- | -------: | --------------------------------- |
+| supplier_name  |   string | Tedarikçi adı                     |
+| cost_amount    |   number | Maliyet                           |
+| currency       |   string | EUR / USD / TRY                   |
+| transit_time   |   string | Transit süre                      |
+| validity_date  |     date | Geçerlilik                        |
+| equipment_type |   string | Supplier’ın uygun ekipmanı        |
+| notes          |   string | Supplier notları                  |
+| source         |   string | simulation / email / portal / api |
+| received_at    | datetime | Fiyatın geldiği zaman             |
 
 ---
 
-# 15. shipment_packages
+## 13. Customer Quote Schema
 
-Yük parça ve ölçü detayları.
+Müşteriye sunulacak satış fiyatı modelidir.
 
-| Field        | Type    | Description                                     |
-| ------------ | ------- | ----------------------------------------------- |
-| id           | UUID    | Primary key                                     |
-| shipment_id  | UUID    | FK → shipments.id                               |
-| package_type | TEXT    | pallet / crate / machine / loose / roll / other |
-| quantity     | INTEGER | Adet                                            |
-| length_cm    | FLOAT   | Boy                                             |
-| width_cm     | FLOAT   | En                                              |
-| height_cm    | FLOAT   | Yükseklik                                       |
-| weight_kg    | FLOAT   | Parça ağırlığı                                  |
-| stackable    | BOOLEAN | İstiflenebilir mi                               |
-| notes        | TEXT    | Not                                             |
+Logical entity:
 
----
+```text
+CustomerQuote
+```
 
-# 16. shipment_risks
+Alanlar:
 
-Shipment bazlı risk kayıtları.
-
-| Field                      | Type      | Description                                |
-| -------------------------- | --------- | ------------------------------------------ |
-| id                         | UUID      | Primary key                                |
-| shipment_id                | UUID      | FK → shipments.id                          |
-| risk_code                  | TEXT      | RISK-001 vb.                               |
-| risk_category              | TEXT      | customer / time / cargo / route / contract |
-| risk_level                 | TEXT      | green / yellow / red                       |
-| description                | TEXT      | Risk açıklaması                            |
-| requires_human_review      | BOOLEAN   | İnsan onayı gerekli mi                     |
-| requires_management_review | BOOLEAN   | Yönetim onayı gerekli mi                   |
-| created_at                 | TIMESTAMP | Oluşturma tarihi                           |
+| Field          |       Type | Description        |
+| -------------- | ---------: | ------------------ |
+| base_cost      |     number | Tedarikçi maliyeti |
+| margin_amount  |     number | Kar                |
+| margin_percent |     number | Kar yüzdesi        |
+| sell_amount    |     number | Satış fiyatı       |
+| currency       |     string | Para birimi        |
+| cost_items     | list[dict] | Cost breakdown     |
+| validity_date  |       date | Teklif geçerliliği |
+| notes          |     string | Teklif notları     |
 
 ---
 
-# 17. supplier_quotes
+## 14. Cost Item Schema
 
-Tedarikçilerden gelen fiyatlar.
+İleride detaylı fiyat kırılımı için kullanılacaktır.
 
-| Field                | Type      | Description             |
-| -------------------- | --------- | ----------------------- |
-| id                   | UUID      | Primary key             |
-| shipment_id          | UUID      | FK → shipments.id       |
-| supplier_id          | UUID      | FK → suppliers.id       |
-| source_email_id      | UUID      | FK → emails.id          |
-| quoted_cost          | FLOAT     | Tedarikçi maliyeti      |
-| currency             | TEXT      | EUR / USD / TRY         |
-| transit_time_text    | TEXT      | Transit süre açıklaması |
-| validity_date        | DATE      | Geçerlilik tarihi       |
-| equipment_type       | TEXT      | Verilen ekipman         |
-| includes_extra_costs | BOOLEAN   | Ek masraflar dahil mi   |
-| notes                | TEXT      | Not                     |
-| received_at          | TIMESTAMP | Fiyat geliş zamanı      |
-| created_at           | TIMESTAMP | Kayıt zamanı            |
+Logical entity:
 
----
+```text
+CostItem
+```
 
-# 18. customer_quotes
+Alanlar:
 
-Müşteriye oluşturulan teklif.
+| Field     |    Type | Description                                          |
+| --------- | ------: | ---------------------------------------------------- |
+| name      |  string | Maliyet adı                                          |
+| amount    |  number | Tutar                                                |
+| currency  |  string | Para birimi                                          |
+| category  |  string | freight / local / surcharge / insurance / dg / other |
+| mandatory | boolean | Zorunlu mu                                           |
+| notes     |  string | Açıklama                                             |
 
-| Field                      | Type      | Description                                           |
-| -------------------------- | --------- | ----------------------------------------------------- |
-| id                         | UUID      | Primary key                                           |
-| shipment_id                | UUID      | FK → shipments.id                                     |
-| selected_supplier_quote_id | UUID      | FK → supplier_quotes.id                               |
-| supplier_cost              | FLOAT     | Seçilen tedarikçi maliyeti                            |
-| margin_type                | TEXT      | percentage / fixed / manual                           |
-| margin_value               | FLOAT     | Kar değeri                                            |
-| final_price                | FLOAT     | Müşteri satış fiyatı                                  |
-| currency                   | TEXT      | EUR / USD / TRY                                       |
-| validity_date              | DATE      | Teklif geçerlilik tarihi                              |
-| quote_status               | TEXT      | draft / pending_approval / approved / sent / rejected |
-| price_context_note         | TEXT      | Geçmiş fiyat / piyasa notu                            |
-| created_at                 | TIMESTAMP | Oluşturma                                             |
-| updated_at                 | TIMESTAMP | Güncelleme                                            |
+Örnek cost item değerleri:
+
+```text
+Navlun
+Fuel surcharge
+Pickup
+Delivery
+Liman masrafları
+Ordino
+DG masrafı
+Sigorta
+```
 
 ---
 
-# 19. quote_drafts
+## 15. Generated Draft Schema
 
-AI tarafından hazırlanan teklif maili taslakları.
+Workflow sonucuna göre farklı draft üretilebilir.
 
-| Field               | Type      | Description             |
-| ------------------- | --------- | ----------------------- |
-| id                  | UUID      | Primary key             |
-| customer_quote_id   | UUID      | FK → customer_quotes.id |
-| email_subject       | TEXT      | Mail konusu             |
-| email_body          | TEXT      | Mail içeriği            |
-| language            | TEXT      | TR / EN                 |
-| ai_model            | TEXT      | Kullanılan model        |
-| ai_confidence_score | FLOAT     | Güven skoru             |
-| human_edited        | BOOLEAN   | İnsan düzenledi mi      |
-| approved_by_user_id | UUID      | Onaylayan kullanıcı     |
-| created_at          | TIMESTAMP | Oluşturma               |
-| approved_at         | TIMESTAMP | Onay tarihi             |
-| sent_at             | TIMESTAMP | Gönderim tarihi         |
+Logical entity:
 
----
+```text
+GeneratedDraft
+```
 
-# 20. audit_logs
+Alanlar:
 
-Sistemde yapılan önemli aksiyonlar.
+| Field          |     Type | Description                               |
+| -------------- | -------: | ----------------------------------------- |
+| draft_type     |   string | quote / clarification / management_review |
+| subject        |   string | Mail konusu                               |
+| body           |     text | Draft gövdesi                             |
+| recipient_type |   string | customer / internal                       |
+| language       |   string | tr / en                                   |
+| created_at     | datetime | Oluşturulma zamanı                        |
 
-| Field        | Type      | Description                            |
-| ------------ | --------- | -------------------------------------- |
-| id           | UUID      | Primary key                            |
-| entity_type  | TEXT      | shipment / quote / customer / supplier |
-| entity_id    | UUID      | İlgili kayıt                           |
-| action       | TEXT      | created / updated / approved / sent    |
-| performed_by | TEXT      | ai / user                              |
-| user_id      | UUID      | Kullanıcı id                           |
-| description  | TEXT      | Açıklama                               |
-| created_at   | TIMESTAMP | Tarih                                  |
+Aynı workflow sonucunda yalnızca ilgili ana draft kullanılmalıdır.
 
 ---
 
-# 21. Key Relationships
+## 16. Action Recommendation Schema
+
+Action Recommendation Engine, kullanıcıya bir sonraki aksiyonu gösterir.
+
+Logical entity:
+
+```text
+ActionRecommendation
+```
+
+Alanlar:
+
+| Field       |         Type | Description                                                                   |
+| ----------- | -----------: | ----------------------------------------------------------------------------- |
+| action_type |       string | quote_ready / quote_with_review / clarification / management_review / unknown |
+| priority    |       string | normal / medium / high                                                        |
+| title       |       string | UI başlığı                                                                    |
+| explanation |       string | Açıklama                                                                      |
+| checklist   | list[string] | Operasyon personeli için yapılacaklar                                         |
+| source      |       string | workflow / risk / missing_info                                                |
+
+---
+
+## 17. Workflow Result Schema
+
+`process_shipment()` fonksiyonunun ana çıktısıdır.
+
+Logical entity:
+
+```text
+WorkflowResult
+```
+
+Alanlar:
+
+| Field                   |                     Type | Description                               |
+| ----------------------- | -----------------------: | ----------------------------------------- |
+| result_type             |                   string | quote / clarification / management_review |
+| shipment                |                 Shipment | Normalize edilmiş shipment                |
+| customer_memory         |     CustomerMemoryResult | Müşteri hafızası sonucu                   |
+| missing_info            | MissingInformationResult | Eksik bilgi sonucu                        |
+| equipment_decision      |        EquipmentDecision | Ekipman kararı                            |
+| risk_assessment         |           RiskAssessment | Risk kararı                               |
+| supplier_quote          |     SupplierQuote / null | Tedarikçi fiyatı                          |
+| customer_quote          |     CustomerQuote / null | Satış fiyatı                              |
+| quote_draft             |    GeneratedDraft / null | Teklif draftı                             |
+| clarification_draft     |    GeneratedDraft / null | Eksik bilgi draftı                        |
+| management_review_draft |    GeneratedDraft / null | Yönetici inceleme draftı                  |
+| action_recommendation   |     ActionRecommendation | Sonraki aksiyon                           |
+
+---
+
+## 18. Test Case Schema
+
+Automated test suite için kullanılır.
+
+Current storage:
+
+```text
+src/simulation/ai_email_test_cases.py
+```
+
+Logical entity:
+
+```text
+AITestCase
+```
+
+Alanlar:
+
+| Field    |   Type | Description              |
+| -------- | -----: | ------------------------ |
+| name     | string | Test adı                 |
+| email    |   text | Test müşteri maili       |
+| expected |   dict | Beklenen workflow sonucu |
+
+Expected alanında kontrol edilen başlıca değerler:
+
+```text
+result_type
+selected_equipment
+shipment_type
+risk_level
+customer_memory_matched
+action_type
+missing_fields
+```
+
+---
+
+## 19. Customer Memory Export Schema
+
+Export endpoint çıktısı:
+
+```text
+GET /customer-memory/export
+```
+
+Schema:
+
+| Field         |                        Type | Description             |
+| ------------- | --------------------------: | ----------------------- |
+| export_type   |                      string | customer_memory         |
+| profile_count |                      number | Profil sayısı           |
+| profiles      | list[CustomerMemoryProfile] | Export edilen profiller |
+
+---
+
+## 20. Customer Memory Import Validation Schema
+
+Import validation endpoint çıktısı:
+
+```text
+POST /customer-memory/import/validate
+```
+
+Schema:
+
+| Field             |         Type | Description                          |
+| ----------------- | -----------: | ------------------------------------ |
+| valid             |      boolean | Import formatı geçerli mi            |
+| profile_count     |       number | Profil sayısı                        |
+| customer_names    | list[string] | Dosyadaki müşteri isimleri           |
+| errors            | list[string] | Import’u engelleyen hatalar          |
+| warnings          | list[string] | Uyarılar                             |
+| duplicate_names   | list[string] | Dosya içi tekrar eden müşteri adları |
+| duplicate_aliases | list[string] | Dosya içi tekrar eden aliaslar       |
+| reserved_warnings | list[string] | Reserved term uyarıları              |
+
+---
+
+## 21. Customer Memory Import Dry Run Schema
+
+Import dry run endpoint çıktısı:
+
+```text
+POST /customer-memory/import/dry-run
+```
+
+Schema:
+
+| Field                 |         Type | Description                         |
+| --------------------- | -----------: | ----------------------------------- |
+| valid                 |      boolean | Dry run yapılabilir mi              |
+| profile_count         |       number | Import dosyasındaki profil sayısı   |
+| current_profile_count |       number | Mevcut sistemdeki profil sayısı     |
+| new_profiles          | list[string] | Yeni profiller                      |
+| existing_profiles     | list[string] | Mevcut profiller                    |
+| name_conflicts        |   list[dict] | İleride kullanılacak conflict alanı |
+| alias_conflicts       |   list[dict] | Başka müşteriye çakışan aliaslar    |
+| will_add              | list[string] | Eklenecek profiller                 |
+| will_update           | list[string] | Güncellenecek profiller             |
+| will_skip             |   list[dict] | Atlanacak kayıtlar                  |
+| errors                | list[string] | Hatalar                             |
+| warnings              | list[string] | Uyarılar                            |
+
+---
+
+## 22. Backup File Schema
+
+Customer Memory backup dosyaları şu klasörde tutulur:
+
+```text
+data/backups/
+```
+
+Dosya formatı:
+
+```text
+list[CustomerMemoryProfile]
+```
+
+Dosya adı formatı:
+
+```text
+customer_memory_backup_<timestamp>.json
+```
+
+---
+
+## 23. Backup List Schema
+
+Backup list endpoint çıktısı:
+
+```text
+GET /customer-memory/backups
+```
+
+Schema:
+
+| Field   |                 Type | Description      |
+| ------- | -------------------: | ---------------- |
+| backups | list[BackupMetadata] | Backup dosyaları |
+
+BackupMetadata:
+
+| Field       |   Type | Description                  |
+| ----------- | -----: | ---------------------------- |
+| file_name   | string | Dosya adı                    |
+| path        | string | Dosya yolu                   |
+| size_bytes  | number | Dosya boyutu                 |
+| modified_at | number | Dosya modification timestamp |
+
+---
+
+## 24. Restore Result Schema
+
+Restore endpoint çıktısı:
+
+```text
+POST /customer-memory/backups/restore
+```
+
+Schema:
+
+| Field                          |         Type | Description                       |
+| ------------------------------ | -----------: | --------------------------------- |
+| success                        |      boolean | Restore başarılı mı               |
+| message                        |       string | Sonuç mesajı                      |
+| result.restored_from           |       string | Restore edilen backup dosyası     |
+| result.pre_restore_backup_path |       string | Restore öncesi alınan yeni backup |
+| result.restored_profile_count  |       number | Restore edilen profil sayısı      |
+| result.restored_profiles       | list[string] | Restore edilen müşteri adları     |
+
+---
+
+## 25. Backup Cleanup Preview Schema
+
+Cleanup preview endpoint çıktısı:
+
+```text
+GET /customer-memory/backups/cleanup-preview
+```
+
+Schema:
+
+| Field                   |                 Type | Description                   |
+| ----------------------- | -------------------: | ----------------------------- |
+| total_backup_count      |               number | Toplam backup sayısı          |
+| keep_latest             |               number | Saklanacak son backup sayısı  |
+| keep_count              |               number | Korunacak dosya sayısı        |
+| cleanup_candidate_count |               number | Silmeye aday dosya sayısı     |
+| backups_to_keep         | list[BackupMetadata] | Korunacak backup dosyaları    |
+| cleanup_candidates      | list[BackupMetadata] | Silmeye aday backup dosyaları |
+| cleanup_enabled         |              boolean | Preview aşamasında false      |
+| message                 |               string | Açıklama                      |
+
+---
+
+## 26. Backup Cleanup Apply Schema
+
+Cleanup apply endpoint çıktısı:
+
+```text
+POST /customer-memory/backups/cleanup
+```
+
+Schema:
+
+| Field         |         Type | Description                       |
+| ------------- | -----------: | --------------------------------- |
+| success       |      boolean | Cleanup başarılı mı               |
+| keep_latest   |       number | Korunan son backup sayısı         |
+| deleted_count |       number | Silinen dosya sayısı              |
+| failed_count  |       number | Silinemeyen dosya sayısı          |
+| deleted_files | list[string] | Silinen dosyalar                  |
+| failed_files  |   list[dict] | Silinemeyen dosyalar ve nedenleri |
+| message       |       string | Sonuç mesajı                      |
+
+---
+
+## 27. Future Database Tables
+
+İleride gerçek database’e geçildiğinde önerilen tablolar:
 
 ```text
 customers
-  └── customer_contacts
-  └── customer_locations
-  └── customer_products
-  └── customer_domains
-
-customers
-  └── shipments
-
+customer_memory_profiles
+customer_memory_audit_logs
 shipments
-  └── shipment_packages
-  └── shipment_risks
-  └── supplier_quotes
-  └── customer_quotes
-
-suppliers
-  └── supplier_contacts
-  └── supplier_routes
-  └── supplier_capabilities
-  └── supplier_scores
-
+shipment_events
+equipment_decisions
+risk_assessments
+missing_information_checks
+supplier_quotes
 customer_quotes
-  └── quote_drafts
+generated_drafts
+action_recommendations
+workflow_results
+test_runs
+test_run_results
+backup_files
 ```
 
 ---
 
-# 22. MVP Notes
+## 28. Data Sensitivity Policy
 
-MVP v1’de zorunlu olmayan ama veri yapısında kapısı açık bırakılan alanlar:
+Customer Memory verisi operasyonel varsayımlar içerir.
 
-* historical pricing intelligence
-* advanced supplier scoring
-* automated pricing suggestions
-* carrier portal integrations
-* multi-modal transport
-* sea freight
-* air freight
+Bu nedenle:
+
+* müşteri gizli bilgileri gereksiz yere saklanmaz
+* kişisel veri minimum düzeyde tutulur
+* müşteri hafızası CRM yerine operasyonel karar desteği olarak kullanılır
+* export / import / restore işlemleri dikkatli yönetilir
+* backup dosyaları repository’ye commit edilmemelidir
 
 ---
 
-# 23. Next Step
+## 29. Current Storage Policy
 
-Bu schema onaylandıktan sonra sıradaki doküman:
+MVP aşamasında storage yaklaşımı:
 
 ```text
-docs/models/workflow-engine.md
+Customer Memory
+→ data/customer_memory.json
+
+Customer Memory Backups
+→ data/backups/
+
+Test Cases
+→ Python source file
+
+Runtime Workflow Results
+→ API response only
 ```
 
-olacaktır.
+İleride database’e geçilene kadar bu yapı korunur.
 
-Workflow Engine içinde:
+---
 
-* Customer Recognition Flow
-* Shipment Extraction Flow
-* Equipment Decision Flow
-* Risk Assessment Flow
-* Supplier Selection Flow
-* Quote Draft Flow
+## 30. Next Schema Priorities
 
-tanımlanacaktır.
+Sonraki schema geliştirme alanları:
 
+* Supplier Profile schema
+* Supplier Route Capability schema
+* Supplier Score schema
+* Rate Sheet schema
+* Cost Breakdown schema
+* Margin Rule schema
+* Booking schema
+* Document Checklist schema
