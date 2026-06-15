@@ -89,9 +89,13 @@ def _normalize(value: Optional[str]) -> str:
     return value
 
 
-def _get_equipment_text(shipment: Any, equipment_decision: Optional[Dict[str, Any]]) -> str:
+def _get_equipment_text(shipment: Any, equipment_decision: Optional[Any]) -> str:
     if equipment_decision:
-        selected = equipment_decision.get("selected_equipment")
+        if isinstance(equipment_decision, dict):
+            selected = equipment_decision.get("selected_equipment")
+        else:
+            selected = getattr(equipment_decision, "selected_equipment", None)
+
         if selected:
             return _normalize(selected)
 
@@ -99,11 +103,14 @@ def _get_equipment_text(shipment: Any, equipment_decision: Optional[Dict[str, An
     return _normalize(equipment_type)
 
 
-def _get_risk_level(risk_assessment: Optional[Dict[str, Any]]) -> str:
+def _get_risk_level(risk_assessment: Optional[Any]) -> str:
     if not risk_assessment:
         return "green"
 
-    return _normalize(risk_assessment.get("risk_level", "green"))
+    if isinstance(risk_assessment, dict):
+        return _normalize(risk_assessment.get("risk_level", "green"))
+
+    return _normalize(getattr(risk_assessment, "risk_level", "green"))
 
 
 def _score_route(supplier: Dict[str, Any], shipment: Any) -> float:
