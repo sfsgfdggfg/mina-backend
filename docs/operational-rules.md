@@ -422,3 +422,55 @@ Riskli taşımalarda güvenilirlik ve operasyonel uygunluk, fiyatın önüne ge�
 * Parsiyel taleplerde LTL / parsiyel network sağlayabilen supplier önceliklendirilmelidir.
 
 Supplier Selection Engine en fazla 3 uygun supplier adayı önermelidir.
+
+## RULE-043 — Supplier Capability Data Must Be Externalized
+
+Supplier kabiliyetleri uzun vadede kod içine gömülü tutulmamalıdır.
+
+Supplier seçimi için kullanılan bilgiler ayrı bir veri kaynağında tutulmalıdır.
+
+İlk versiyonda bu veri kaynağı:
+
+```text
+data/supplier_capabilities.json
+```
+
+dosyasıdır.
+
+Supplier capability datası aşağıdaki operasyonel alanları içermelidir:
+
+```text
+- Hangi ülke / bölge / hatta çalıştığı
+- Hangi servis tiplerini desteklediği
+- Hangi ekipmanları sağlayabildiği
+- ADR / reefer / lowbed / parsiyel gibi özel kabiliyetleri
+- Ana supplier mı, yedek supplier mı olduğu
+- Güvenilirlik skoru
+- Fiyat rekabetçiliği skoru
+- Hız / transit uygunluğu skoru
+```
+
+Supplier seçimi yalnızca fiyat üzerinden yapılmamalıdır.
+
+---
+
+## RULE-044 — Critical Email Signals Require Safety Overrides
+
+Kritik operasyonel sinyaller yalnızca AI parser sonucuna bırakılmamalıdır.
+
+Ham email metninde açıkça görülen bazı bilgiler için deterministic safety override uygulanmalıdır.
+
+Örnek kritik sinyaller:
+
+```text
+- ADR Class 1
+- ADR Class 7
+- Sıcaklık kontrollü taşıma ihtiyacı
+- Lowbed / ağır yük ihtimali
+- Teslim tarihi açısından imkânsız veya riskli termin
+```
+
+Özellikle ADR Class 1 ve ADR Class 7 gibi yüksek riskli yüklerde sistem, AI parser eksik veya hatalı dönse bile ham email metninden güvenlik kontrolü yapmalıdır.
+
+Bu tür sinyaller tespit edildiğinde workflow daha güvenli aksiyonlara yönlendirilmelidir.
+
