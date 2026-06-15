@@ -173,5 +173,32 @@
     "price_score": 0.88,
     "speed_score": 0.74,
     "notes": "Parsiyel / LTL talepler için demo network."
+  },
+  {
+    "supplier_name": "Anatolia Domestic",
+    "active": true,
+    "role": "primary",
+    "route_regions": [
+      "domestic"
+    ],
+    "countries": [
+      "Türkiye"
+    ],
+    "service_types": [
+      "FTL"
+    ],
+    "equipment_types": [
+      "Tenteli / Curtainsider",
+      "Kapalı Kasa / Box Trailer",
+      "Mega Trailer"
+    ],
+    "special_capabilities": [],
+    "priority_routes": [
+      "Türkiye-Türkiye"
+    ],
+    "reliability_score": 0.86,
+    "price_score": 0.82,
+    "speed_score": 0.84,
+    "notes": "Türkiye içi FTL taşımalarda demo ana tedarikçi."
   }
 ]
