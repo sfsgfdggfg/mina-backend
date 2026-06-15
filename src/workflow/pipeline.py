@@ -1,3 +1,4 @@
+import json
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
@@ -13,6 +14,7 @@ from src.core.equipment import decide_equipment
 from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
 from src.simulation.supplier_simulator import simulate_supplier_quote
+from src.core.supplier_selection import select_suppliers_for_shipment
 from src.core.pricing import calculate_customer_quote
 
 
@@ -30,6 +32,12 @@ def process_shipment(shipment, email_text: str | None = None):
 )
 
     # 1. RED risk varsa önce yönetici onayına gider
+    supplier_selection = select_suppliers_for_shipment(
+        shipment=shipment,
+        equipment_decision=equipment_decision,
+        risk_assessment=risk_assessment,
+    )
+
     if risk_assessment.risk_level == "red":
         management_review_draft = generate_management_review_draft(
             shipment=shipment,
@@ -50,6 +58,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "missing_info": missing_info,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
+            "supplier_selection": supplier_selection,
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -78,6 +87,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "missing_info": missing_info,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
+            "supplier_selection": supplier_selection,
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -111,6 +121,7 @@ def process_shipment(shipment, email_text: str | None = None):
         "missing_info": missing_info,
         "equipment_decision": equipment_decision,
         "risk_assessment": risk_assessment,
+        "supplier_selection": supplier_selection,
         "supplier_quote": supplier_quote,
         "customer_quote": customer_quote,
         "quote_draft": quote_draft,
@@ -223,6 +234,7 @@ def print_result(result):
     equipment_decision = result["equipment_decision"]
     risk_assessment = result["risk_assessment"]
     supplier_quote = result.get("supplier_quote")
+    supplier_selection = result.get("supplier_selection")
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
     clarification_draft = result.get("clarification_draft")
@@ -237,6 +249,9 @@ def print_result(result):
 
     print("\n--- RISK ASSESSMENT ---")
     print(risk_assessment.model_dump_json(indent=2))
+
+    print("\n--- SUPPLIER SELECTION ---")
+    print(json.dumps(supplier_selection, indent=2, ensure_ascii=False))
 
     if customer_memory:
         print("\n--- CUSTOMER MEMORY ---")
