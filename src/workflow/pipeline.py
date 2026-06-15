@@ -97,7 +97,7 @@ def process_shipment(shipment, email_text: str | None = None):
         }
 
     # 3. Her şey uygunsa quote akışı çalışır
-    supplier_quote = simulate_supplier_quote(shipment, equipment_decision)
+    supplier_quote = simulate_supplier_quote(shipment, equipment_decision, supplier_selection=supplier_selection)
     customer_quote = calculate_customer_quote(supplier_quote)
 
     quote_draft = generate_quote_draft(
