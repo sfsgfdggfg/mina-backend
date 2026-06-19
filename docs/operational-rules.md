@@ -546,3 +546,37 @@ Known no   → elenir veya warning üretir
 Unknown    → doğrulama warning'i üretir
 ```
 
+## RULE-047 — Raw Email Commodity Signals Override Generic AI Commodity
+
+Müşteri mailinde açık ve güvenilir bir ürün ifadesi varsa, bu ifade AI parser tarafından üretilen daha genel commodity değerinin üstünde önceliğe sahip olmalıdır.
+
+Sistem şu tür durumlarda AI çıktısını deterministik olarak düzeltmelidir:
+
+```text
+Mailde: içecek
+AI commodity: Gıda
+Final commodity: İçecek / Meşrubat
+```
+
+```text
+Mailde: trafo
+AI commodity: Makine
+Final commodity: Elektrik Transformatörü
+```
+
+Bu kuralın amacı, açık ürün sinyallerinin daha genel sınıflara indirgenmesini engellemektir.
+
+İlk desteklenen commodity override grupları:
+
+```text
+içecek / icecek / meşrubat / mesrubat  → İçecek / Meşrubat
+trafo / transformatör / transformer    → Elektrik Transformatörü
+tekstil / textile / kumaş              → Tekstil
+makine / makina / machine              → Makine
+```
+
+Bu kural yalnızca müşteri mailinde açıkça görünen güçlü ürün sinyalleri için uygulanmalıdır.
+
+Sistem belirsiz ürün ifadelerinde commodity uydurmamalıdır. Belirsizlik varsa mevcut AI parser çıktısı korunmalı veya eksik bilgi / doğrulama sorusu üretilmelidir.
+
+Bu yapı MVP aşamasında kod içi safety override olarak tutulabilir. Ürünleşme aşamasında commodity keyword ve alias kayıtları ayrı bir data kaynağına veya database tablosuna taşınmalıdır.
