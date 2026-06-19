@@ -15,6 +15,7 @@ from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
 from src.simulation.supplier_simulator import simulate_supplier_quote
 from src.core.supplier_selection import select_suppliers_for_shipment
+from src.core.operational_consistency import check_operational_consistency
 from src.core.pricing import calculate_customer_quote
 
 
@@ -38,6 +39,14 @@ def process_shipment(shipment, email_text: str | None = None):
         risk_assessment=risk_assessment,
     )
 
+    operational_consistency = check_operational_consistency(
+        shipment=shipment,
+        equipment_decision=equipment_decision,
+        risk_assessment=risk_assessment,
+        supplier_selection=supplier_selection,
+        supplier_quote=None,
+    )
+
     if risk_assessment.risk_level == "red":
         management_review_draft = generate_management_review_draft(
             shipment=shipment,
@@ -59,6 +68,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
+            "operational_consistency": operational_consistency,
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -88,6 +98,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
+            "operational_consistency": operational_consistency,
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -122,6 +133,7 @@ def process_shipment(shipment, email_text: str | None = None):
         "equipment_decision": equipment_decision,
         "risk_assessment": risk_assessment,
         "supplier_selection": supplier_selection,
+        "operational_consistency": operational_consistency,
         "supplier_quote": supplier_quote,
         "customer_quote": customer_quote,
         "quote_draft": quote_draft,
@@ -235,6 +247,7 @@ def print_result(result):
     risk_assessment = result["risk_assessment"]
     supplier_quote = result.get("supplier_quote")
     supplier_selection = result.get("supplier_selection")
+    operational_consistency = result.get("operational_consistency")
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
     clarification_draft = result.get("clarification_draft")
@@ -252,6 +265,10 @@ def print_result(result):
 
     print("\n--- SUPPLIER SELECTION ---")
     print(json.dumps(supplier_selection, indent=2, ensure_ascii=False))
+
+    if operational_consistency:
+        print("\n--- OPERATIONAL CONSISTENCY ---")
+        print(json.dumps(operational_consistency, indent=2, ensure_ascii=False))
 
     if customer_memory:
         print("\n--- CUSTOMER MEMORY ---")
