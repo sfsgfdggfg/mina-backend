@@ -474,3 +474,34 @@ Ham email metninde açıkça görülen bazı bilgiler için deterministic safety
 
 Bu tür sinyaller tespit edildiğinde workflow daha güvenli aksiyonlara yönlendirilmelidir.
 
+## RULE-045 — Selected Supplier and Quoted Supplier Must Match
+
+Supplier Selection Engine tarafından seçilen supplier ile Supplier Quote içinde kullanılan supplier aynı olmalıdır.
+
+Sistem bir taşıma talebi için supplier seçimi yaptıktan sonra, quote simülasyonu veya teklif hazırlığı farklı bir supplier adıyla devam etmemelidir.
+
+Yanlış örnek:
+
+```text id="k34pzb"
+Supplier Selection: Anatolia Domestic
+Supplier Quote: Demo Transport
+```
+
+Doğru örnek:
+
+```text id="ai3cg2"
+Supplier Selection: Anatolia Domestic
+Supplier Quote: Anatolia Domestic
+```
+
+Bu kural demo/simülasyon ortamında da geçerlidir. Çünkü sistemin kendi çıktıları arasında görünen tutarsızlık kullanıcı güvenini zedeler.
+
+Eğer Supplier Selection sonucu boşsa:
+
+```text id="bdpkm4"
+selected_suppliers = []
+```
+
+sistem ileride bunu ayrıca operasyonel uyarı veya consistency check olarak ele almalıdır.
+
+Bu kuralın amacı, Supplier Selection ve Supplier Quote katmanları arasında temel operasyonel tutarlılığı sağlamaktır.
