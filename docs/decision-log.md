@@ -610,3 +610,79 @@ Test reporter artık şu kontrolleri yapar:
 * Yurtiçi Oğuz Gıda testlerinde `Anatolia Domestic` supplier beklentisi doğrulanır.
 * Test suite artık yalnızca teknik akışı değil, temel operasyonel tutarlılığı da kontrol etmeye başlamıştır.
 * Bu karar, ileride Operational Consistency Checks yapısının temelini oluşturur.
+
+## DEC-038 — Operational Consistency Checks v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+Operational Consistency Check yapısı eklenmiştir.
+
+Bu yapı, workflow teknik olarak çalışsa bile lojistik açıdan bariz tutarsızlıkları yakalamak için kullanılacaktır.
+
+İlk versiyonda sistem şu kontrolleri yapar:
+
+```text
+1. Supplier Selection boşken Supplier Quote üretilmiş mi?
+2. Supplier Selection ile Supplier Quote aynı supplier'ı mı kullanıyor?
+3. Yurtiçi taşımalarda domestic supplier seçilmiş mi?
+4. ADR Class 1 / Class 7 yüklerde risk seviyesi red mi?
+5. ADR Class 1 / Class 7 yüklerde uygun ADR ekipmanı seçilmiş mi?
+6. Reefer taşımalarda soğuk zincir supplier uygunluğu şüpheli mi?
+7. LTL / parsiyel taşımalarda seçilen supplier gerçekten LTL destekliyor mu?
+```
+
+### Rationale
+
+Testlerin PASS olması tek başına yeterli değildir.
+
+Sistem, operasyonel olarak kendi içinde tutarlı çıktı üretmelidir. Örneğin bir supplier seçip başka bir supplier adına quote üretmek, teknik olarak hata vermese bile lojistik kullanıcı açısından güven kırıcıdır.
+
+Ayrıca bazı durumlarda AI veya simülasyon akışı sonucu üretse bile sistemin şu tür uyarılar verebilmesi gerekir:
+
+```text
+Bu taşıma LTL görünüyor, fakat seçilen supplier'ın LTL desteği capability datasında doğrulanamadı.
+```
+
+Bu nedenle operasyonel tutarlılık kontrolleri ayrı bir engine olarak tasarlanmıştır.
+
+### Implementation
+
+Yeni dosya eklendi:
+
+```text
+src/core/operational_consistency.py
+```
+
+Pipeline içine bağlandı:
+
+```text
+src/workflow/pipeline.py
+```
+
+Operational Consistency Engine şu kaynağı kullanır:
+
+```text
+data/supplier_capabilities.json
+```
+
+Özellikle LTL kontrolü supplier adına veya açıklama metnine bakarak değil, supplier capability datasına bakarak yapılır.
+
+Örnek doğru yaklaşım:
+
+```text
+Shipment service_type = LTL
+Selected supplier = Local LTL Network
+Supplier capability service_types contains LTL
+Result = no warning
+```
+
+### Consequences
+
+* Workflow çıktılarında operasyonel tutarlılık kontrolü başlamıştır.
+* Supplier Selection ve Supplier Quote arasındaki uyumsuzluklar daha erken yakalanabilir.
+* LTL uygunluk kontrolü gerçek supplier capability datasına bağlanmıştır.
+* İlk versiyon workflow'u durdurmaz; sadece `warnings` ve `errors` üretir.
+* İleride bazı kritik hatalar workflow'u durduracak blocking validation seviyesine yükseltilebilir.
