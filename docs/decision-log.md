@@ -552,3 +552,61 @@ Supplier profilleri şu bilgileri içerir:
 * Yeni supplier eklemek için ileride kod değişikliği gerekmeyebilir.
 * Gerçek ürün aşamasında bu JSON yapısı database tablosuna dönüşebilir.
 * Mevcut versiyon hâlâ demo veri ile çalışır.
+
+## DEC-037 — Supplier Selection Regression Checks
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+Supplier Selection Engine için regression test kontrolleri eklenmiştir.
+
+Sistem artık yalnızca teklif üretimini değil, supplier selection ile supplier quote çıktısının birbiriyle tutarlı olup olmadığını da kontrol eder.
+
+Özellikle şu kural test suite içine alınmıştır:
+
+```text
+Supplier Selection tarafından seçilen ilk supplier ile
+Supplier Quote içinde görünen supplier aynı olmalıdır.
+```
+
+### Rationale
+
+Supplier Selection Engine bir tedarikçi seçtiği halde, Supplier Quote çıktısında farklı bir supplier adı görünmesi operasyonel olarak tutarsızdır.
+
+Örnek yanlış çıktı:
+
+```text
+Supplier Selection: Anatolia Domestic
+Supplier Quote: Demo Transport
+```
+
+Bu durum demo/simülasyon ortamında bile kullanıcı güvenini zedeler. Sistem kendi içinde tutarlı görünmelidir.
+
+Bu nedenle Test 7 ve Test 8 için supplier selection regression kontrolü eklenmiştir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+src/simulation/ai_email_test_cases.py
+src/simulation/test_reporter.py
+```
+
+Test case içine `expected_supplier_name` alanı eklenmiştir.
+
+Test reporter artık şu kontrolleri yapar:
+
+```text
+1. selected_suppliers[0].supplier_name beklenen supplier mı?
+2. supplier_quote.supplier_name beklenen supplier mı?
+```
+
+### Consequences
+
+* Supplier Selection ve Supplier Quote çıktıları arasındaki tutarsızlıklar otomatik testte yakalanır.
+* Yurtiçi Oğuz Gıda testlerinde `Anatolia Domestic` supplier beklentisi doğrulanır.
+* Test suite artık yalnızca teknik akışı değil, temel operasyonel tutarlılığı da kontrol etmeye başlamıştır.
+* Bu karar, ileride Operational Consistency Checks yapısının temelini oluşturur.
