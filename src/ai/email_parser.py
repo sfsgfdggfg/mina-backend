@@ -130,16 +130,42 @@ def parse_email_to_shipment(email_text: str) -> Shipment:
     return shipment
 
 
-def _apply_email_text_safety_overrides(shipment, email_text: str):
+COMMODITY_KEYWORD_OVERRIDES = [
+    (r"\b(içecek|icecek|içecekler|icecekler|meşrubat|mesrubat|meşrubatlar|mesrubatlar)\b", "İçecek / Meşrubat"),
+    (r"\b(trafo|trafolar|transformatör|transformator|transformer|transformers)\b", "Elektrik Transformatörü"),
+    (r"\b(tekstil|textile|kumaş|kumas)\b", "Tekstil"),
+    (r"\b(makine|makina|machine|machinery)\b", "Makine"),
+]
+
+
+def _apply_commodity_safety_overrides(shipment, email_text: str):
     """
-    Critical logistics signals should not depend only on AI extraction.
-    If the raw email clearly contains ADR Class 1 or Class 7, force ADR flags.
+    Raw email text can contain clear commodity signals.
+    These deterministic overrides prevent the AI parser from returning
+    overly generic commodity values such as "Gıda" when the email clearly says
+    "içecek" or "meşrubat".
     """
 
     text = (email_text or "").lower()
 
-    adr_match = re.search(r"\badr\b[^0-9]{0,20}\b(1|7)\b", text)
-    class_match = re.search(r"\bclass\s*(1|7)\b", text)
+    for pattern, canonical_commodity in COMMODITY_KEYWORD_OVERRIDES:
+        if re.search(pattern, text):
+            shipment.commodity = canonical_commodity
+            break
+
+    return shipment
+
+
+def _apply_email_text_safety_overrides(shipment, email_text: str):
+    """
+    Critical logistics signals should not depend only on AI extraction.
+    Raw email text overrides are deterministic and should have final priority.
+    """
+
+    text = (email_text or "").lower()
+
+    adr_match = re.search(r"\\badr\\b[^0-9]{0,20}\\b(1|7)\b", text)
+    class_match = re.search(r"\\bclass\\s*(1|7)\b", text)
 
     match = adr_match or class_match
 
@@ -151,6 +177,8 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
 
         if not shipment.commodity:
             shipment.commodity = f"ADR Class {adr_class}"
+
+    shipment = _apply_commodity_safety_overrides(shipment, email_text)
 
     return shipment
 

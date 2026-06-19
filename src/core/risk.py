@@ -51,6 +51,13 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
         requires_management_review = True
         requires_human_review = True
 
+    # Temperature controlled cargo
+    if shipment.is_temperature_controlled or shipment.temperature_requirement:
+        risk_reasons.append(
+            "Sıcaklık kontrollü yük. Reefer uygunluğu ve sıcaklık gereksinimi ayrıca kontrol edilmeli."
+        )
+        requires_human_review = True
+
     # Heavy / oversize
     for package in shipment.packages:
         if package.weight_kg and package.weight_kg >= 26000:
