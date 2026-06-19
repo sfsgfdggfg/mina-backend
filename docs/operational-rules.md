@@ -505,3 +505,44 @@ selected_suppliers = []
 sistem ileride bunu ayrıca operasyonel uyarı veya consistency check olarak ele almalıdır.
 
 Bu kuralın amacı, Supplier Selection ve Supplier Quote katmanları arasında temel operasyonel tutarlılığı sağlamaktır.
+
+## RULE-046 — Capability-Based Service Validation
+
+MINAI, supplier uygunluğunu supplier adı, açıklama metni veya tahmine dayalı ifadeler üzerinden değerlendirmemelidir.
+
+Servis tipi uygunluğu, supplier capability datası üzerinden kontrol edilmelidir.
+
+Özellikle LTL / parsiyel taşımalarda sistem şu mantıkla çalışmalıdır:
+
+```text
+Shipment service_type = LTL
+Selected supplier = Local LTL Network
+Supplier capability service_types contains LTL
+Result = supplier is valid for LTL
+```
+
+Eğer seçilen supplier'ın capability datasında LTL desteği yoksa sistem uyarı üretmelidir:
+
+```text
+Selected supplier capability does not support LTL.
+```
+
+Eğer seçilen supplier için capability datası bulunamıyorsa sistem bunu da açıkça belirtmelidir:
+
+```text
+Supplier capability data not found.
+LTL support must be verified.
+```
+
+Bu kural FTL, LTL, reefer, ADR ve ileride eklenecek diğer servis tipleri için de geçerlidir.
+
+Sistem bilmediği bir capability bilgisini varmış gibi kabul etmemelidir.
+
+Doğru karar seviyesi:
+
+```text
+Known yes  → kullanılabilir
+Known no   → elenir veya warning üretir
+Unknown    → doğrulama warning'i üretir
+```
+
