@@ -686,3 +686,65 @@ Result = no warning
 * LTL uygunluk kontrolü gerçek supplier capability datasına bağlanmıştır.
 * İlk versiyon workflow'u durdurmaz; sadece `warnings` ve `errors` üretir.
 * İleride bazı kritik hatalar workflow'u durduracak blocking validation seviyesine yükseltilebilir.
+
+## DEC-039 — Commodity Safety Overrides v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+Commodity Safety Overrides yapısı eklenmiştir.
+
+Bu yapı, müşteri mailinde açıkça görünen ürün ifadelerinin AI parser tarafından daha genel veya yanlış commodity değerlerine dönüştürülmesini engellemek için kullanılır.
+
+İlk versiyonda şu deterministik eşleşmeler eklenmiştir:
+
+```text
+içecek / icecek / meşrubat / mesrubat  → İçecek / Meşrubat
+trafo / transformatör / transformer    → Elektrik Transformatörü
+tekstil / textile / kumaş              → Tekstil
+makine / makina / machine              → Makine
+```
+
+### Rationale
+
+AI parser bazen müşteri mailinde açık ürün ifadesi olmasına rağmen daha genel bir commodity üretebilir.
+
+Örnek:
+
+```text
+Mailde: içecek
+AI çıktısı: Gıda
+Beklenen çıktı: İçecek / Meşrubat
+```
+
+Bu durum ekipman seçimi, customer memory, operasyonel uyarılar ve ileride belge/evrak tavsiyeleri açısından hatalı sonuçlara neden olabilir.
+
+Bu nedenle raw email text içinde açık ve güvenilir ürün sinyalleri varsa, bu sinyaller AI çıktısının üstünde önceliğe sahip olmalıdır.
+
+### Implementation
+
+Güncellenen dosya:
+
+```text
+src/ai/email_parser.py
+```
+
+Commodity override kuralları `_apply_email_text_safety_overrides` akışı içine eklenmiştir.
+
+Ayrıca sıcaklık kontrollü yüklerin risk değerlendirmesinde `yellow` seviyesine çıkması için risk engine güncellenmiştir.
+
+Güncellenen dosya:
+
+```text
+src/core/risk.py
+```
+
+### Consequences
+
+* Açık ürün sinyalleri daha tutarlı commodity değerlerine dönüştürülür.
+* Oğuz Gıda / içecek senaryolarında `Gıda` yerine `İçecek / Meşrubat` çıktısı üretilir.
+* Trafo / transformatör içeren maillerde `Elektrik Transformatörü` çıktısı güçlendirilir.
+* Sıcaklık kontrollü yükler artık otomatik olarak human review gerektirir.
+* Bu yapı MVP için kod içi güvenlik katmanıdır; ileride commodity sözlüğü ayrı data kaynağına veya database’e taşınmalıdır.
