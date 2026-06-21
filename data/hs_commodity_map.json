@@ -1,0 +1,30 @@
+{
+  "22": {
+    "commodity_group": "İçecek / Meşrubat",
+    "notes": ["Gıda/içecek ürünlerinde ülkeye göre ek uygunluk belgeleri gerekebilir."]
+  },
+  "2202": {
+    "commodity_group": "İçecek / Meşrubat",
+    "notes": ["Alkolsüz içecek / meşrubat ürünleri için ambalaj ve uygunluk bilgileri kontrol edilmelidir."]
+  },
+  "61": {
+    "commodity_group": "Tekstil / Hazır Giyim",
+    "notes": ["Hazır giyim ürünlerinde koli/paket adedi ve brüt ağırlık kontrol edilmelidir."]
+  },
+  "62": {
+    "commodity_group": "Tekstil / Hazır Giyim",
+    "notes": ["Hazır giyim ürünlerinde koli/paket adedi ve brüt ağırlık kontrol edilmelidir."]
+  },
+  "84": {
+    "commodity_group": "Makine",
+    "notes": ["Makine yüklerinde ölçü, ağırlık ve yükleme yöntemi kontrol edilmelidir."]
+  },
+  "85": {
+    "commodity_group": "Elektrikli Makine / Ekipman",
+    "notes": ["Elektrikli ekipmanlarda ürün açıklaması ve kullanım amacı doğrulanmalıdır."]
+  },
+  "8504": {
+    "commodity_group": "Elektrik Transformatörü",
+    "notes": ["Transformatör yüklerinde ölçü, ağırlık, kaldırma ve sabitleme yöntemi kontrol edilmelidir."]
+  }
+}

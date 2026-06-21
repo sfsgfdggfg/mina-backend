@@ -26,6 +26,11 @@ class Shipment(BaseModel):
     delivery_postcode: Optional[str] = None
 
     commodity: Optional[str] = None
+    gtip_code: Optional[str] = None
+    hs_chapter: Optional[str] = None
+    hs_heading: Optional[str] = None
+    hs_subheading: Optional[str] = None
+    gtip_detected_from_email: bool = False
     gross_weight_kg: Optional[float] = None
     weight_is_approximate: bool = True
 

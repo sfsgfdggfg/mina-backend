@@ -43,6 +43,28 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
             f"service_type expected {expected_service_type}, got {shipment.service_type}"
         )
 
+    expected_commodity = expected.get("commodity")
+    if expected_commodity and shipment.commodity != expected_commodity:
+        failures.append(
+            f"commodity expected {expected_commodity}, got {shipment.commodity}"
+        )
+
+    for field_name in [
+        "gtip_code",
+        "hs_chapter",
+        "hs_heading",
+        "hs_subheading",
+        "gtip_detected_from_email",
+    ]:
+        if field_name in expected:
+            expected_value = expected.get(field_name)
+            actual_value = getattr(shipment, field_name, None)
+
+            if actual_value != expected_value:
+                failures.append(
+                    f"{field_name} expected {expected_value}, got {actual_value}"
+                )
+
     expected_risk_level = expected.get("risk_level")
     if expected_risk_level and risk_assessment.risk_level != expected_risk_level:
         failures.append(

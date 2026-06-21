@@ -5,6 +5,7 @@ from openai import OpenAI
 from src.core.normalization import normalize_shipment
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.core.models import Shipment, Package
+from src.core.gtip import interpret_gtip_from_email
 
 GENERIC_CUSTOMER_NAMES = {
     "",
@@ -156,6 +157,42 @@ def _apply_commodity_safety_overrides(shipment, email_text: str):
     return shipment
 
 
+def _apply_gtip_safety_overrides(shipment, email_text: str):
+    """
+    If the customer explicitly provides a GTIP / HS code, interpret it for
+    operational commodity classification.
+
+    MINAI does not assign legally binding GTIP codes. It only interprets
+    customer-provided codes for freight operations.
+    """
+
+    gtip_info = interpret_gtip_from_email(email_text)
+
+    shipment.gtip_code = gtip_info.get("gtip_code")
+    shipment.hs_chapter = gtip_info.get("hs_chapter")
+    shipment.hs_heading = gtip_info.get("hs_heading")
+    shipment.hs_subheading = gtip_info.get("hs_subheading")
+    shipment.gtip_detected_from_email = bool(gtip_info.get("gtip_detected_from_email"))
+
+    commodity_match = gtip_info.get("commodity_match")
+
+    if commodity_match:
+        commodity_group = commodity_match.get("commodity_group")
+        if commodity_group:
+            shipment.commodity = commodity_group
+
+        notes = commodity_match.get("notes") or []
+        if notes:
+            note_text = "[GTIP] " + " ".join(str(note) for note in notes)
+            if shipment.special_notes:
+                if note_text not in shipment.special_notes:
+                    shipment.special_notes = shipment.special_notes + "\n" + note_text
+            else:
+                shipment.special_notes = note_text
+
+    return shipment
+
+
 def _apply_email_text_safety_overrides(shipment, email_text: str):
     """
     Critical logistics signals should not depend only on AI extraction.
@@ -179,6 +216,7 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
             shipment.commodity = f"ADR Class {adr_class}"
 
     shipment = _apply_commodity_safety_overrides(shipment, email_text)
+    shipment = _apply_gtip_safety_overrides(shipment, email_text)
 
     return shipment
 

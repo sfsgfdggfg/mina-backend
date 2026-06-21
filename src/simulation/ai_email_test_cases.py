@@ -200,4 +200,27 @@ Teşekkürler.
             "action_type": "quote_with_review",
         },
     },
+    {
+        "name": "GTIP beverage classification",
+        "email": """
+Merhaba,
+
+Adana'dan İstanbul'a GTİP: 2202.10.00.00.00 olan meşrubat yükümüz için fiyat rica ederiz.
+Toplam 20 palet, yaklaşık 10000 kg.
+Yük 28.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "quote",
+            "service_type": "FTL",
+            "commodity": "İçecek / Meşrubat",
+            "gtip_code": "220210000000",
+            "hs_chapter": "22",
+            "hs_heading": "2202",
+            "hs_subheading": "220210",
+            "gtip_detected_from_email": True,
+        },
+    },
+
 ]
