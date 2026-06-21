@@ -22,6 +22,7 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
     action_recommendation = result.get("action_recommendation")
     supplier_selection = result.get("supplier_selection")
     supplier_quote = result.get("supplier_quote")
+    operational_consistency = result.get("operational_consistency")
 
     actual_result_type = determine_result_type(result)
 
@@ -122,6 +123,32 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
         if actual_quote_supplier != expected_supplier_name:
             failures.append(
                 f"supplier_quote supplier expected {expected_supplier_name}, got {actual_quote_supplier}"
+            )
+
+    expected_operational_warning_contains = expected.get("operational_warning_contains")
+    if expected_operational_warning_contains:
+        actual_warnings = (
+            operational_consistency.get("warnings", [])
+            if isinstance(operational_consistency, dict)
+            else []
+        )
+
+        if not any(expected_operational_warning_contains in warning for warning in actual_warnings):
+            failures.append(
+                f"operational warning containing {expected_operational_warning_contains} not found; got {actual_warnings}"
+            )
+
+    expected_operational_error_contains = expected.get("operational_error_contains")
+    if expected_operational_error_contains:
+        actual_errors = (
+            operational_consistency.get("errors", [])
+            if isinstance(operational_consistency, dict)
+            else []
+        )
+
+        if not any(expected_operational_error_contains in error for error in actual_errors):
+            failures.append(
+                f"operational error containing {expected_operational_error_contains} not found; got {actual_errors}"
             )
 
     expected_missing_fields = expected.get("missing_fields")

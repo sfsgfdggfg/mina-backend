@@ -223,4 +223,28 @@ Teşekkürler.
         },
     },
 
+    {
+        "name": "GTIP commodity conflict warning",
+        "email": """
+Merhaba,
+
+Adana'dan İstanbul'a GTİP: 8504.21.00.00.00 olan plastik poşet yükümüz için fiyat rica ederiz.
+Toplam 15 palet, yaklaşık 8000 kg.
+Yük 29.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "quote",
+            "service_type": "FTL",
+            "commodity": "Plastik Ürünler",
+            "gtip_code": "850421000000",
+            "hs_chapter": "85",
+            "hs_heading": "8504",
+            "hs_subheading": "850421",
+            "gtip_detected_from_email": True,
+            "operational_warning_contains": "GTIP kodu ile ürün açıklaması uyumsuz",
+        },
+    },
+
 ]

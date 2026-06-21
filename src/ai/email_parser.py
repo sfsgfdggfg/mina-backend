@@ -135,6 +135,7 @@ COMMODITY_KEYWORD_OVERRIDES = [
     (r"\b(içecek|icecek|içecekler|icecekler|meşrubat|mesrubat|meşrubatlar|mesrubatlar)\b", "İçecek / Meşrubat"),
     (r"\b(trafo|trafolar|transformatör|transformator|transformer|transformers)\b", "Elektrik Transformatörü"),
     (r"\b(tekstil|textile|kumaş|kumas)\b", "Tekstil"),
+    (r"\b(plastik|plastic|poşet|poset|çöp torbası|cop torbasi|polybag)\b", "Plastik Ürünler"),
     (r"\b(makine|makina|machine|machinery)\b", "Makine"),
 ]
 
@@ -155,6 +156,96 @@ def _apply_commodity_safety_overrides(shipment, email_text: str):
             break
 
     return shipment
+
+
+GTIP_COMPATIBLE_COMMODITIES = {
+    "İçecek / Meşrubat": ["İçecek / Meşrubat", "Gıda"],
+    "Elektrik Transformatörü": [
+        "Elektrik Transformatörü",
+        "Elektrikli Makine / Ekipman",
+        "Makine",
+    ],
+    "Elektrikli Makine / Ekipman": [
+        "Elektrikli Makine / Ekipman",
+        "Elektrik Transformatörü",
+        "Makine",
+    ],
+    "Tekstil / Hazır Giyim": ["Tekstil / Hazır Giyim", "Tekstil"],
+    "Makine": ["Makine", "Elektrikli Makine / Ekipman"],
+}
+
+
+def _normalize_commodity_text(value: str | None) -> str:
+    if not value:
+        return ""
+
+    return (
+        str(value)
+        .strip()
+        .lower()
+        .replace("ı", "i")
+        .replace("İ", "i")
+        .replace("ü", "u")
+        .replace("Ü", "u")
+        .replace("ö", "o")
+        .replace("Ö", "o")
+        .replace("ğ", "g")
+        .replace("Ğ", "g")
+        .replace("ş", "s")
+        .replace("Ş", "s")
+        .replace("ç", "c")
+        .replace("Ç", "c")
+    )
+
+
+def _append_special_note(shipment, note: str):
+    if not note:
+        return shipment
+
+    if shipment.special_notes:
+        if note not in shipment.special_notes:
+            shipment.special_notes = shipment.special_notes + "\n" + note
+    else:
+        shipment.special_notes = note
+
+    return shipment
+
+
+def _is_gtip_commodity_conflict(email_commodity: str | None, gtip_commodity: str | None) -> bool:
+    if not email_commodity or not gtip_commodity:
+        return False
+
+    normalized_email_commodity = _normalize_commodity_text(email_commodity)
+    normalized_gtip_commodity = _normalize_commodity_text(gtip_commodity)
+
+    if normalized_email_commodity == normalized_gtip_commodity:
+        return False
+
+    compatible_values = GTIP_COMPATIBLE_COMMODITIES.get(gtip_commodity, [])
+    normalized_compatible_values = {
+        _normalize_commodity_text(value)
+        for value in compatible_values
+    }
+
+    if normalized_email_commodity in normalized_compatible_values:
+        return False
+
+    generic_values = {
+        "",
+        "urun",
+        "yuk",
+        "cargo",
+        "goods",
+        "gida",
+        "makine",
+        "unknown",
+        "unknown commodity",
+    }
+
+    if normalized_email_commodity in generic_values:
+        return False
+
+    return True
 
 
 def _apply_gtip_safety_overrides(shipment, email_text: str):
@@ -178,17 +269,25 @@ def _apply_gtip_safety_overrides(shipment, email_text: str):
 
     if commodity_match:
         commodity_group = commodity_match.get("commodity_group")
+
         if commodity_group:
-            shipment.commodity = commodity_group
+            email_commodity_before_gtip = shipment.commodity
+
+            if _is_gtip_commodity_conflict(email_commodity_before_gtip, commodity_group):
+                warning = (
+                    "[GTIP CONSISTENCY WARNING] GTIP kodu ile ürün açıklaması "
+                    "uyumsuz görünüyor. "
+                    f"Email commodity: {email_commodity_before_gtip}; "
+                    f"GTIP commodity: {commodity_group}."
+                )
+                shipment = _append_special_note(shipment, warning)
+            else:
+                shipment.commodity = commodity_group
 
         notes = commodity_match.get("notes") or []
         if notes:
             note_text = "[GTIP] " + " ".join(str(note) for note in notes)
-            if shipment.special_notes:
-                if note_text not in shipment.special_notes:
-                    shipment.special_notes = shipment.special_notes + "\n" + note_text
-            else:
-                shipment.special_notes = note_text
+            shipment = _append_special_note(shipment, note_text)
 
     return shipment
 

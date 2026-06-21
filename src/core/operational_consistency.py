@@ -164,6 +164,13 @@ def check_operational_consistency(
     selected_equipment = _normalize(_get_attr(equipment_decision, "selected_equipment"))
     risk_level = _normalize(_get_attr(risk_assessment, "risk_level"))
 
+    special_notes = str(_get_attr(shipment, "special_notes", "") or "")
+
+    if "GTIP CONSISTENCY WARNING" in special_notes:
+        warnings.append(
+            "GTIP kodu ile ürün açıklaması uyumsuz görünüyor. Lütfen müşteri veya gümrük müşaviri ile doğrulayın."
+        )
+
     if supplier_quote and not selected_suppliers:
         warnings.append(
             "Supplier Quote üretildi ancak Supplier Selection sonucu boş."
