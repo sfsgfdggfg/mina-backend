@@ -580,3 +580,87 @@ Bu kural yalnızca müşteri mailinde açıkça görünen güçlü ürün sinyal
 Sistem belirsiz ürün ifadelerinde commodity uydurmamalıdır. Belirsizlik varsa mevcut AI parser çıktısı korunmalı veya eksik bilgi / doğrulama sorusu üretilmelidir.
 
 Bu yapı MVP aşamasında kod içi safety override olarak tutulabilir. Ürünleşme aşamasında commodity keyword ve alias kayıtları ayrı bir data kaynağına veya database tablosuna taşınmalıdır.
+
+## RULE-048 — Customer-Provided GTIP Codes Are Interpreted, Not Assigned
+
+MINAI müşteri tarafından açıkça verilen GTİP / HS kodlarını okuyabilir ve operasyonel olarak yorumlayabilir.
+
+Ancak MINAI kesin GTİP tayini yapmamalıdır.
+
+Doğru davranış:
+
+```text
+Müşteri mailinde GTİP kodu varsa:
+- Kod normalize edilir.
+- HS chapter / heading / subheading ayrıştırılır.
+- Kod mevcut commodity map içinde aranır.
+- Uygun operasyonel commodity grubu önerilir.
+```
+
+Örnek:
+
+```text
+GTİP: 2202.10.00.00.00
+Final commodity: İçecek / Meşrubat
+```
+
+Yanlış davranış:
+
+```text
+MINAI bu ürünün kesin GTİP kodu budur.
+```
+
+Bu kuralın amacı, GTİP bilgisini operasyonel fayda için kullanmak ama sistemi gümrük müşaviri gibi konumlandırmamaktır.
+
+Eğer müşteri ürün açıklaması ile GTİP kodu arasında bariz bir uyumsuzluk varsa sistem ileride operasyonel uyarı üretmelidir.
+
+Örnek uyumsuzluk:
+
+```text
+Ürün açıklaması: plastik poşet
+GTİP: 8504...
+```
+
+Bu durumda sistem sessizce karar vermemeli, doğrulama istemelidir.
+
+MVP v1 kapsamında GTİP kodları şu amaçlarla kullanılabilir:
+
+```text
+1. Commodity sınıflandırmasını güçlendirmek
+2. Ürün ailesini anlamak
+3. Operasyonel not üretmek
+4. İleride evrak / uygunluk uyarılarını tetiklemek
+5. Customer memory içinde müşterinin sık kullandığı GTİP kodlarını öğrenmek
+```
+## RULE-049 — GTIP and Product Description Conflicts Must Be Flagged
+
+Müşteri mailinde verilen GTİP / HS kodu ile ürün açıklaması arasında bariz uyumsuzluk varsa MINAI bunu operasyonel uyarı olarak işaretlemelidir.
+
+Sistem böyle durumlarda GTİP koduna göre commodity değerini körlemesine değiştirmemelidir.
+
+Örnek:
+
+```text
+Ürün açıklaması: plastik poşet
+GTİP: 8504.21.00.00.00
+```
+
+Bu GTİP kodu elektrik transformatörü / elektrik ekipmanı grubuna işaret ederken, ürün açıklaması plastik ürün grubuna işaret eder.
+
+Doğru davranış:
+
+```text
+Final commodity: Plastik Ürünler
+Operational warning: GTIP kodu ile ürün açıklaması uyumsuz görünüyor.
+```
+
+Yanlış davranış:
+
+```text
+Final commodity: Elektrik Transformatörü
+Warning yok
+```
+
+Bu kuralın amacı, müşteri tarafından hatalı veya uyumsuz girilmiş GTİP kodlarının sessizce operasyonel karara dönüşmesini engellemektir.
+
+MINAI bu durumda müşteri veya gümrük müşaviri doğrulaması gerektiğini belirtmelidir.

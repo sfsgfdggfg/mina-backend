@@ -748,3 +748,149 @@ src/core/risk.py
 * Trafo / transformatör içeren maillerde `Elektrik Transformatörü` çıktısı güçlendirilir.
 * Sıcaklık kontrollü yükler artık otomatik olarak human review gerektirir.
 * Bu yapı MVP için kod içi güvenlik katmanıdır; ileride commodity sözlüğü ayrı data kaynağına veya database’e taşınmalıdır.
+
+## DEC-040 — GTIP / HS Code Parser v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+GTIP / HS Code Parser v1 eklenmiştir.
+
+MINAI artık müşteri mailinde açıkça verilen GTİP / HS kodlarını yakalayabilir, normalize edebilir ve operasyonel commodity sınıflandırmasına bağlayabilir.
+
+Örnek:
+
+```text
+GTİP: 2202.10.00.00.00
+```
+
+Sistem bunu şu şekilde yorumlar:
+
+```text
+gtip_code: 220210000000
+hs_chapter: 22
+hs_heading: 2202
+hs_subheading: 220210
+commodity: İçecek / Meşrubat
+```
+
+### Rationale
+
+Bazı müşteriler teklif talebi sırasında GTİP kodu paylaşabilir.
+
+Bu durumda MINAI’nin GTİP kodunu görmezden gelmesi doğru değildir. GTİP kodu, ürün ailesini ve operasyonel commodity grubunu anlamak için güçlü bir sinyaldir.
+
+Ancak MINAI kesin GTİP tayini yapmamalıdır. GTİP tayini hukuki ve teknik bir sınıflandırma işidir. MINAI yalnızca müşteri tarafından verilen kodu operasyonel amaçla yorumlar.
+
+### Implementation
+
+Yeni dosyalar:
+
+```text
+src/core/gtip.py
+data/hs_commodity_map.json
+```
+
+Güncellenen dosyalar:
+
+```text
+src/core/models.py
+src/ai/email_parser.py
+src/simulation/ai_email_test_cases.py
+src/simulation/test_reporter.py
+```
+
+Shipment modeline şu alanlar eklenmiştir:
+
+```text
+gtip_code
+hs_chapter
+hs_heading
+hs_subheading
+gtip_detected_from_email
+```
+
+Test suite içine yeni GTİP test case eklenmiştir:
+
+```text
+AI TEST 11 — GTIP beverage classification
+```
+
+### Consequences
+
+* Müşteri mailinde verilen GTİP kodları artık shipment içine işlenir.
+* GTİP kodu üzerinden operasyonel commodity güçlendirilebilir.
+* 2202 kodu İçecek / Meşrubat grubuna bağlanmıştır.
+* 8504 kodu Elektrik Transformatörü grubuna bağlanmıştır.
+* Test suite 10 testten 11 teste çıkmıştır.
+* MINAI hâlâ kesin GTİP tayini yapmaz; yalnızca müşteri tarafından verilen kodu yorumlar.
+
+## DEC-041 — GTIP / Commodity Consistency Check v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+GTIP / Commodity Consistency Check v1 eklenmiştir.
+
+MINAI artık müşteri mailinde verilen GTİP / HS kodu ile maildeki ürün açıklaması arasında bariz uyumsuzluk varsa bunu operasyonel uyarı olarak işaretler.
+
+Örnek uyumsuzluk:
+
+```text
+Ürün açıklaması: plastik poşet
+GTİP: 8504.21.00.00.00
+```
+
+Bu durumda sistem GTİP koduna göre ürünü körlemesine `Elektrik Transformatörü` olarak değiştirmez. Maildeki açık ürün sinyalini korur ve operational consistency warning üretir.
+
+### Rationale
+
+GTİP kodu güçlü bir ürün sinyalidir, ancak müşteri tarafından hatalı yazılmış olabilir.
+
+MINAI, müşteri tarafından verilen GTİP kodunu operasyonel amaçla yorumlamalıdır; fakat ürün açıklaması ile GTİP kodu açıkça çelişiyorsa sessizce karar vermemelidir.
+
+Bu kontrol özellikle şu hataları yakalamak için önemlidir:
+
+```text
+Ürün açıklaması: plastik poşet
+GTİP kodu: elektrik transformatörü / elektrik ekipmanı grubuna ait
+```
+
+Bu tür durumlarda doğrulama gerekir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+src/ai/email_parser.py
+src/core/operational_consistency.py
+src/simulation/ai_email_test_cases.py
+src/simulation/test_reporter.py
+```
+
+Test suite içine yeni test eklenmiştir:
+
+```text
+AI TEST 12 — GTIP commodity conflict warning
+```
+
+Bu testte sistem şu davranışı doğrular:
+
+```text
+Email commodity: Plastik Ürünler
+GTIP commodity: Elektrik Transformatörü
+Operational warning: GTIP kodu ile ürün açıklaması uyumsuz görünüyor.
+```
+
+### Consequences
+
+* GTİP kodu ile ürün açıklaması çeliştiğinde sistem uyarı üretir.
+* Maildeki açık ürün açıklaması korunur.
+* GTİP kaynaklı commodity bilgisi körlemesine uygulanmaz.
+* Operational Consistency Engine daha güçlü hale gelmiştir.
+* Test suite 11 testten 12 teste çıkmıştır.
