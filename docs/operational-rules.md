@@ -664,3 +664,33 @@ Warning yok
 Bu kuralın amacı, müşteri tarafından hatalı veya uyumsuz girilmiş GTİP kodlarının sessizce operasyonel karara dönüşmesini engellemektir.
 
 MINAI bu durumda müşteri veya gümrük müşaviri doğrulaması gerektiğini belirtmelidir.
+## RULE-050 — Commodity Keywords Must Be Data-Driven
+
+MINAI ürün tipi kelime eşleşmelerini Python kodu içine gömülü sabit listelerden yönetmemelidir.
+
+Commodity keyword / alias eşleşmeleri data-driven olmalıdır.
+
+Doğru yapı:
+
+```text
+data/commodity_dictionary.json
+```
+
+Örnek:
+
+```text
+keyword: içecek
+canonical_commodity: İçecek / Meşrubat
+```
+
+Yanlış yapı:
+
+```text
+email_parser.py içinde hard-coded commodity keyword listesi
+```
+
+Bu kuralın amacı, yeni ürün tipleri eklendikçe parser kodunun sürekli değiştirilmesini engellemektir.
+
+MVP aşamasında commodity dictionary JSON dosyasında tutulabilir. Ürünleşme aşamasında bu yapı database, admin panel veya müşteri/operasyon öğrenme sistemiyle yönetilmelidir.
+
+MINAI yeni bir ürün tipiyle karşılaştığında kod değiştirmemeli; yeni alias / commodity önerisini data katmanına eklenebilir hale getirmelidir.

@@ -894,3 +894,61 @@ Operational warning: GTIP kodu ile ürün açıklaması uyumsuz görünüyor.
 * GTİP kaynaklı commodity bilgisi körlemesine uygulanmaz.
 * Operational Consistency Engine daha güçlü hale gelmiştir.
 * Test suite 11 testten 12 teste çıkmıştır.
+## DEC-042 — Commodity Dictionary v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+Commodity keyword override yapısı kod içinden çıkarılarak ayrı bir data dosyasına taşınmıştır.
+
+Yeni data dosyası:
+
+```text
+data/commodity_dictionary.json
+```
+
+MINAI artık müşteri mailindeki ürün kelimelerini Python kodu içindeki sabit listeye göre değil, commodity dictionary datasına göre yorumlar.
+
+Örnek eşleşmeler:
+
+```text
+içecek / meşrubat  → İçecek / Meşrubat
+trafo              → Elektrik Transformatörü
+tekstil            → Tekstil
+plastik / poşet    → Plastik Ürünler
+makine             → Makine
+```
+
+### Rationale
+
+Ürün tipi eşleşmeleri zaman içinde büyüyecektir.
+
+Bu eşleşmeleri `email_parser.py` içinde sabit kod olarak tutmak sürdürülebilir değildir. Yeni ürün tipi veya alias eklemek için Python kodu değiştirmek yerine data dosyası güncellenmelidir.
+
+Bu yapı, ileride commodity dictionary’nin database veya yönetim paneline taşınması için temel oluşturur.
+
+### Implementation
+
+Yeni dosya:
+
+```text
+data/commodity_dictionary.json
+```
+
+Güncellenen dosya:
+
+```text
+src/ai/email_parser.py
+```
+
+Commodity safety override akışı artık `data/commodity_dictionary.json` dosyasını okuyarak çalışır.
+
+### Consequences
+
+* Yeni commodity alias eklemek için Python kodu değiştirmek gerekmez.
+* Ürün eşleşmeleri daha yönetilebilir hale gelir.
+* MVP aşamasında JSON dosyası kullanılır.
+* Ürünleşme aşamasında bu yapı database tablosuna veya admin paneline taşınabilir.
+* Existing parser safety behavior korunmuştur.
