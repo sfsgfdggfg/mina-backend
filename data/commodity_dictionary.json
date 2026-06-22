@@ -1,0 +1,73 @@
+[
+  {
+    "canonical_commodity": "İçecek / Meşrubat",
+    "keywords": [
+      "içecek",
+      "icecek",
+      "içecekler",
+      "icecekler",
+      "meşrubat",
+      "mesrubat",
+      "meşrubatlar",
+      "mesrubatlar",
+      "beverage",
+      "soft drink"
+    ],
+    "notes": [
+      "Gıda/içecek ürünlerinde ülkeye göre uygunluk ve ambalaj bilgileri kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Elektrik Transformatörü",
+    "keywords": [
+      "trafo",
+      "trafolar",
+      "transformatör",
+      "transformator",
+      "transformer",
+      "transformers"
+    ],
+    "notes": [
+      "Transformatör yüklerinde ölçü, ağırlık, kaldırma ve sabitleme yöntemi kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Tekstil",
+    "keywords": [
+      "tekstil",
+      "textile",
+      "kumaş",
+      "kumas"
+    ],
+    "notes": [
+      "Tekstil yüklerinde paketleme şekli, palet/koli bilgisi ve brüt ağırlık kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Plastik Ürünler",
+    "keywords": [
+      "plastik",
+      "plastic",
+      "poşet",
+      "poset",
+      "çöp torbası",
+      "cop torbasi",
+      "polybag"
+    ],
+    "notes": [
+      "Plastik ürünlerde hacim, istiflenebilirlik ve ambalaj bilgisi kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Makine",
+    "keywords": [
+      "makine",
+      "makina",
+      "machine",
+      "machinery"
+    ],
+    "notes": [
+      "Makine yüklerinde ölçü, ağırlık ve özel ekipman ihtiyacı kontrol edilmelidir."
+    ]
+  }
+]

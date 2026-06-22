@@ -1,4 +1,6 @@
+import json
 import re
+from pathlib import Path
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from openai import OpenAI
@@ -131,29 +133,53 @@ def parse_email_to_shipment(email_text: str) -> Shipment:
     return shipment
 
 
-COMMODITY_KEYWORD_OVERRIDES = [
-    (r"\b(içecek|icecek|içecekler|icecekler|meşrubat|mesrubat|meşrubatlar|mesrubatlar)\b", "İçecek / Meşrubat"),
-    (r"\b(trafo|trafolar|transformatör|transformator|transformer|transformers)\b", "Elektrik Transformatörü"),
-    (r"\b(tekstil|textile|kumaş|kumas)\b", "Tekstil"),
-    (r"\b(plastik|plastic|poşet|poset|çöp torbası|cop torbasi|polybag)\b", "Plastik Ürünler"),
-    (r"\b(makine|makina|machine|machinery)\b", "Makine"),
-]
+COMMODITY_DICTIONARY_PATH = Path("data/commodity_dictionary.json")
+
+
+def _load_commodity_dictionary() -> list[dict]:
+    if not COMMODITY_DICTIONARY_PATH.exists():
+        return []
+
+    try:
+        raw_data = json.loads(COMMODITY_DICTIONARY_PATH.read_text())
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(raw_data, list):
+        return []
+
+    return [item for item in raw_data if isinstance(item, dict)]
+
+
+def _keyword_matches(text: str, keyword: str) -> bool:
+    if not keyword:
+        return False
+
+    pattern = r"(?<!\\w)" + re.escape(keyword.lower()) + r"(?!\\w)"
+    return re.search(pattern, text) is not None
 
 
 def _apply_commodity_safety_overrides(shipment, email_text: str):
     """
     Raw email text can contain clear commodity signals.
-    These deterministic overrides prevent the AI parser from returning
-    overly generic commodity values such as "Gıda" when the email clearly says
-    "içecek" or "meşrubat".
+    Keyword to canonical commodity mapping is loaded from
+    data/commodity_dictionary.json instead of being hard-coded in Python.
     """
 
     text = (email_text or "").lower()
+    commodity_dictionary = _load_commodity_dictionary()
 
-    for pattern, canonical_commodity in COMMODITY_KEYWORD_OVERRIDES:
-        if re.search(pattern, text):
-            shipment.commodity = canonical_commodity
-            break
+    for item in commodity_dictionary:
+        canonical_commodity = item.get("canonical_commodity")
+        keywords = item.get("keywords", [])
+
+        if not canonical_commodity or not isinstance(keywords, list):
+            continue
+
+        for keyword in keywords:
+            if _keyword_matches(text, str(keyword)):
+                shipment.commodity = canonical_commodity
+                return shipment
 
     return shipment
 
