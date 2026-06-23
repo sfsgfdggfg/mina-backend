@@ -247,4 +247,25 @@ Teşekkürler.
         },
     },
 
+    {
+        "name": "Frozen food commodity profile",
+        "email": """
+Merhaba,
+
+Adana'dan Berlin Almanya'ya dondurulmuş gıda yükümüz için fiyat rica ederiz.
+Toplam 18 palet, yaklaşık 9000 kg.
+Yük 30.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Reefer",
+            "service_type": "FTL",
+            "commodity": "Dondurulmuş Gıda",
+            "risk_level": "yellow",
+            "action_type": "quote_with_review",
+        },
+    },
+
 ]

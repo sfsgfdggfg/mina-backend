@@ -1,4 +1,5 @@
 from src.core.models import Shipment, EquipmentDecision
+from src.core.commodity_profile import get_commodity_operational_profile
 
 def _has_meaningful_text(value):
     if value is None:
@@ -55,6 +56,20 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
             explanation=(
                 "Yük ADR Class 1 veya Class 7 kapsamında olduğu için standart ekipmanla ilerlenmez. "
                 "Özel ADR ekipmanı ve yönetici / senior operasyon kontrolü gerekir."
+            ),
+        )
+
+    # Commodity profile reefer trigger
+    commodity_profile = get_commodity_operational_profile(shipment.commodity)
+    if commodity_profile.get("requires_reefer") or commodity_profile.get("default_equipment") == "Reefer":
+        return EquipmentDecision(
+            selected_equipment="Reefer",
+            reason="Commodity operational profile reefer ekipman gerektiriyor.",
+            confidence=0.90,
+            source="commodity_operational_profile",
+            explanation=(
+                "Ürün grubu operasyonel profili reefer / sıcaklık kontrollü taşıma ihtiyacı gösteriyor. "
+                "Bu nedenle Reefer seçildi."
             ),
         )
 

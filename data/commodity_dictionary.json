@@ -85,7 +85,20 @@
     ],
     "notes": [
       "Dondurulmuş gıdalarda reefer ekipman, sıcaklık derecesi ve ürünün soğuk zincir gereksinimi kontrol edilmelidir."
-    ]
+    ],
+    "operational_profile": {
+      "requires_human_review": true,
+      "requires_temperature_control": true,
+      "requires_reefer": true,
+      "default_equipment": "Reefer",
+      "default_temperature_requirement": "-18C",
+      "risk_reason": "Dondurulmuş gıda yükü. Reefer, sıcaklık derecesi ve soğuk zincir gereksinimi kontrol edilmeli.",
+      "operational_notes": [
+        "Reefer ekipman uygunluğu kontrol edilmelidir.",
+        "Sıcaklık derecesi müşteriyle doğrulanmalıdır.",
+        "Soğuk zincir kırılma riski dikkate alınmalıdır."
+      ]
+    }
   },
   {
     "canonical_commodity": "Gıda",
@@ -118,7 +131,17 @@
     ],
     "notes": [
       "Kimyasal ürünlerde ADR durumu, MSDS/SDS belgesi ve ambalaj uygunluğu kontrol edilmelidir."
-    ]
+    ],
+    "operational_profile": {
+      "requires_human_review": true,
+      "requires_adr_check": true,
+      "risk_reason": "Kimyasal ürün. ADR durumu, MSDS/SDS ve ambalaj uygunluğu kontrol edilmeli.",
+      "operational_notes": [
+        "MSDS/SDS belgesi istenmelidir.",
+        "ADR kapsamı müşteriyle doğrulanmalıdır.",
+        "Ambalaj ve etiketleme uygunluğu kontrol edilmelidir."
+      ]
+    }
   },
   {
     "canonical_commodity": "Kozmetik",
@@ -152,7 +175,16 @@
     ],
     "notes": [
       "Medikal ürünlerde ürün tipi, belge gereklilikleri ve ülke bazlı uygunluk kontrolleri dikkate alınmalıdır."
-    ]
+    ],
+    "operational_profile": {
+      "requires_human_review": true,
+      "risk_reason": "Medikal ürün. Ürün tipi, belge gereklilikleri ve ülke bazlı uygunluk kontrol edilmeli.",
+      "operational_notes": [
+        "Ürün tipi ve kullanım amacı doğrulanmalıdır.",
+        "Ülke bazlı uygunluk / belge gerekliliği kontrol edilmelidir.",
+        "Sıcaklık hassasiyeti olup olmadığı sorulmalıdır."
+      ]
+    }
   },
   {
     "canonical_commodity": "İlaç / Pharma",
@@ -166,7 +198,17 @@
     ],
     "notes": [
       "İlaç / pharma yüklerinde sıcaklık gereksinimi, ruhsat/uygunluk belgeleri ve özel taşıma şartları kontrol edilmelidir."
-    ]
+    ],
+    "operational_profile": {
+      "requires_human_review": true,
+      "requires_temperature_check": true,
+      "risk_reason": "İlaç / pharma yükü. Sıcaklık gereksinimi, ruhsat/uygunluk ve özel taşıma şartları kontrol edilmeli.",
+      "operational_notes": [
+        "Sıcaklık gereksinimi mutlaka doğrulanmalıdır.",
+        "Ruhsat / uygunluk belgeleri kontrol edilmelidir.",
+        "Pharma taşıma şartları müşteriyle netleştirilmelidir."
+      ]
+    }
   },
   {
     "canonical_commodity": "Elektronik",
@@ -185,7 +227,17 @@
     ],
     "notes": [
       "Elektronik ürünlerde yüksek değer, hırsızlık riski, hassasiyet ve ambalaj uygunluğu kontrol edilmelidir."
-    ]
+    ],
+    "operational_profile": {
+      "requires_human_review": true,
+      "high_value_candidate": true,
+      "risk_reason": "Elektronik ürün. Yüksek değer, hırsızlık riski ve hassasiyet kontrol edilmeli.",
+      "operational_notes": [
+        "Yüksek değer riski değerlendirilmeli.",
+        "Ambalaj ve darbe hassasiyeti kontrol edilmeli.",
+        "Gerekirse kapalı kasa / güvenli taşıma değerlendirilmelidir."
+      ]
+    }
   },
   {
     "canonical_commodity": "Cam / Kırılabilir",
@@ -201,7 +253,16 @@
     ],
     "notes": [
       "Cam / kırılabilir ürünlerde ambalaj, sabitleme, istiflenebilirlik ve hasar riski kontrol edilmelidir."
-    ]
+    ],
+    "operational_profile": {
+      "requires_human_review": true,
+      "risk_reason": "Cam / kırılabilir ürün. Ambalaj, sabitleme ve hasar riski kontrol edilmeli.",
+      "operational_notes": [
+        "Kırılabilir ürün ambalajı kontrol edilmelidir.",
+        "Sabitleme / lashing ihtiyacı değerlendirilmelidir.",
+        "İstiflenebilirlik netleştirilmelidir."
+      ]
+    }
   },
   {
     "canonical_commodity": "Metal Ürün",

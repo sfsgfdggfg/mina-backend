@@ -1,4 +1,5 @@
 from src.core.models import Shipment, RiskAssessment
+from src.core.commodity_profile import get_commodity_operational_profile
 
 
 def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
@@ -56,6 +57,19 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
         risk_reasons.append(
             "Sıcaklık kontrollü yük. Reefer uygunluğu ve sıcaklık gereksinimi ayrıca kontrol edilmeli."
         )
+        requires_human_review = True
+
+    # Commodity operational profile
+    commodity_profile = get_commodity_operational_profile(shipment.commodity)
+    if commodity_profile.get("requires_human_review"):
+        risk_reasons.append(
+            commodity_profile.get("risk_reason")
+            or "Commodity operational profile requires human review."
+        )
+        requires_human_review = True
+
+    if commodity_profile.get("requires_management_review"):
+        requires_management_review = True
         requires_human_review = True
 
     # Heavy / oversize

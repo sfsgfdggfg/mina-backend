@@ -8,6 +8,7 @@ from src.core.normalization import normalize_shipment
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.core.models import Shipment, Package
 from src.core.gtip import interpret_gtip_from_email
+from src.core.commodity_profile import apply_commodity_profile_to_shipment
 
 GENERIC_CUSTOMER_NAMES = {
     "",
@@ -155,7 +156,7 @@ def _keyword_matches(text: str, keyword: str) -> bool:
     if not keyword:
         return False
 
-    pattern = r"(?<!\\w)" + re.escape(keyword.lower()) + r"(?!\\w)"
+    pattern = r"(?<!\w)" + re.escape(keyword.lower()) + r"(?!\w)"
     return re.search(pattern, text) is not None
 
 
@@ -228,15 +229,28 @@ def _append_special_note(shipment, note: str):
     if not note:
         return shipment
 
-    if shipment.special_notes:
-        if note not in shipment.special_notes:
-            shipment.special_notes = shipment.special_notes + "\n" + note
+    existing_notes = getattr(shipment, "special_notes", None)
+
+    null_like_notes = {
+        "",
+        "none",
+        "null",
+        "/null/",
+        "n/a",
+        "na",
+        "-",
+    }
+
+    if isinstance(existing_notes, str) and existing_notes.strip().lower() in null_like_notes:
+        existing_notes = None
+
+    if existing_notes:
+        if note not in existing_notes:
+            shipment.special_notes = existing_notes + "\n" + note
     else:
         shipment.special_notes = note
 
     return shipment
-
-
 def _is_gtip_commodity_conflict(email_commodity: str | None, gtip_commodity: str | None) -> bool:
     if not email_commodity or not gtip_commodity:
         return False
@@ -342,6 +356,7 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
 
     shipment = _apply_commodity_safety_overrides(shipment, email_text)
     shipment = _apply_gtip_safety_overrides(shipment, email_text)
+    shipment = apply_commodity_profile_to_shipment(shipment)
 
     return shipment
 
