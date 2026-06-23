@@ -69,5 +69,208 @@
     "notes": [
       "Makine yüklerinde ölçü, ağırlık ve özel ekipman ihtiyacı kontrol edilmelidir."
     ]
+  },
+  {
+    "canonical_commodity": "Dondurulmuş Gıda",
+    "keywords": [
+      "dondurulmuş gıda",
+      "dondurulmus gida",
+      "frozen food",
+      "donuk gıda",
+      "donuk gida",
+      "dondurulmuş",
+      "dondurulmus",
+      "-18",
+      "-18c"
+    ],
+    "notes": [
+      "Dondurulmuş gıdalarda reefer ekipman, sıcaklık derecesi ve ürünün soğuk zincir gereksinimi kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Gıda",
+    "keywords": [
+      "gıda",
+      "gida",
+      "food",
+      "gıda ürünü",
+      "gida urunu",
+      "yiyecek",
+      "erzak"
+    ],
+    "notes": [
+      "Gıda ürünlerinde ülkeye göre uygunluk, ambalaj, paletleme ve belge gereklilikleri kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Kimyasal Ürün",
+    "keywords": [
+      "kimyasal",
+      "chemical",
+      "chemicals",
+      "solvent",
+      "boya",
+      "reçine",
+      "recine",
+      "tutkal",
+      "yapıştırıcı",
+      "yapistirici"
+    ],
+    "notes": [
+      "Kimyasal ürünlerde ADR durumu, MSDS/SDS belgesi ve ambalaj uygunluğu kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Kozmetik",
+    "keywords": [
+      "kozmetik",
+      "cosmetic",
+      "cosmetics",
+      "şampuan",
+      "sampuan",
+      "krem",
+      "parfüm",
+      "parfum",
+      "losyon"
+    ],
+    "notes": [
+      "Kozmetik ürünlerde ülkeye göre uygunluk belgeleri ve ambalaj bilgileri kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Medikal Ürün",
+    "keywords": [
+      "medikal",
+      "medical",
+      "tıbbi",
+      "tibbi",
+      "tıbbi cihaz",
+      "tibbi cihaz",
+      "medical device",
+      "maske",
+      "eldiven"
+    ],
+    "notes": [
+      "Medikal ürünlerde ürün tipi, belge gereklilikleri ve ülke bazlı uygunluk kontrolleri dikkate alınmalıdır."
+    ]
+  },
+  {
+    "canonical_commodity": "İlaç / Pharma",
+    "keywords": [
+      "ilaç",
+      "ilac",
+      "pharma",
+      "pharmaceutical",
+      "medicine",
+      "medication"
+    ],
+    "notes": [
+      "İlaç / pharma yüklerinde sıcaklık gereksinimi, ruhsat/uygunluk belgeleri ve özel taşıma şartları kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Elektronik",
+    "keywords": [
+      "elektronik",
+      "electronic",
+      "electronics",
+      "bilgisayar",
+      "computer",
+      "laptop",
+      "telefon",
+      "phone",
+      "tablet",
+      "devre kartı",
+      "devre karti"
+    ],
+    "notes": [
+      "Elektronik ürünlerde yüksek değer, hırsızlık riski, hassasiyet ve ambalaj uygunluğu kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Cam / Kırılabilir",
+    "keywords": [
+      "cam",
+      "glass",
+      "kırılabilir",
+      "kirilabilir",
+      "fragile",
+      "ayna",
+      "seramik",
+      "ceramic"
+    ],
+    "notes": [
+      "Cam / kırılabilir ürünlerde ambalaj, sabitleme, istiflenebilirlik ve hasar riski kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Metal Ürün",
+    "keywords": [
+      "metal",
+      "çelik",
+      "celik",
+      "steel",
+      "alüminyum",
+      "aluminyum",
+      "aluminum",
+      "profil",
+      "sac",
+      "levha"
+    ],
+    "notes": [
+      "Metal ürünlerde ağırlık dağılımı, bağlama/sabitleme ve yükleme yöntemi kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Mobilya",
+    "keywords": [
+      "mobilya",
+      "furniture",
+      "koltuk",
+      "sandalye",
+      "masa",
+      "dolap",
+      "yatak"
+    ],
+    "notes": [
+      "Mobilya yüklerinde hacim, ambalaj, kırılabilir yüzeyler ve istiflenebilirlik kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Ambalaj Malzemesi",
+    "keywords": [
+      "ambalaj",
+      "packaging",
+      "karton",
+      "carton",
+      "koli",
+      "box",
+      "streç",
+      "strec",
+      "film",
+      "palet"
+    ],
+    "notes": [
+      "Ambalaj malzemelerinde hacim, istiflenebilirlik ve paket tipi kontrol edilmelidir."
+    ]
+  },
+  {
+    "canonical_commodity": "Otomotiv Parçası",
+    "keywords": [
+      "otomotiv parçası",
+      "otomotiv parcasi",
+      "oto parça",
+      "oto parca",
+      "yedek parça",
+      "yedek parca",
+      "automotive part",
+      "auto part",
+      "spare part",
+      "araç parçası",
+      "arac parcasi"
+    ],
+    "notes": [
+      "Otomotiv parçalarında termin hassasiyeti, paketleme ve müşteri üretim planı etkisi kontrol edilmelidir."
+    ]
   }
 ]
