@@ -730,3 +730,51 @@ notes: ADR durumu, MSDS/SDS belgesi ve ambalaj uygunluğu kontrol edilmelidir.
 Bu kuralın amacı, MINAI’nin ürün tanıma kabiliyetini operasyonel faydaya göre büyütmektir.
 
 Commodity dictionary yalnızca kelime listesi değildir; ileride risk, ekipman, belge ve müşteri alışkanlığı kararlarının temel veri kaynaklarından biri olacaktır.
+## RULE-052 — Commodity Recognition Must Trigger Operational Reflexes
+
+MINAI bir ürün grubunu tanıdığında sadece commodity alanını doldurmakla yetinmemelidir.
+
+Commodity tanıma sonucunda gerekiyorsa operasyonel refleks üretmelidir.
+
+Operasyonel refleks örnekleri:
+
+```text
+Dondurulmuş Gıda:
+- Reefer ekipman değerlendirilmeli
+- Sıcaklık derecesi kontrol edilmeli
+- Soğuk zincir riski dikkate alınmalı
+
+Kimyasal Ürün:
+- ADR durumu kontrol edilmeli
+- MSDS/SDS belgesi istenmeli
+- Ambalaj ve etiketleme uygunluğu doğrulanmalı
+
+Cam / Kırılabilir:
+- Ambalaj kontrol edilmeli
+- Sabitleme / lashing ihtiyacı değerlendirilmeli
+- Hasar riski dikkate alınmalı
+
+Elektronik:
+- Yüksek değer riski değerlendirilmeli
+- Hırsızlık ve hassasiyet riski kontrol edilmeli
+- Gerekirse kapalı kasa / güvenli taşıma düşünülmeli
+
+İlaç / Pharma:
+- Sıcaklık gereksinimi doğrulanmalı
+- Ruhsat / uygunluk belgeleri kontrol edilmeli
+- Özel taşıma şartları netleştirilmeli
+```
+
+Commodity operational profile şu amaçlarla kullanılmalıdır:
+
+```text
+1. Risk seviyesi belirleme
+2. Human review gerekip gerekmediğini belirleme
+3. Ekipman önerisini destekleme
+4. Operasyon notu üretme
+5. Eksik bilgi sorularını ileride daha akıllı hale getirme
+```
+
+Bu kuralın amacı, MINAI’nin “ürünü tanıyan bot” seviyesinde kalmasını engellemektir.
+
+MINAI ürün tipini tanıdığında, o ürünün freight forwarding operasyonunda ne anlama geldiğini de yorumlamalıdır.

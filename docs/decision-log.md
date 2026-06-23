@@ -1013,3 +1013,87 @@ Kod mantığı değiştirilmemiştir. Parser zaten commodity dictionary datasın
 * Test suite korunmuştur.
 * Mevcut 12 test başarıyla geçmiştir.
 * Commodity dictionary ileride database veya admin panel ile yönetilebilir hale getirilebilir.
+## DEC-044 — Commodity Operational Profiles v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+MINAI’de commodity dictionary yalnızca ürün adı tanıyan bir yapı olmaktan çıkarılmıştır.
+
+Belirli commodity grupları için `operational_profile` alanı eklenmiştir. Bu profil, ürün tanındığında sistemin operasyonel refleks üretmesini sağlar.
+
+İlk versiyonda profil eklenen başlıca ürün grupları:
+
+```text
+Dondurulmuş Gıda
+Kimyasal Ürün
+Cam / Kırılabilir
+Elektronik
+Medikal Ürün
+İlaç / Pharma
+```
+
+### Rationale
+
+Freight forwarding operasyonunda ürün adı tek başına yeterli değildir.
+
+Aynı güzergâh ve ağırlıkta iki farklı yük, ürün tipine göre tamamen farklı operasyonel dikkat gerektirebilir.
+
+Örnek:
+
+```text
+Dondurulmuş Gıda → Reefer, sıcaklık derecesi, soğuk zincir
+Kimyasal Ürün → ADR kontrolü, MSDS/SDS, ambalaj uygunluğu
+Cam / Kırılabilir → ambalaj, sabitleme, hasar riski
+Elektronik → yüksek değer, hırsızlık riski, hassasiyet
+```
+
+Bu nedenle MINAI’nin yalnızca commodity classification yapması yeterli görülmemiştir. Commodity tanıma sonucunda risk, ekipman ve operasyon notu üretmesi gerekir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+data/commodity_dictionary.json
+src/core/commodity_profile.py
+src/ai/email_parser.py
+src/core/risk.py
+src/core/equipment.py
+src/simulation/ai_email_test_cases.py
+```
+
+Yeni modül:
+
+```text
+src/core/commodity_profile.py
+```
+
+Commodity profile akışı:
+
+```text
+1. Parser müşteri mailinden commodity tespit eder.
+2. Commodity dictionary üzerinden ilgili operational_profile okunur.
+3. Profile notları shipment.special_notes içine eklenir.
+4. Gerekiyorsa risk engine human review tetikler.
+5. Gerekiyorsa equipment engine özel ekipman seçer.
+```
+
+Yeni test:
+
+```text
+AI TEST 13 — Frozen food commodity profile
+```
+
+Bu testte `Dondurulmuş Gıda` yükü için sistemin `Reefer` ekipman seçmesi, risk seviyesini `yellow` yapması ve teklif akışını human review ile ilerletmesi doğrulanmıştır.
+
+### Consequences
+
+* MINAI ürün tipine göre operasyonel refleks vermeye başlamıştır.
+* Commodity dictionary artık yalnızca alias listesi değil, operasyonel karar datası haline gelmiştir.
+* Dondurulmuş gıda gibi ürünlerde Reefer seçimi data-driven hale gelmiştir.
+* Kimyasal, medikal, pharma, elektronik ve kırılabilir ürünler için human review tetiklenebilir hale gelmiştir.
+* Test suite 13 teste çıkmıştır.
+* Mevcut testler korunmuştur.
