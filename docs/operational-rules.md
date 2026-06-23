@@ -694,3 +694,39 @@ Bu kuralın amacı, yeni ürün tipleri eklendikçe parser kodunun sürekli değ
 MVP aşamasında commodity dictionary JSON dosyasında tutulabilir. Ürünleşme aşamasında bu yapı database, admin panel veya müşteri/operasyon öğrenme sistemiyle yönetilmelidir.
 
 MINAI yeni bir ürün tipiyle karşılaştığında kod değiştirmemeli; yeni alias / commodity önerisini data katmanına eklenebilir hale getirmelidir.
+## RULE-051 — MVP Commodity Dictionary Should Cover Operationally Relevant Product Groups
+
+MVP aşamasında commodity dictionary, sonsuz ürün listesi olmaya çalışmamalıdır.
+
+Bunun yerine operasyonel kararı etkileyen ürün gruplarını kapsamalıdır.
+
+Bir ürün grubu commodity dictionary’ye eklenirken şu sorular dikkate alınmalıdır:
+
+```text
+Bu ürün ekipman seçimini etkiliyor mu?
+Risk seviyesini etkiliyor mu?
+Eksik bilgi sorusunu değiştiriyor mu?
+Belge / uygunluk uyarısı gerektiriyor mu?
+Supplier seçimini etkiliyor mu?
+Customer memory için anlamlı mı?
+```
+
+Commodity dictionary’ye eklenen her ürün grubu şu yapıya sahip olmalıdır:
+
+```text
+canonical_commodity
+keywords
+notes
+```
+
+Örnek:
+
+```text
+canonical_commodity: Kimyasal Ürün
+keywords: kimyasal, chemical, solvent, boya
+notes: ADR durumu, MSDS/SDS belgesi ve ambalaj uygunluğu kontrol edilmelidir.
+```
+
+Bu kuralın amacı, MINAI’nin ürün tanıma kabiliyetini operasyonel faydaya göre büyütmektir.
+
+Commodity dictionary yalnızca kelime listesi değildir; ileride risk, ekipman, belge ve müşteri alışkanlığı kararlarının temel veri kaynaklarından biri olacaktır.

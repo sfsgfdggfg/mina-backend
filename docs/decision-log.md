@@ -952,3 +952,64 @@ Commodity safety override akışı artık `data/commodity_dictionary.json` dosya
 * MVP aşamasında JSON dosyası kullanılır.
 * Ürünleşme aşamasında bu yapı database tablosuna veya admin paneline taşınabilir.
 * Existing parser safety behavior korunmuştur.
+## DEC-043 — Commodity Dictionary Expansion v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+Commodity Dictionary v1 genişletilmiştir.
+
+MINAI’nin MVP aşamasında daha fazla operasyonel ürün grubunu tanıyabilmesi için `data/commodity_dictionary.json` dosyasına yeni commodity grupları ve keyword alias kayıtları eklenmiştir.
+
+Eklenen başlıca ürün grupları:
+
+```text
+Dondurulmuş Gıda
+Gıda
+Kimyasal Ürün
+Kozmetik
+Medikal Ürün
+İlaç / Pharma
+Elektronik
+Cam / Kırılabilir
+Metal Ürün
+Mobilya
+Ambalaj Malzemesi
+Otomotiv Parçası
+```
+
+### Rationale
+
+MVP’de ürün tanıma kabiliyeti yalnızca birkaç örnek ürünle sınırlı kalmamalıdır.
+
+MINAI’nin operasyonel refleks gösterebilmesi için ürün gruplarını daha geniş bir sözlük üzerinden tanıması gerekir.
+
+Bu genişleme özellikle şu alanlarda fayda sağlar:
+
+```text
+1. Ekipman seçimi
+2. Risk değerlendirmesi
+3. Eksik bilgi soruları
+4. Belge / uygunluk uyarıları
+5. Customer memory ve supplier selection kararları
+```
+
+### Implementation
+
+Güncellenen dosya:
+
+```text
+data/commodity_dictionary.json
+```
+
+Kod mantığı değiştirilmemiştir. Parser zaten commodity dictionary datasını okuyacak şekilde çalıştığı için bu task yalnızca data genişletmesi olarak uygulanmıştır.
+
+### Consequences
+
+* MINAI daha fazla ürün grubunu deterministic olarak tanıyabilir.
+* Yeni commodity alias ekleme süreci Python kodundan bağımsız kalmıştır.
+* Test suite korunmuştur.
+* Mevcut 12 test başarıyla geçmiştir.
+* Commodity dictionary ileride database veya admin panel ile yönetilebilir hale getirilebilir.
