@@ -140,7 +140,18 @@
         "MSDS/SDS belgesi istenmelidir.",
         "ADR kapsamı müşteriyle doğrulanmalıdır.",
         "Ambalaj ve etiketleme uygunluğu kontrol edilmelidir."
-      ]
+      ],
+      "missing_info_fields": [
+        "msds/sds document",
+        "adr status",
+        "chemical packaging type"
+      ],
+      "critical_missing_info_fields": [
+        "msds/sds document",
+        "adr status",
+        "chemical packaging type"
+      ],
+      "missing_info_reason": "Kimyasal ürünlerde MSDS/SDS, ADR durumu ve ambalaj tipi netleşmeden fiyat çalışması tamamlanmamalıdır."
     }
   },
   {

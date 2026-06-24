@@ -62,6 +62,9 @@ def translate_missing_field(field: str) -> str:
         "commodity": "Ürün cinsi",
         "cargo ready date": "Yük hazır tarihi",
         "machine dimensions": "Makine ölçüleri (en / boy / yükseklik)",
+        "msds/sds document": "MSDS/SDS belgesi",
+        "adr status": "Yükün ADR kapsamında olup olmadığı",
+        "chemical packaging type": "Kimyasal ürünün ambalaj tipi ve ambalaj uygunluğu",
     }
 
     return mapping.get(field, field)

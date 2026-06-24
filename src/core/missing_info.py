@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List
 from src.core.models import Shipment
+from src.core.commodity_profile import get_commodity_operational_profile
 
 
 class MissingInfoResult(BaseModel):
@@ -43,6 +44,15 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
         if not has_dimensions:
             missing_fields.append("machine dimensions")
 
+    # Commodity profile driven missing info
+    commodity_profile = get_commodity_operational_profile(shipment.commodity)
+
+    profile_missing_fields = commodity_profile.get("missing_info_fields", [])
+    if isinstance(profile_missing_fields, list):
+        for field in profile_missing_fields:
+            if isinstance(field, str) and field not in missing_fields:
+                missing_fields.append(field)
+
     # If critical missing info exists, stop quote flow
     critical_fields = {
         "pickup location",
@@ -52,13 +62,21 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
         "machine dimensions",
     }
 
+    profile_critical_fields = commodity_profile.get("critical_missing_info_fields", [])
+    if isinstance(profile_critical_fields, list):
+        critical_fields.update(
+            field for field in profile_critical_fields if isinstance(field, str)
+        )
+
     critical_missing = [field for field in missing_fields if field in critical_fields]
 
     if critical_missing:
+        reason = commodity_profile.get("missing_info_reason") or "Kritik eksik bilgi bulundu. Fiyat çalışması durduruldu."
+
         return MissingInfoResult(
             can_continue_to_quote=False,
             missing_fields=missing_fields,
-            reason="Kritik eksik bilgi bulundu. Fiyat çalışması durduruldu.",
+            reason=reason,
         )
 
     return MissingInfoResult(

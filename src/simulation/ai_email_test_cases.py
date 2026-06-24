@@ -268,4 +268,29 @@ Teşekkürler.
         },
     },
 
+    {
+        "name": "Chemical commodity profile missing info",
+        "email": """
+Merhaba,
+
+Gebze'den Hamburg Almanya'ya kimyasal ürün taşıması için komple araç fiyat rica ederiz.
+Toplam 12 palet, yaklaşık 6000 kg.
+Yük 01.07.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "clarification",
+            "service_type": "FTL",
+            "commodity": "Kimyasal Ürün",
+            "risk_level": "yellow",
+            "missing_fields": [
+                "msds/sds document",
+                "adr status",
+                "chemical packaging type"
+            ],
+            "action_type": "clarification",
+        },
+    },
+
 ]
