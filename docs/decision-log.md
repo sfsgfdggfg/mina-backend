@@ -1097,3 +1097,84 @@ Bu testte `Dondurulmuş Gıda` yükü için sistemin `Reefer` ekipman seçmesi, 
 * Kimyasal, medikal, pharma, elektronik ve kırılabilir ürünler için human review tetiklenebilir hale gelmiştir.
 * Test suite 13 teste çıkmıştır.
 * Mevcut testler korunmuştur.
+## DEC-045 — Commodity Profile Driven Missing Info v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+MINAI’de commodity operational profile yapısı missing information engine’e bağlanmıştır.
+
+Artık belirli ürün grupları, kendi operasyonel profiline göre ek eksik bilgi alanları tanımlayabilir.
+
+İlk uygulama `Kimyasal Ürün` için yapılmıştır.
+
+Kimyasal ürünlerde aşağıdaki bilgiler kritik eksik bilgi olarak kabul edilir:
+
+```text
+msds/sds document
+adr status
+chemical packaging type
+```
+
+Bu bilgiler eksikse sistem fiyat çalışmasına doğrudan devam etmez; müşteriden eksik bilgi istemek için clarification akışına geçer.
+
+### Rationale
+
+Bazı ürün gruplarında standart alanlar yeterli değildir.
+
+Örneğin kimyasal ürünlerde yükleme yeri, teslimat yeri, ağırlık ve hazır tarih bilinse bile aşağıdaki bilgiler operasyonel olarak kritiktir:
+
+```text
+MSDS/SDS belgesi var mı?
+Yük ADR kapsamında mı?
+Ambalaj tipi ve ambalaj uygunluğu nedir?
+```
+
+Bu bilgiler netleşmeden fiyat vermek operasyonel hata, yanlış ekipman seçimi veya mevzuat riski doğurabilir.
+
+Bu nedenle commodity profile, missing info engine’e ek eksik bilgi alanları sağlayabilmelidir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+data/commodity_dictionary.json
+src/core/missing_info.py
+src/ai/clarification_generator.py
+src/simulation/ai_email_test_cases.py
+```
+
+`Kimyasal Ürün` operational profile içine şu alanlar eklenmiştir:
+
+```text
+missing_info_fields
+critical_missing_info_fields
+missing_info_reason
+```
+
+Clarification generator müşteri dostu çevirilerle aşağıdaki alanları mail taslağına ekleyebilir:
+
+```text
+MSDS/SDS belgesi
+Yükün ADR kapsamında olup olmadığı
+Kimyasal ürünün ambalaj tipi ve ambalaj uygunluğu
+```
+
+Yeni test:
+
+```text
+AI TEST 14 — Chemical commodity profile missing info
+```
+
+Bu testte kimyasal ürün talebi için sistemin clarification akışına geçmesi ve commodity profile kaynaklı eksik bilgileri istemesi doğrulanmıştır.
+
+### Consequences
+
+* Commodity profile artık yalnızca risk ve ekipman kararını değil, eksik bilgi kararını da etkiler.
+* Kimyasal ürünlerde kritik bilgiler netleşmeden fiyat çalışması durdurulur.
+* Clarification maili ürün tipine göre daha akıllı hale gelir.
+* Test suite 14 teste çıkmıştır.
+* Mevcut testler korunmuştur.

@@ -778,3 +778,43 @@ Commodity operational profile şu amaçlarla kullanılmalıdır:
 Bu kuralın amacı, MINAI’nin “ürünü tanıyan bot” seviyesinde kalmasını engellemektir.
 
 MINAI ürün tipini tanıdığında, o ürünün freight forwarding operasyonunda ne anlama geldiğini de yorumlamalıdır.
+## RULE-053 — Commodity Profiles May Add Critical Missing Information
+
+MINAI’de bazı ürün grupları, standart teklif alanlarına ek olarak kritik bilgi gerektirebilir.
+
+Bu bilgiler commodity operational profile üzerinden tanımlanmalıdır.
+
+Örnek:
+
+```text
+Kimyasal Ürün:
+- MSDS/SDS belgesi
+- ADR durumu
+- Ambalaj tipi ve ambalaj uygunluğu
+```
+
+Bir commodity profile içinde `critical_missing_info_fields` tanımlanmışsa, bu alanlar eksik olduğunda sistem fiyat çalışmasına doğrudan devam etmemelidir.
+
+Bu durumda doğru aksiyon:
+
+```text
+result_type: clarification
+action_type: clarification
+```
+
+Müşteriden eksik bilgiler istenmeli ve bilgiler tamamlanmadan teklif paylaşılmamalıdır.
+
+Bu kuralın amacı, MINAI’nin yalnızca genel eksik bilgi kontrolü yapmasını değil, ürün grubuna özel operasyonel eksik bilgileri de yakalamasını sağlamaktır.
+
+Commodity profile kaynaklı missing info kuralları özellikle şu ürün gruplarında kullanılmalıdır:
+
+```text
+Kimyasal Ürün
+İlaç / Pharma
+Medikal Ürün
+Cam / Kırılabilir
+Dondurulmuş Gıda
+Yüksek değerli elektronik
+```
+
+MINAI, ürün tipini tanıdığında o ürün için gerekli kritik operasyonel bilgileri de sorgulamalıdır.
