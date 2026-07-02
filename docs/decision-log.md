@@ -1263,3 +1263,73 @@ Bu testte pharma / ilaç yükü için sistemin clarification akışına geçmesi
 * Clarification maili ürün tipine göre daha operasyonel hale gelmiştir.
 * Test suite 15 teste çıkmıştır.
 * Mevcut testler korunmuştur.
+## DEC-047 — Commodity Profile Action Checklists v1
+
+**Status:** Accepted
+**Date:** 2026-07-02
+
+### Decision
+
+Commodity operational profile yapısı action recommendation checklist akışına bağlanmıştır.
+
+MINAI artık belirli ürün grupları için operasyoncuya yalnızca genel checklist vermez; ürün tipine özel kontrol maddelerini de action recommendation içine ekler.
+
+İlk uygulamada şu commodity grupları için `action_checklist` alanı desteklenmiştir:
+
+```text
+Kimyasal Ürün
+İlaç / Pharma
+Dondurulmuş Gıda
+Cam / Kırılabilir
+Elektronik
+Medikal Ürün
+```
+
+Örnek:
+
+```text
+İlaç / Pharma:
+- Sıcaklık gereksinimini müşteriyle doğrula.
+- Uygunluk / ruhsat belgelerini kontrol et.
+- Özel taşıma şartlarını netleştir.
+```
+
+### Rationale
+
+Operasyoncuya verilen aksiyon önerileri yalnızca genel maddelerden oluşursa ürün bazlı riskler gözden kaçabilir.
+
+Örneğin pharma yükünde “eksik bilgi mail taslağını kontrol et” genel bir yönlendirmedir; fakat operasyonel olarak yeterli değildir. Sistem ayrıca sıcaklık gereksinimi, belge gerekliliği ve özel taşıma şartlarını da checklist’e eklemelidir.
+
+Bu nedenle commodity profile, action recommendation checklist’ini genişletebilmelidir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+data/commodity_dictionary.json
+src/core/commodity_profile.py
+src/core/action_recommendation.py
+src/simulation/test_reporter.py
+src/simulation/ai_email_test_cases.py
+```
+
+Yeni helper:
+
+```text
+get_commodity_action_checklist
+```
+
+Action recommendation akışında commodity profile’dan gelen checklist maddeleri mevcut genel checklist’e eklenir.
+
+Test reporter, beklenen checklist maddelerini doğrulayabilecek şekilde genişletilmiştir.
+
+Mevcut pharma regression testine action checklist beklentileri eklenmiştir.
+
+### Consequences
+
+* Operasyoncuya verilen aksiyon önerileri ürün tipine göre daha anlamlı hale gelmiştir.
+* Commodity profile artık risk, ekipman, eksik bilgi ve aksiyon checklist kararlarını etkileyebilir.
+* Pharma yükleri için sıcaklık, belge ve özel taşıma şartları checklist’e otomatik eklenir.
+* Mevcut test sayısı korunmuştur.
+* Test suite 15 test ile başarılı çalışmıştır.

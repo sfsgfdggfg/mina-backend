@@ -873,3 +873,35 @@ action_type: clarification
 Bu kuralın amacı, MINAI’nin ürün tipine göre operasyonel olarak anlamlı sorular sormasını sağlamaktır.
 
 MINAI, yüksek hassasiyetli ürünlerde “bilgi yeterli görünüyor” yanılgısına düşmemeli; ürün grubunun gerektirdiği kritik detayları ayrıca kontrol etmelidir.
+## RULE-055 — Action Recommendations Must Include Commodity-Specific Checks
+
+MINAI’nin action recommendation çıktısı yalnızca genel operasyon checklist’i içermemelidir.
+
+Bir shipment’ın commodity profile’ında `action_checklist` tanımlıysa, bu maddeler operasyoncuya verilen checklist içine eklenmelidir.
+
+Örnek:
+
+```text
+İlaç / Pharma:
+- Sıcaklık gereksinimini müşteriyle doğrula.
+- Uygunluk / ruhsat belgelerini kontrol et.
+- Özel taşıma şartlarını netleştir.
+
+Kimyasal Ürün:
+- MSDS/SDS belgesini kontrol et.
+- ADR durumunu müşteriyle doğrula.
+- Ambalaj ve etiketleme uygunluğunu kontrol et.
+
+Dondurulmuş Gıda:
+- Reefer ekipman uygunluğunu doğrula.
+- Sıcaklık derecesini müşteriyle teyit et.
+- Soğuk zincir hassasiyetini kontrol et.
+```
+
+Bu kuralın amacı, action recommendation çıktısının ürün tipine göre operasyonel olarak anlamlı hale gelmesini sağlamaktır.
+
+MINAI bir ürünü tanıdığında, operasyoncuya o ürün için dikkat edilmesi gereken özel kontrolleri de göstermelidir.
+
+Genel checklist korunmalı, commodity-specific checklist maddeleri bu listeye eklenmelidir.
+
+Aynı madde birden fazla kaynaktan gelirse tekrar edilmemelidir.
