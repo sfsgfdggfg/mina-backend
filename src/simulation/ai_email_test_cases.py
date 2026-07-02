@@ -315,6 +315,11 @@ Teşekkürler.
                 "pharma special transport requirements"
             ],
             "action_type": "clarification",
+            "action_checklist_contains": [
+                "Sıcaklık gereksinimini müşteriyle doğrula.",
+                "Uygunluk / ruhsat belgelerini kontrol et.",
+                "Özel taşıma şartlarını netleştir."
+            ],
         },
     },
 

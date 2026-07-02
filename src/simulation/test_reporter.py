@@ -85,6 +85,20 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
                 f"action_type expected {expected_action_type}, got {actual_action_type}"
             )
     
+    expected_action_checklist_contains = expected.get("action_checklist_contains")
+    if expected_action_checklist_contains:
+        actual_checklist = (
+            action_recommendation.checklist
+            if action_recommendation
+            else []
+        )
+
+        for expected_item in expected_action_checklist_contains:
+            if not any(expected_item in checklist_item for checklist_item in actual_checklist):
+                failures.append(
+                    f"action checklist item containing {expected_item} not found; got {actual_checklist}"
+                )
+    
     expected_customer_memory_matched = expected.get("customer_memory_matched")
     if expected_customer_memory_matched is not None:
         customer_memory = result.get("customer_memory")

@@ -103,7 +103,12 @@
         "reefer confirmation",
         "cold chain sensitivity"
       ],
-      "missing_info_reason": "Dondurulmuş gıdalarda sıcaklık derecesi, reefer onayı ve soğuk zincir hassasiyeti kontrol edilmelidir."
+      "missing_info_reason": "Dondurulmuş gıdalarda sıcaklık derecesi, reefer onayı ve soğuk zincir hassasiyeti kontrol edilmelidir.",
+      "action_checklist": [
+        "Reefer ekipman uygunluğunu doğrula.",
+        "Sıcaklık derecesini müşteriyle teyit et.",
+        "Soğuk zincir hassasiyetini kontrol et."
+      ]
     }
   },
   {
@@ -157,7 +162,12 @@
         "adr status",
         "chemical packaging type"
       ],
-      "missing_info_reason": "Kimyasal ürünlerde MSDS/SDS, ADR durumu ve ambalaj tipi netleşmeden fiyat çalışması tamamlanmamalıdır."
+      "missing_info_reason": "Kimyasal ürünlerde MSDS/SDS, ADR durumu ve ambalaj tipi netleşmeden fiyat çalışması tamamlanmamalıdır.",
+      "action_checklist": [
+        "MSDS/SDS belgesini kontrol et.",
+        "ADR durumunu müşteriyle doğrula.",
+        "Ambalaj ve etiketleme uygunluğunu kontrol et."
+      ]
     }
   },
   {
@@ -211,7 +221,12 @@
         "medical compliance document",
         "medical temperature sensitivity"
       ],
-      "missing_info_reason": "Medikal ürünlerde ürün tipi, belge gereklilikleri ve sıcaklık hassasiyeti netleşmeden fiyat çalışması tamamlanmamalıdır."
+      "missing_info_reason": "Medikal ürünlerde ürün tipi, belge gereklilikleri ve sıcaklık hassasiyeti netleşmeden fiyat çalışması tamamlanmamalıdır.",
+      "action_checklist": [
+        "Ürün tipi ve kullanım amacını doğrula.",
+        "Uygunluk / belge gerekliliklerini kontrol et.",
+        "Sıcaklık hassasiyeti olup olmadığını sor."
+      ]
     }
   },
   {
@@ -246,7 +261,12 @@
         "pharma compliance document",
         "pharma special transport requirements"
       ],
-      "missing_info_reason": "İlaç / pharma yüklerinde sıcaklık gereksinimi, uygunluk belgeleri ve özel taşıma şartları netleşmeden fiyat çalışması tamamlanmamalıdır."
+      "missing_info_reason": "İlaç / pharma yüklerinde sıcaklık gereksinimi, uygunluk belgeleri ve özel taşıma şartları netleşmeden fiyat çalışması tamamlanmamalıdır.",
+      "action_checklist": [
+        "Sıcaklık gereksinimini müşteriyle doğrula.",
+        "Uygunluk / ruhsat belgelerini kontrol et.",
+        "Özel taşıma şartlarını netleştir."
+      ]
     }
   },
   {
@@ -286,7 +306,12 @@
         "electronic packaging sensitivity",
         "secure transport requirement"
       ],
-      "missing_info_reason": "Elektronik ürünlerde yaklaşık değer, ambalaj/hassasiyet ve güvenli taşıma ihtiyacı netleşmeden fiyat çalışması tamamlanmamalıdır."
+      "missing_info_reason": "Elektronik ürünlerde yaklaşık değer, ambalaj/hassasiyet ve güvenli taşıma ihtiyacı netleşmeden fiyat çalışması tamamlanmamalıdır.",
+      "action_checklist": [
+        "Yaklaşık ürün değerini kontrol et.",
+        "Ambalaj ve darbe hassasiyetini doğrula.",
+        "Güvenli taşıma / kapalı kasa ihtiyacını değerlendir."
+      ]
     }
   },
   {
@@ -322,7 +347,12 @@
         "fragile stackability",
         "fragile lashing requirement"
       ],
-      "missing_info_reason": "Cam / kırılabilir ürünlerde ambalaj, istiflenebilirlik ve sabitleme ihtiyacı netleşmeden fiyat çalışması tamamlanmamalıdır."
+      "missing_info_reason": "Cam / kırılabilir ürünlerde ambalaj, istiflenebilirlik ve sabitleme ihtiyacı netleşmeden fiyat çalışması tamamlanmamalıdır.",
+      "action_checklist": [
+        "Ambalaj tipini ve koruma seviyesini kontrol et.",
+        "İstiflenebilirlik bilgisini doğrula.",
+        "Sabitleme / lashing ihtiyacını değerlendir."
+      ]
     }
   },
   {

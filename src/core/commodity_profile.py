@@ -73,6 +73,16 @@ def get_commodity_operational_profile(commodity: Optional[str]) -> Dict[str, Any
     return {}
 
 
+def get_commodity_action_checklist(commodity: Optional[str]) -> list[str]:
+    profile = get_commodity_operational_profile(commodity)
+    checklist = profile.get("action_checklist", [])
+
+    if not isinstance(checklist, list):
+        return []
+
+    return [str(item) for item in checklist if item]
+
+
 def _append_special_note(shipment, note: str):
     if not note:
         return shipment
