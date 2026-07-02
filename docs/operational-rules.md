@@ -818,3 +818,58 @@ Yüksek değerli elektronik
 ```
 
 MINAI, ürün tipini tanıdığında o ürün için gerekli kritik operasyonel bilgileri de sorgulamalıdır.
+## RULE-054 — High-Sensitivity Commodities Require Product-Specific Clarification
+
+MINAI, operasyonel hassasiyeti yüksek ürün gruplarında yalnızca genel eksik bilgi kontrolüyle yetinmemelidir.
+
+High-sensitivity commodity grupları için ürün tipine özel clarification soruları tanımlanmalıdır.
+
+Örnek ürün grupları:
+
+```text
+İlaç / Pharma
+Medikal Ürün
+Kimyasal Ürün
+Dondurulmuş Gıda
+Cam / Kırılabilir
+Elektronik
+```
+
+Bu ürün gruplarında gerekli bilgiler ürün tipine göre değişir.
+
+Örnek:
+
+```text
+İlaç / Pharma:
+- Sıcaklık gereksinimi
+- Uygunluk / ruhsat belgeleri
+- Özel taşıma şartları
+
+Dondurulmuş Gıda:
+- Sıcaklık derecesi
+- Reefer gereksinimi
+- Soğuk zincir hassasiyeti
+
+Cam / Kırılabilir:
+- Ambalaj tipi
+- İstiflenebilirlik
+- Sabitleme / lashing ihtiyacı
+
+Elektronik:
+- Yaklaşık ürün değeri
+- Ambalaj ve darbe hassasiyeti
+- Güvenli taşıma / kapalı kasa ihtiyacı
+```
+
+Bir commodity profile içinde `critical_missing_info_fields` tanımlanmışsa, bu bilgiler eksik olduğunda sistem teklif üretimini durdurmalı ve clarification akışına geçmelidir.
+
+Doğru davranış:
+
+```text
+result_type: clarification
+action_type: clarification
+```
+
+Bu kuralın amacı, MINAI’nin ürün tipine göre operasyonel olarak anlamlı sorular sormasını sağlamaktır.
+
+MINAI, yüksek hassasiyetli ürünlerde “bilgi yeterli görünüyor” yanılgısına düşmemeli; ürün grubunun gerektirdiği kritik detayları ayrıca kontrol etmelidir.

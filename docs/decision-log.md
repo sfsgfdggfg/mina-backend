@@ -1178,3 +1178,88 @@ Bu testte kimyasal ürün talebi için sistemin clarification akışına geçmes
 * Clarification maili ürün tipine göre daha akıllı hale gelir.
 * Test suite 14 teste çıkmıştır.
 * Mevcut testler korunmuştur.
+## DEC-046 — Commodity Missing Info Expansion v1
+
+**Status:** Accepted
+**Date:** 2026-07-02
+
+### Decision
+
+Commodity profile driven missing information yapısı genişletilmiştir.
+
+Kimyasal ürün için başlatılan profile-driven missing info yaklaşımı, daha yüksek operasyonel hassasiyet taşıyan ürün gruplarına genişletilmiştir.
+
+Genişletilen başlıca ürün grupları:
+
+```text
+Dondurulmuş Gıda
+İlaç / Pharma
+Medikal Ürün
+Cam / Kırılabilir
+Elektronik
+```
+
+İlk regression testi `İlaç / Pharma` ürünü için eklenmiştir.
+
+İlaç / Pharma yüklerinde aşağıdaki bilgiler kritik eksik bilgi olarak kabul edilir:
+
+```text
+pharma temperature requirement
+pharma compliance document
+pharma special transport requirements
+```
+
+Bu bilgiler eksikse sistem fiyat çalışmasına doğrudan devam etmez; clarification akışına geçer.
+
+### Rationale
+
+Bazı ürün gruplarında standart navlun bilgileri fiyat çalışması için yeterli değildir.
+
+Örneğin ilaç / pharma yüklerinde aşağıdaki bilgiler operasyonel olarak kritiktir:
+
+```text
+Sıcaklık gereksinimi nedir?
+Uygunluk / ruhsat belgeleri var mı?
+Özel taşıma şartı var mı?
+```
+
+Bu bilgiler netleşmeden teklif üretmek yanlış ekipman, yanlış fiyat, mevzuat riski veya operasyonel hasar riski doğurabilir.
+
+Bu nedenle high-sensitivity commodity grupları, kendi profile’ları üzerinden kritik eksik bilgi alanları tanımlayabilmelidir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+data/commodity_dictionary.json
+src/ai/clarification_generator.py
+src/simulation/ai_email_test_cases.py
+```
+
+`data/commodity_dictionary.json` içinde bazı commodity profile kayıtlarına şu alanlar eklenmiştir:
+
+```text
+missing_info_fields
+critical_missing_info_fields
+missing_info_reason
+```
+
+Clarification generator yeni missing info alanlarını müşteri dostu Türkçe metinlere çevirecek şekilde genişletilmiştir.
+
+Yeni test:
+
+```text
+AI TEST 15 — Pharma commodity profile missing info
+```
+
+Bu testte pharma / ilaç yükü için sistemin clarification akışına geçmesi ve ürün grubuna özel kritik bilgileri istemesi doğrulanmıştır.
+
+### Consequences
+
+* Commodity profile missing info yapısı tek bir ürün grubuna bağlı kalmamıştır.
+* High-sensitivity commodity grupları için ürün tipine özel eksik bilgi soruları desteklenmiştir.
+* İlaç / Pharma yüklerinde kritik bilgiler netleşmeden fiyat çalışması durdurulur.
+* Clarification maili ürün tipine göre daha operasyonel hale gelmiştir.
+* Test suite 15 teste çıkmıştır.
+* Mevcut testler korunmuştur.
