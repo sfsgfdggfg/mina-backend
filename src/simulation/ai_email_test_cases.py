@@ -293,4 +293,29 @@ Teşekkürler.
         },
     },
 
+    {
+        "name": "Pharma commodity profile missing info",
+        "email": """
+Merhaba,
+
+İstanbul'dan Paris Fransa'ya pharma ilaç yükümüz için komple araç fiyat rica ederiz.
+Toplam 8 palet, yaklaşık 2500 kg.
+Yük 02.07.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "clarification",
+            "service_type": "FTL",
+            "commodity": "İlaç / Pharma",
+            "risk_level": "yellow",
+            "missing_fields": [
+                "pharma temperature requirement",
+                "pharma compliance document",
+                "pharma special transport requirements"
+            ],
+            "action_type": "clarification",
+        },
+    },
+
 ]

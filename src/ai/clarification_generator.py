@@ -65,6 +65,21 @@ def translate_missing_field(field: str) -> str:
         "msds/sds document": "MSDS/SDS belgesi",
         "adr status": "Yükün ADR kapsamında olup olmadığı",
         "chemical packaging type": "Kimyasal ürünün ambalaj tipi ve ambalaj uygunluğu",
+        "frozen temperature requirement": "Dondurulmuş ürün için gerekli sıcaklık derecesi",
+        "reefer confirmation": "Reefer araç gereksiniminin teyidi",
+        "cold chain sensitivity": "Ürünün soğuk zincir hassasiyeti",
+        "pharma temperature requirement": "İlaç / pharma yükü için sıcaklık gereksinimi",
+        "pharma compliance document": "İlaç / pharma uygunluk veya ruhsat belgeleri",
+        "pharma special transport requirements": "İlaç / pharma özel taşıma şartları",
+        "medical product type": "Medikal ürün tipi ve kullanım amacı",
+        "medical compliance document": "Medikal ürün uygunluk / belge gereklilikleri",
+        "medical temperature sensitivity": "Medikal ürünün sıcaklık hassasiyeti olup olmadığı",
+        "fragile packaging type": "Kırılabilir ürün ambalaj tipi",
+        "fragile stackability": "Ürünün istiflenebilir olup olmadığı",
+        "fragile lashing requirement": "Sabitleme / lashing gerekip gerekmediği",
+        "electronic cargo value": "Elektronik ürün yaklaşık değeri",
+        "electronic packaging sensitivity": "Elektronik ürün ambalajı ve darbe hassasiyeti",
+        "secure transport requirement": "Güvenli taşıma / kapalı kasa ihtiyacı",
     }
 
     return mapping.get(field, field)

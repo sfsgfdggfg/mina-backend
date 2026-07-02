@@ -97,7 +97,13 @@
         "Reefer ekipman uygunluğu kontrol edilmelidir.",
         "Sıcaklık derecesi müşteriyle doğrulanmalıdır.",
         "Soğuk zincir kırılma riski dikkate alınmalıdır."
-      ]
+      ],
+      "missing_info_fields": [
+        "frozen temperature requirement",
+        "reefer confirmation",
+        "cold chain sensitivity"
+      ],
+      "missing_info_reason": "Dondurulmuş gıdalarda sıcaklık derecesi, reefer onayı ve soğuk zincir hassasiyeti kontrol edilmelidir."
     }
   },
   {
@@ -194,7 +200,18 @@
         "Ürün tipi ve kullanım amacı doğrulanmalıdır.",
         "Ülke bazlı uygunluk / belge gerekliliği kontrol edilmelidir.",
         "Sıcaklık hassasiyeti olup olmadığı sorulmalıdır."
-      ]
+      ],
+      "missing_info_fields": [
+        "medical product type",
+        "medical compliance document",
+        "medical temperature sensitivity"
+      ],
+      "critical_missing_info_fields": [
+        "medical product type",
+        "medical compliance document",
+        "medical temperature sensitivity"
+      ],
+      "missing_info_reason": "Medikal ürünlerde ürün tipi, belge gereklilikleri ve sıcaklık hassasiyeti netleşmeden fiyat çalışması tamamlanmamalıdır."
     }
   },
   {
@@ -218,7 +235,18 @@
         "Sıcaklık gereksinimi mutlaka doğrulanmalıdır.",
         "Ruhsat / uygunluk belgeleri kontrol edilmelidir.",
         "Pharma taşıma şartları müşteriyle netleştirilmelidir."
-      ]
+      ],
+      "missing_info_fields": [
+        "pharma temperature requirement",
+        "pharma compliance document",
+        "pharma special transport requirements"
+      ],
+      "critical_missing_info_fields": [
+        "pharma temperature requirement",
+        "pharma compliance document",
+        "pharma special transport requirements"
+      ],
+      "missing_info_reason": "İlaç / pharma yüklerinde sıcaklık gereksinimi, uygunluk belgeleri ve özel taşıma şartları netleşmeden fiyat çalışması tamamlanmamalıdır."
     }
   },
   {
@@ -247,7 +275,18 @@
         "Yüksek değer riski değerlendirilmeli.",
         "Ambalaj ve darbe hassasiyeti kontrol edilmeli.",
         "Gerekirse kapalı kasa / güvenli taşıma değerlendirilmelidir."
-      ]
+      ],
+      "missing_info_fields": [
+        "electronic cargo value",
+        "electronic packaging sensitivity",
+        "secure transport requirement"
+      ],
+      "critical_missing_info_fields": [
+        "electronic cargo value",
+        "electronic packaging sensitivity",
+        "secure transport requirement"
+      ],
+      "missing_info_reason": "Elektronik ürünlerde yaklaşık değer, ambalaj/hassasiyet ve güvenli taşıma ihtiyacı netleşmeden fiyat çalışması tamamlanmamalıdır."
     }
   },
   {
@@ -272,7 +311,18 @@
         "Kırılabilir ürün ambalajı kontrol edilmelidir.",
         "Sabitleme / lashing ihtiyacı değerlendirilmelidir.",
         "İstiflenebilirlik netleştirilmelidir."
-      ]
+      ],
+      "missing_info_fields": [
+        "fragile packaging type",
+        "fragile stackability",
+        "fragile lashing requirement"
+      ],
+      "critical_missing_info_fields": [
+        "fragile packaging type",
+        "fragile stackability",
+        "fragile lashing requirement"
+      ],
+      "missing_info_reason": "Cam / kırılabilir ürünlerde ambalaj, istiflenebilirlik ve sabitleme ihtiyacı netleşmeden fiyat çalışması tamamlanmamalıdır."
     }
   },
   {
