@@ -1333,3 +1333,59 @@ Mevcut pharma regression testine action checklist beklentileri eklenmiştir.
 * Pharma yükleri için sıcaklık, belge ve özel taşıma şartları checklist’e otomatik eklenir.
 * Mevcut test sayısı korunmuştur.
 * Test suite 15 test ile başarılı çalışmıştır.
+## DEC-048 — UI Action Recommendation Checklist Display v1
+
+**Status:** Accepted
+**Date:** 2026-07-02
+
+### Decision
+
+MINAI Streamlit UI içinde action recommendation ve operasyonel kontrol maddelerinin görünürlüğü iyileştirilmiştir.
+
+UI artık action checklist’i daha belirgin şekilde gösterir ve checklist’in genel operasyon maddeleri ile commodity profile kaynaklı ürün özel kontrollerini birlikte içerdiğini açıklar.
+
+Ayrıca eksik bilgi alanları internal field code olarak değil, operasyoncu ve müşteri tarafından anlaşılır Türkçe karşılıklarla gösterilir.
+
+### Rationale
+
+Backend action recommendation içinde ürün tipine özel checklist maddeleri üretilse bile, UI bu bilgileri açık ve operasyonel olarak görünür sunmazsa operasyoncu önemli kontrolleri kaçırabilir.
+
+Özellikle aşağıdaki alanların UI’da net görünmesi gerekir:
+
+```text id="9gkr39"
+Aksiyon tipi
+Öncelik
+Operasyon kontrol listesi
+Commodity-specific checklist maddeleri
+Risk nedenleri
+Eksik bilgi alanları
+Missing info reason
+```
+
+Bu nedenle UI, backend’in ürettiği operasyonel kararları sadece teknik JSON olarak değil, operasyoncuya doğrudan aksiyon aldıracak şekilde göstermelidir.
+
+### Implementation
+
+Güncellenen dosya:
+
+```text id="wrjexa"
+ui/app.py
+```
+
+Eklenen / iyileştirilen UI davranışları:
+
+```text id="cgjxv8"
+1. Eksik bilgi alanları Türkçe gösterilir.
+2. Missing info reason UI’da warning olarak gösterilir.
+3. Action checklist bölümü "Operasyon Kontrol Listesi" olarak güçlendirilmiştir.
+4. Checklist madde sayısı gösterilir.
+5. Risk nedenleri bölümüne açıklayıcı caption eklenmiştir.
+6. Commodity profile kaynaklı checklist maddelerinin UI’da görünürlüğü artırılmıştır.
+```
+
+### Consequences
+
+* Operasyoncu eksik bilgi alanlarını daha anlaşılır görür.
+* Commodity-specific action checklist maddeleri UI’da daha görünür hale gelir.
+* Backend’in ürettiği operasyonel refleksler kullanıcı ekranında daha iyi karşılık bulur.
+* Test suite 15 test ile başarılı çalışmıştır.

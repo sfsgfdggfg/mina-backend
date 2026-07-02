@@ -905,3 +905,40 @@ MINAI bir ürünü tanıdığında, operasyoncuya o ürün için dikkat edilmesi
 Genel checklist korunmalı, commodity-specific checklist maddeleri bu listeye eklenmelidir.
 
 Aynı madde birden fazla kaynaktan gelirse tekrar edilmemelidir.
+## RULE-056 — UI Must Surface Operational Action Items Clearly
+
+MINAI UI, backend tarafından üretilen operasyonel aksiyonları açık ve uygulanabilir şekilde göstermelidir.
+
+Action recommendation içinde yer alan checklist maddeleri operasyoncu için görünür olmalıdır.
+
+UI şu bilgileri net göstermelidir:
+
+```text id="e7de67"
+Aksiyon tipi
+Öncelik
+Aksiyon kaynağı
+Operasyon kontrol listesi
+Risk nedenleri
+Eksik bilgi alanları
+Eksik bilgi nedeni
+```
+
+Eksik bilgi alanları internal field code olarak gösterilmemelidir.
+
+Örnek yanlış gösterim:
+
+```text id="b7tibg"
+pharma temperature requirement
+pharma compliance document
+```
+
+Örnek doğru gösterim:
+
+```text id="abb82g"
+İlaç / pharma yükü için sıcaklık gereksinimi
+İlaç / pharma uygunluk veya ruhsat belgeleri
+```
+
+Commodity profile kaynaklı checklist maddeleri genel checklist içinde kaybolmamalıdır. UI, bu listenin hem genel operasyon kontrollerini hem de ürün tipine özel kontrolleri içerdiğini açıkça belirtmelidir.
+
+Bu kuralın amacı, MINAI’nin operasyonel kararlarını sadece backend çıktısı olarak üretmesini değil, operasyoncunun günlük iş akışında kullanabileceği şekilde görünür kılmasını sağlamaktır.
