@@ -71,6 +71,37 @@ def build_route_text(shipment: dict) -> str:
     return "Güzergah net değil"
 
 
+
+def translate_missing_field_for_ui(field: str) -> str:
+    mapping = {
+        "pickup location": "Yükleme adresi / yükleme bölgesi",
+        "delivery location": "Teslimat adresi / teslimat bölgesi",
+        "commodity": "Ürün cinsi",
+        "cargo ready date": "Yük hazır tarihi",
+        "machine dimensions": "Makine ölçüleri (en / boy / yükseklik)",
+        "msds/sds document": "MSDS/SDS belgesi",
+        "adr status": "Yükün ADR kapsamında olup olmadığı",
+        "chemical packaging type": "Kimyasal ürünün ambalaj tipi ve ambalaj uygunluğu",
+        "frozen temperature requirement": "Dondurulmuş ürün için gerekli sıcaklık derecesi",
+        "reefer confirmation": "Reefer araç gereksiniminin teyidi",
+        "cold chain sensitivity": "Ürünün soğuk zincir hassasiyeti",
+        "pharma temperature requirement": "İlaç / pharma yükü için sıcaklık gereksinimi",
+        "pharma compliance document": "İlaç / pharma uygunluk veya ruhsat belgeleri",
+        "pharma special transport requirements": "İlaç / pharma özel taşıma şartları",
+        "medical product type": "Medikal ürün tipi ve kullanım amacı",
+        "medical compliance document": "Medikal ürün uygunluk / belge gereklilikleri",
+        "medical temperature sensitivity": "Medikal ürünün sıcaklık hassasiyeti olup olmadığı",
+        "fragile packaging type": "Kırılabilir ürün ambalaj tipi",
+        "fragile stackability": "Ürünün istiflenebilir olup olmadığı",
+        "fragile lashing requirement": "Sabitleme / lashing gerekip gerekmediği",
+        "electronic cargo value": "Elektronik ürün yaklaşık değeri",
+        "electronic packaging sensitivity": "Elektronik ürün ambalajı ve darbe hassasiyeti",
+        "secure transport requirement": "Güvenli taşıma / kapalı kasa ihtiyacı",
+    }
+
+    return mapping.get(field, field)
+
+
 def render_customer_memory(customer_memory: dict):
     if not customer_memory:
         return
@@ -136,7 +167,12 @@ def render_action_recommendation(action: dict):
 
     checklist = action.get("checklist") or []
     if checklist:
-        st.markdown("### Kontrol Listesi")
+        st.markdown("### Operasyon Kontrol Listesi")
+        st.caption(
+            "Bu liste genel operasyon kontrollerini ve varsa ürün tipine özel commodity profile kontrollerini birlikte gösterir."
+        )
+
+        st.metric("Checklist Maddesi", len(checklist))
 
         for index, item in enumerate(checklist, start=1):
             st.checkbox(
@@ -204,14 +240,21 @@ def render_summary(result: dict):
     risk_reasons = risk.get("risk_reasons") or []
     if risk_reasons:
         st.markdown("### Risk Nedenleri")
+        st.caption("Bu maddeler risk engine ve commodity profile tarafından üretilen operasyonel uyarılardır.")
+
         for reason in risk_reasons:
             st.write(f"- {reason}")
 
     missing_fields = missing.get("missing_fields") or []
     if missing_fields:
         st.markdown("### Eksik Bilgiler")
+
+        missing_reason = missing.get("reason")
+        if missing_reason:
+            st.warning(missing_reason)
+
         for field in missing_fields:
-            st.write(f"- {field}")
+            st.write(f"- {translate_missing_field_for_ui(field)}")
 
     render_customer_memory(customer_memory)
     render_action_recommendation(action_recommendation)
