@@ -1,3 +1,6 @@
+from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
+
+
 def determine_result_type(result: dict) -> str:
     if result.get("management_review_draft"):
         return "management_review"
@@ -236,6 +239,20 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
     return {
         "name": test_case["name"],
         "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_commodity_dictionary_validation() -> dict:
+    validation_result = validate_commodity_dictionary_file()
+    failures = []
+
+    for error in validation_result.get("errors", []):
+        failures.append(error)
+
+    return {
+        "name": "Commodity dictionary validation",
+        "passed": validation_result.get("valid") is True,
         "failures": failures,
     }
 

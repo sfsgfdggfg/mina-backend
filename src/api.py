@@ -17,7 +17,7 @@ from src.core.customer_memory import (
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result
+from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation
 
 
 app = FastAPI(
@@ -441,6 +441,7 @@ def validate_customer_memory_import(
 @app.get("/run-test-suite")
 def run_test_suite():
     test_results = []
+    test_results.append(evaluate_commodity_dictionary_validation())
 
     for test_case in AI_EMAIL_TEST_CASES:
         shipment = parse_email_with_ai(test_case["email"])
