@@ -1141,3 +1141,40 @@ Supplier capability validation test suite içinde çalışmalıdır.
 Supplier capability matrix invalid ise test suite fail vermelidir.
 
 Bu kuralın amacı, MINAI’nin supplier selection kararlarının sessiz veri hatalarıyla bozulmasını engellemektir.
+## RULE-062 — Supplier Data Health Must Be Visible in UI
+
+MINAI’de supplier capability matrix sağlığı UI üzerinden görülebilir olmalıdır.
+
+`data/supplier_capabilities.json` dosyası operasyonel supplier seçim datası içerir.
+
+Bu data şu alanları etkiler:
+
+```text
+Supplier selection
+Route capability
+Equipment capability
+Risk fit
+Supplier quote simulation
+Operational consistency checks
+UI supplier selection display
+```
+
+Bu nedenle supplier data health paneli şu bilgileri göstermelidir:
+
+```text
+Supplier sayısı
+Active supplier sayısı
+FTL coverage
+LTL coverage
+Reefer coverage
+ADR coverage
+Validation errors
+Validation warnings
+Raw validation result
+```
+
+Supplier data health paneli varsayılan olarak read-only olmalıdır.
+
+Supplier ekleme, supplier silme, skor değiştirme veya capability edit etme özellikleri ayrı task olarak ele alınmalı ve açıkça onaylanmalıdır.
+
+Bu kuralın amacı, supplier selection kararlarını etkileyen veri sağlığını görünür yapmak ve operasyonel data bozulmalarını erken yakalamaktır.

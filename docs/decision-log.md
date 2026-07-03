@@ -1789,3 +1789,87 @@ Bu test supplier capability matrix invalid olduğunda fail verir.
 * Eksik FTL coverage gibi kritik hatalar testlerde yakalanır.
 * LTL, Reefer ve ADR coverage eksiklikleri warning olarak görülebilir.
 * Test suite 17 teste çıkmıştır.
+## DEC-054 — Supplier Capability Validation UI v1
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Decision
+
+Supplier capability matrix validation sonucunun UI üzerinden görüntülenmesine karar verilmiştir.
+
+Yeni UI paneli:
+
+```text
+Data Sağlığı / Supplier Capability Matrix
+```
+
+Bu panel sadece okuma amaçlıdır.
+
+Panel şu bilgileri gösterir:
+
+```text
+Valid / invalid durumu
+Supplier sayısı
+Active supplier sayısı
+Active FTL supplier sayısı
+Active LTL supplier sayısı
+Active Reefer supplier sayısı
+Active ADR supplier sayısı
+Hata sayısı
+Uyarı sayısı
+Validation source
+Hata detayları
+Uyarı detayları
+Raw validation result
+```
+
+API tarafına yeni endpoint eklenmiştir:
+
+```text
+GET /supplier-capabilities/validation
+```
+
+### Rationale
+
+Supplier capability matrix, supplier selection engine için kritik operasyonel data kaynağıdır.
+
+Bu data şu alanları etkiler:
+
+```text
+Supplier selection
+Route fit
+Equipment fit
+Risk fit
+Supplier quote simulation
+Operational consistency checks
+UI supplier selection display
+```
+
+Bu nedenle supplier datasının sağlığı yalnızca terminal testlerinde değil, UI üzerinden de görülebilmelidir.
+
+Operasyoncu veya proje yöneticisi supplier coverage durumunu kod açmadan kontrol edebilmelidir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+src/api.py
+ui/app.py
+```
+
+API tarafında supplier capability validator sonucu endpoint olarak açılmıştır.
+
+UI tarafında “Data Sağlığı / Supplier Capability Matrix” paneli eklenmiştir.
+
+Panel şu anda supplier datasını edit etmez. Sadece validator sonucunu gösterir.
+
+### Consequences
+
+* Supplier capability matrix sağlığı UI üzerinden izlenebilir.
+* FTL / LTL / Reefer / ADR coverage durumu görünür hale gelir.
+* Supplier datasındaki hata ve uyarılar teknik olmayan kullanıcıya daha anlaşılır şekilde gösterilir.
+* Data health kontrolü test suite dışında da erişilebilir olur.
+* Supplier edit yetkisi bilinçli olarak eklenmemiştir.
+* UI paneli read-only kalır.
