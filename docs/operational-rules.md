@@ -1083,3 +1083,61 @@ Operasyonel data bozulmalarını erken fark etmek
 Edit, import, delete veya otomatik düzeltme özellikleri ayrı task olarak ele alınmalı ve açıkça onaylanmalıdır.
 
 Bu kuralın amacı, operasyonel karar datasının yanlışlıkla UI üzerinden bozulmasını engellemektir.
+## RULE-061 — Supplier Capability Matrix Must Be Validated
+
+MINAI supplier capability matrix datası otomatik validation olmadan büyütülmemelidir.
+
+`data/supplier_capabilities.json` dosyası operasyonel supplier seçim datası içerir.
+
+Bu data şu alanları etkiler:
+
+```text
+Supplier selection
+Route fit
+Equipment fit
+Risk fit
+Supplier quote simulation
+Operational consistency checks
+UI supplier selection display
+```
+
+Bu nedenle supplier datasına yeni kayıt, rota, ekipman, servis tipi veya skor eklenirken validator temiz geçmelidir.
+
+Validator şu dosyada tutulur:
+
+```text
+src/core/supplier_capability_validator.py
+```
+
+Validation kuralları en az şunları kontrol etmelidir:
+
+```text
+supplier_name dolu olmalı.
+supplier_name duplicate olmamalı.
+active boolean olmalı.
+role geçerli değerlerden biri olmalı.
+route_regions liste olmalı.
+countries liste olmalı.
+service_types liste olmalı.
+equipment_types liste olmalı.
+special_capabilities liste olmalı.
+priority_routes liste olmalı.
+reliability_score, price_score ve speed_score 0-1 aralığında sayı olmalı.
+notes dolu string olmalı.
+En az bir active supplier bulunmalı.
+En az bir active FTL supplier bulunmalı.
+```
+
+Coverage eksiklikleri ayrıca warning olarak raporlanmalıdır:
+
+```text
+LTL coverage yoksa warning.
+Reefer coverage yoksa warning.
+ADR coverage yoksa warning.
+```
+
+Supplier capability validation test suite içinde çalışmalıdır.
+
+Supplier capability matrix invalid ise test suite fail vermelidir.
+
+Bu kuralın amacı, MINAI’nin supplier selection kararlarının sessiz veri hatalarıyla bozulmasını engellemektir.

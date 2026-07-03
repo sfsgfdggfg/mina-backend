@@ -1697,3 +1697,95 @@ Panel şu anda dictionary edit etmez. Sadece validator sonucunu gösterir.
 * Data health kontrolü test suite dışında da erişilebilir olur.
 * Dictionary edit yetkisi bilinçli olarak eklenmemiştir.
 * UI paneli read-only kalır.
+## DEC-053 — Supplier Capability Matrix Validator v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+Supplier capability matrix datası için otomatik validation mekanizması eklenmiştir.
+
+Yeni validator:
+
+```text
+src/core/supplier_capability_validator.py
+```
+
+Validator, `data/supplier_capabilities.json` dosyasının yapısal olarak doğru kalmasını kontrol eder.
+
+İlk validation kapsamı:
+
+```text
+supplier_name boş olamaz.
+duplicate supplier_name olamaz.
+active boolean olmalıdır.
+role geçerli değerlerden biri olmalıdır.
+route_regions liste olmalıdır.
+countries liste olmalıdır.
+service_types liste olmalıdır.
+equipment_types liste olmalıdır.
+special_capabilities liste olmalıdır.
+priority_routes liste olmalıdır.
+reliability_score sayı olmalı ve 0-1 aralığında olmalıdır.
+price_score sayı olmalı ve 0-1 aralığında olmalıdır.
+speed_score sayı olmalı ve 0-1 aralığında olmalıdır.
+notes boş olmayan string olmalıdır.
+En az bir active supplier bulunmalıdır.
+En az bir active FTL supplier bulunmalıdır.
+LTL, Reefer ve ADR coverage eksikliği warning olarak raporlanır.
+```
+
+Validator test suite akışına bağlanmıştır.
+
+### Rationale
+
+Supplier capability matrix, supplier selection engine için operasyonel karar datasıdır.
+
+Bu dosya şu kararları etkiler:
+
+```text
+Supplier selection
+Route capability
+Equipment fit
+Risk fit
+Price / speed scoring
+Quote supplier consistency
+Operational consistency checks
+```
+
+Bu nedenle supplier datasında yapılacak eksik veya hatalı bir kayıt, yanlış supplier seçimine veya yanlış operasyonel uyarıya yol açabilir.
+
+Supplier datası büyüdükçe manuel kontrol yeterli değildir. Otomatik validation gerekir.
+
+### Implementation
+
+Yeni dosya:
+
+```text
+src/core/supplier_capability_validator.py
+```
+
+Güncellenen dosyalar:
+
+```text
+src/simulation/test_reporter.py
+src/workflow/pipeline.py
+src/api.py
+```
+
+Test suite içine yeni validation testi eklenmiştir:
+
+```text
+Supplier capability validation
+```
+
+Bu test supplier capability matrix invalid olduğunda fail verir.
+
+### Consequences
+
+* Supplier capability matrix veri kalitesi otomatik kontrol edilir.
+* Supplier selection engine için kritik data daha güvenli hale gelir.
+* Eksik FTL coverage gibi kritik hatalar testlerde yakalanır.
+* LTL, Reefer ve ADR coverage eksiklikleri warning olarak görülebilir.
+* Test suite 17 teste çıkmıştır.
