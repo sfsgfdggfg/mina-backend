@@ -975,3 +975,36 @@ Profile-driven missing info alanları kritik ise UI’da açıkça ayrıştırı
 Bu kuralın amacı, MINAI’nin ürün tipine göre verdiği operasyonel refleksleri kullanıcıya görünür kılmaktır.
 
 Operasyoncu yalnızca “sarı risk” veya “eksik bilgi” sonucu görmemeli; bu sonucun hangi commodity profile’dan kaynaklandığını da anlayabilmelidir.
+## RULE-058 — API Responses Must Preserve UI-Critical Operational Profile Data
+
+MINAI API response’ları, UI’ın operasyonel kararları göstermek için ihtiyaç duyduğu kritik datayı korumalıdır.
+
+`commodity_profile` UI açısından kritik bir response alanıdır.
+
+Bu alan şu bilgileri içerebilmelidir:
+
+```text
+canonical_commodity
+notes
+operational_profile
+risk_reason
+missing_info_fields
+critical_missing_info_fields
+action_checklist
+```
+
+UI’da gösterilen commodity profile paneli bu dataya bağlıdır.
+
+Bu nedenle `commodity_profile` alanı API response içinden kaldırılmamalı veya eksik döndürülmemelidir.
+
+Yeni API response değişikliklerinde şu kontrol yapılmalıdır:
+
+```text
+UI bu alanı kullanıyor mu?
+Test suite bu alanın varlığını doğruluyor mu?
+Alan eksikse operasyoncu ekranında kritik bilgi kaybolur mu?
+```
+
+Bu kuralın amacı, backend response kontratını UI’ın operasyonel ihtiyaçlarıyla uyumlu tutmaktır.
+
+MINAI’de UI-critical alanlar yalnızca teknik JSON detayı sayılmamalı; regression test ile korunmalıdır.

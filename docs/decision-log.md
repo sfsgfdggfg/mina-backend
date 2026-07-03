@@ -1459,3 +1459,76 @@ Bu fonksiyon operasyon özetinde customer memory ve action recommendation bölü
 * Commodity profile kaynaklı risk, eksik bilgi ve checklist maddeleri daha anlaşılır hale gelir.
 * Backend kararlarının nedeni UI’da daha şeffaf görünür.
 * Test suite 15 test ile başarılı çalışmıştır.
+## DEC-050 — Commodity Profile API Regression Test v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+Commodity profile bilgisinin API response ve test suite içinde regression kontrolü yapılmasına karar verilmiştir.
+
+MINAI artık API response içinde `commodity_profile` alanını döndürmektedir. Bu alan UI için kritik olduğu için test suite içinde doğrulanmalıdır.
+
+İlk regression kontrolü `İlaç / Pharma` senaryosu üzerinde yapılmıştır.
+
+Kontrol edilen başlıca alanlar:
+
+```text
+commodity_profile
+operational_profile.risk_reason
+operational_profile.missing_info_fields
+operational_profile.critical_missing_info_fields
+operational_profile.action_checklist
+```
+
+### Rationale
+
+Commodity profile artık yalnızca backend içi yardımcı data değildir.
+
+Bu yapı UI’da operasyonel profil panelini besler ve şu alanlarda karar üretir:
+
+```text
+Risk
+Missing info
+Action checklist
+Operational notes
+UI açıklamaları
+```
+
+Bu nedenle API response içinden yanlışlıkla çıkarılması veya eksik dönmesi UI davranışını bozabilir.
+
+Bu alanın test suite ile korunması gerekir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+src/workflow/pipeline.py
+src/api.py
+src/simulation/test_reporter.py
+src/simulation/ai_email_test_cases.py
+```
+
+Workflow result içine `commodity_profile` eklenmiştir.
+
+API `serialize_result` fonksiyonu result içindeki `commodity_profile` bilgisini response’a ekler.
+
+Test reporter aşağıdaki beklentileri kontrol edebilecek şekilde genişletilmiştir:
+
+```text
+commodity_profile
+commodity_profile_keys
+commodity_profile_missing_fields
+commodity_profile_action_checklist_contains
+```
+
+Pharma regression testine commodity profile beklentileri eklenmiştir.
+
+### Consequences
+
+* API response içindeki commodity profile datası regression test ile korunur.
+* UI için kritik operasyonel profil datasının kaybolması testlerde yakalanır.
+* Commodity profile panelinin backend kontratı daha güvenli hale gelir.
+* Test suite 15 test ile başarılı çalışmıştır.
