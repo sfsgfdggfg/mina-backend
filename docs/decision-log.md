@@ -1792,7 +1792,7 @@ Bu test supplier capability matrix invalid olduğunda fail verir.
 ## DEC-054 — Supplier Capability Validation UI v1
 
 **Status:** Accepted
-**Date:** 2026-06-16
+**Date:** 2026-07-03
 
 ### Decision
 
@@ -1873,3 +1873,72 @@ Panel şu anda supplier datasını edit etmez. Sadece validator sonucunu göster
 * Data health kontrolü test suite dışında da erişilebilir olur.
 * Supplier edit yetkisi bilinçli olarak eklenmemiştir.
 * UI paneli read-only kalır.
+## DEC-055 — Data Health Dashboard Consolidation v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+UI’daki data health kontrollerinin tek bir dashboard altında toplanmasına karar verilmiştir.
+
+Yeni ana bölüm:
+
+```text
+Data Sağlığı Dashboard
+```
+
+Bu dashboard şu kontrolleri sekmeler halinde gösterir:
+
+```text
+Test Suite
+Commodity Dictionary
+Supplier Capability Matrix
+```
+
+Önceki ayrı panel yapısı sadeleştirilmiştir.
+
+### Rationale
+
+MINAI UI büyüdükçe data health kontrolleri sayfa içinde dağılmaya başlamıştır.
+
+Test suite, commodity dictionary validation ve supplier capability validation aynı operasyonel amaca hizmet eder:
+
+```text
+Sistemin sağlıklı çalıştığını kontrol etmek
+Kritik data kaynaklarının bozulmadığını görmek
+Hata ve uyarıları operasyoncu / proje yöneticisi için görünür yapmak
+```
+
+Bu nedenle bu kontrollerin tek bir dashboard altında toplanması UI’ın okunabilirliğini artırır.
+
+### Implementation
+
+Güncellenen dosya:
+
+```text
+ui/app.py
+```
+
+Aşağıdaki yapı kurulmuştur:
+
+```text
+render_data_health_dashboard()
+render_test_suite_runner_content()
+render_commodity_dictionary_validation_content()
+render_supplier_capabilities_validation_content()
+```
+
+Sayfanın altındaki ayrı çağrılar yerine tek dashboard çağrısı kullanılmaktadır:
+
+```text
+render_data_health_dashboard()
+```
+
+### Consequences
+
+* UI daha düzenli hale gelmiştir.
+* Data health kontrolleri tek bölümde toplanmıştır.
+* Test suite ve validator panelleri birbirinden kopuk görünmez.
+* Yeni data health kontrolleri ileride aynı dashboard’a sekme olarak eklenebilir.
+* Dashboard read-only kalmıştır.

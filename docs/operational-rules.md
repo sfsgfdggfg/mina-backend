@@ -1178,3 +1178,31 @@ Supplier data health paneli varsayılan olarak read-only olmalıdır.
 Supplier ekleme, supplier silme, skor değiştirme veya capability edit etme özellikleri ayrı task olarak ele alınmalı ve açıkça onaylanmalıdır.
 
 Bu kuralın amacı, supplier selection kararlarını etkileyen veri sağlığını görünür yapmak ve operasyonel data bozulmalarını erken yakalamaktır.
+## RULE-063 — Data Health Checks Should Be Grouped in One UI Area
+
+MINAI’de data health kontrolleri UI içinde dağınık halde tutulmamalıdır.
+
+Test suite, dictionary validation, supplier matrix validation ve benzeri sağlık kontrolleri mümkün olduğunca tek bir ana bölüm altında gruplanmalıdır.
+
+Varsayılan ana bölüm:
+
+```text
+Data Sağlığı Dashboard
+```
+
+Bu dashboard şu tür kontrolleri içerebilir:
+
+```text
+Automated test suite
+Commodity dictionary validation
+Supplier capability validation
+Customer memory validation
+HS / GTIP mapping validation
+Future data source health checks
+```
+
+Yeni data health kontrolü eklendiğinde önce mevcut dashboard’a yeni sekme olarak eklenmesi düşünülmelidir.
+
+Ayrı sayfa veya ayrı panel ancak açık ihtiyaç varsa tercih edilmelidir.
+
+Bu kuralın amacı, UI’ın büyüdükçe dağılmasını engellemek ve operasyonel sağlık kontrollerini tek merkezde görünür tutmaktır.
