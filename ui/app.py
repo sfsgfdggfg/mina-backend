@@ -102,6 +102,74 @@ def translate_missing_field_for_ui(field: str) -> str:
     return mapping.get(field, field)
 
 
+def render_commodity_profile(commodity_profile: dict):
+    if not commodity_profile:
+        return
+
+    commodity = commodity_profile.get("canonical_commodity") or "-"
+    profile = commodity_profile.get("operational_profile") or {}
+    notes = commodity_profile.get("notes") or []
+    operational_notes = profile.get("operational_notes") or []
+    missing_info_fields = profile.get("missing_info_fields") or []
+    critical_missing_fields = profile.get("critical_missing_info_fields") or []
+    action_checklist = profile.get("action_checklist") or []
+
+    st.markdown("### Commodity Profile / Operasyonel Profil")
+    st.info(f"Ürün profili: {commodity}")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            "Human Review",
+            "Evet" if profile.get("requires_human_review") else "Hayır",
+        )
+
+    with col2:
+        st.metric(
+            "Reefer",
+            "Evet" if profile.get("requires_reefer") else "Hayır",
+        )
+
+    with col3:
+        st.metric(
+            "High Value",
+            "Evet" if profile.get("high_value_candidate") else "Hayır",
+        )
+
+    if profile.get("default_equipment") or profile.get("default_temperature_requirement"):
+        st.markdown("**Profil Varsayılanları:**")
+        if profile.get("default_equipment"):
+            st.write(f"- Varsayılan ekipman: {profile.get('default_equipment')}")
+        if profile.get("default_temperature_requirement"):
+            st.write(f"- Varsayılan sıcaklık: {profile.get('default_temperature_requirement')}")
+
+    if profile.get("risk_reason"):
+        st.markdown("**Risk Profili:**")
+        st.warning(profile.get("risk_reason"))
+
+    if notes or operational_notes:
+        st.markdown("**Operasyon Notları:**")
+        for note in notes:
+            st.write(f"- {note}")
+        for note in operational_notes:
+            st.write(f"- {note}")
+
+    if missing_info_fields:
+        st.markdown("**Profile Kaynaklı Eksik Bilgiler:**")
+        for field in missing_info_fields:
+            label = translate_missing_field_for_ui(field)
+            if field in critical_missing_fields:
+                st.write(f"- 🔴 {label}")
+            else:
+                st.write(f"- 🟡 {label}")
+
+    if action_checklist:
+        st.markdown("**Profile Action Checklist:**")
+        for item in action_checklist:
+            st.write(f"- {item}")
+
+
 def render_customer_memory(customer_memory: dict):
     if not customer_memory:
         return
@@ -188,6 +256,7 @@ def render_summary(result: dict):
     risk = result.get("risk_assessment") or {}
     missing = result.get("missing_info") or {}
     customer_memory = result.get("customer_memory") or {}
+    commodity_profile = result.get("commodity_profile") or {}
     action_recommendation = result.get("action_recommendation") or {}
 
     result_type = result.get("result_type")
@@ -256,6 +325,7 @@ def render_summary(result: dict):
         for field in missing_fields:
             st.write(f"- {translate_missing_field_for_ui(field)}")
 
+    render_commodity_profile(commodity_profile)
     render_customer_memory(customer_memory)
     render_action_recommendation(action_recommendation)
 

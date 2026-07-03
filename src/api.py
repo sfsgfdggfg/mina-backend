@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
+from src.core.commodity_profile import get_commodity_record
 from src.core.customer_memory import (
     CustomerMemoryProfile,
     load_customer_memory,
@@ -589,6 +590,7 @@ def serialize_result(result: dict) -> dict:
     management_review_draft = result.get("management_review_draft")
     customer_memory = result.get("customer_memory")
     action_recommendation = result.get("action_recommendation")
+    commodity_profile = get_commodity_record(shipment.commodity) if shipment else None
 
     return {
         "shipment": shipment.model_dump() if shipment else None,
@@ -602,6 +604,7 @@ def serialize_result(result: dict) -> dict:
         "clarification_draft": clarification_draft.model_dump() if clarification_draft else None,
         "management_review_draft": management_review_draft.model_dump() if management_review_draft else None,
         "customer_memory": customer_memory.model_dump() if customer_memory else None,
+        "commodity_profile": commodity_profile,
         "result_type": determine_result_type(result),
         "action_recommendation": action_recommendation.model_dump() if action_recommendation else None,
     }
