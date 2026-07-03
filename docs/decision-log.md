@@ -2114,3 +2114,90 @@ Panel şu anda customer memory datasını edit etmez. Sadece validator sonucunu 
   * Supplier Capability Matrix
   * Customer Memory
 * Panel read-only kalır.
+## DEC-058 — HS / GTIP Mapping Validator v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+HS / GTIP commodity mapping datası için otomatik validation mekanizması eklenmiştir.
+
+Yeni validator:
+
+```text id="n8ubt6"
+src/core/hs_commodity_map_validator.py
+```
+
+Validator, `data/hs_commodity_map.json` dosyasının yapısal olarak doğru kalmasını kontrol eder.
+
+İlk validation kapsamı:
+
+```text id="t2aizw"
+Root yapı dict / object olmalıdır.
+En az bir mapping bulunmalıdır.
+HS kodları yalnızca rakamlardan oluşmalıdır.
+HS kod uzunluğu 2, 4 veya 6 karakter olmalıdır.
+Duplicate HS code key yakalanmalıdır.
+commodity_group boş olamaz.
+notes varsa liste olmalıdır.
+notes içindeki her madde boş olmayan string olmalıdır.
+Heading / subheading kayıtlarında parent chapter veya heading eksikse warning üretilir.
+commodity_group, commodity dictionary canonical değerleriyle birebir eşleşmiyorsa warning üretilir.
+```
+
+Validator test suite akışına bağlanmıştır.
+
+### Rationale
+
+HS / GTIP mapping, müşterinin verdiği GTIP veya HS kodunu operasyonel commodity grubuna çevirmek için kullanılır.
+
+Bu data şu alanları etkiler:
+
+```text id="cm9n1d"
+GTIP interpretation
+Commodity classification
+GTIP / commodity consistency warning
+Operational notes
+Risk and missing information behavior
+Customer quote workflow safety
+```
+
+Bu nedenle HS / GTIP mapping içinde yapılacak bozuk kayıt, yanlış commodity yorumuna veya yanlış operasyonel uyarıya yol açabilir.
+
+HS / GTIP datası büyüdükçe manuel kontrol yeterli değildir. Otomatik validation gerekir.
+
+### Implementation
+
+Yeni dosya:
+
+```text id="u55ceu"
+src/core/hs_commodity_map_validator.py
+```
+
+Güncellenen dosyalar:
+
+```text id="6klry2"
+src/simulation/test_reporter.py
+src/workflow/pipeline.py
+src/api.py
+```
+
+Test suite içine yeni validation testi eklenmiştir:
+
+```text id="xn6q69"
+HS / GTIP commodity map validation
+```
+
+Bu test HS / GTIP mapping invalid olduğunda fail verir.
+
+Commodity dictionary ile birebir eşleşmeyen ama operasyonel grup olarak kullanılan commodity_group değerleri ilk sürümde hata değil warning olarak raporlanır.
+
+### Consequences
+
+* HS / GTIP mapping veri kalitesi otomatik kontrol edilir.
+* Hatalı HS kod formatları testlerde yakalanır.
+* Bozuk notes veya boş commodity_group testlerde yakalanır.
+* Parent chapter / heading coverage eksiklikleri warning olarak görülebilir.
+* Commodity dictionary ile birebir uyumsuz operasyonel gruplar warning olarak izlenebilir.
+* Test suite 19 teste çıkmıştır.

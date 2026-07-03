@@ -1290,3 +1290,54 @@ Customer memory data health paneli varsayılan olarak read-only olmalıdır.
 Müşteri ekleme, müşteri silme, alias değiştirme veya otomatik düzeltme özellikleri ayrı task olarak ele alınmalı ve açıkça onaylanmalıdır.
 
 Bu kuralın amacı, customer memory kaynaklı yanlış müşteri eşleşmesi ve yanlış operasyonel karar risklerini erken görünür hale getirmektir.
+## RULE-066 — HS / GTIP Mapping Must Be Validated
+
+MINAI HS / GTIP mapping datası otomatik validation olmadan büyütülmemelidir.
+
+`data/hs_commodity_map.json` dosyası müşterinin verdiği GTIP / HS kodlarını operasyonel commodity gruplarına bağlayan kritik data içerir.
+
+Bu data şu alanları etkiler:
+
+```text id="ua8gh4"
+GTIP interpretation
+Commodity classification
+GTIP consistency warning
+Operational notes
+Risk assessment
+Missing information behavior
+```
+
+Bu nedenle HS / GTIP mapping’e yeni chapter, heading veya subheading eklenirken validator temiz geçmelidir.
+
+Validator şu dosyada tutulur:
+
+```text id="m0z6mx"
+src/core/hs_commodity_map_validator.py
+```
+
+Validation kuralları en az şunları kontrol etmelidir:
+
+```text id="g4wmd7"
+Root yapı dict / object olmalı.
+En az bir mapping bulunmalı.
+HS kodları yalnızca rakamlardan oluşmalı.
+HS kod uzunluğu 2, 4 veya 6 karakter olmalı.
+commodity_group dolu olmalı.
+notes varsa liste olmalı.
+notes içindeki maddeler boş olmayan string olmalı.
+Duplicate HS code key yakalanmalı.
+```
+
+Coverage ve uyumluluk eksikleri ayrıca warning olarak raporlanmalıdır:
+
+```text id="744ycd"
+Heading kaydı varsa parent chapter yoksa warning.
+Subheading kaydı varsa parent heading veya parent chapter yoksa warning.
+commodity_group commodity dictionary canonical değerleriyle birebir eşleşmiyorsa warning.
+```
+
+HS / GTIP mapping validation test suite içinde çalışmalıdır.
+
+HS / GTIP mapping invalid ise test suite fail vermelidir.
+
+Bu kuralın amacı, MINAI’nin GTIP kaynaklı commodity yorumlarının sessiz veri hatalarıyla bozulmasını engellemektir.
