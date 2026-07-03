@@ -1,6 +1,7 @@
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
 from src.core.customer_memory_validator import validate_customer_memory_file
+from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
 
 
 def determine_result_type(result: dict) -> str:
@@ -282,6 +283,20 @@ def evaluate_customer_memory_validation() -> dict:
 
     return {
         "name": "Customer memory validation",
+        "passed": validation_result.get("valid") is True,
+        "failures": failures,
+    }
+
+
+def evaluate_hs_commodity_map_validation() -> dict:
+    validation_result = validate_hs_commodity_map_file()
+    failures = []
+
+    for error in validation_result.get("errors", []):
+        failures.append(error)
+
+    return {
+        "name": "HS / GTIP commodity map validation",
         "passed": validation_result.get("valid") is True,
         "failures": failures,
     }
