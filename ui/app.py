@@ -393,9 +393,8 @@ def render_debug(result: dict):
         st.json(result)
 
 
-def render_test_suite_runner():
-    st.markdown("---")
-    st.markdown("## Test Suite")
+def render_test_suite_runner_content():
+    st.markdown("### Test Suite")
 
     st.write(
         "MINAI'nin temel senaryolarda doğru çalışıp çalışmadığını kontrol eder."
@@ -442,9 +441,8 @@ def render_test_suite_runner():
                 st.code(str(error))
 
 
-def render_commodity_dictionary_validation_panel():
-    st.markdown("---")
-    st.markdown("## Data Sağlığı / Commodity Dictionary")
+def render_commodity_dictionary_validation_content():
+    st.markdown("### Commodity Dictionary")
 
     st.caption(
         "Commodity dictionary validation sonucu. Bu panel sadece okuma amaçlıdır; dictionary edit etmez."
@@ -506,9 +504,8 @@ def render_commodity_dictionary_validation_panel():
         st.json(result)
 
 
-def render_supplier_capabilities_validation_panel():
-    st.markdown("---")
-    st.markdown("## Data Sağlığı / Supplier Capability Matrix")
+def render_supplier_capabilities_validation_content():
+    st.markdown("### Supplier Capability Matrix")
 
     st.caption(
         "Supplier capability matrix validation sonucu. Bu panel sadece okuma amaçlıdır; supplier datasını edit etmez."
@@ -582,6 +579,32 @@ def render_supplier_capabilities_validation_panel():
 
     with st.expander("Raw Supplier Validation Result", expanded=False):
         st.json(result)
+
+
+def render_data_health_dashboard():
+    st.markdown("---")
+    st.markdown("## Data Sağlığı Dashboard")
+
+    st.caption(
+        "Test suite ve kritik operasyonel data kaynaklarının sağlığını tek yerden kontrol eder. Bu bölüm read-only'dir."
+    )
+
+    test_tab, commodity_tab, supplier_tab = st.tabs(
+        [
+            "Test Suite",
+            "Commodity Dictionary",
+            "Supplier Capability Matrix",
+        ]
+    )
+
+    with test_tab:
+        render_test_suite_runner_content()
+
+    with commodity_tab:
+        render_commodity_dictionary_validation_content()
+
+    with supplier_tab:
+        render_supplier_capabilities_validation_content()
 
 def render_customer_memory_edit_form(profile: dict):
     customer_name = profile.get("customer_name") or ""
@@ -1578,7 +1601,7 @@ if st.button("Process Email"):
                 st.code(str(error))
 
 
-render_test_suite_runner()
+render_data_health_dashboard()
 render_customer_memory_list()
 render_customer_memory_editor()
 render_customer_memory_export()
