@@ -17,6 +17,7 @@ from src.simulation.supplier_simulator import simulate_supplier_quote
 from src.core.supplier_selection import select_suppliers_for_shipment
 from src.core.operational_consistency import check_operational_consistency
 from src.core.pricing import calculate_customer_quote
+from src.core.commodity_profile import get_commodity_record
 
 
 def process_shipment(shipment, email_text: str | None = None):
@@ -25,6 +26,7 @@ def process_shipment(shipment, email_text: str | None = None):
         email_text=email_text,
     )
 
+    commodity_profile = get_commodity_record(shipment.commodity)
     missing_info = check_missing_information(shipment)
     equipment_decision = decide_equipment(shipment)
     risk_assessment = assess_risk(
@@ -64,6 +66,7 @@ def process_shipment(shipment, email_text: str | None = None):
         return {
             "shipment": shipment,
             "customer_memory": customer_memory,
+            "commodity_profile": commodity_profile,
             "missing_info": missing_info,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
@@ -94,6 +97,7 @@ def process_shipment(shipment, email_text: str | None = None):
         return {
             "shipment": shipment,
             "customer_memory": customer_memory,
+            "commodity_profile": commodity_profile,
             "missing_info": missing_info,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,

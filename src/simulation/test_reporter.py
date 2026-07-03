@@ -23,6 +23,7 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
     supplier_selection = result.get("supplier_selection")
     supplier_quote = result.get("supplier_quote")
     operational_consistency = result.get("operational_consistency")
+    commodity_profile = result.get("commodity_profile")
 
     actual_result_type = determine_result_type(result)
 
@@ -49,6 +50,63 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
         failures.append(
             f"commodity expected {expected_commodity}, got {shipment.commodity}"
         )
+
+    expected_commodity_profile = expected.get("commodity_profile")
+    if expected_commodity_profile:
+        actual_profile_commodity = (
+            commodity_profile.get("canonical_commodity")
+            if isinstance(commodity_profile, dict)
+            else None
+        )
+
+        if actual_profile_commodity != expected_commodity_profile:
+            failures.append(
+                f"commodity_profile expected {expected_commodity_profile}, got {actual_profile_commodity}"
+            )
+
+    expected_commodity_profile_keys = expected.get("commodity_profile_keys")
+    if expected_commodity_profile_keys:
+        actual_operational_profile = (
+            commodity_profile.get("operational_profile", {})
+            if isinstance(commodity_profile, dict)
+            else {}
+        )
+
+        for key in expected_commodity_profile_keys:
+            if key not in actual_operational_profile:
+                failures.append(
+                    f"commodity_profile operational_profile key expected {key}, got keys {sorted(actual_operational_profile.keys())}"
+                )
+
+    expected_commodity_profile_missing_fields = expected.get("commodity_profile_missing_fields")
+    if expected_commodity_profile_missing_fields:
+        actual_operational_profile = (
+            commodity_profile.get("operational_profile", {})
+            if isinstance(commodity_profile, dict)
+            else {}
+        )
+        actual_profile_missing_fields = actual_operational_profile.get("missing_info_fields", [])
+
+        for field in expected_commodity_profile_missing_fields:
+            if field not in actual_profile_missing_fields:
+                failures.append(
+                    f"commodity_profile missing_info field expected {field}, got {actual_profile_missing_fields}"
+                )
+
+    expected_commodity_profile_action_checklist_contains = expected.get("commodity_profile_action_checklist_contains")
+    if expected_commodity_profile_action_checklist_contains:
+        actual_operational_profile = (
+            commodity_profile.get("operational_profile", {})
+            if isinstance(commodity_profile, dict)
+            else {}
+        )
+        actual_profile_checklist = actual_operational_profile.get("action_checklist", [])
+
+        for expected_item in expected_commodity_profile_action_checklist_contains:
+            if not any(expected_item in checklist_item for checklist_item in actual_profile_checklist):
+                failures.append(
+                    f"commodity_profile action checklist item containing {expected_item} not found; got {actual_profile_checklist}"
+                )
 
     for field_name in [
         "gtip_code",

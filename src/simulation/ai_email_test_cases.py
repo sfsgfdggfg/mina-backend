@@ -320,6 +320,23 @@ Teşekkürler.
                 "Uygunluk / ruhsat belgelerini kontrol et.",
                 "Özel taşıma şartlarını netleştir."
             ],
+            "commodity_profile": "İlaç / Pharma",
+            "commodity_profile_keys": [
+                "risk_reason",
+                "missing_info_fields",
+                "critical_missing_info_fields",
+                "action_checklist"
+            ],
+            "commodity_profile_missing_fields": [
+                "pharma temperature requirement",
+                "pharma compliance document",
+                "pharma special transport requirements"
+            ],
+            "commodity_profile_action_checklist_contains": [
+                "Sıcaklık gereksinimini müşteriyle doğrula.",
+                "Uygunluk / ruhsat belgelerini kontrol et.",
+                "Özel taşıma şartlarını netleştir."
+            ],
         },
     },
 
