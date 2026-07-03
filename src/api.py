@@ -4,6 +4,7 @@ from typing import List, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
+from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.customer_memory import (
     CustomerMemoryProfile,
     load_customer_memory,
@@ -591,6 +592,11 @@ def get_commodity_dictionary_validation():
 @app.get("/supplier-capabilities/validation")
 def get_supplier_capabilities_validation():
     return validate_supplier_capabilities_file()
+
+
+@app.get("/customer-memory/validation")
+def get_customer_memory_validation():
+    return validate_customer_memory_file()
 
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]

@@ -581,6 +581,75 @@ def render_supplier_capabilities_validation_content():
         st.json(result)
 
 
+
+def render_customer_memory_validation_content():
+    st.markdown("### Customer Memory")
+
+    st.caption(
+        "Customer memory validation sonucu. Bu panel sadece okuma amaçlıdır; müşteri hafızasını edit etmez."
+    )
+
+    if not st.button("Customer Memory Kontrol Et"):
+        return
+
+    with st.spinner("Customer memory kontrol ediliyor..."):
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/customer-memory/validation",
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        except requests.exceptions.RequestException as error:
+            st.error("Customer memory validation API çağrısı başarısız oldu.")
+            st.code(str(error))
+            return
+
+    valid = result.get("valid") is True
+    errors = result.get("errors") or []
+    warnings = result.get("warnings") or []
+
+    if valid:
+        st.success("Customer memory geçerli.")
+    else:
+        st.error("Customer memory hatalı.")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Valid", "Evet" if valid else "Hayır")
+
+    with col2:
+        st.metric("Profile", result.get("profile_count", 0))
+
+    with col3:
+        st.metric("Active Profile", result.get("active_profile_count", 0))
+
+    with col4:
+        st.metric("Hata / Uyarı", f"{len(errors)} / {len(warnings)}")
+
+    alias_col1, alias_col2 = st.columns(2)
+
+    with alias_col1:
+        st.metric("Alias", result.get("alias_count", 0))
+
+    with alias_col2:
+        st.write(f"**Source:** {result.get('source') or '-'}")
+
+    if errors:
+        st.markdown("### Hatalar")
+        for error in errors:
+            st.error(error)
+
+    if warnings:
+        st.markdown("### Uyarılar")
+        for warning in warnings:
+            st.warning(warning)
+
+    with st.expander("Raw Customer Memory Validation Result", expanded=False):
+        st.json(result)
+
 def render_data_health_dashboard():
     st.markdown("---")
     st.markdown("## Data Sağlığı Dashboard")
@@ -589,11 +658,12 @@ def render_data_health_dashboard():
         "Test suite ve kritik operasyonel data kaynaklarının sağlığını tek yerden kontrol eder. Bu bölüm read-only'dir."
     )
 
-    test_tab, commodity_tab, supplier_tab = st.tabs(
+    test_tab, commodity_tab, supplier_tab, customer_memory_tab = st.tabs(
         [
             "Test Suite",
             "Commodity Dictionary",
             "Supplier Capability Matrix",
+            "Customer Memory",
         ]
     )
 
@@ -605,6 +675,9 @@ def render_data_health_dashboard():
 
     with supplier_tab:
         render_supplier_capabilities_validation_content()
+
+    with customer_memory_tab:
+        render_customer_memory_validation_content()
 
 def render_customer_memory_edit_form(profile: dict):
     customer_name = profile.get("customer_name") or ""
