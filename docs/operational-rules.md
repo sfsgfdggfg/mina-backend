@@ -1254,3 +1254,39 @@ Customer memory validation test suite içinde çalışmalıdır.
 Customer memory invalid ise test suite fail vermelidir.
 
 Bu kuralın amacı, MINAI’nin müşteri hafızası kaynaklı yanlış eşleşme ve yanlış operasyonel karar riskini azaltmaktır.
+## RULE-065 — Customer Memory Data Health Must Be Visible in UI
+
+MINAI’de customer memory data sağlığı UI üzerinden görülebilir olmalıdır.
+
+`data/customer_memory.json` dosyası müşteri tanıma ve müşteri özel operasyon kararları için kritik data içerir.
+
+Bu data şu alanları etkiler:
+
+```text id="b29j0q"
+Customer recognition
+Alias matching
+Default commodity
+Default equipment
+Default pickup / delivery information
+Price sensitivity
+Time sensitivity
+Risk assessment
+Operational notes
+```
+
+Bu nedenle customer memory data health paneli şu bilgileri göstermelidir:
+
+```text id="xwc7cr"
+Profile sayısı
+Active profile sayısı
+Alias sayısı
+Validation errors
+Validation warnings
+Raw validation result
+```
+
+Customer memory data health paneli varsayılan olarak read-only olmalıdır.
+
+Müşteri ekleme, müşteri silme, alias değiştirme veya otomatik düzeltme özellikleri ayrı task olarak ele alınmalı ve açıkça onaylanmalıdır.
+
+Bu kuralın amacı, customer memory kaynaklı yanlış müşteri eşleşmesi ve yanlış operasyonel karar risklerini erken görünür hale getirmektir.

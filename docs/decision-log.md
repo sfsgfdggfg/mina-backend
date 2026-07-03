@@ -2029,3 +2029,88 @@ Bu test customer memory invalid olduğunda fail verir.
 * Geçersiz sensitivity değerleri testlerde yakalanır.
 * Yanlış müşteri eşleşmesi riski azalır.
 * Test suite 18 teste çıkmıştır.
+## DEC-057 — Customer Memory Validation UI v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+Customer memory validation sonucunun UI üzerinden görüntülenmesine karar verilmiştir.
+
+Yeni UI sekmesi:
+
+```text id="8lkvn6"
+Data Sağlığı Dashboard → Customer Memory
+```
+
+Bu sekme sadece okuma amaçlıdır.
+
+Panel şu bilgileri gösterir:
+
+```text id="o4gh9z"
+Valid / invalid durumu
+Profile sayısı
+Active profile sayısı
+Alias sayısı
+Hata sayısı
+Uyarı sayısı
+Validation source
+Hata detayları
+Uyarı detayları
+Raw validation result
+```
+
+API tarafına yeni endpoint eklenmiştir:
+
+```text id="czl92v"
+GET /customer-memory/validation
+```
+
+### Rationale
+
+Customer memory, MINAI’nin düzenli müşterileri tanıması ve müşteri özel varsayımları uygulaması için kritik data kaynağıdır.
+
+Bu data şu alanları etkiler:
+
+```text id="uaev24"
+Customer recognition
+Alias matching
+Default commodity
+Default equipment
+Default pickup / delivery assumptions
+Risk assessment
+Missing information behavior
+Operational notes
+```
+
+Bu nedenle customer memory datasının sağlığı yalnızca test suite içinde değil, UI üzerinden de görülebilmelidir.
+
+Operasyoncu veya proje yöneticisi müşteri hafızası sağlığını kod açmadan kontrol edebilmelidir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text id="i2mpmo"
+src/api.py
+ui/app.py
+```
+
+API tarafında customer memory validator sonucu endpoint olarak açılmıştır.
+
+UI tarafında Data Sağlığı Dashboard içine “Customer Memory” sekmesi eklenmiştir.
+
+Panel şu anda customer memory datasını edit etmez. Sadece validator sonucunu gösterir.
+
+### Consequences
+
+* Customer memory sağlığı UI üzerinden izlenebilir.
+* Profile / active profile / alias sayıları görünür hale gelir.
+* Duplicate alias, invalid sensitivity veya bozuk kayıtlar UI’dan görülebilir.
+* Data health dashboard artık üç ana data kaynağını kapsar:
+
+  * Commodity Dictionary
+  * Supplier Capability Matrix
+  * Customer Memory
+* Panel read-only kalır.
