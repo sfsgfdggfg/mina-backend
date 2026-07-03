@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
+from src.core.supplier_capability_validator import validate_supplier_capabilities_file
 from src.core.customer_memory import (
     CustomerMemoryProfile,
     load_customer_memory,
@@ -584,6 +585,11 @@ def restore_customer_memory_backup(
 @app.get("/commodity-dictionary/validation")
 def get_commodity_dictionary_validation():
     return validate_commodity_dictionary_file()
+
+
+@app.get("/supplier-capabilities/validation")
+def get_supplier_capabilities_validation():
+    return validate_supplier_capabilities_file()
 
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]

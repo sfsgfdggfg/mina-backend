@@ -505,6 +505,84 @@ def render_commodity_dictionary_validation_panel():
     with st.expander("Raw Validation Result", expanded=False):
         st.json(result)
 
+
+def render_supplier_capabilities_validation_panel():
+    st.markdown("---")
+    st.markdown("## Data Sağlığı / Supplier Capability Matrix")
+
+    st.caption(
+        "Supplier capability matrix validation sonucu. Bu panel sadece okuma amaçlıdır; supplier datasını edit etmez."
+    )
+
+    if not st.button("Supplier Capability Matrix Kontrol Et"):
+        return
+
+    with st.spinner("Supplier capability matrix kontrol ediliyor..."):
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/supplier-capabilities/validation",
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        except requests.exceptions.RequestException as error:
+            st.error("Supplier capability validation API çağrısı başarısız oldu.")
+            st.code(str(error))
+            return
+
+    valid = result.get("valid") is True
+    errors = result.get("errors") or []
+    warnings = result.get("warnings") or []
+
+    if valid:
+        st.success("Supplier capability matrix geçerli.")
+    else:
+        st.error("Supplier capability matrix hatalı.")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Valid", "Evet" if valid else "Hayır")
+
+    with col2:
+        st.metric("Supplier", result.get("supplier_count", 0))
+
+    with col3:
+        st.metric("Active Supplier", result.get("active_supplier_count", 0))
+
+    with col4:
+        st.metric("Hata / Uyarı", f"{len(errors)} / {len(warnings)}")
+
+    coverage_col1, coverage_col2, coverage_col3, coverage_col4 = st.columns(4)
+
+    with coverage_col1:
+        st.metric("Active FTL", result.get("active_ftl_count", 0))
+
+    with coverage_col2:
+        st.metric("Active LTL", result.get("active_ltl_count", 0))
+
+    with coverage_col3:
+        st.metric("Active Reefer", result.get("active_reefer_count", 0))
+
+    with coverage_col4:
+        st.metric("Active ADR", result.get("active_adr_count", 0))
+
+    st.write(f"**Source:** {result.get('source') or '-'}")
+
+    if errors:
+        st.markdown("### Hatalar")
+        for error in errors:
+            st.error(error)
+
+    if warnings:
+        st.markdown("### Uyarılar")
+        for warning in warnings:
+            st.warning(warning)
+
+    with st.expander("Raw Supplier Validation Result", expanded=False):
+        st.json(result)
+
 def render_customer_memory_edit_form(profile: dict):
     customer_name = profile.get("customer_name") or ""
     active = profile.get("active", True)
