@@ -1619,3 +1619,81 @@ Bu test dictionary invalid olduğunda fail verir.
 * UI ve backend kararları için kritik data daha güvenli hale gelir.
 * Test suite 16 teste çıkmıştır.
 * Mevcut operasyonel testler korunmuştur.
+## DEC-052 — Commodity Dictionary Validation UI v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+Commodity dictionary validation sonucunun UI üzerinden görüntülenmesine karar verilmiştir.
+
+Yeni UI paneli:
+
+```text
+Data Sağlığı / Commodity Dictionary
+```
+
+Bu panel sadece okuma amaçlıdır.
+
+Panel şu bilgileri gösterir:
+
+```text
+Valid / invalid durumu
+Commodity sayısı
+Unique keyword sayısı
+Hata sayısı
+Uyarı sayısı
+Validation source
+Hata detayları
+Uyarı detayları
+Raw validation result
+```
+
+API tarafına yeni endpoint eklenmiştir:
+
+```text
+GET /commodity-dictionary/validation
+```
+
+### Rationale
+
+Commodity dictionary artık operasyonel karar datasıdır.
+
+Bu data şu alanları etkiler:
+
+```text
+Commodity recognition
+Risk assessment
+Equipment decision
+Missing information
+Action checklist
+UI commodity profile panel
+```
+
+Bu nedenle yalnızca terminal testlerinde değil, UI üzerinden de data sağlığının görülebilmesi gerekir.
+
+Operasyoncu veya proje yöneticisi dictionary sağlığını kod açmadan kontrol edebilmelidir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+src/api.py
+ui/app.py
+```
+
+API tarafında validator sonucu endpoint olarak açılmıştır.
+
+UI tarafında “Data Sağlığı / Commodity Dictionary” paneli eklenmiştir.
+
+Panel şu anda dictionary edit etmez. Sadece validator sonucunu gösterir.
+
+### Consequences
+
+* Commodity dictionary sağlığı UI üzerinden izlenebilir.
+* Validator sonucu teknik olmayan kullanıcıya daha görünür hale gelir.
+* Data health kontrolü test suite dışında da erişilebilir olur.
+* Dictionary edit yetkisi bilinçli olarak eklenmemiştir.
+* UI paneli read-only kalır.

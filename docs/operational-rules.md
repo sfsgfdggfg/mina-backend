@@ -1053,3 +1053,33 @@ Commodity dictionary validation test suite içinde çalışmalıdır.
 Dictionary invalid ise test suite fail vermelidir.
 
 Bu kuralın amacı, MINAI’nin data-driven operasyon kararlarının sessiz veri hatalarıyla bozulmasını engellemektir.
+## RULE-060 — Data Health Panels Are Read-Only Unless Explicitly Approved
+
+MINAI’de data health panelleri varsayılan olarak sadece okuma amaçlı olmalıdır.
+
+Commodity dictionary, customer memory, supplier capability matrix veya benzeri operasyonel data kaynakları UI’da gösterilebilir.
+
+Ancak bu paneller açık onay olmadan data değiştirmemelidir.
+
+Özellikle şu data kaynaklarında dikkatli olunmalıdır:
+
+```text
+data/commodity_dictionary.json
+data/supplier_capabilities.json
+customer memory profiles
+HS / GTIP mapping data
+```
+
+Read-only data health panelleri şu amaçla kullanılmalıdır:
+
+```text
+Validation sonucu göstermek
+Hata ve uyarıları görünür yapmak
+Data sayısını göstermek
+Teknik JSON preview sağlamak
+Operasyonel data bozulmalarını erken fark etmek
+```
+
+Edit, import, delete veya otomatik düzeltme özellikleri ayrı task olarak ele alınmalı ve açıkça onaylanmalıdır.
+
+Bu kuralın amacı, operasyonel karar datasının yanlışlıkla UI üzerinden bozulmasını engellemektir.
