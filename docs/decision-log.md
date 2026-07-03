@@ -1532,3 +1532,90 @@ Pharma regression testine commodity profile beklentileri eklenmiştir.
 * UI için kritik operasyonel profil datasının kaybolması testlerde yakalanır.
 * Commodity profile panelinin backend kontratı daha güvenli hale gelir.
 * Test suite 15 test ile başarılı çalışmıştır.
+## DEC-051 — Operational Profile Data Hygiene v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+Commodity dictionary ve operational profile datası için otomatik validation mekanizması eklenmiştir.
+
+Yeni validator:
+
+```text id="nnv9zd"
+src/core/commodity_dictionary_validator.py
+```
+
+Validator, `data/commodity_dictionary.json` dosyasının yapısal olarak doğru kalmasını kontrol eder.
+
+İlk validation kapsamı:
+
+```text id="a6uamw"
+canonical_commodity boş olamaz.
+keywords liste olmalı ve boş olmamalıdır.
+Aynı commodity içinde duplicate keyword olmamalıdır.
+Genel dictionary içinde duplicate keyword uyarı olarak raporlanır.
+notes varsa liste olmalıdır.
+operational_profile varsa object / dict olmalıdır.
+missing_info_fields liste olmalıdır.
+critical_missing_info_fields liste olmalıdır.
+critical_missing_info_fields içindeki her alan missing_info_fields içinde de bulunmalıdır.
+action_checklist liste olmalıdır.
+Profile boolean alanları boolean olmalıdır.
+Profile string alanları boş string olmamalıdır.
+```
+
+Validator test suite akışına bağlanmıştır.
+
+### Rationale
+
+Commodity dictionary artık yalnızca basit bir keyword listesi değildir.
+
+Bu dosya şu kararları etkiler:
+
+```text id="at8d4z"
+Commodity recognition
+Risk assessment
+Equipment decision
+Missing information
+Clarification questions
+Action recommendation checklist
+UI commodity profile panel
+```
+
+Bu nedenle dictionary içinde yapılacak hatalı veya eksik bir kayıt, sistemin operasyonel kararlarını bozabilir.
+
+Bu risk manuel kontrolle yönetilemez. Data büyüdükçe otomatik validation gereklidir.
+
+### Implementation
+
+Yeni dosya:
+
+```text id="zrejas"
+src/core/commodity_dictionary_validator.py
+```
+
+Güncellenen dosyalar:
+
+```text id="bmmgpc"
+src/simulation/test_reporter.py
+src/workflow/pipeline.py
+src/api.py
+```
+
+Test suite içine yeni validation testi eklenmiştir:
+
+```text id="r6f9co"
+Commodity dictionary validation
+```
+
+Bu test dictionary invalid olduğunda fail verir.
+
+### Consequences
+
+* Commodity dictionary veri kalitesi otomatik kontrol edilir.
+* Operational profile alanlarının hatalı girilmesi testlerde yakalanır.
+* UI ve backend kararları için kritik data daha güvenli hale gelir.
+* Test suite 16 teste çıkmıştır.
+* Mevcut operasyonel testler korunmuştur.

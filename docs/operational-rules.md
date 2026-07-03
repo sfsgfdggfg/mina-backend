@@ -1008,3 +1008,48 @@ Alan eksikse operasyoncu ekranında kritik bilgi kaybolur mu?
 Bu kuralın amacı, backend response kontratını UI’ın operasyonel ihtiyaçlarıyla uyumlu tutmaktır.
 
 MINAI’de UI-critical alanlar yalnızca teknik JSON detayı sayılmamalı; regression test ile korunmalıdır.
+## RULE-059 — Commodity Dictionary Must Be Validated
+
+MINAI commodity dictionary datası otomatik validation olmadan büyütülmemelidir.
+
+`data/commodity_dictionary.json` dosyası operasyonel karar datası içerir ve şu alanları etkiler:
+
+```text id="o9jm5u"
+Commodity recognition
+Risk assessment
+Equipment decision
+Missing information
+Clarification draft
+Action recommendation checklist
+UI commodity profile panel
+```
+
+Bu nedenle dictionary’ye yeni ürün, keyword veya operational profile eklenirken validator temiz geçmelidir.
+
+Validator şu dosyada tutulur:
+
+```text id="mndn6l"
+src/core/commodity_dictionary_validator.py
+```
+
+Validation kuralları en az şunları kontrol etmelidir:
+
+```text id="gitpas"
+canonical_commodity dolu olmalı.
+keywords liste olmalı ve boş olmamalı.
+Aynı commodity içinde duplicate keyword olmamalı.
+notes liste olmalı.
+operational_profile dict olmalı.
+missing_info_fields liste olmalı.
+critical_missing_info_fields liste olmalı.
+critical_missing_info_fields içindeki alanlar missing_info_fields içinde de yer almalı.
+action_checklist liste olmalı.
+Boolean profile alanları boolean olmalı.
+String profile alanları boş olmamalı.
+```
+
+Commodity dictionary validation test suite içinde çalışmalıdır.
+
+Dictionary invalid ise test suite fail vermelidir.
+
+Bu kuralın amacı, MINAI’nin data-driven operasyon kararlarının sessiz veri hatalarıyla bozulmasını engellemektir.
