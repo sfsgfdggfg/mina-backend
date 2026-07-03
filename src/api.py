@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from src.core.commodity_profile import get_commodity_record
+from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
 from src.core.customer_memory import (
     CustomerMemoryProfile,
     load_customer_memory,
@@ -577,6 +578,11 @@ def restore_customer_memory_backup(
         "message": "Customer memory restored successfully.",
         "result": result,
     }
+
+
+@app.get("/commodity-dictionary/validation")
+def get_commodity_dictionary_validation():
+    return validate_commodity_dictionary_file()
 
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]

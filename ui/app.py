@@ -441,6 +441,70 @@ def render_test_suite_runner():
                 st.error("Test suite API çağrısı başarısız oldu.")
                 st.code(str(error))
 
+
+def render_commodity_dictionary_validation_panel():
+    st.markdown("---")
+    st.markdown("## Data Sağlığı / Commodity Dictionary")
+
+    st.caption(
+        "Commodity dictionary validation sonucu. Bu panel sadece okuma amaçlıdır; dictionary edit etmez."
+    )
+
+    if not st.button("Commodity Dictionary Kontrol Et"):
+        return
+
+    with st.spinner("Commodity dictionary kontrol ediliyor..."):
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/commodity-dictionary/validation",
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        except requests.exceptions.RequestException as error:
+            st.error("Commodity dictionary validation API çağrısı başarısız oldu.")
+            st.code(str(error))
+            return
+
+    valid = result.get("valid") is True
+    errors = result.get("errors") or []
+    warnings = result.get("warnings") or []
+
+    if valid:
+        st.success("Commodity dictionary geçerli.")
+    else:
+        st.error("Commodity dictionary hatalı.")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Valid", "Evet" if valid else "Hayır")
+
+    with col2:
+        st.metric("Commodity", result.get("commodity_count", 0))
+
+    with col3:
+        st.metric("Keyword", result.get("unique_keyword_count", 0))
+
+    with col4:
+        st.metric("Hata / Uyarı", f"{len(errors)} / {len(warnings)}")
+
+    st.write(f"**Source:** {result.get('source') or '-'}")
+
+    if errors:
+        st.markdown("### Hatalar")
+        for error in errors:
+            st.error(error)
+
+    if warnings:
+        st.markdown("### Uyarılar")
+        for warning in warnings:
+            st.warning(warning)
+
+    with st.expander("Raw Validation Result", expanded=False):
+        st.json(result)
+
 def render_customer_memory_edit_form(profile: dict):
     customer_name = profile.get("customer_name") or ""
     active = profile.get("active", True)
