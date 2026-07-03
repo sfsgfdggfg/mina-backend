@@ -1206,3 +1206,51 @@ Yeni data health kontrolü eklendiğinde önce mevcut dashboard’a yeni sekme o
 Ayrı sayfa veya ayrı panel ancak açık ihtiyaç varsa tercih edilmelidir.
 
 Bu kuralın amacı, UI’ın büyüdükçe dağılmasını engellemek ve operasyonel sağlık kontrollerini tek merkezde görünür tutmaktır.
+## RULE-064 — Customer Memory Must Be Validated
+
+MINAI customer memory datası otomatik validation olmadan büyütülmemelidir.
+
+`data/customer_memory.json` dosyası müşteri tanıma ve müşteri özel operasyon kararları için kritik data içerir.
+
+Bu data şu alanları etkiler:
+
+```text id="dwjlls"
+Customer recognition
+Alias matching
+Default commodity
+Default equipment
+Default pickup / delivery information
+Price sensitivity
+Time sensitivity
+Risk assessment
+Operational notes
+```
+
+Bu nedenle customer memory’ye yeni müşteri, alias veya varsayılan operasyon bilgisi eklenirken validator temiz geçmelidir.
+
+Validator şu dosyada tutulur:
+
+```text id="i56wde"
+src/core/customer_memory_validator.py
+```
+
+Validation kuralları en az şunları kontrol etmelidir:
+
+```text id="d97c4d"
+customer_name dolu olmalı.
+customer_name duplicate olmamalı.
+active boolean olmalı.
+aliases liste olmalı.
+Aynı müşteri içinde duplicate alias olmamalı.
+Aynı alias iki farklı müşteri tarafından kullanılmamalı.
+Alias başka bir customer_name ile çakışmamalı.
+price_sensitivity geçerli değerlerden biri olmalı.
+time_sensitivity geçerli değerlerden biri olmalı.
+operational_notes liste olmalı.
+```
+
+Customer memory validation test suite içinde çalışmalıdır.
+
+Customer memory invalid ise test suite fail vermelidir.
+
+Bu kuralın amacı, MINAI’nin müşteri hafızası kaynaklı yanlış eşleşme ve yanlış operasyonel karar riskini azaltmaktır.

@@ -1942,3 +1942,90 @@ render_data_health_dashboard()
 * Test suite ve validator panelleri birbirinden kopuk görünmez.
 * Yeni data health kontrolleri ileride aynı dashboard’a sekme olarak eklenebilir.
 * Dashboard read-only kalmıştır.
+## DEC-056 — Customer Memory Validation v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+Customer memory datası için otomatik validation mekanizması eklenmiştir.
+
+Yeni validator:
+
+```text id="e8cmf3"
+src/core/customer_memory_validator.py
+```
+
+Validator, `data/customer_memory.json` dosyasının yapısal olarak doğru kalmasını kontrol eder.
+
+İlk validation kapsamı:
+
+```text id="hc3pne"
+customer_name boş olamaz.
+duplicate customer_name olamaz.
+active boolean olmalıdır.
+aliases liste olmalıdır.
+Aynı profile içinde duplicate alias olamaz.
+Aynı alias iki farklı müşteride kullanılamaz.
+Alias başka bir customer_name ile çakışamaz.
+price_sensitivity sadece low / medium / high / boş olabilir.
+time_sensitivity sadece low / medium / high / boş olabilir.
+default_equipment_type bilinen ekipman listesine göre kontrol edilir.
+operational_notes liste olmalıdır.
+Opsiyonel string alanları string veya null olmalıdır.
+```
+
+Validator test suite akışına bağlanmıştır.
+
+### Rationale
+
+Customer memory, MINAI’nin düzenli müşterileri doğru tanıması ve eksik bilgileri tekrar tekrar istememesi için kritik data kaynağıdır.
+
+Bu data şu alanları etkiler:
+
+```text id="lmrpic"
+Customer recognition
+Default commodity
+Default equipment
+Default pickup / delivery assumptions
+Risk assessment
+Missing information behavior
+Customer-specific operational notes
+```
+
+Bu nedenle customer memory içinde yapılacak bozuk kayıt, duplicate alias veya geçersiz değerler yanlış müşteri eşleşmesine ve yanlış operasyonel karara yol açabilir.
+
+Customer memory büyüdükçe manuel kontrol yeterli değildir. Otomatik validation gerekir.
+
+### Implementation
+
+Yeni dosya:
+
+```text id="x6mytw"
+src/core/customer_memory_validator.py
+```
+
+Güncellenen dosyalar:
+
+```text id="vwbccj"
+src/simulation/test_reporter.py
+src/workflow/pipeline.py
+src/api.py
+```
+
+Test suite içine yeni validation testi eklenmiştir:
+
+```text id="jzbdkq"
+Customer memory validation
+```
+
+Bu test customer memory invalid olduğunda fail verir.
+
+### Consequences
+
+* Customer memory veri kalitesi otomatik kontrol edilir.
+* Duplicate alias ve duplicate customer name riskleri testlerde yakalanır.
+* Geçersiz sensitivity değerleri testlerde yakalanır.
+* Yanlış müşteri eşleşmesi riski azalır.
+* Test suite 18 teste çıkmıştır.
