@@ -1389,3 +1389,73 @@ Eklenen / iyileştirilen UI davranışları:
 * Commodity-specific action checklist maddeleri UI’da daha görünür hale gelir.
 * Backend’in ürettiği operasyonel refleksler kullanıcı ekranında daha iyi karşılık bulur.
 * Test suite 15 test ile başarılı çalışmıştır.
+## DEC-049 — UI Commodity Profile Panel v1
+
+**Status:** Accepted
+**Date:** 2026-07-03
+
+### Decision
+
+MINAI API response içine `commodity_profile` alanı eklenmiştir ve Streamlit UI’da ayrı bir **Commodity Profile / Operasyonel Profil** paneli gösterilmeye başlanmıştır.
+
+Bu panel, shipment’ın ürün grubuna bağlı operasyonel profilini kullanıcıya açık şekilde gösterir.
+
+Panelde gösterilen başlıca bilgiler:
+
+```text
+Ürün profili
+Human review gerekip gerekmediği
+Reefer gerekip gerekmediği
+High value adayı olup olmadığı
+Varsayılan ekipman / sıcaklık bilgisi
+Risk profili
+Operasyon notları
+Profile kaynaklı eksik bilgiler
+Profile action checklist
+```
+
+### Rationale
+
+Commodity profile artık yalnızca backend karar datası değildir.
+
+Bu profil risk, ekipman, eksik bilgi ve action checklist kararlarını etkilediği için operasyoncunun UI üzerinde bu bilgiyi doğrudan görebilmesi gerekir.
+
+Aksi durumda sistem doğru karar üretse bile operasyoncu bu kararın ürün profili kaynaklı olduğunu anlamayabilir.
+
+Örnek:
+
+```text
+İlaç / Pharma
+→ Human review gerekli
+→ Sıcaklık gereksinimi sorulmalı
+→ Uygunluk / ruhsat belgeleri kontrol edilmeli
+→ Özel taşıma şartları netleştirilmeli
+```
+
+Bu bilgiler tek bir panelde görünür olmalıdır.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+src/api.py
+ui/app.py
+```
+
+API tarafında `serialize_result` çıktısına `commodity_profile` eklenmiştir.
+
+UI tarafında yeni render fonksiyonu eklenmiştir:
+
+```text
+render_commodity_profile
+```
+
+Bu fonksiyon operasyon özetinde customer memory ve action recommendation bölümlerinden önce commodity profile bilgisini gösterir.
+
+### Consequences
+
+* Operasyoncu ürün bazlı profil bilgisini UI’da doğrudan görebilir.
+* Commodity profile kaynaklı risk, eksik bilgi ve checklist maddeleri daha anlaşılır hale gelir.
+* Backend kararlarının nedeni UI’da daha şeffaf görünür.
+* Test suite 15 test ile başarılı çalışmıştır.

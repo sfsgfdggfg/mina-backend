@@ -942,3 +942,36 @@ pharma compliance document
 Commodity profile kaynaklı checklist maddeleri genel checklist içinde kaybolmamalıdır. UI, bu listenin hem genel operasyon kontrollerini hem de ürün tipine özel kontrolleri içerdiğini açıkça belirtmelidir.
 
 Bu kuralın amacı, MINAI’nin operasyonel kararlarını sadece backend çıktısı olarak üretmesini değil, operasyoncunun günlük iş akışında kullanabileceği şekilde görünür kılmasını sağlamaktır.
+## RULE-057 — UI Must Expose Commodity Operational Profile
+
+MINAI UI, shipment’ın commodity operational profile bilgisini operasyoncuya açık şekilde göstermelidir.
+
+Commodity profile yalnızca backend içinde kullanılan teknik bir yapı olarak kalmamalıdır.
+
+UI’da gösterilmesi gereken başlıca bilgiler:
+
+```text
+Commodity adı
+Human review gerekip gerekmediği
+Reefer / özel ekipman ihtiyacı
+High value adayı olup olmadığı
+Varsayılan ekipman veya sıcaklık bilgisi
+Risk reason
+Operational notes
+Profile-driven missing info alanları
+Profile action checklist
+```
+
+Profile-driven missing info alanları kritik ise UI’da açıkça ayrıştırılmalıdır.
+
+Örnek:
+
+```text
+🔴 İlaç / pharma yükü için sıcaklık gereksinimi
+🔴 İlaç / pharma uygunluk veya ruhsat belgeleri
+🔴 İlaç / pharma özel taşıma şartları
+```
+
+Bu kuralın amacı, MINAI’nin ürün tipine göre verdiği operasyonel refleksleri kullanıcıya görünür kılmaktır.
+
+Operasyoncu yalnızca “sarı risk” veya “eksik bilgi” sonucu görmemeli; bu sonucun hangi commodity profile’dan kaynaklandığını da anlayabilmelidir.
