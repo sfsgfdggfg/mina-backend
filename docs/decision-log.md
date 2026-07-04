@@ -2287,3 +2287,83 @@ Panel şu anda HS / GTIP mapping datasını edit etmez. Sadece validator sonucun
   * Customer Memory
   * HS / GTIP Mapping
 * Panel read-only kalır.
+## DEC-060 — Data Health Summary Endpoint v1
+
+**Status:** Accepted
+**Date:** 2026-07-04
+
+### Decision
+
+Data health validator sonuçlarının tek bir API endpoint altında toplanmasına karar verilmiştir.
+
+Yeni endpoint:
+
+```text id="q37e7u"
+GET /data-health/summary
+```
+
+Bu endpoint şu validator sonuçlarını birlikte döndürür:
+
+```text id="s6i18u"
+commodity_dictionary
+supplier_capabilities
+customer_memory
+hs_commodity_map
+```
+
+Endpoint ayrıca genel özet alanları üretir:
+
+```text id="f900sc"
+overall_valid
+total_checks
+valid_checks
+invalid_checks
+total_errors
+total_warnings
+checks
+```
+
+### Rationale
+
+MINAI’de artık birden fazla kritik data kaynağı validator ile korunmaktadır.
+
+Bu kaynaklar:
+
+```text id="t9ovfc"
+Commodity Dictionary
+Supplier Capability Matrix
+Customer Memory
+HS / GTIP Mapping
+```
+
+Her biri ayrı endpoint üzerinden kontrol edilebilse de UI ve ilerideki monitoring ihtiyaçları için tek bir özet endpoint gerekir.
+
+Bu endpoint, sistemin data sağlığını hızlıca değerlendirmek için merkezi kontrat sağlar.
+
+### Implementation
+
+Güncellenen dosya:
+
+```text id="hzy3hu"
+src/api.py
+```
+
+Yeni yardımcı fonksiyon eklenmiştir:
+
+```text id="3moce1"
+build_data_health_summary()
+```
+
+Yeni API endpoint eklenmiştir:
+
+```text id="fpuniv"
+GET /data-health/summary
+```
+
+### Consequences
+
+* Tüm data health validator sonuçları tek endpoint altında görülebilir.
+* UI dashboard için merkezi summary data oluşmuştur.
+* Monitoring veya ilerideki otomasyonlar tek endpoint üzerinden data sağlığı kontrol edebilir.
+* Mevcut ayrı validation endpoint’leri korunmuştur.
+* Test suite 19 test ile başarılı çalışmıştır.

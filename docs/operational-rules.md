@@ -1376,3 +1376,44 @@ HS / GTIP mapping data health paneli varsayılan olarak read-only olmalıdır.
 Mapping ekleme, mapping silme, commodity_group değiştirme veya otomatik düzeltme özellikleri ayrı task olarak ele alınmalı ve açıkça onaylanmalıdır.
 
 Bu kuralın amacı, GTIP kaynaklı yanlış commodity yorumu ve yanlış operasyonel uyarı risklerini erken görünür hale getirmektir.
+## RULE-068 — Data Health Summary Must Aggregate Validator Results
+
+MINAI’de kritik data kaynakları için üretilen validator sonuçları merkezi bir data health summary altında toplanmalıdır.
+
+Varsayılan summary endpoint:
+
+```text id="a3lk2u"
+GET /data-health/summary
+```
+
+Bu endpoint en az şu validator sonuçlarını kapsamalıdır:
+
+```text id="hkc3i2"
+Commodity Dictionary
+Supplier Capability Matrix
+Customer Memory
+HS / GTIP Mapping
+```
+
+Summary response şu genel alanları sağlamalıdır:
+
+```text id="n3v3vm"
+overall_valid
+total_checks
+valid_checks
+invalid_checks
+total_errors
+total_warnings
+checks
+```
+
+Yeni bir data validator eklendiğinde şu adımlar düşünülmelidir:
+
+```text id="fyve6i"
+Validator test suite’e bağlandı mı?
+Validator için read-only endpoint var mı?
+Validator sonucu /data-health/summary içine eklendi mi?
+UI Data Sağlığı Dashboard bunu gösterecek mi?
+```
+
+Bu kuralın amacı, data health bilgisinin dağılmasını engellemek ve MINAI’nin operasyonel data sağlığını tek merkezden izlenebilir hale getirmektir.
