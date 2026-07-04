@@ -2367,3 +2367,75 @@ GET /data-health/summary
 * Monitoring veya ilerideki otomasyonlar tek endpoint üzerinden data sağlığı kontrol edebilir.
 * Mevcut ayrı validation endpoint’leri korunmuştur.
 * Test suite 19 test ile başarılı çalışmıştır.
+## DEC-061 — Data Health Summary UI v1
+
+**Status:** Accepted
+**Date:** 2026-07-04
+
+### Decision
+
+Data Sağlığı Dashboard içine genel summary kartı eklenmesine karar verilmiştir.
+
+Yeni UI bölümü:
+
+```text
+Data Sağlığı Dashboard → Summary
+```
+
+Bu summary, yeni merkezi endpoint üzerinden data health durumunu gösterir:
+
+```text
+GET /data-health/summary
+```
+
+Summary alanları:
+
+```text
+Overall Valid
+Valid Checks
+Errors
+Warnings
+Kontrol Özeti
+Raw Data Health Summary
+```
+
+### Rationale
+
+MINAI’de birden fazla kritik data validator bulunmaktadır:
+
+```text
+Commodity Dictionary
+Supplier Capability Matrix
+Customer Memory
+HS / GTIP Mapping
+```
+
+Ayrı sekmeler detaylı kontrol için faydalıdır, ancak kullanıcı dashboard’a girdiğinde sistemin genel data sağlığını tek bakışta görebilmelidir.
+
+Bu nedenle dashboard üstünde merkezi bir summary alanı gerekir.
+
+### Implementation
+
+Güncellenen dosya:
+
+```text
+ui/app.py
+```
+
+Yeni UI fonksiyonu eklenmiştir:
+
+```text
+render_data_health_summary()
+```
+
+Bu fonksiyon `/data-health/summary` endpoint’ini çağırır ve sonucu Data Sağlığı Dashboard’un üstünde gösterir.
+
+Summary altında her validator için kısa kontrol özeti gösterilir.
+
+### Consequences
+
+* Data health genel durumu tek bakışta görülebilir.
+* Ayrı validator sekmelerine girmeden önce genel sağlık durumu anlaşılır.
+* Error ve warning toplamları görünür hale gelir.
+* Dashboard daha yönetici / PM dostu hale gelir.
+* Detaylı validator panelleri korunmuştur.

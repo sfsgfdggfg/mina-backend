@@ -1417,3 +1417,35 @@ UI Data Sağlığı Dashboard bunu gösterecek mi?
 ```
 
 Bu kuralın amacı, data health bilgisinin dağılmasını engellemek ve MINAI’nin operasyonel data sağlığını tek merkezden izlenebilir hale getirmektir.
+## RULE-069 — Data Health Dashboard Must Show Overall Summary
+
+MINAI Data Sağlığı Dashboard, detay sekmelerine ek olarak genel data health summary göstermelidir.
+
+Summary en az şu alanları içermelidir:
+
+```text
+Overall Valid
+Valid Checks
+Errors
+Warnings
+Kontrol Özeti
+Raw Summary
+```
+
+Summary verisi merkezi endpoint üzerinden alınmalıdır:
+
+```text
+GET /data-health/summary
+```
+
+Dashboard’da ayrı validator sekmeleri korunmalıdır, ancak kullanıcı önce genel durumu görebilmelidir.
+
+Yeni validator eklendiğinde şu kontroller yapılmalıdır:
+
+```text
+Validator /data-health/summary içine eklendi mi?
+Dashboard summary toplamları yeni validator’ı kapsıyor mu?
+Detay sekmesi gerekiyorsa Data Sağlığı Dashboard’a eklendi mi?
+```
+
+Bu kuralın amacı, operasyonel data sağlığının tek bakışta anlaşılmasını ve detayların gerektiğinde incelenmesini sağlamaktır.
