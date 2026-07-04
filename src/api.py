@@ -605,6 +605,36 @@ def get_customer_memory_validation():
 def get_hs_commodity_map_validation():
     return validate_hs_commodity_map_file()
 
+
+def build_data_health_summary() -> dict:
+    checks = {
+        "commodity_dictionary": validate_commodity_dictionary_file(),
+        "supplier_capabilities": validate_supplier_capabilities_file(),
+        "customer_memory": validate_customer_memory_file(),
+        "hs_commodity_map": validate_hs_commodity_map_file(),
+    }
+
+    total_checks = len(checks)
+    valid_checks = sum(1 for result in checks.values() if result.get("valid") is True)
+    invalid_checks = total_checks - valid_checks
+    total_errors = sum(len(result.get("errors") or []) for result in checks.values())
+    total_warnings = sum(len(result.get("warnings") or []) for result in checks.values())
+
+    return {
+        "overall_valid": invalid_checks == 0,
+        "total_checks": total_checks,
+        "valid_checks": valid_checks,
+        "invalid_checks": invalid_checks,
+        "total_errors": total_errors,
+        "total_warnings": total_warnings,
+        "checks": checks,
+    }
+
+
+@app.get("/data-health/summary")
+def get_data_health_summary():
+    return build_data_health_summary()
+
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]
     missing_info = result.get("missing_info")
