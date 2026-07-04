@@ -650,6 +650,80 @@ def render_customer_memory_validation_content():
     with st.expander("Raw Customer Memory Validation Result", expanded=False):
         st.json(result)
 
+
+def render_hs_commodity_map_validation_content():
+    st.markdown("### HS / GTIP Mapping")
+
+    st.caption(
+        "HS / GTIP commodity mapping validation sonucu. Bu panel sadece okuma amaçlıdır; mapping datasını edit etmez."
+    )
+
+    if not st.button("HS / GTIP Mapping Kontrol Et"):
+        return
+
+    with st.spinner("HS / GTIP mapping kontrol ediliyor..."):
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/hs-commodity-map/validation",
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        except requests.exceptions.RequestException as error:
+            st.error("HS / GTIP mapping validation API çağrısı başarısız oldu.")
+            st.code(str(error))
+            return
+
+    valid = result.get("valid") is True
+    errors = result.get("errors") or []
+    warnings = result.get("warnings") or []
+
+    if valid:
+        st.success("HS / GTIP mapping geçerli.")
+    else:
+        st.error("HS / GTIP mapping hatalı.")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Valid", "Evet" if valid else "Hayır")
+
+    with col2:
+        st.metric("Mapping", result.get("mapping_count", 0))
+
+    with col3:
+        st.metric("Canonical Commodity", result.get("canonical_commodity_count", 0))
+
+    with col4:
+        st.metric("Hata / Uyarı", f"{len(errors)} / {len(warnings)}")
+
+    hs_col1, hs_col2, hs_col3 = st.columns(3)
+
+    with hs_col1:
+        st.metric("Chapter", result.get("chapter_count", 0))
+
+    with hs_col2:
+        st.metric("Heading", result.get("heading_count", 0))
+
+    with hs_col3:
+        st.metric("Subheading", result.get("subheading_count", 0))
+
+    st.write(f"**Source:** {result.get('source') or '-'}")
+
+    if errors:
+        st.markdown("### Hatalar")
+        for error in errors:
+            st.error(error)
+
+    if warnings:
+        st.markdown("### Uyarılar")
+        for warning in warnings:
+            st.warning(warning)
+
+    with st.expander("Raw HS / GTIP Validation Result", expanded=False):
+        st.json(result)
+
 def render_data_health_dashboard():
     st.markdown("---")
     st.markdown("## Data Sağlığı Dashboard")
@@ -658,12 +732,13 @@ def render_data_health_dashboard():
         "Test suite ve kritik operasyonel data kaynaklarının sağlığını tek yerden kontrol eder. Bu bölüm read-only'dir."
     )
 
-    test_tab, commodity_tab, supplier_tab, customer_memory_tab = st.tabs(
+    test_tab, commodity_tab, supplier_tab, customer_memory_tab, hs_tab = st.tabs(
         [
             "Test Suite",
             "Commodity Dictionary",
             "Supplier Capability Matrix",
             "Customer Memory",
+            "HS / GTIP Mapping",
         ]
     )
 
@@ -678,6 +753,9 @@ def render_data_health_dashboard():
 
     with customer_memory_tab:
         render_customer_memory_validation_content()
+
+    with hs_tab:
+        render_hs_commodity_map_validation_content()
 
 def render_customer_memory_edit_form(profile: dict):
     customer_name = profile.get("customer_name") or ""
