@@ -1341,3 +1341,38 @@ HS / GTIP mapping validation test suite içinde çalışmalıdır.
 HS / GTIP mapping invalid ise test suite fail vermelidir.
 
 Bu kuralın amacı, MINAI’nin GTIP kaynaklı commodity yorumlarının sessiz veri hatalarıyla bozulmasını engellemektir.
+## RULE-067 — HS / GTIP Mapping Data Health Must Be Visible in UI
+
+MINAI’de HS / GTIP mapping data sağlığı UI üzerinden görülebilir olmalıdır.
+
+`data/hs_commodity_map.json` dosyası GTIP / HS kodlarını operasyonel commodity gruplarına bağlayan kritik data içerir.
+
+Bu data şu alanları etkiler:
+
+```text
+GTIP interpretation
+Commodity classification
+GTIP consistency warning
+Operational notes
+Risk assessment
+Missing information behavior
+```
+
+Bu nedenle HS / GTIP mapping data health paneli şu bilgileri göstermelidir:
+
+```text
+Mapping sayısı
+Chapter sayısı
+Heading sayısı
+Subheading sayısı
+Canonical commodity coverage
+Validation errors
+Validation warnings
+Raw validation result
+```
+
+HS / GTIP mapping data health paneli varsayılan olarak read-only olmalıdır.
+
+Mapping ekleme, mapping silme, commodity_group değiştirme veya otomatik düzeltme özellikleri ayrı task olarak ele alınmalı ve açıkça onaylanmalıdır.
+
+Bu kuralın amacı, GTIP kaynaklı yanlış commodity yorumu ve yanlış operasyonel uyarı risklerini erken görünür hale getirmektir.

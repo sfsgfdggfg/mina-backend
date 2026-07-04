@@ -2201,3 +2201,89 @@ Commodity dictionary ile birebir eşleşmeyen ama operasyonel grup olarak kullan
 * Parent chapter / heading coverage eksiklikleri warning olarak görülebilir.
 * Commodity dictionary ile birebir uyumsuz operasyonel gruplar warning olarak izlenebilir.
 * Test suite 19 teste çıkmıştır.
+## DEC-059 — HS / GTIP Mapping Validation UI v1
+
+**Status:** Accepted
+**Date:** 2026-07-04
+
+### Decision
+
+HS / GTIP mapping validation sonucunun UI üzerinden görüntülenmesine karar verilmiştir.
+
+Yeni UI sekmesi:
+
+```text
+Data Sağlığı Dashboard → HS / GTIP Mapping
+```
+
+Bu sekme sadece okuma amaçlıdır.
+
+Panel şu bilgileri gösterir:
+
+```text
+Valid / invalid durumu
+Mapping sayısı
+Chapter sayısı
+Heading sayısı
+Subheading sayısı
+Canonical commodity sayısı
+Hata sayısı
+Uyarı sayısı
+Validation source
+Hata detayları
+Uyarı detayları
+Raw validation result
+```
+
+API tarafına yeni endpoint eklenmiştir:
+
+```text
+GET /hs-commodity-map/validation
+```
+
+### Rationale
+
+HS / GTIP mapping, müşterinin verdiği GTIP veya HS kodunu operasyonel commodity grubuna çevirmek için kullanılır.
+
+Bu data şu alanları etkiler:
+
+```text
+GTIP interpretation
+Commodity classification
+GTIP / commodity consistency warning
+Operational notes
+Risk and missing information behavior
+Customer quote workflow safety
+```
+
+Bu nedenle HS / GTIP mapping datasının sağlığı yalnızca test suite içinde değil, UI üzerinden de görülebilmelidir.
+
+Operasyoncu veya proje yöneticisi GTIP mapping sağlığını kod açmadan kontrol edebilmelidir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text
+src/api.py
+ui/app.py
+```
+
+API tarafında HS / GTIP mapping validator sonucu endpoint olarak açılmıştır.
+
+UI tarafında Data Sağlığı Dashboard içine “HS / GTIP Mapping” sekmesi eklenmiştir.
+
+Panel şu anda HS / GTIP mapping datasını edit etmez. Sadece validator sonucunu gösterir.
+
+### Consequences
+
+* HS / GTIP mapping sağlığı UI üzerinden izlenebilir.
+* Chapter / heading / subheading coverage durumu görünür hale gelir.
+* Hatalar ve warning’ler teknik olmayan kullanıcıya daha görünür olur.
+* Data Sağlığı Dashboard artık dört ana data kaynağını kapsar:
+
+  * Commodity Dictionary
+  * Supplier Capability Matrix
+  * Customer Memory
+  * HS / GTIP Mapping
+* Panel read-only kalır.
