@@ -724,6 +724,72 @@ def render_hs_commodity_map_validation_content():
     with st.expander("Raw HS / GTIP Validation Result", expanded=False):
         st.json(result)
 
+
+def render_data_health_summary():
+    with st.spinner("Data health özeti alınıyor..."):
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/data-health/summary",
+                timeout=30,
+            )
+            response.raise_for_status()
+            summary = response.json()
+
+        except requests.exceptions.RequestException as error:
+            st.error("Data health summary API çağrısı başarısız oldu.")
+            st.code(str(error))
+            return
+
+    overall_valid = summary.get("overall_valid") is True
+    total_checks = summary.get("total_checks", 0)
+    valid_checks = summary.get("valid_checks", 0)
+    invalid_checks = summary.get("invalid_checks", 0)
+    total_errors = summary.get("total_errors", 0)
+    total_warnings = summary.get("total_warnings", 0)
+
+    if overall_valid:
+        st.success("Genel data sağlığı geçerli.")
+    else:
+        st.error("Genel data sağlığında hata var.")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Overall Valid", "Evet" if overall_valid else "Hayır")
+
+    with col2:
+        st.metric("Valid Checks", f"{valid_checks}/{total_checks}")
+
+    with col3:
+        st.metric("Errors", total_errors)
+
+    with col4:
+        st.metric("Warnings", total_warnings)
+
+    if invalid_checks:
+        st.warning(f"{invalid_checks} data health kontrolü başarısız.")
+
+    checks = summary.get("checks") or {}
+
+    if checks:
+        st.markdown("### Kontrol Özeti")
+
+        for check_name, result in checks.items():
+            valid = result.get("valid") is True
+            errors = result.get("errors") or []
+            warnings = result.get("warnings") or []
+
+            status_icon = "✅" if valid else "❌"
+            readable_name = check_name.replace("_", " ").title()
+
+            st.write(
+                f"{status_icon} **{readable_name}** — "
+                f"errors: {len(errors)}, warnings: {len(warnings)}"
+            )
+
+    with st.expander("Raw Data Health Summary", expanded=False):
+        st.json(summary)
+
 def render_data_health_dashboard():
     st.markdown("---")
     st.markdown("## Data Sağlığı Dashboard")
@@ -731,6 +797,8 @@ def render_data_health_dashboard():
     st.caption(
         "Test suite ve kritik operasyonel data kaynaklarının sağlığını tek yerden kontrol eder. Bu bölüm read-only'dir."
     )
+
+    render_data_health_summary()
 
     test_tab, commodity_tab, supplier_tab, customer_memory_tab, hs_tab = st.tabs(
         [
