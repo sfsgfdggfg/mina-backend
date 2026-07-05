@@ -1511,3 +1511,39 @@ dokümantasyon
 ```
 
 Bu kuralın amacı, API katmanını sade tutmak ve operasyonel data health mantığını test edilebilir core servis olarak yönetmektir.
+## RULE-072 — Data Health Summary Contract Must Be Tested
+
+MINAI’de data health summary response yapısı regression test ile korunmalıdır.
+
+Summary contract en az şu alanları içermelidir:
+
+```text id="kmmd72"
+overall_valid
+total_checks
+valid_checks
+invalid_checks
+total_errors
+total_warnings
+checks
+```
+
+Regression test şu validator check isimlerini doğrulamalıdır:
+
+```text id="xm1n1t"
+commodity_dictionary
+supplier_capabilities
+customer_memory
+hs_commodity_map
+```
+
+Yeni validator eklendiğinde şu yerler birlikte güncellenmelidir:
+
+```text id="t9mdki"
+src/core/data_health.py
+evaluate_data_health_summary()
+Data Sağlığı Dashboard
+ilgili API endpoint
+dokümantasyon
+```
+
+Bu kuralın amacı, UI ve API arasında kullanılan data health summary contract’ının sessizce bozulmasını engellemektir.

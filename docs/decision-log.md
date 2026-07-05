@@ -2572,3 +2572,88 @@ from src.core.data_health import build_data_health_summary
 * Core servis ileride doğrudan test edilebilir hale geldi.
 * UI endpoint değişmediği için UI tarafında değişiklik gerekmedi.
 * Yeni validator eklendiğinde merkezi summary mantığı `src/core/data_health.py` üzerinden yönetilecektir.
+## DEC-064 — Data Health Summary Regression Test v1
+
+**Status:** Accepted
+**Date:** 2026-07-05
+
+### Decision
+
+Data health summary çıktısının test suite içinde regression test ile doğrulanmasına karar verilmiştir.
+
+Yeni test:
+
+```text id="mxcydn"
+Data health summary regression
+```
+
+Test suite sonucu:
+
+```text id="jr50ce"
+20 passed, 0 failed
+```
+
+### Rationale
+
+`/data-health/summary` endpoint’i UI için kritik bir contract üretmektedir.
+
+Bu contract şu alanları içerir:
+
+```text id="fnw81j"
+overall_valid
+total_checks
+valid_checks
+invalid_checks
+total_errors
+total_warnings
+checks
+```
+
+Bu yapı bozulursa Data Sağlığı Dashboard yanlış veya eksik bilgi gösterebilir.
+
+Bu nedenle summary response yapısı test suite içinde korunmalıdır.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+```text id="n1xskj"
+src/simulation/test_reporter.py
+src/workflow/pipeline.py
+```
+
+Yeni evaluator:
+
+```text id="d95ks6"
+evaluate_data_health_summary()
+```
+
+Test şu kontrolleri yapar:
+
+```text id="st9axu"
+Gerekli top-level summary alanları var mı?
+checks dictionary mi?
+Beklenen validator check isimleri var mı?
+total_checks doğru mu?
+valid_checks doğru hesaplanıyor mu?
+invalid_checks doğru hesaplanıyor mu?
+total_errors doğru hesaplanıyor mu?
+total_warnings doğru hesaplanıyor mu?
+overall_valid doğru hesaplanıyor mu?
+```
+
+Beklenen check isimleri:
+
+```text id="ezthw8"
+commodity_dictionary
+supplier_capabilities
+customer_memory
+hs_commodity_map
+```
+
+### Consequences
+
+* Data health summary response contract test altına alındı.
+* UI için kritik summary alanlarının yanlışlıkla bozulması zorlaştı.
+* Yeni validator eklendiğinde regression test güncellenmelidir.
+* Test suite toplamı 19’dan 20’ye çıkmıştır.
