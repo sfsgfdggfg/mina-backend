@@ -735,13 +735,24 @@ def fetch_data_health_summary() -> dict:
     return response.json()
 
 
+
+def get_data_health_check_label(check_name: str) -> str:
+    labels = {
+        "commodity_dictionary": "Ürün Sözlüğü",
+        "supplier_capabilities": "Tedarikçi Yetkinlik Matrisi",
+        "customer_memory": "Müşteri Hafızası",
+        "hs_commodity_map": "HS / GTIP Eşleştirme",
+    }
+
+    return labels.get(check_name, check_name.replace("_", " ").title())
+
 def render_data_health_summary():
-    st.markdown("### Genel Data Health Özeti")
+    st.markdown("### Genel Data Sağlığı Özeti")
 
     col_refresh, col_checked = st.columns([1, 3])
 
     with col_refresh:
-        refresh_requested = st.button("Refresh Data Health Summary")
+        refresh_requested = st.button("Özeti Yenile")
 
     should_fetch = (
         refresh_requested
@@ -768,9 +779,9 @@ def render_data_health_summary():
 
     with col_checked:
         if checked_at:
-            st.caption(f"Last checked: {checked_at}")
+            st.caption(f"Son kontrol: {checked_at}")
         else:
-            st.caption("Last checked: henüz kontrol edilmedi.")
+            st.caption("Son kontrol: henüz kontrol edilmedi.")
 
     overall_valid = summary.get("overall_valid") is True
     total_checks = summary.get("total_checks", 0)
@@ -787,16 +798,16 @@ def render_data_health_summary():
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Overall Valid", "Evet" if overall_valid else "Hayır")
+        st.metric("Genel Durum", "Geçerli" if overall_valid else "Hatalı")
 
     with col2:
-        st.metric("Valid Checks", f"{valid_checks}/{total_checks}")
+        st.metric("Geçen Kontrol", f"{valid_checks}/{total_checks}")
 
     with col3:
-        st.metric("Errors", total_errors)
+        st.metric("Hata", total_errors)
 
     with col4:
-        st.metric("Warnings", total_warnings)
+        st.metric("Uyarı", total_warnings)
 
     if invalid_checks:
         st.warning(f"{invalid_checks} data health kontrolü başarısız.")
@@ -812,11 +823,11 @@ def render_data_health_summary():
             warnings = result.get("warnings") or []
 
             status_icon = "✅" if valid else "❌"
-            readable_name = check_name.replace("_", " ").title()
+            readable_name = get_data_health_check_label(check_name)
 
             st.write(
                 f"{status_icon} **{readable_name}** — "
-                f"errors: {len(errors)}, warnings: {len(warnings)}"
+                f"hata: {len(errors)}, uyarı: {len(warnings)}"
             )
 
     issue_checks = {
@@ -826,34 +837,34 @@ def render_data_health_summary():
     }
 
     if issue_checks:
-        st.markdown("### Data Health Uyarı / Hata Detayları")
+        st.markdown("### Data Sağlığı Uyarı / Hata Detayları")
         st.caption(
-            "Summary içindeki error ve warning detayları. Detay sekmelerine girmeden hızlı kontrol için gösterilir."
+            "Özet içindeki hata ve uyarı detayları. Detay sekmelerine girmeden hızlı kontrol için gösterilir."
         )
 
         for check_name, result in issue_checks.items():
-            readable_name = check_name.replace("_", " ").title()
+            readable_name = get_data_health_check_label(check_name)
             errors = result.get("errors") or []
             warnings = result.get("warnings") or []
 
             with st.expander(
-                f"{readable_name} — errors: {len(errors)}, warnings: {len(warnings)}",
+                f"{readable_name} — hata: {len(errors)}, uyarı: {len(warnings)}",
                 expanded=False,
             ):
                 if errors:
-                    st.error("Errors")
+                    st.error("Hatalar")
                     for error in errors:
                         st.markdown(f"- ❌ {error}")
 
                 if warnings:
-                    st.warning("Warnings")
+                    st.warning("Uyarılar")
                     for warning in warnings:
                         st.markdown(f"- ⚠️ {warning}")
 
     elif checks:
-        st.info("Data health summary içinde error veya warning bulunmuyor.")
+        st.info("Data sağlığı özetinde hata veya uyarı bulunmuyor.")
 
-    with st.expander("Raw Data Health Summary", expanded=False):
+    with st.expander("Ham Data Sağlığı Özeti", expanded=False):
         st.json(summary)
 
 def render_data_health_dashboard():
