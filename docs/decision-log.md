@@ -2506,3 +2506,69 @@ data_health_summary_checked_at
 * Kullanıcı summary sonucunu manuel yenileyebilir.
 * Dashboard daha güvenilir ve anlaşılır hale gelir.
 * Detay sekmeleri ve raw summary korunmuştur.
+## DEC-063 — Data Health Summary Core Service v1
+
+**Status:** Accepted
+**Date:** 2026-07-05
+
+### Decision
+
+Data health summary üretim mantığının API katmanından çıkarılıp core servis katmanına taşınmasına karar verilmiştir.
+
+Yeni core servis dosyası:
+
+```text
+src/core/data_health.py
+```
+
+Yeni core fonksiyon:
+
+```text
+build_data_health_summary()
+```
+
+API endpoint aynı kalmıştır:
+
+```text
+GET /data-health/summary
+```
+
+Ancak endpoint artık summary mantığını kendi içinde üretmez; core servisten çağırır.
+
+### Rationale
+
+Data health summary bir API davranışı değil, operasyonel core servis mantığıdır.
+
+API dosyasının görevi endpoint sunmak olmalıdır. Validator sonuçlarını toplamak, toplam hata / uyarı sayısını hesaplamak ve overall health üretmek core katmanda kalmalıdır.
+
+Bu ayrım ileride test, bakım ve yeni validator ekleme süreçlerini kolaylaştırır.
+
+### Implementation
+
+Yeni dosya:
+
+```text
+src/core/data_health.py
+```
+
+Güncellenen dosya:
+
+```text
+src/api.py
+```
+
+`src/api.py` içindeki eski `build_data_health_summary()` fonksiyonu kaldırılmıştır.
+
+API artık şu import üzerinden core servisi kullanır:
+
+```text
+from src.core.data_health import build_data_health_summary
+```
+
+### Consequences
+
+* Data health summary mantığı API dışına taşındı.
+* API katmanı sadeleşti.
+* Core servis ileride doğrudan test edilebilir hale geldi.
+* UI endpoint değişmediği için UI tarafında değişiklik gerekmedi.
+* Yeni validator eklendiğinde merkezi summary mantığı `src/core/data_health.py` üzerinden yönetilecektir.

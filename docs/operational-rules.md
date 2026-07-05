@@ -1475,3 +1475,39 @@ Refresh Data Health Summary
 Summary sonucu UI içinde kısa süreli state olarak saklanabilir.
 
 Bu kuralın amacı, kullanıcının data health bilgisinin güncelliğini anlayabilmesini ve gerektiğinde hızlıca tekrar kontrol edebilmesini sağlamaktır.
+## RULE-071 — Data Health Logic Should Live Outside API Layer
+
+MINAI’de data health summary üretim mantığı API katmanında tutulmamalıdır.
+
+Data health summary için merkezi core servis kullanılmalıdır:
+
+```text
+src/core/data_health.py
+```
+
+API endpoint sadece bu core servisi çağırmalıdır:
+
+```text
+GET /data-health/summary
+```
+
+Data health summary en az şu validator sonuçlarını merkezi olarak toplamalıdır:
+
+```text
+Commodity Dictionary
+Supplier Capability Matrix
+Customer Memory
+HS / GTIP Mapping
+```
+
+Yeni validator eklendiğinde şu yerler kontrol edilmelidir:
+
+```text
+src/core/data_health.py
+test suite
+Data Sağlığı Dashboard
+ilgili API endpoint
+dokümantasyon
+```
+
+Bu kuralın amacı, API katmanını sade tutmak ve operasyonel data health mantığını test edilebilir core servis olarak yönetmektir.
