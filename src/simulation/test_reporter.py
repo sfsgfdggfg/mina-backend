@@ -2,6 +2,7 @@ from src.core.commodity_dictionary_validator import validate_commodity_dictionar
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
+from src.core.data_health import build_data_health_summary
 
 
 def determine_result_type(result: dict) -> str:
@@ -301,6 +302,98 @@ def evaluate_hs_commodity_map_validation() -> dict:
         "failures": failures,
     }
 
+
+
+def evaluate_data_health_summary() -> dict:
+    summary = build_data_health_summary()
+    failures = []
+
+    required_top_level_keys = [
+        "overall_valid",
+        "total_checks",
+        "valid_checks",
+        "invalid_checks",
+        "total_errors",
+        "total_warnings",
+        "checks",
+    ]
+
+    for key in required_top_level_keys:
+        if key not in summary:
+            failures.append(f"missing data health summary key: {key}")
+
+    checks = summary.get("checks")
+
+    if not isinstance(checks, dict):
+        failures.append("checks must be a dictionary")
+        checks = {}
+
+    expected_checks = {
+        "commodity_dictionary",
+        "supplier_capabilities",
+        "customer_memory",
+        "hs_commodity_map",
+    }
+
+    missing_checks = expected_checks - set(checks.keys())
+
+    for check_name in sorted(missing_checks):
+        failures.append(f"missing data health check: {check_name}")
+
+    if summary.get("total_checks") != len(checks):
+        failures.append(
+            f"total_checks expected {len(checks)}, got {summary.get('total_checks')}"
+        )
+
+    expected_valid_checks = sum(
+        1
+        for result in checks.values()
+        if isinstance(result, dict) and result.get("valid") is True
+    )
+    expected_invalid_checks = len(checks) - expected_valid_checks
+    expected_total_errors = sum(
+        len(result.get("errors") or [])
+        for result in checks.values()
+        if isinstance(result, dict)
+    )
+    expected_total_warnings = sum(
+        len(result.get("warnings") or [])
+        for result in checks.values()
+        if isinstance(result, dict)
+    )
+
+    if summary.get("valid_checks") != expected_valid_checks:
+        failures.append(
+            f"valid_checks expected {expected_valid_checks}, got {summary.get('valid_checks')}"
+        )
+
+    if summary.get("invalid_checks") != expected_invalid_checks:
+        failures.append(
+            f"invalid_checks expected {expected_invalid_checks}, got {summary.get('invalid_checks')}"
+        )
+
+    if summary.get("total_errors") != expected_total_errors:
+        failures.append(
+            f"total_errors expected {expected_total_errors}, got {summary.get('total_errors')}"
+        )
+
+    if summary.get("total_warnings") != expected_total_warnings:
+        failures.append(
+            f"total_warnings expected {expected_total_warnings}, got {summary.get('total_warnings')}"
+        )
+
+    expected_overall_valid = expected_invalid_checks == 0
+
+    if summary.get("overall_valid") is not expected_overall_valid:
+        failures.append(
+            f"overall_valid expected {expected_overall_valid}, got {summary.get('overall_valid')}"
+        )
+
+    return {
+        "name": "Data health summary regression",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
 
 def print_test_report(test_results: list[dict]) -> None:
     print("\n\n==============================")
