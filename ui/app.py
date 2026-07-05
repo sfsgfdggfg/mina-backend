@@ -819,6 +819,40 @@ def render_data_health_summary():
                 f"errors: {len(errors)}, warnings: {len(warnings)}"
             )
 
+    issue_checks = {
+        check_name: result
+        for check_name, result in checks.items()
+        if (result.get("errors") or result.get("warnings"))
+    }
+
+    if issue_checks:
+        st.markdown("### Data Health Uyarı / Hata Detayları")
+        st.caption(
+            "Summary içindeki error ve warning detayları. Detay sekmelerine girmeden hızlı kontrol için gösterilir."
+        )
+
+        for check_name, result in issue_checks.items():
+            readable_name = check_name.replace("_", " ").title()
+            errors = result.get("errors") or []
+            warnings = result.get("warnings") or []
+
+            with st.expander(
+                f"{readable_name} — errors: {len(errors)}, warnings: {len(warnings)}",
+                expanded=False,
+            ):
+                if errors:
+                    st.error("Errors")
+                    for error in errors:
+                        st.markdown(f"- ❌ {error}")
+
+                if warnings:
+                    st.warning("Warnings")
+                    for warning in warnings:
+                        st.markdown(f"- ⚠️ {warning}")
+
+    elif checks:
+        st.info("Data health summary içinde error veya warning bulunmuyor.")
+
     with st.expander("Raw Data Health Summary", expanded=False):
         st.json(summary)
 
