@@ -1547,3 +1547,31 @@ dokümantasyon
 ```
 
 Bu kuralın amacı, UI ve API arasında kullanılan data health summary contract’ının sessizce bozulmasını engellemektir.
+## RULE-073 — Data Health Summary Must Expose Warning Details
+
+MINAI Data Sağlığı Dashboard, summary alanında sadece toplam warning/error sayılarını değil, detaylarını da göstermelidir.
+
+Summary UI en az şu bilgileri göstermelidir:
+
+```text id="5y4ibm"
+Total errors
+Total warnings
+Validator bazlı error listesi
+Validator bazlı warning listesi
+Raw summary
+```
+
+Warning/error detayları kullanıcıyı detay sekmelerine girmeye zorlamadan görülebilmelidir.
+
+Validator bazlı gösterim tercih edilmelidir:
+
+```text id="5kry5y"
+Commodity Dictionary
+Supplier Capability Matrix
+Customer Memory
+HS / GTIP Mapping
+```
+
+Yeni validator eklendiğinde summary warning/error detayları içinde otomatik veya açık şekilde görünmelidir.
+
+Bu kuralın amacı, data health uyarılarının sayısal olarak değil, operasyonel olarak anlaşılabilir şekilde görünmesini sağlamaktır.

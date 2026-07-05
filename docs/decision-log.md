@@ -2657,3 +2657,64 @@ hs_commodity_map
 * UI için kritik summary alanlarının yanlışlıkla bozulması zorlaştı.
 * Yeni validator eklendiğinde regression test güncellenmelidir.
 * Test suite toplamı 19’dan 20’ye çıkmıştır.
+## DEC-065 — Data Health Summary Warning Details UI v1
+
+**Status:** Accepted
+**Date:** 2026-07-05
+
+### Decision
+
+Data Sağlığı Dashboard içindeki summary alanında warning ve error detaylarının gösterilmesine karar verilmiştir.
+
+Yeni UI bölümü:
+
+```text id="go9a9g"
+Data Health Uyarı / Hata Detayları
+```
+
+Bu bölüm, `/data-health/summary` response içindeki validator bazlı `errors` ve `warnings` listelerini gösterir.
+
+Her validator için ayrı expander kullanılır.
+
+### Rationale
+
+Summary alanı toplam error ve warning sayılarını gösteriyordu.
+
+Ancak kullanıcı uyarıların ne olduğunu görmek için detay sekmelerine tek tek girmek zorunda kalıyordu.
+
+Bu durum özellikle şu bilgi için yetersizdi:
+
+```text id="yl4mm3"
+Warnings: 6
+```
+
+Bu nedenle summary alanında uyarı ve hata detayları hızlıca görülebilmelidir.
+
+### Implementation
+
+Güncellenen dosya:
+
+```text id="88zwew"
+ui/app.py
+```
+
+`render_data_health_summary()` fonksiyonu genişletilmiştir.
+
+Eklenen davranış:
+
+```text id="m7p6d4"
+summary.checks içindeki error/warning bulunan validator’lar tespit edilir
+her validator için expander oluşturulur
+errors listesi ❌ ile gösterilir
+warnings listesi ⚠️ ile gösterilir
+error/warning yoksa bilgi mesajı gösterilir
+Raw Data Health Summary korunur
+```
+
+### Consequences
+
+* Kullanıcı toplam warning sayısının detayını summary alanında görebilir.
+* Detay sekmelerine girmeden hızlı data health kontrolü yapılabilir.
+* Error ve warning ayrımı daha görünür hale gelir.
+* Endpoint değişmedi.
+* Data Sağlığı Dashboard read-only kalmaya devam eder.
