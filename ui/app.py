@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from datetime import datetime
 
 import requests
 import streamlit as st
@@ -725,20 +726,51 @@ def render_hs_commodity_map_validation_content():
         st.json(result)
 
 
-def render_data_health_summary():
-    with st.spinner("Data health özeti alınıyor..."):
-        try:
-            response = requests.get(
-                f"{API_BASE_URL}/data-health/summary",
-                timeout=30,
-            )
-            response.raise_for_status()
-            summary = response.json()
+def fetch_data_health_summary() -> dict:
+    response = requests.get(
+        f"{API_BASE_URL}/data-health/summary",
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
 
-        except requests.exceptions.RequestException as error:
-            st.error("Data health summary API çağrısı başarısız oldu.")
-            st.code(str(error))
-            return
+
+def render_data_health_summary():
+    st.markdown("### Genel Data Health Özeti")
+
+    col_refresh, col_checked = st.columns([1, 3])
+
+    with col_refresh:
+        refresh_requested = st.button("Refresh Data Health Summary")
+
+    should_fetch = (
+        refresh_requested
+        or "data_health_summary" not in st.session_state
+    )
+
+    if should_fetch:
+        with st.spinner("Data health özeti alınıyor..."):
+            try:
+                summary = fetch_data_health_summary()
+                st.session_state["data_health_summary"] = summary
+                st.session_state["data_health_summary_checked_at"] = datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+
+            except requests.exceptions.RequestException as error:
+                st.error("Data health summary API çağrısı başarısız oldu.")
+                st.code(str(error))
+                return
+    else:
+        summary = st.session_state.get("data_health_summary") or {}
+
+    checked_at = st.session_state.get("data_health_summary_checked_at")
+
+    with col_checked:
+        if checked_at:
+            st.caption(f"Last checked: {checked_at}")
+        else:
+            st.caption("Last checked: henüz kontrol edilmedi.")
 
     overall_valid = summary.get("overall_valid") is True
     total_checks = summary.get("total_checks", 0)
