@@ -1449,3 +1449,29 @@ Detay sekmesi gerekiyorsa Data Sağlığı Dashboard’a eklendi mi?
 ```
 
 Bu kuralın amacı, operasyonel data sağlığının tek bakışta anlaşılmasını ve detayların gerektiğinde incelenmesini sağlamaktır.
+## RULE-070 — Data Health Summary Must Show Last Checked Time
+
+MINAI Data Sağlığı Dashboard, summary bilgisinin ne zaman kontrol edildiğini göstermelidir.
+
+Dashboard summary alanı en az şu bilgileri içermelidir:
+
+```text
+Overall Valid
+Valid Checks
+Errors
+Warnings
+Last checked
+Manual refresh button
+```
+
+Kullanıcı, data health summary sonucunu sayfayı tamamen yenilemeden manuel olarak tekrar çağırabilmelidir.
+
+Varsayılan refresh butonu:
+
+```text
+Refresh Data Health Summary
+```
+
+Summary sonucu UI içinde kısa süreli state olarak saklanabilir.
+
+Bu kuralın amacı, kullanıcının data health bilgisinin güncelliğini anlayabilmesini ve gerektiğinde hızlıca tekrar kontrol edebilmesini sağlamaktır.

@@ -2439,3 +2439,70 @@ Summary altında her validator için kısa kontrol özeti gösterilir.
 * Error ve warning toplamları görünür hale gelir.
 * Dashboard daha yönetici / PM dostu hale gelir.
 * Detaylı validator panelleri korunmuştur.
+## DEC-062 — Data Health Summary Refresh State v1
+
+**Status:** Accepted
+**Date:** 2026-07-05
+
+### Decision
+
+Data Sağlığı Dashboard içindeki summary alanına manuel refresh ve last checked bilgisi eklenmesine karar verilmiştir.
+
+Yeni UI davranışı:
+
+```text
+Refresh Data Health Summary
+Last checked: YYYY-MM-DD HH:MM:SS
+```
+
+Summary sonucu `st.session_state` içinde tutulur.
+
+Kullanıcı dashboard’a geldiğinde summary otomatik alınır. Kullanıcı isterse “Refresh Data Health Summary” butonu ile sonucu tekrar çağırabilir.
+
+### Rationale
+
+Data health summary tek bakışta sistemin operasyonel data sağlığını gösterir.
+
+Ancak kullanıcı summary’nin ne zaman kontrol edildiğini bilmezse ekrandaki bilginin güncelliğinden emin olamaz.
+
+Bu nedenle dashboard’da son kontrol zamanı görünmelidir.
+
+Ayrıca kullanıcı API veya data değişikliklerinden sonra sayfayı komple yenilemeden summary sonucunu manuel güncelleyebilmelidir.
+
+### Implementation
+
+Güncellenen dosya:
+
+```text
+ui/app.py
+```
+
+Yeni yardımcı fonksiyon eklenmiştir:
+
+```text
+fetch_data_health_summary()
+```
+
+`render_data_health_summary()` fonksiyonu güncellenmiştir.
+
+Eklenen UI alanları:
+
+```text
+Genel Data Health Özeti
+Refresh Data Health Summary
+Last checked
+```
+
+Summary sonucu şu session state alanlarında tutulur:
+
+```text
+data_health_summary
+data_health_summary_checked_at
+```
+
+### Consequences
+
+* Data health summary’nin ne zaman kontrol edildiği görünür.
+* Kullanıcı summary sonucunu manuel yenileyebilir.
+* Dashboard daha güvenilir ve anlaşılır hale gelir.
+* Detay sekmeleri ve raw summary korunmuştur.
