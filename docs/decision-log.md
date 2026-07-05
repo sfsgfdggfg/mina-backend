@@ -2718,3 +2718,66 @@ Raw Data Health Summary korunur
 * Error ve warning ayrımı daha görünür hale gelir.
 * Endpoint değişmedi.
 * Data Sağlığı Dashboard read-only kalmaya devam eder.
+## DEC-066 — Data Health Summary Human-Friendly Labels v1
+
+**Status:** Accepted
+**Date:** 2026-07-05
+
+### Decision
+
+Data Sağlığı Dashboard summary alanındaki teknik / İngilizce etiketlerin kullanıcı dostu Türkçe operasyon diliyle gösterilmesine karar verilmiştir.
+
+Yeni label örnekleri:
+
+```text id="s0g7uf"
+Refresh Data Health Summary → Özeti Yenile
+Last checked → Son kontrol
+Overall Valid → Genel Durum
+Valid Checks → Geçen Kontrol
+Errors → Hata
+Warnings → Uyarı
+Raw Data Health Summary → Ham Data Sağlığı Özeti
+```
+
+Validator isimleri de kullanıcı dostu hale getirilmiştir:
+
+```text id="kzd87d"
+commodity_dictionary → Ürün Sözlüğü
+supplier_capabilities → Tedarikçi Yetkinlik Matrisi
+customer_memory → Müşteri Hafızası
+hs_commodity_map → HS / GTIP Eşleştirme
+```
+
+### Rationale
+
+Data Sağlığı Dashboard operasyon kullanıcısı ve PM için okunabilir olmalıdır.
+
+Teknik alan adları geliştirici için anlamlıdır, ancak kullanıcı ekranında doğrudan görünmeleri ürün deneyimini zayıflatır.
+
+Bu nedenle UI label’ları teknik sistem adlarından ayrılmıştır.
+
+### Implementation
+
+Güncellenen dosya:
+
+```text id="36x4rd"
+ui/app.py
+```
+
+Yeni yardımcı fonksiyon:
+
+```text id="5azouc"
+get_data_health_check_label()
+```
+
+Bu fonksiyon data health check anahtarlarını kullanıcı dostu label’lara çevirir.
+
+Summary alanındaki buton, metric, caption, expander ve hata/uyarı metinleri Türkçe operasyon ekranı diline yaklaştırılmıştır.
+
+### Consequences
+
+* Data Sağlığı Dashboard daha kullanıcı dostu hale geldi.
+* Teknik check isimleri UI’da doğrudan görünmez.
+* Validator key’leri API contract içinde korunur.
+* UI label’ları ayrı helper üzerinden yönetilebilir hale geldi.
+* Endpoint, core servis ve test suite değişmedi.

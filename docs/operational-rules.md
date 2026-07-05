@@ -1575,3 +1575,31 @@ HS / GTIP Mapping
 Yeni validator eklendiğinde summary warning/error detayları içinde otomatik veya açık şekilde görünmelidir.
 
 Bu kuralın amacı, data health uyarılarının sayısal olarak değil, operasyonel olarak anlaşılabilir şekilde görünmesini sağlamaktır.
+## RULE-074 — Data Health UI Labels Must Be Human-Friendly
+
+MINAI Data Sağlığı Dashboard, teknik alan adlarını kullanıcı ekranında doğrudan göstermemelidir.
+
+UI’da kullanıcı dostu operasyon dili tercih edilmelidir.
+
+Örnek label dönüşümleri:
+
+```text id="pa9ouh"
+overall_valid → Genel Durum
+valid_checks → Geçen Kontrol
+errors → Hata
+warnings → Uyarı
+checked_at → Son kontrol
+```
+
+Validator key’leri UI’da şu şekilde gösterilmelidir:
+
+```text id="yu8cis"
+commodity_dictionary → Ürün Sözlüğü
+supplier_capabilities → Tedarikçi Yetkinlik Matrisi
+customer_memory → Müşteri Hafızası
+hs_commodity_map → HS / GTIP Eşleştirme
+```
+
+Yeni data health validator eklendiğinde, teknik key ile birlikte kullanıcı dostu UI label’ı da eklenmelidir.
+
+Bu kuralın amacı, operasyon ekranının geliştirici terimleri yerine anlaşılır iş diliyle çalışmasını sağlamaktır.
