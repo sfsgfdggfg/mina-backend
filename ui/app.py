@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
+from src.core.data_health_labels import get_data_health_check_label
 
 
 API_BASE_URL = "http://127.0.0.1:8000"
@@ -734,17 +735,6 @@ def fetch_data_health_summary() -> dict:
     response.raise_for_status()
     return response.json()
 
-
-
-def get_data_health_check_label(check_name: str) -> str:
-    labels = {
-        "commodity_dictionary": "Ürün Sözlüğü",
-        "supplier_capabilities": "Tedarikçi Yetkinlik Matrisi",
-        "customer_memory": "Müşteri Hafızası",
-        "hs_commodity_map": "HS / GTIP Eşleştirme",
-    }
-
-    return labels.get(check_name, check_name.replace("_", " ").title())
 
 def render_data_health_summary():
     st.markdown("### Genel Data Sağlığı Özeti")

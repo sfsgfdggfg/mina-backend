@@ -3,6 +3,7 @@ from src.core.supplier_capability_validator import validate_supplier_capabilitie
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
 from src.core.data_health import build_data_health_summary
+from src.core.data_health_labels import get_data_health_check_label
 
 
 def determine_result_type(result: dict) -> str:
@@ -391,6 +392,38 @@ def evaluate_data_health_summary() -> dict:
 
     return {
         "name": "Data health summary regression",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_data_health_label_mapping() -> dict:
+    expected_labels = {
+        "commodity_dictionary": "Ürün Sözlüğü",
+        "supplier_capabilities": "Tedarikçi Yetkinlik Matrisi",
+        "customer_memory": "Müşteri Hafızası",
+        "hs_commodity_map": "HS / GTIP Eşleştirme",
+    }
+
+    failures = []
+
+    for check_name, expected_label in expected_labels.items():
+        actual_label = get_data_health_check_label(check_name)
+
+        if actual_label != expected_label:
+            failures.append(
+                f"label for {check_name} expected {expected_label}, got {actual_label}"
+            )
+
+    fallback_label = get_data_health_check_label("unknown_validator_key")
+
+    if fallback_label != "Unknown Validator Key":
+        failures.append(
+            f"fallback label expected Unknown Validator Key, got {fallback_label}"
+        )
+
+    return {
+        "name": "Data health label mapping",
         "passed": len(failures) == 0,
         "failures": failures,
     }
