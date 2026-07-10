@@ -1603,3 +1603,34 @@ hs_commodity_map → HS / GTIP Eşleştirme
 Yeni data health validator eklendiğinde, teknik key ile birlikte kullanıcı dostu UI label’ı da eklenmelidir.
 
 Bu kuralın amacı, operasyon ekranının geliştirici terimleri yerine anlaşılır iş diliyle çalışmasını sağlamaktır.
+
+## RULE-075 — Data Health UI Labels Must Be Contract-Tested
+
+MINAI Data Sağlığı Dashboard'da kullanılan validator label mapping merkezi ve test edilebilir olmalıdır.
+
+Merkezi helper:
+
+    src/core/data_health_labels.py
+    get_data_health_check_label()
+
+UI, kendi yerel label sözlüğünü oluşturmamalı; merkezi helper'ı kullanmalıdır.
+
+Contract test en az şu mapping'leri doğrulamalıdır:
+
+    commodity_dictionary → Ürün Sözlüğü
+    supplier_capabilities → Tedarikçi Yetkinlik Matrisi
+    customer_memory → Müşteri Hafızası
+    hs_commodity_map → HS / GTIP Eşleştirme
+
+Bilinmeyen validator anahtarları için okunabilir fallback davranışı da test edilmelidir.
+
+Yeni data health validator eklendiğinde şu yerler birlikte güncellenmelidir:
+
+    src/core/data_health.py
+    src/core/data_health_labels.py
+    evaluate_data_health_summary()
+    evaluate_data_health_label_mapping()
+    Data Sağlığı Dashboard
+    dokümantasyon
+
+Bu kuralın amacı, API validator anahtarları ile kullanıcıya gösterilen UI etiketleri arasındaki contract'ın sessizce bozulmasını engellemektir.

@@ -2781,3 +2781,73 @@ Summary alanındaki buton, metric, caption, expander ve hata/uyarı metinleri T�
 * Validator key’leri API contract içinde korunur.
 * UI label’ları ayrı helper üzerinden yönetilebilir hale geldi.
 * Endpoint, core servis ve test suite değişmedi.
+
+## DEC-067 — Data Health Label Mapping Contract Test v1
+
+**Status:** Accepted  
+**Date:** 2026-07-10
+
+### Decision
+
+Data health validator anahtarlarının kullanıcı dostu UI etiketlerine dönüştürülmesi için merkezi bir label helper kullanılmasına ve bu mapping'in regression test ile korunmasına karar verilmiştir.
+
+Yeni core dosyası:
+
+    src/core/data_health_labels.py
+
+Yeni helper:
+
+    get_data_health_check_label()
+
+Yeni test:
+
+    Data health label mapping
+
+Test suite sonucu:
+
+    21 passed, 0 failed
+
+### Rationale
+
+Data health etiketleri daha önce doğrudan `ui/app.py` içinde tutuluyordu.
+
+Bu yapı:
+
+- UI dosyasını import etmeden mapping'i test etmeyi zorlaştırıyordu.
+- Streamlit yan etkileri nedeniyle doğrudan UI testi oluşturmayı riskli hale getiriyordu.
+- Label contract'ının sessizce değişmesine izin verebiliyordu.
+
+Label mapping saf bir core helper'a taşınarak UI ve test suite tarafından ortak kullanılabilir hale getirilmiştir.
+
+### Implementation
+
+Yeni dosya:
+
+    src/core/data_health_labels.py
+
+Güncellenen dosyalar:
+
+    ui/app.py
+    src/simulation/test_reporter.py
+    src/workflow/pipeline.py
+
+Merkezi mapping şu validator anahtarlarını kapsar:
+
+    commodity_dictionary → Ürün Sözlüğü
+    supplier_capabilities → Tedarikçi Yetkinlik Matrisi
+    customer_memory → Müşteri Hafızası
+    hs_commodity_map → HS / GTIP Eşleştirme
+
+Bilinmeyen validator anahtarları için okunabilir fallback label üretilir.
+
+Örnek:
+
+    unknown_validator_key → Unknown Validator Key
+
+### Consequences
+
+- UI label mapping merkezi hale geldi.
+- Streamlit uygulaması import edilmeden mapping test edilebilir.
+- Bilinen validator etiketleri regression test ile korunur.
+- Bilinmeyen validator anahtarları için güvenli fallback bulunur.
+- Test suite toplamı 20'den 21'e çıkmıştır.
