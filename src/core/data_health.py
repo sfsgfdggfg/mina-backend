@@ -2,19 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
-from src.core.customer_memory_validator import validate_customer_memory_file
-from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
-from src.core.supplier_capability_validator import validate_supplier_capabilities_file
+from src.core.data_health_registry import run_data_health_checks
 
 
 def build_data_health_summary() -> Dict[str, Any]:
-    checks = {
-        "commodity_dictionary": validate_commodity_dictionary_file(),
-        "supplier_capabilities": validate_supplier_capabilities_file(),
-        "customer_memory": validate_customer_memory_file(),
-        "hs_commodity_map": validate_hs_commodity_map_file(),
-    }
+    checks = run_data_health_checks()
 
     total_checks = len(checks)
     valid_checks = sum(

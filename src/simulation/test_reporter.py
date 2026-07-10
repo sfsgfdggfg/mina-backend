@@ -4,6 +4,7 @@ from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
 from src.core.data_health import build_data_health_summary
 from src.core.data_health_labels import get_data_health_check_label
+from src.core.data_health_registry import get_data_health_check_keys, get_data_health_check_labels
 
 
 def determine_result_type(result: dict) -> str:
@@ -329,12 +330,7 @@ def evaluate_data_health_summary() -> dict:
         failures.append("checks must be a dictionary")
         checks = {}
 
-    expected_checks = {
-        "commodity_dictionary",
-        "supplier_capabilities",
-        "customer_memory",
-        "hs_commodity_map",
-    }
+    expected_checks = set(get_data_health_check_keys())
 
     missing_checks = expected_checks - set(checks.keys())
 
@@ -398,12 +394,7 @@ def evaluate_data_health_summary() -> dict:
 
 
 def evaluate_data_health_label_mapping() -> dict:
-    expected_labels = {
-        "commodity_dictionary": "Ürün Sözlüğü",
-        "supplier_capabilities": "Tedarikçi Yetkinlik Matrisi",
-        "customer_memory": "Müşteri Hafızası",
-        "hs_commodity_map": "HS / GTIP Eşleştirme",
-    }
+    expected_labels = get_data_health_check_labels()
 
     failures = []
 
