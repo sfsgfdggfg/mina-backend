@@ -1634,3 +1634,34 @@ Yeni data health validator eklendiğinde şu yerler birlikte güncellenmelidir:
     dokümantasyon
 
 Bu kuralın amacı, API validator anahtarları ile kullanıcıya gösterilen UI etiketleri arasındaki contract'ın sessizce bozulmasını engellemektir.
+
+## RULE-076 — Data Health Checks Must Be Registry-Driven
+
+MINAI’de data health check tanımları merkezi registry üzerinden yönetilmelidir.
+
+Merkezi registry dosyası:
+
+    src/core/data_health_registry.py
+
+Her data health check en az şu alanlara sahip olmalıdır:
+
+    key
+    label
+    validator
+
+Data health summary, UI label mapping ve regression testleri mümkün olduğunca bu registry’den beslenmelidir.
+
+Yeni data health validator eklendiğinde şu yerler kontrol edilmelidir:
+
+    src/core/data_health_registry.py
+    src/core/data_health.py
+    src/core/data_health_labels.py
+    evaluate_data_health_summary()
+    evaluate_data_health_label_mapping()
+    Data Sağlığı Dashboard
+    docs/decision-log.md
+    docs/operational-rules.md
+
+Validator key, label ve validator fonksiyonu ayrı dosyalarda tekrar hardcoded edilmemelidir.
+
+Bu kuralın amacı, data health sisteminde kaynak tekrarını azaltmak ve yeni validator eklerken UI, API ve test contract’larının birlikte güncel kalmasını sağlamaktır.

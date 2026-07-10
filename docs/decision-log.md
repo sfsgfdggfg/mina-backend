@@ -2851,3 +2851,70 @@ Bilinmeyen validator anahtarları için okunabilir fallback label üretilir.
 - Bilinen validator etiketleri regression test ile korunur.
 - Bilinmeyen validator anahtarları için güvenli fallback bulunur.
 - Test suite toplamı 20'den 21'e çıkmıştır.
+
+## DEC-068 — Data Health Check Registry v1
+
+**Status:** Accepted  
+**Date:** 2026-07-10
+
+### Decision
+
+Data health check tanımlarının merkezi bir registry üzerinden yönetilmesine karar verilmiştir.
+
+Yeni core dosyası:
+
+    src/core/data_health_registry.py
+
+Registry her data health check için şu bilgileri tutar:
+
+    key
+    label
+    validator
+
+Yeni registry yapısı:
+
+    DATA_HEALTH_CHECKS
+    get_data_health_checks()
+    get_data_health_check_keys()
+    get_data_health_check_labels()
+    run_data_health_checks()
+
+### Rationale
+
+Data health check listesi daha önce birden fazla dosyada hardcoded şekilde bulunuyordu:
+
+    src/core/data_health.py
+    src/core/data_health_labels.py
+    src/simulation/test_reporter.py
+    ui/app.py
+    docs
+
+Bu yapı yeni validator eklenirken hata riskini artırıyordu.
+
+Merkezi registry ile data health check key, label ve validator fonksiyonu tek noktada yönetilir.
+
+### Implementation
+
+Yeni dosya:
+
+    src/core/data_health_registry.py
+
+Güncellenen dosyalar:
+
+    src/core/data_health.py
+    src/core/data_health_labels.py
+    src/simulation/test_reporter.py
+
+`build_data_health_summary()` artık validator listesini doğrudan kendi içinde tutmaz. Bunun yerine registry üzerinden `run_data_health_checks()` çağırır.
+
+`get_data_health_check_label()` artık label sözlüğünü doğrudan kendi içinde tutmaz. Bunun yerine registry üzerinden `get_data_health_check_labels()` çağırır.
+
+Data health summary ve label mapping testleri artık beklenen check listesini registry’den alır.
+
+### Consequences
+
+- Data health check listesi merkezi hale geldi.
+- Yeni validator ekleme süreci daha güvenli hale geldi.
+- Summary, label ve regression testleri aynı registry kaynağına bağlandı.
+- Hardcoded check listeleri azaltıldı.
+- Test suite sonucu korunmuştur: 21 passed, 0 failed.
