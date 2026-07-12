@@ -46,6 +46,19 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
             ),
         )
 
+    # ADR class must be known before final equipment selection
+    if shipment.is_adr and not _has_meaningful_text(shipment.adr_class):
+        return EquipmentDecision(
+            selected_equipment="ADR Equipment Review",
+            reason="ADR sınıfı belirtilmemiştir.",
+            confidence=0.40,
+            source="rule_engine",
+            explanation=(
+                "Yük ADR kapsamında belirtilmiştir ancak ADR sınıfı bilinmemektedir. "
+                "ADR sınıfı netleşmeden standart veya özel ADR ekipmanı seçilmemelidir."
+            ),
+        )
+
     # ADR high-risk trigger
     if shipment.is_adr and shipment.adr_class in ["1", "7"]:
         return EquipmentDecision(

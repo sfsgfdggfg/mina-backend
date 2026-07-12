@@ -123,6 +123,8 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
         "hs_heading",
         "hs_subheading",
         "gtip_detected_from_email",
+        "is_adr",
+        "adr_class",
     ]:
         if field_name in expected:
             expected_value = expected.get(field_name)

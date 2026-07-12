@@ -171,6 +171,21 @@ def check_operational_consistency(
             "GTIP kodu ile ürün açıklaması uyumsuz görünüyor. Lütfen müşteri veya gümrük müşaviri ile doğrulayın."
         )
 
+    if is_adr and not adr_class:
+        errors.append(
+            "ADR sınıfı eksik. ADR sınıfı netleşmeden fiyat ve ekipman kararı tamamlanmamalıdır."
+        )
+
+        if "adr" not in selected_equipment:
+            errors.append(
+                "ADR sınıfı belirsiz yük için ekipman kararı ADR review durumunda olmalıdır."
+            )
+
+    if adr_class and not is_adr:
+        errors.append(
+            f"ADR Class {adr_class} mevcut ancak shipment is_adr=false."
+        )
+
     if supplier_quote and not selected_suppliers:
         warnings.append(
             "Supplier Quote üretildi ancak Supplier Selection sonucu boş."

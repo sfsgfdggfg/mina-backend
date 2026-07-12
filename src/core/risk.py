@@ -46,10 +46,22 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
             )
             requires_human_review = True
 
-    # ADR high-risk
-    if shipment.is_adr and shipment.adr_class in ["1", "7"]:
+    # ADR risk
+    if shipment.is_adr and not shipment.adr_class:
+        risk_reasons.append(
+            "Yük ADR kapsamında belirtilmiş ancak ADR sınıfı eksik."
+        )
+        requires_human_review = True
+
+    elif shipment.is_adr and shipment.adr_class in ["1", "7"]:
         risk_reasons.append("Yüksek riskli ADR sınıfı.")
         requires_management_review = True
+        requires_human_review = True
+
+    elif shipment.is_adr:
+        risk_reasons.append(
+            f"ADR Class {shipment.adr_class} yük. ADR taşıma şartları ayrıca kontrol edilmeli."
+        )
         requires_human_review = True
 
     # Temperature controlled cargo

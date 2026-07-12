@@ -34,6 +34,10 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
     if not shipment.cargo_ready_date:
         missing_fields.append("cargo ready date")
 
+    # ADR cargo requires an explicit ADR class
+    if shipment.is_adr and not shipment.adr_class:
+        missing_fields.append("adr class")
+
     # Machine cargo requires dimensions
     if shipment.commodity and "makine" in shipment.commodity.lower():
         has_dimensions = any(
@@ -60,6 +64,7 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
         "commodity",
         "cargo ready date",
         "machine dimensions",
+        "adr class",
     }
 
     profile_critical_fields = commodity_profile.get("critical_missing_info_fields", [])

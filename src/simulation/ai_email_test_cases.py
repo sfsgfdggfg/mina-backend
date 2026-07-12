@@ -340,4 +340,50 @@ Teşekkürler.
         },
     },
 
+    {
+        "name": "ADR class missing",
+        "email": """
+Merhaba,
+
+Bursa'dan Lyon Fransa'ya ADR kapsamındaki endüstriyel malzememiz için komple araç fiyatı rica ederiz.
+Toplam 10 palet, yaklaşık 6500 kg.
+Yük 28.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "clarification",
+            "equipment": "ADR Equipment Review",
+            "service_type": "FTL",
+            "risk_level": "yellow",
+            "is_adr": True,
+            "adr_class": None,
+            "missing_fields": ["adr class"],
+            "action_type": "clarification",
+            "operational_error_contains": "ADR sınıfı eksik",
+        },
+    },
+    {
+        "name": "Non-ADR negation",
+        "email": """
+Merhaba,
+
+İzmir'den Köln Almanya'ya 5 palet tekstil ürünü için komple araç fiyatı rica ederiz.
+Toplam ağırlık yaklaşık 1800 kg.
+Yük ADR kapsamında değildir.
+Yük 29.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "quote",
+            "equipment": "Tenteli / Curtainsider",
+            "service_type": "FTL",
+            "risk_level": "yellow",
+            "is_adr": False,
+            "adr_class": None,
+            "action_type": "quote_with_review",
+        },
+    },
+
 ]

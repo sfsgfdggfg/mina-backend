@@ -335,24 +335,44 @@ def _apply_gtip_safety_overrides(shipment, email_text: str):
 def _apply_email_text_safety_overrides(shipment, email_text: str):
     """
     Critical logistics signals should not depend only on AI extraction.
-    Raw email text overrides are deterministic and should have final priority.
+    Raw email text overrides have final priority for ADR status.
     """
 
     text = (email_text or "").lower()
 
-    adr_match = re.search(r"\\badr\\b[^0-9]{0,20}\\b(1|7)\b", text)
-    class_match = re.search(r"\\bclass\\s*(1|7)\b", text)
+    adr_negated = any(
+        re.search(pattern, text)
+        for pattern in [
+            r"\bnon[\s-]?adr\b",
+            r"\badr\s+(?:değil|degil|değildir|degildir|yok)\b",
+            r"\badr\s+kapsam(?:ı|i)nda\s+(?:değil|degil|değildir|degildir)\b",
+            r"\badr\s+kapsam(?:ı|i)\s+dış(?:ı|i)nda\b",
+            r"\bnot\s+(?:subject\s+to\s+)?adr\b",
+        ]
+    )
 
-    match = adr_match or class_match
+    adr_mentioned = bool(re.search(r"\badr\b", text))
+    adr_class_match = re.search(
+        r"\badr\b\s*(?:class|sınıf(?:ı)?|sinif(?:i)?)"
+        r"\s*[:\-]?\s*([1-9](?:\.[1-3])?)\b",
+        text,
+    )
 
-    if match:
-        adr_class = match.group(1)
-
+    if adr_negated:
+        shipment.is_adr = False
+        shipment.adr_class = None
+    elif adr_class_match:
         shipment.is_adr = True
-        shipment.adr_class = adr_class
+        shipment.adr_class = adr_class_match.group(1)
 
         if not shipment.commodity:
-            shipment.commodity = f"ADR Class {adr_class}"
+            shipment.commodity = f"ADR Class {shipment.adr_class}"
+    elif adr_mentioned:
+        shipment.is_adr = True
+        shipment.adr_class = None
+    else:
+        shipment.is_adr = False
+        shipment.adr_class = None
 
     shipment = _apply_commodity_safety_overrides(shipment, email_text)
     shipment = _apply_gtip_safety_overrides(shipment, email_text)
