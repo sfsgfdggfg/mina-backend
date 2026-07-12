@@ -59,7 +59,11 @@ def get_data_health_check_labels() -> Dict[str, str]:
 
 
 def run_data_health_checks() -> Dict[str, ValidationResult]:
-    return {
-        check.key: check.validator()
-        for check in DATA_HEALTH_CHECKS
-    }
+    results: Dict[str, ValidationResult] = {}
+
+    for check in DATA_HEALTH_CHECKS:
+        result = dict(check.validator())
+        result["label"] = check.label
+        results[check.key] = result
+
+    return results

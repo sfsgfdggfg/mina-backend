@@ -813,7 +813,7 @@ def render_data_health_summary():
             warnings = result.get("warnings") or []
 
             status_icon = "✅" if valid else "❌"
-            readable_name = get_data_health_check_label(check_name)
+            readable_name = result.get("label") or get_data_health_check_label(check_name)
 
             st.write(
                 f"{status_icon} **{readable_name}** — "
@@ -833,7 +833,7 @@ def render_data_health_summary():
         )
 
         for check_name, result in issue_checks.items():
-            readable_name = get_data_health_check_label(check_name)
+            readable_name = result.get("label") or get_data_health_check_label(check_name)
             errors = result.get("errors") or []
             warnings = result.get("warnings") or []
 

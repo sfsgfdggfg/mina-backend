@@ -482,6 +482,47 @@ def evaluate_data_health_registry_integrity() -> dict:
         "failures": failures,
     }
 
+
+def evaluate_data_health_summary_check_metadata() -> dict:
+    summary = build_data_health_summary()
+    expected_labels = get_data_health_check_labels()
+    failures = []
+
+    checks = summary.get("checks")
+
+    if not isinstance(checks, dict):
+        failures.append("data health summary checks must be a dictionary")
+        checks = {}
+
+    for check_name, expected_label in expected_labels.items():
+        result = checks.get(check_name)
+
+        if not isinstance(result, dict):
+            failures.append(
+                f"summary result for {check_name} must be a dictionary"
+            )
+            continue
+
+        if "label" not in result:
+            failures.append(
+                f"summary result for {check_name} missing label metadata"
+            )
+            continue
+
+        actual_label = result.get("label")
+
+        if actual_label != expected_label:
+            failures.append(
+                f"summary label for {check_name} "
+                f"expected {expected_label}, got {actual_label}"
+            )
+
+    return {
+        "name": "Data health summary check metadata",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
 def print_test_report(test_results: list[dict]) -> None:
     print("\n\n==============================")
     print("AUTOMATED TEST REPORT")
