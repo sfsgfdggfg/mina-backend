@@ -185,28 +185,7 @@ Resmi tatiller, dini bayramlar ve kritik tatil dönemleri operasyonel risk fakt�
 
 AI bu durumlarda kullanıcıyı uyarır ancak tek başına karar vermez.
 
-RULE-031
-Public email domain kullanan kontaklarda müşteri şirketi otomatik domain üzerinden belirlenmez.
-
-RULE-032
-Çok düzenli müşterilerde kişi adı / email ön eki müşteri tanıma için güçlü sinyaldir.
-
-Örnek:
-selman@temsa.com
-→ Selman bilinen kontaksa
-→ Customer = TEMSA
-
-[RULE-033]
-Road Freight fiyatı supplier’dan gelen güncel fiyatlara dayanır.
-
-Geçmiş fiyatlar karar destek verisidir; ana fiyat kaynağı değildir.
-
-RULE-034
-
-Makine yüklerinde ölçü bilgisi eksikse sistem fiyat üretmez.
-
-Müşteriden ölçü ve ağırlık bilgisi ister.
-
+---
 
 ## RULE-031
 
