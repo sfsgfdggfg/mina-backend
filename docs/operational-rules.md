@@ -1711,3 +1711,55 @@ Yeni validator eklendiğinde şu kontroller yapılmalıdır:
 
 Bu kuralın amacı, teknik validator anahtarları ile kullanıcıya gösterilen adlar arasındaki ilişkiyi API seviyesinde açık ve güvenilir hale getirmektir.
 
+
+## RULE-079 — ADR Status and Class Must Be Deterministic and Complete
+
+MINAI, ADR durumunu yalnızca AI çıkarımına dayanarak belirlememelidir.
+
+Ham email metni ADR statüsü için deterministik safety override olarak kullanılmalıdır.
+
+Email açıkça ADR ifadesi içeriyorsa:
+
+    is_adr = true
+
+ADR sınıfı belirtilmişse:
+
+    adr_class = belirtilen sınıf
+
+ADR belirtilmiş ancak ADR sınıfı eksikse:
+
+    adr class kritik eksik bilgi olarak işaretlenmelidir
+    fiyat ve teklif akışı durmalıdır
+    clarification email hazırlanmalıdır
+    ekipman kararı ADR Equipment Review olmalıdır
+    operational consistency hata üretmelidir
+
+Email ADR olmadığını açıkça belirtiyorsa:
+
+    is_adr = false
+    adr_class = null
+
+Negation örnekleri:
+
+    non-ADR
+    ADR değil
+    ADR değildir
+    ADR kapsamında değildir
+    ADR kapsamı dışında
+    not subject to ADR
+
+Email içinde ADR ifadesi yoksa AI tarafından varsayılan ADR bilgisi korunmamalıdır.
+
+ADR sınıfı eksikken standart Tenteli, Reefer veya başka nihai ekipman seçimi yapılmamalıdır.
+
+Clarification email en az şu bilgiyi istemelidir:
+
+    Yükün ADR sınıfı ve varsa alt sınıfı
+
+Yeni ADR parser veya regex değişikliklerinde şu regression testleri korunmalıdır:
+
+    ADR Class 7
+    ADR class missing
+    Non-ADR negation
+
+Bu kuralın amacı, ADR yüklerinde yanlış sınıflandırma, yanlış ekipman ve erken fiyatlandırma riskini önlemektir.

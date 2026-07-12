@@ -3055,3 +3055,103 @@ Test suite sonucu:
 - Merkezi label helper güvenli fallback olarak korunur.
 - Yeni validator eklendiğinde display metadata otomatik olarak registry'den alınır.
 
+
+## DEC-071 — ADR Parser and Consistency Guard v1
+
+**Status:** Accepted  
+**Date:** 2026-07-12
+
+### Decision
+
+ADR durumunun yalnızca AI çıkarımına bırakılmamasına ve ham email metni üzerinden deterministik safety override uygulanmasına karar verilmiştir.
+
+Yeni davranış:
+
+    Email açıkça ADR diyorsa:
+    is_adr = true
+
+    ADR sınıfı belirtilmişse:
+    adr_class = belirtilen sınıf
+
+    ADR belirtilmiş ancak sınıf yoksa:
+    is_adr = true
+    adr_class = null
+    fiyat akışı durur
+    clarification email hazırlanır
+
+    Email ADR olmadığını açıkça söylüyorsa:
+    is_adr = false
+    adr_class = null
+
+    Email içinde ADR ifadesi yoksa:
+    AI tarafından varsayılan ADR bilgisi sıfırlanır
+
+### Rationale
+
+AI parser aynı veya benzer girdilerde zaman zaman ADR bilgisini yanlışlıkla varsayabiliyordu.
+
+Bu durum şu risklere yol açıyordu:
+
+    ADR olmayan yükün ADR olarak işaretlenmesi
+    ADR sınıfı bilinmeyen yükte standart ekipman seçilmesi
+    ADR sınıfı eksikken fiyat oluşturulması
+    Operational consistency kontrolünün belirsiz ADR durumunu sessizce geçirmesi
+
+ADR operasyonel olarak yüksek etkili bir bilgidir ve deterministik kontrol gerektirir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+    src/ai/email_parser.py
+    src/core/missing_info.py
+    src/core/risk.py
+    src/core/equipment.py
+    src/core/operational_consistency.py
+    src/ai/clarification_generator.py
+    src/simulation/ai_email_test_cases.py
+    src/simulation/test_reporter.py
+
+Parser safety override şu davranışları destekler:
+
+    ADR Class 1
+    ADR sınıf 7
+    ADR belirtilmiş ancak sınıf eksik
+    non-ADR
+    ADR değildir
+    ADR kapsamında değildir
+    not subject to ADR
+
+ADR sınıfı eksikse yeni kritik missing field eklenir:
+
+    adr class
+
+Bu durumda ekipman kararı:
+
+    ADR Equipment Review
+
+Clarification email şu bilgiyi ister:
+
+    Yükün ADR sınıfı ve varsa alt sınıfı
+
+Operational consistency şu durumu hata olarak işaretler:
+
+    ADR sınıfı eksik
+
+Yeni regression testleri:
+
+    ADR class missing
+    Non-ADR negation
+
+Test suite sonucu:
+
+    25 passed, 0 failed
+
+### Consequences
+
+- ADR statüsü ham email metninden deterministik olarak belirlenir.
+- AI tarafından yanlışlıkla varsayılan ADR bilgisi engellenir.
+- ADR sınıfı eksikken fiyat oluşturulmaz.
+- Belirsiz ADR yükünde standart ekipman seçilmez.
+- Clarification email ADR sınıfını açıkça ister.
+- Operational consistency ADR belirsizliğini hata olarak gösterir.
