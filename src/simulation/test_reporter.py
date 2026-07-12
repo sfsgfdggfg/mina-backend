@@ -4,7 +4,7 @@ from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
 from src.core.data_health import build_data_health_summary
 from src.core.data_health_labels import get_data_health_check_label
-from src.core.data_health_registry import get_data_health_check_keys, get_data_health_check_labels
+from src.core.data_health_registry import get_data_health_check_keys, get_data_health_check_labels, get_data_health_checks
 
 
 def determine_result_type(result: dict) -> str:
@@ -415,6 +415,69 @@ def evaluate_data_health_label_mapping() -> dict:
 
     return {
         "name": "Data health label mapping",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_data_health_registry_integrity() -> dict:
+    checks = get_data_health_checks()
+    failures = []
+
+    if not checks:
+        failures.append("data health registry must not be empty")
+
+    keys = []
+    labels = []
+
+    for index, check in enumerate(checks, start=1):
+        if not check.key or not isinstance(check.key, str):
+            failures.append(f"check #{index} has invalid key: {check.key}")
+
+        if not check.label or not isinstance(check.label, str):
+            failures.append(f"check #{index} has invalid label: {check.label}")
+
+        if not callable(check.validator):
+            failures.append(f"check #{index} validator is not callable")
+
+        keys.append(check.key)
+        labels.append(check.label)
+
+        if callable(check.validator):
+            try:
+                result = check.validator()
+            except Exception as error:
+                failures.append(
+                    f"validator for {check.key} raised {type(error).__name__}: {error}"
+                )
+                continue
+
+            if not isinstance(result, dict):
+                failures.append(f"validator for {check.key} must return dict")
+
+            elif "valid" not in result:
+                failures.append(f"validator for {check.key} missing valid key")
+
+    duplicate_keys = sorted(
+        key
+        for key in set(keys)
+        if keys.count(key) > 1
+    )
+
+    duplicate_labels = sorted(
+        label
+        for label in set(labels)
+        if labels.count(label) > 1
+    )
+
+    for key in duplicate_keys:
+        failures.append(f"duplicate data health registry key: {key}")
+
+    for label in duplicate_labels:
+        failures.append(f"duplicate data health registry label: {label}")
+
+    return {
+        "name": "Data health registry integrity",
         "passed": len(failures) == 0,
         "failures": failures,
     }
