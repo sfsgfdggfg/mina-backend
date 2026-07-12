@@ -2918,3 +2918,66 @@ Data health summary ve label mapping testleri artık beklenen check listesini re
 - Summary, label ve regression testleri aynı registry kaynağına bağlandı.
 - Hardcoded check listeleri azaltıldı.
 - Test suite sonucu korunmuştur: 21 passed, 0 failed.
+
+## DEC-069 — Data Health Registry Integrity Test v1
+
+**Status:** Accepted  
+**Date:** 2026-07-10
+
+### Decision
+
+Data health registry yapısının test suite içinde ayrı bir integrity test ile doğrulanmasına karar verilmiştir.
+
+Yeni test:
+
+    Data health registry integrity
+
+Test suite sonucu:
+
+    22 passed, 0 failed
+
+### Rationale
+
+Data health check tanımları artık merkezi registry üzerinden yönetilmektedir:
+
+    src/core/data_health_registry.py
+
+Bu registry; data health summary, UI label mapping ve regression testleri için kritik kaynak haline gelmiştir.
+
+Registry bozulursa şu alanlar etkilenebilir:
+
+    /data-health/summary
+    Data Sağlığı Dashboard
+    label mapping
+    data health regression testleri
+
+Bu nedenle registry'nin kendi bütünlüğü test edilmelidir.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+    src/simulation/test_reporter.py
+    src/workflow/pipeline.py
+
+Yeni evaluator:
+
+    evaluate_data_health_registry_integrity()
+
+Test şu kontrolleri yapar:
+
+    Registry boş değil mi?
+    Her check key geçerli mi?
+    Her label geçerli mi?
+    Her validator callable mı?
+    Duplicate key var mı?
+    Duplicate label var mı?
+    Validator çalıştırıldığında dict dönüyor mu?
+    Validator sonucu valid anahtarı içeriyor mu?
+
+### Consequences
+
+- Data health registry artık test suite tarafından korunur.
+- Yeni validator eklenirken registry hataları daha erken yakalanır.
+- Data health summary ve label mapping altyapısı daha güvenli hale geldi.
+- Test suite toplamı 21'den 22'ye çıkmıştır.

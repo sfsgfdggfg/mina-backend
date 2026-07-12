@@ -1665,3 +1665,32 @@ Yeni data health validator eklendiğinde şu yerler kontrol edilmelidir:
 Validator key, label ve validator fonksiyonu ayrı dosyalarda tekrar hardcoded edilmemelidir.
 
 Bu kuralın amacı, data health sisteminde kaynak tekrarını azaltmak ve yeni validator eklerken UI, API ve test contract’larının birlikte güncel kalmasını sağlamaktır.
+
+## RULE-077 — Data Health Registry Integrity Must Be Tested
+
+MINAI data health registry bütünlüğü test suite içinde doğrulanmalıdır.
+
+Registry dosyası:
+
+    src/core/data_health_registry.py
+
+Her registry kaydı en az şu alanları sağlamalıdır:
+
+    key
+    label
+    validator
+
+Integrity test şu durumları kontrol etmelidir:
+
+    Registry boş olmamalıdır.
+    Check key boş olmamalıdır.
+    Check label boş olmamalıdır.
+    Validator callable olmalıdır.
+    Duplicate key olmamalıdır.
+    Duplicate label olmamalıdır.
+    Validator çalıştırıldığında dict dönmelidir.
+    Validator sonucu valid anahtarını içermelidir.
+
+Yeni data health validator eklendiğinde registry integrity testinin geçmesi zorunludur.
+
+Bu kuralın amacı, data health registry'nin UI, API ve test contract'ları için güvenilir merkezi kaynak olarak kalmasını sağlamaktır.
