@@ -2981,3 +2981,77 @@ Test şu kontrolleri yapar:
 - Yeni validator eklenirken registry hataları daha erken yakalanır.
 - Data health summary ve label mapping altyapısı daha güvenli hale geldi.
 - Test suite toplamı 21'den 22'ye çıkmıştır.
+
+## DEC-070 — Data Health Summary Check Metadata v1
+
+**Status:** Accepted  
+**Date:** 2026-07-12
+
+### Decision
+
+Data health summary içindeki her validator sonucuna kullanıcı dostu görüntüleme metadata'sı eklenmesine karar verilmiştir.
+
+Her check sonucu artık registry'de tanımlanan `label` alanını içerir.
+
+Örnek:
+
+    "commodity_dictionary": {
+        "label": "Ürün Sözlüğü",
+        "valid": true,
+        "errors": [],
+        "warnings": []
+    }
+
+### Rationale
+
+Data health summary daha önce yalnızca teknik check anahtarlarını içeriyordu:
+
+    commodity_dictionary
+    supplier_capabilities
+    customer_memory
+    hs_commodity_map
+
+Bu anahtarlar geliştirici için anlamlıdır ancak harici istemciler ve kullanıcı arayüzleri için yeterince açıklayıcı değildir.
+
+Check sonucuna kullanıcı dostu label eklenmesiyle API contract kendi kendini açıklayan bir yapıya kavuşur.
+
+### Implementation
+
+Güncellenen dosyalar:
+
+    src/core/data_health_registry.py
+    src/simulation/test_reporter.py
+    src/workflow/pipeline.py
+    ui/app.py
+
+`run_data_health_checks()` her validator sonucuna registry'deki label bilgisini ekler.
+
+UI, check adını gösterirken öncelikle API sonucundaki `label` alanını kullanır.
+
+API sonucunda label bulunmaması halinde merkezi helper fallback olarak korunur:
+
+    get_data_health_check_label()
+
+Yeni regression testi:
+
+    Data health summary check metadata
+
+Test şu davranışları doğrular:
+
+    Her registry check'i summary içinde bulunur.
+    Her check sonucu dictionary yapısındadır.
+    Her check sonucu label metadata'sı içerir.
+    Label değeri registry'deki label ile eşleşir.
+
+Test suite sonucu:
+
+    23 passed, 0 failed
+
+### Consequences
+
+- Data health summary kendi kendini açıklayan bir API contract haline geldi.
+- Harici istemciler teknik check anahtarlarını çevirmek zorunda kalmaz.
+- UI label bilgisini doğrudan API sonucundan okuyabilir.
+- Merkezi label helper güvenli fallback olarak korunur.
+- Yeni validator eklendiğinde display metadata otomatik olarak registry'den alınır.
+

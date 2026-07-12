@@ -1673,3 +1673,41 @@ Integrity test şu durumları kontrol etmelidir:
 Yeni data health validator eklendiğinde registry integrity testinin geçmesi zorunludur.
 
 Bu kuralın amacı, data health registry'nin UI, API ve test contract'ları için güvenilir merkezi kaynak olarak kalmasını sağlamaktır.
+
+## RULE-078 — Data Health Summary Checks Must Include Display Metadata
+
+MINAI data health summary içindeki her check sonucu kullanıcı dostu display metadata içermelidir.
+
+Zorunlu metadata alanı:
+
+    label
+
+Label değeri merkezi data health registry üzerinden alınmalıdır:
+
+    src/core/data_health_registry.py
+
+Her summary check sonucu en az şu yapıyı desteklemelidir:
+
+    label
+    valid
+    errors
+    warnings
+
+UI, check adını gösterirken öncelikle API sonucundaki `label` alanını kullanmalıdır.
+
+API sonucunda label bulunmaması durumunda merkezi label helper fallback olarak kullanılabilir:
+
+    get_data_health_check_label()
+
+Label metadata'sı registry'deki tanımla eşleşmelidir.
+
+Yeni validator eklendiğinde şu kontroller yapılmalıdır:
+
+    Registry kaydında kullanıcı dostu label var mı?
+    Summary sonucu label metadata'sını içeriyor mu?
+    UI API label bilgisini gösterebiliyor mu?
+    evaluate_data_health_summary_check_metadata() testi geçiyor mu?
+    Data health summary contract dokümantasyonu güncel mi?
+
+Bu kuralın amacı, teknik validator anahtarları ile kullanıcıya gösterilen adlar arasındaki ilişkiyi API seviyesinde açık ve güvenilir hale getirmektir.
+
