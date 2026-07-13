@@ -120,7 +120,8 @@
     ],
     "equipment_types": [
       "Special ADR Equipment",
-      "Tenteli / Curtainsider"
+      "Tenteli / Curtainsider",
+      "ADR-Capable Equipment"
     ],
     "special_capabilities": [
       "adr",

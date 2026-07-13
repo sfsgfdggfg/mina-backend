@@ -386,4 +386,32 @@ Teşekkürler.
         },
     },
 
+    {
+        "name": "ADR Class 3 standard",
+        "email": """
+Merhaba,
+
+Gebze'den Paris Fransa'ya ADR Class 3 kapsamındaki boya ürünümüz için komple araç fiyatı rica ederiz.
+Toplam 12 palet, yaklaşık 9000 kg.
+Yük 30.06.2026 tarihinde hazır olacaktır.
+
+Teşekkürler.
+""",
+        "expected": {
+            "result_type": "clarification",
+            "equipment": "ADR-Capable Equipment",
+            "service_type": "FTL",
+            "risk_level": "yellow",
+            "is_adr": True,
+            "adr_class": "3",
+            "expected_selected_supplier_name": "ADR Secure Logistics",
+            "missing_fields": [
+                "msds/sds document",
+                "adr status",
+                "chemical packaging type",
+            ],
+            "action_type": "clarification",
+        },
+    },
+
 ]

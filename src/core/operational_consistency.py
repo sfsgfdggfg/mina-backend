@@ -109,6 +109,20 @@ def _find_supplier_capability(
     return None
 
 
+def _get_special_capabilities(
+    supplier_capability: Optional[Dict[str, Any]]
+) -> List[str]:
+    if not supplier_capability:
+        return []
+
+    raw_capabilities = supplier_capability.get("special_capabilities") or []
+
+    if not isinstance(raw_capabilities, list):
+        return []
+
+    return [_normalize(item) for item in raw_capabilities]
+
+
 def _get_service_types(supplier_capability: Optional[Dict[str, Any]]) -> List[str]:
     if not supplier_capability:
         return []
@@ -202,6 +216,21 @@ def check_operational_consistency(
         if selected_supplier_name and "domestic" not in _normalize(selected_supplier_name):
             warnings.append(
                 "Yurtiçi taşıma için domestic supplier seçilmemiş görünüyor."
+            )
+
+    if is_adr and selected_supplier_name:
+        supplier_special_capabilities = _get_special_capabilities(
+            selected_supplier_capability
+        )
+
+        if selected_supplier_capability is None:
+            errors.append(
+                f"{selected_supplier_name} için capability datası bulunamadı; "
+                "ADR yetkinliği doğrulanamadı."
+            )
+        elif "adr" not in supplier_special_capabilities:
+            errors.append(
+                f"{selected_supplier_name} ADR yetkinliğine sahip görünmüyor."
             )
 
     if is_adr and adr_class in ["1", "7"]:

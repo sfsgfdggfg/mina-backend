@@ -178,6 +178,29 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
                 f"customer_memory_matched expected {expected_customer_memory_matched}, got {actual_matched}"
             )
 
+    expected_selected_supplier_name = expected.get(
+        "expected_selected_supplier_name"
+    )
+    if expected_selected_supplier_name:
+        selected_suppliers = (
+            supplier_selection.get("selected_suppliers", [])
+            if isinstance(supplier_selection, dict)
+            else []
+        )
+
+        actual_selected_supplier = (
+            selected_suppliers[0].get("supplier_name")
+            if selected_suppliers
+            else None
+        )
+
+        if actual_selected_supplier != expected_selected_supplier_name:
+            failures.append(
+                "selected supplier expected "
+                f"{expected_selected_supplier_name}, "
+                f"got {actual_selected_supplier}"
+            )
+
     expected_supplier_name = expected.get("expected_supplier_name")
     if expected_supplier_name:
         selected_suppliers = (

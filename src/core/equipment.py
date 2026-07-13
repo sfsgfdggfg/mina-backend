@@ -72,6 +72,20 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
             ),
         )
 
+    # Other known ADR classes require ADR-capable equipment
+    if shipment.is_adr and _has_meaningful_text(shipment.adr_class):
+        return EquipmentDecision(
+            selected_equipment="ADR-Capable Equipment",
+            reason=f"ADR Class {shipment.adr_class} yük tespit edildi.",
+            confidence=0.90,
+            source="rule_engine",
+            explanation=(
+                f"Yük ADR Class {shipment.adr_class} kapsamında belirtilmiştir. "
+                "Class 1 ve 7 dışındaki ADR yüklerinde de ADR uyumlu araç, "
+                "sürücü ve taşıyıcı doğrulanmalıdır."
+            ),
+        )
+
     # Commodity profile reefer trigger
     commodity_profile = get_commodity_operational_profile(shipment.commodity)
     if commodity_profile.get("requires_reefer") or commodity_profile.get("default_equipment") == "Reefer":
