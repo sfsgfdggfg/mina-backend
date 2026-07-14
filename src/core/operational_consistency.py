@@ -4,6 +4,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.core.supplier_capability_registry import (
+    ADR_CAPABILITY,
+    get_required_adr_class_capability,
+)
+
 
 SUPPLIER_CAPABILITY_PATH = Path("data/supplier_capabilities.json")
 
@@ -228,14 +233,20 @@ def check_operational_consistency(
                 f"{selected_supplier_name} için capability datası bulunamadı; "
                 "ADR yetkinliği doğrulanamadı."
             )
-        elif "adr" not in supplier_special_capabilities:
+        elif ADR_CAPABILITY not in supplier_special_capabilities:
             errors.append(
                 f"{selected_supplier_name} ADR yetkinliğine sahip görünmüyor."
             )
-        elif adr_class in ["1", "7"]:
-            required_class_capability = f"class_{adr_class}"
+        else:
+            required_class_capability = get_required_adr_class_capability(
+                adr_class
+            )
 
-            if required_class_capability not in supplier_special_capabilities:
+            if (
+                required_class_capability
+                and required_class_capability
+                not in supplier_special_capabilities
+            ):
                 errors.append(
                     f"{selected_supplier_name} ADR Class {adr_class} "
                     "yetkinliğine sahip görünmüyor."

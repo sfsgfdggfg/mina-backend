@@ -4,22 +4,18 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.core.supplier_capability_registry import (
+    ADR_CAPABILITY,
+    ADR_CLASS_1_CAPABILITY,
+    ADR_CLASS_7_CAPABILITY,
+    ALLOWED_SPECIAL_CAPABILITIES,
+)
+
 
 SUPPLIER_CAPABILITIES_PATH = Path("data/supplier_capabilities.json")
 
 ALLOWED_ROLES = {"primary", "backup", "specialist"}
 ALLOWED_SERVICE_TYPES = {"FTL", "LTL"}
-ALLOWED_SPECIAL_CAPABILITIES = {
-    "adr",
-    "class_1",
-    "class_7",
-    "reefer",
-    "temperature_controlled",
-    "cold_chain",
-    "ltl",
-    "partial",
-    "parsiyel",
-}
 SCORE_FIELDS = ["reliability_score", "price_score", "speed_score"]
 
 REQUIRED_LIST_FIELDS = [
@@ -216,15 +212,18 @@ def validate_supplier_capabilities_file(
                         f"'{capability}'."
                     )
 
-            if active and "adr" in normalized_capabilities:
+            if active and ADR_CAPABILITY in normalized_capabilities:
                 active_adr_count += 1
 
             if (
                 any(
                     capability in normalized_capabilities
-                    for capability in ["class_1", "class_7"]
+                    for capability in [
+                        ADR_CLASS_1_CAPABILITY,
+                        ADR_CLASS_7_CAPABILITY,
+                    ]
                 )
-                and "adr" not in normalized_capabilities
+                and ADR_CAPABILITY not in normalized_capabilities
             ):
                 errors.append(
                     f"{supplier}: class_1 or class_7 capability requires "
@@ -245,7 +244,7 @@ def validate_supplier_capabilities_file(
                         "adr-capable equipment",
                     ]
                 )
-                and "adr" not in normalized_capabilities
+                and ADR_CAPABILITY not in normalized_capabilities
             ):
                 errors.append(
                     f"{supplier}: ADR equipment requires general "

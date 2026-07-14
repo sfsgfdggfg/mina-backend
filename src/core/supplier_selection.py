@@ -5,6 +5,11 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.core.supplier_capability_registry import (
+    ADR_CAPABILITY,
+    get_required_adr_class_capability,
+)
+
 
 def _normalize(value: Optional[str]) -> str:
     if value is None:
@@ -179,7 +184,7 @@ def select_suppliers_for_shipment(
             for item in supplier.get("special_capabilities", [])
         ]
 
-        if is_adr and "adr" not in supplier_capabilities:
+        if is_adr and ADR_CAPABILITY not in supplier_capabilities:
             rejected_suppliers.append(
                 {
                     "supplier_name": supplier["supplier_name"],
@@ -188,19 +193,22 @@ def select_suppliers_for_shipment(
             )
             continue
 
-        if is_adr and adr_class in ["1", "7"]:
-            required_class_capability = f"class_{adr_class}"
+        required_class_capability = get_required_adr_class_capability(adr_class)
 
-            if required_class_capability not in supplier_capabilities:
-                rejected_suppliers.append(
-                    {
-                        "supplier_name": supplier["supplier_name"],
-                        "reason": (
-                            f"ADR Class {adr_class} yetkinliği bulunmadığı için elendi."
-                        ),
-                    }
-                )
-                continue
+        if (
+            is_adr
+            and required_class_capability
+            and required_class_capability not in supplier_capabilities
+        ):
+            rejected_suppliers.append(
+                {
+                    "supplier_name": supplier["supplier_name"],
+                    "reason": (
+                        f"ADR Class {adr_class} yetkinliği bulunmadığı için elendi."
+                    ),
+                }
+            )
+            continue
 
         route_score = _score_route(supplier, shipment)
         equipment_score = _score_equipment(supplier, equipment_text, service_type)
