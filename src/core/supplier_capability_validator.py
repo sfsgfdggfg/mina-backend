@@ -9,6 +9,17 @@ SUPPLIER_CAPABILITIES_PATH = Path("data/supplier_capabilities.json")
 
 ALLOWED_ROLES = {"primary", "backup", "specialist"}
 ALLOWED_SERVICE_TYPES = {"FTL", "LTL"}
+ALLOWED_SPECIAL_CAPABILITIES = {
+    "adr",
+    "class_1",
+    "class_7",
+    "reefer",
+    "temperature_controlled",
+    "cold_chain",
+    "ltl",
+    "partial",
+    "parsiyel",
+}
 SCORE_FIELDS = ["reliability_score", "price_score", "speed_score"]
 
 REQUIRED_LIST_FIELDS = [
@@ -190,8 +201,56 @@ def validate_supplier_capabilities_file(
                 if _is_non_empty_string(capability)
             ]
 
+            seen_capabilities: set[str] = set()
+
+            for capability in normalized_capabilities:
+                if capability in seen_capabilities:
+                    errors.append(
+                        f"{supplier}: duplicate special_capability '{capability}'."
+                    )
+                seen_capabilities.add(capability)
+
+                if capability not in ALLOWED_SPECIAL_CAPABILITIES:
+                    errors.append(
+                        f"{supplier}: unsupported special_capability "
+                        f"'{capability}'."
+                    )
+
             if active and "adr" in normalized_capabilities:
                 active_adr_count += 1
+
+            if (
+                any(
+                    capability in normalized_capabilities
+                    for capability in ["class_1", "class_7"]
+                )
+                and "adr" not in normalized_capabilities
+            ):
+                errors.append(
+                    f"{supplier}: class_1 or class_7 capability requires "
+                    "general 'adr' capability."
+                )
+
+            normalized_equipment = [
+                str(equipment).strip().lower()
+                for equipment in equipment_types
+                if _is_non_empty_string(equipment)
+            ]
+
+            if (
+                any(
+                    equipment in normalized_equipment
+                    for equipment in [
+                        "special adr equipment",
+                        "adr-capable equipment",
+                    ]
+                )
+                and "adr" not in normalized_capabilities
+            ):
+                errors.append(
+                    f"{supplier}: ADR equipment requires general "
+                    "'adr' capability."
+                )
 
         for score_field in SCORE_FIELDS:
             if score_field not in item:

@@ -1,4 +1,8 @@
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
+import json
+import tempfile
+from pathlib import Path
+
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
@@ -323,6 +327,62 @@ def evaluate_supplier_capability_validation() -> dict:
     return {
         "name": "Supplier capability validation",
         "passed": validation_result.get("valid") is True,
+        "failures": failures,
+    }
+
+
+def evaluate_supplier_adr_capability_validation() -> dict:
+    invalid_supplier = [
+        {
+            "supplier_name": "Invalid ADR Supplier",
+            "active": True,
+            "role": "specialist",
+            "route_regions": ["western_europe"],
+            "countries": ["Almanya"],
+            "service_types": ["FTL"],
+            "equipment_types": ["ADR-Capable Equipment"],
+            "special_capabilities": [
+                "class_7",
+                "class_7",
+                "unknown_capability",
+            ],
+            "priority_routes": ["Türkiye-Almanya"],
+            "reliability_score": 0.90,
+            "price_score": 0.80,
+            "speed_score": 0.80,
+            "notes": "Intentionally invalid ADR supplier.",
+        }
+    ]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir) / "supplier_capabilities.json"
+        temp_path.write_text(
+            json.dumps(invalid_supplier, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        validation_result = validate_supplier_capabilities_file(temp_path)
+
+    errors = validation_result.get("errors", [])
+    expected_fragments = [
+        "duplicate special_capability 'class_7'",
+        "unsupported special_capability 'unknown_capability'",
+        "class_1 or class_7 capability requires general 'adr' capability",
+        "ADR equipment requires general 'adr' capability",
+    ]
+
+    failures = [
+        f"expected validation error containing {fragment!r}"
+        for fragment in expected_fragments
+        if not any(fragment in error for error in errors)
+    ]
+
+    if validation_result.get("valid") is not False:
+        failures.append("invalid ADR capability data should fail validation")
+
+    return {
+        "name": "Supplier ADR capability validation",
+        "passed": len(failures) == 0,
         "failures": failures,
     }
 
