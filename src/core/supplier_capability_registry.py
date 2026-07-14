@@ -12,21 +12,34 @@ REGISTRY_PATH = (
 )
 
 
-def _load_registry() -> dict:
-    if not REGISTRY_PATH.exists():
-        raise FileNotFoundError(
-            f"Supplier capability registry not found: {REGISTRY_PATH}"
+class SupplierCapabilityRegistryError(RuntimeError):
+    pass
+
+
+def load_supplier_capability_registry(
+    path: Path = REGISTRY_PATH,
+) -> dict:
+    if not path.exists():
+        raise SupplierCapabilityRegistryError(
+            f"Supplier capability registry not found: {path}"
         )
 
-    raw = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SupplierCapabilityRegistryError(
+            f"Invalid JSON in supplier capability registry: {exc}"
+        ) from exc
 
     if not isinstance(raw, dict):
-        raise ValueError("Supplier capability registry root must be an object.")
+        raise SupplierCapabilityRegistryError(
+            "Supplier capability registry root must be an object."
+        )
 
     return raw
 
 
-_REGISTRY = _load_registry()
+_REGISTRY = load_supplier_capability_registry()
 
 ALLOWED_SPECIAL_CAPABILITIES: Set[str] = set(
     _REGISTRY.get("allowed_special_capabilities", [])
@@ -42,6 +55,15 @@ ADR_CLASS_CAPABILITY_MAP: Dict[str, str] = {
 ADR_CAPABILITY = "adr"
 ADR_CLASS_1_CAPABILITY = ADR_CLASS_CAPABILITY_MAP.get("1", "class_1")
 ADR_CLASS_7_CAPABILITY = ADR_CLASS_CAPABILITY_MAP.get("7", "class_7")
+
+
+def get_supplier_capability_registry_metadata() -> dict:
+    return {
+        "source": str(REGISTRY_PATH),
+        "loaded": True,
+        "allowed_capability_count": len(ALLOWED_SPECIAL_CAPABILITIES),
+        "adr_class_mapping_count": len(ADR_CLASS_CAPABILITY_MAP),
+    }
 
 
 def get_required_adr_class_capability(

@@ -7,6 +7,10 @@ from src.core.supplier_capability_validator import validate_supplier_capabilitie
 from src.core.supplier_capability_registry_validator import (
     validate_supplier_capability_registry_file,
 )
+from src.core.supplier_capability_registry import (
+    SupplierCapabilityRegistryError,
+    load_supplier_capability_registry,
+)
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
 from src.core.data_health import build_data_health_summary
@@ -433,6 +437,70 @@ def evaluate_supplier_capability_registry_validation() -> dict:
 
     return {
         "name": "Supplier capability registry validation",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_supplier_capability_registry_runtime_integrity() -> dict:
+    failures = []
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+
+        missing_path = temp_dir_path / "missing_registry.json"
+
+        invalid_json_path = temp_dir_path / "invalid_registry.json"
+        invalid_json_path.write_text(
+            "{invalid json",
+            encoding="utf-8",
+        )
+
+        non_object_path = temp_dir_path / "non_object_registry.json"
+        non_object_path.write_text(
+            json.dumps(["adr", "class_1"]),
+            encoding="utf-8",
+        )
+
+        scenarios = [
+            (
+                "missing file",
+                missing_path,
+                "Supplier capability registry not found",
+            ),
+            (
+                "invalid JSON",
+                invalid_json_path,
+                "Invalid JSON in supplier capability registry",
+            ),
+            (
+                "non-object root",
+                non_object_path,
+                "Supplier capability registry root must be an object",
+            ),
+        ]
+
+        for scenario_name, scenario_path, expected_fragment in scenarios:
+            try:
+                load_supplier_capability_registry(scenario_path)
+            except SupplierCapabilityRegistryError as exc:
+                if expected_fragment not in str(exc):
+                    failures.append(
+                        f"{scenario_name}: expected error containing "
+                        f"{expected_fragment!r}, got {str(exc)!r}"
+                    )
+            except Exception as exc:
+                failures.append(
+                    f"{scenario_name}: unexpected exception type "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            else:
+                failures.append(
+                    f"{scenario_name}: expected SupplierCapabilityRegistryError"
+                )
+
+    return {
+        "name": "Supplier capability registry runtime integrity",
         "passed": len(failures) == 0,
         "failures": failures,
     }
