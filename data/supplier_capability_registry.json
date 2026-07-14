@@ -1,0 +1,17 @@
+{
+  "allowed_special_capabilities": [
+    "adr",
+    "class_1",
+    "class_7",
+    "reefer",
+    "temperature_controlled",
+    "cold_chain",
+    "ltl",
+    "partial",
+    "parsiyel"
+  ],
+  "adr_class_capability_map": {
+    "1": "class_1",
+    "7": "class_7"
+  }
+}

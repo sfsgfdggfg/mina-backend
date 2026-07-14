@@ -7,6 +7,9 @@ from src.core.commodity_dictionary_validator import validate_commodity_dictionar
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
+from src.core.supplier_capability_registry_validator import (
+    validate_supplier_capability_registry_file,
+)
 
 
 ValidationResult = Dict[str, object]
@@ -29,6 +32,11 @@ DATA_HEALTH_CHECKS: List[DataHealthCheck] = [
         key="supplier_capabilities",
         label="Tedarikçi Yetkinlik Matrisi",
         validator=validate_supplier_capabilities_file,
+    ),
+    DataHealthCheck(
+        key="supplier_capability_registry",
+        label="Tedarikçi Yetkinlik Registry",
+        validator=validate_supplier_capability_registry_file,
     ),
     DataHealthCheck(
         key="customer_memory",

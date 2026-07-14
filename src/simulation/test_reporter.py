@@ -4,6 +4,9 @@ import tempfile
 from pathlib import Path
 
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
+from src.core.supplier_capability_registry_validator import (
+    validate_supplier_capability_registry_file,
+)
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
 from src.core.data_health import build_data_health_summary
@@ -382,6 +385,54 @@ def evaluate_supplier_adr_capability_validation() -> dict:
 
     return {
         "name": "Supplier ADR capability validation",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_supplier_capability_registry_validation() -> dict:
+    invalid_registry = {
+        "allowed_special_capabilities": [
+            "adr",
+            "class_7",
+            "class_7",
+        ],
+        "adr_class_capability_map": {
+            "1": "unknown_class_1",
+        },
+    }
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir) / "supplier_capability_registry.json"
+        temp_path.write_text(
+            json.dumps(invalid_registry, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        validation_result = validate_supplier_capability_registry_file(
+            temp_path
+        )
+
+    errors = validation_result.get("errors", [])
+
+    expected_fragments = [
+        "duplicate allowed_special_capability 'class_7'",
+        "ADR Class 1 maps to unsupported capability 'unknown_class_1'",
+    ]
+
+    failures = [
+        f"expected validation error containing {fragment!r}"
+        for fragment in expected_fragments
+        if not any(fragment in error for error in errors)
+    ]
+
+    if validation_result.get("valid") is not False:
+        failures.append(
+            "invalid supplier capability registry should fail validation"
+        )
+
+    return {
+        "name": "Supplier capability registry validation",
         "passed": len(failures) == 0,
         "failures": failures,
     }
