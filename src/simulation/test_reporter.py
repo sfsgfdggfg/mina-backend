@@ -178,6 +178,31 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
                 f"customer_memory_matched expected {expected_customer_memory_matched}, got {actual_matched}"
             )
 
+    expected_rejected_supplier_reason_contains = expected.get(
+        "expected_rejected_supplier_reason_contains"
+    )
+    if expected_rejected_supplier_reason_contains:
+        rejected_suppliers = (
+            supplier_selection.get("rejected_suppliers", [])
+            if isinstance(supplier_selection, dict)
+            else []
+        )
+
+        rejected_reasons = [
+            str(item.get("reason", ""))
+            for item in rejected_suppliers
+            if isinstance(item, dict)
+        ]
+
+        if not any(
+            expected_rejected_supplier_reason_contains in reason
+            for reason in rejected_reasons
+        ):
+            failures.append(
+                "rejected supplier reason containing "
+                f"{expected_rejected_supplier_reason_contains!r} not found"
+            )
+
     expected_selected_supplier_name = expected.get(
         "expected_selected_supplier_name"
     )

@@ -232,6 +232,14 @@ def check_operational_consistency(
             errors.append(
                 f"{selected_supplier_name} ADR yetkinliğine sahip görünmüyor."
             )
+        elif adr_class in ["1", "7"]:
+            required_class_capability = f"class_{adr_class}"
+
+            if required_class_capability not in supplier_special_capabilities:
+                errors.append(
+                    f"{selected_supplier_name} ADR Class {adr_class} "
+                    "yetkinliğine sahip görünmüyor."
+                )
 
     if is_adr and adr_class in ["1", "7"]:
         if risk_level != "red":

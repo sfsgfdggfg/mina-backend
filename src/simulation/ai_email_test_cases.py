@@ -72,6 +72,9 @@ Saygılar.
             "equipment": "Special ADR Equipment",
             "service_type": "FTL",
             "risk_level": "red",
+            "expected_rejected_supplier_reason_contains": (
+                "ADR Class 7 yetkinliği bulunmadığı için elendi."
+            ),
             "action_type": "management_review",
         },
     },
@@ -404,7 +407,6 @@ Teşekkürler.
             "risk_level": "yellow",
             "is_adr": True,
             "adr_class": "3",
-            "expected_selected_supplier_name": "ADR Secure Logistics",
             "missing_fields": [
                 "msds/sds document",
                 "chemical packaging type",

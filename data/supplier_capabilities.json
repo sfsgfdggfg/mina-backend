@@ -201,5 +201,38 @@
     "price_score": 0.82,
     "speed_score": 0.84,
     "notes": "Türkiye içi FTL taşımalarda demo ana tedarikçi."
+  },
+  {
+    "supplier_name": "General ADR Logistics",
+    "active": true,
+    "role": "specialist",
+    "route_regions": [
+      "western_europe",
+      "central_europe"
+    ],
+    "countries": [
+      "Almanya",
+      "Avusturya",
+      "Fransa",
+      "Belçika"
+    ],
+    "service_types": [
+      "FTL"
+    ],
+    "equipment_types": [
+      "ADR-Capable Equipment",
+      "Special ADR Equipment"
+    ],
+    "special_capabilities": [
+      "adr"
+    ],
+    "priority_routes": [
+      "Türkiye-Almanya",
+      "Türkiye-Avusturya"
+    ],
+    "reliability_score": 0.91,
+    "price_score": 0.8,
+    "speed_score": 0.8,
+    "notes": "Genel ADR taşımalarda yetkin; Class 1 ve Class 7 özel yetkinliği bulunmaz."
   }
 ]

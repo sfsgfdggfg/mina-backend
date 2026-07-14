@@ -168,6 +168,7 @@ def select_suppliers_for_shipment(
     risk_level = _get_risk_level(risk_assessment)
     service_type = getattr(shipment, "service_type", "FTL") or "FTL"
     is_adr = bool(getattr(shipment, "is_adr", False))
+    adr_class = _normalize(getattr(shipment, "adr_class", None))
 
     scored_suppliers = []
     rejected_suppliers = []
@@ -186,6 +187,20 @@ def select_suppliers_for_shipment(
                 }
             )
             continue
+
+        if is_adr and adr_class in ["1", "7"]:
+            required_class_capability = f"class_{adr_class}"
+
+            if required_class_capability not in supplier_capabilities:
+                rejected_suppliers.append(
+                    {
+                        "supplier_name": supplier["supplier_name"],
+                        "reason": (
+                            f"ADR Class {adr_class} yetkinliği bulunmadığı için elendi."
+                        ),
+                    }
+                )
+                continue
 
         route_score = _score_route(supplier, shipment)
         equipment_score = _score_equipment(supplier, equipment_text, service_type)
