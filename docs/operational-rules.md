@@ -1879,3 +1879,31 @@ Yüksek riskli ADR sınıf capability mapping'i merkezi olarak tanımlanmalıdı
 Yeni capability eklenirken önce merkezi registry güncellenmelidir.
 
 Validator, selection ve consistency aynı capability adını registry üzerinden kullanmalıdır.
+
+## RULE-084 — Supplier Capability Registry Must Be Data-Driven and Validated
+
+Supplier capability isimleri ve ADR class capability mapping'leri merkezi veri dosyasından yönetilmelidir.
+
+Kaynak:
+
+    data/supplier_capability_registry.json
+
+Registry en az şu alanları içermelidir:
+
+    allowed_special_capabilities
+    adr_class_capability_map
+
+ADR class mapping'de kullanılan capability, allowed_special_capabilities listesinde bulunmalıdır.
+
+Duplicate capability isimleri validation hatası üretmelidir.
+
+Registry içinde genel adr capability bulunmalıdır.
+
+Registry validator, Data Health sistemine bağlı olmalıdır.
+
+Supplier selection, operational consistency ve supplier capability validator aynı data-driven registry'yi kullanmalıdır.
+
+Regression testi en az şu hataları doğrulamalıdır:
+
+    duplicate allowed capability
+    unsupported ADR class mapping target

@@ -3405,3 +3405,69 @@ Test suite sonucu:
 - Validator, selection ve consistency arasında string ayrışması riski azalır.
 - Yeni capability ekleme süreci daha kontrollü hale gelir.
 - ADR Class 1 ve 7 mapping'i tek yerde tutulur.
+
+## DEC-076 — Data-Driven Supplier Capability Registry v1
+
+**Status:** Accepted  
+**Date:** 2026-07-14
+
+### Decision
+
+Supplier capability isimleri ve yüksek riskli ADR sınıf mapping'lerinin kod içinde sabit tutulmamasına karar verilmiştir.
+
+Yeni veri dosyası:
+
+    data/supplier_capability_registry.json
+
+Bu dosya şu alanları yönetir:
+
+    allowed_special_capabilities
+    adr_class_capability_map
+
+Örnek ADR class mapping:
+
+    ADR Class 1 -> class_1
+    ADR Class 7 -> class_7
+
+Runtime registry bu JSON dosyasını yükler.
+
+### Implementation
+
+Güncellenen alanlar:
+
+    data/supplier_capability_registry.json
+    src/core/supplier_capability_registry.py
+    src/core/supplier_capability_registry_validator.py
+    src/core/data_health_registry.py
+    src/simulation/test_reporter.py
+    src/workflow/pipeline.py
+    src/api.py
+
+Yeni validator şu hataları kontrol eder:
+
+    registry root formatı
+    allowed capability listesi
+    duplicate capability
+    adr capability varlığı
+    ADR class mapping formatı
+    mapping target capability'nin allowed listede bulunması
+
+Yeni Data Health check:
+
+    supplier_capability_registry
+    Tedarikçi Yetkinlik Registry
+
+Yeni regression testi:
+
+    Supplier capability registry validation
+
+Test suite sonucu:
+
+    28 passed, 0 failed
+
+### Consequences
+
+- Capability isimleri veri tabanlı hale gelir.
+- ADR class mapping kod değişikliği olmadan registry verisi üzerinden güncellenebilir.
+- Hatalı mapping ve duplicate capability Data Health aşamasında yakalanır.
+- CLI ve API test akışları registry validation regression testini çalıştırır.
