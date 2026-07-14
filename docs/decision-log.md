@@ -3347,3 +3347,61 @@ Test suite sonucu:
 - Data Health supplier validation bu kuralları otomatik olarak uygular.
 - Yanlış ADR ekipman/capability kombinasyonları sessizce sisteme giremez.
 - CLI ve API test akışları aynı regression kontrolünü çalıştırır.
+
+## DEC-075 — Supplier Capability Registry v1
+
+**Status:** Accepted  
+**Date:** 2026-07-14
+
+### Decision
+
+Supplier capability isimlerinin validator, supplier selection ve operational consistency içinde ayrı ayrı string olarak tutulmamasına karar verilmiştir.
+
+Capability adları merkezi registry üzerinden yönetilecektir.
+
+Yeni merkezi dosya:
+
+    src/core/supplier_capability_registry.py
+
+Registry şu alanları içerir:
+
+    adr
+    class_1
+    class_7
+    reefer
+    temperature_controlled
+    cold_chain
+    ltl
+    partial
+    parsiyel
+
+Ayrıca yüksek riskli ADR sınıfları için merkezi mapping sağlar:
+
+    ADR Class 1 -> class_1
+    ADR Class 7 -> class_7
+
+### Implementation
+
+Güncellenen alanlar:
+
+    src/core/supplier_capability_registry.py
+    src/core/supplier_capability_validator.py
+    src/core/supplier_selection.py
+    src/core/operational_consistency.py
+
+Validator, izin verilen capability listesini registry'den alır.
+
+Supplier selection, genel ADR capability ve sınıf bazlı ADR capability gereksinimlerini registry üzerinden çözer.
+
+Operational consistency aynı registry ve mapping'i kullanır.
+
+Test suite sonucu:
+
+    27 passed, 0 failed
+
+### Consequences
+
+- Capability isimleri tek merkezden yönetilir.
+- Validator, selection ve consistency arasında string ayrışması riski azalır.
+- Yeni capability ekleme süreci daha kontrollü hale gelir.
+- ADR Class 1 ve 7 mapping'i tek yerde tutulur.

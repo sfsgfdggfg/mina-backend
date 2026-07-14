@@ -1848,3 +1848,34 @@ Regression testi en az şu hataları doğrulamalıdır:
     unknown capability
     class-specific capability without adr
     ADR equipment without adr
+
+## RULE-083 — Supplier Capability Names Must Come From the Central Registry
+
+Supplier capability isimleri farklı modüllerde serbest string olarak tekrar edilmemelidir.
+
+Aşağıdaki modüller merkezi capability registry kullanmalıdır:
+
+    supplier capability validator
+    supplier selection
+    operational consistency
+
+İzin verilen capability isimleri:
+
+    adr
+    class_1
+    class_7
+    reefer
+    temperature_controlled
+    cold_chain
+    ltl
+    partial
+    parsiyel
+
+Yüksek riskli ADR sınıf capability mapping'i merkezi olarak tanımlanmalıdır:
+
+    ADR Class 1 -> class_1
+    ADR Class 7 -> class_7
+
+Yeni capability eklenirken önce merkezi registry güncellenmelidir.
+
+Validator, selection ve consistency aynı capability adını registry üzerinden kullanmalıdır.
