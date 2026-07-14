@@ -3286,3 +3286,64 @@ Test suite sonucu:
 - Genel ADR supplier yüksek riskli ADR sınıflarına otomatik olarak uygun sayılmaz.
 - Class 1/7 dışındaki ADR sınıflarında genel ADR supplier kullanılabilir.
 - Supplier selection ve operational consistency aynı sınıf yetkinliği kuralını uygular.
+
+## DEC-074 — ADR Capability Data Validation v1
+
+**Status:** Accepted  
+**Date:** 2026-07-14
+
+### Decision
+
+Supplier capability datasındaki ADR bilgilerinin yalnızca runtime selection sırasında değil, veri doğrulama aşamasında da kontrol edilmesine karar verilmiştir.
+
+Yeni validation kuralları:
+
+    class_1 veya class_7 capability varsa:
+    genel adr capability zorunlu
+
+    Special ADR Equipment varsa:
+    genel adr capability zorunlu
+
+    ADR-Capable Equipment varsa:
+    genel adr capability zorunlu
+
+    duplicate special_capabilities:
+    validation error
+
+    bilinmeyen special_capability:
+    validation error
+
+### Implementation
+
+Güncellenen alanlar:
+
+    src/core/supplier_capability_validator.py
+    src/simulation/test_reporter.py
+    src/workflow/pipeline.py
+    src/api.py
+
+İzin verilen special capabilities merkezi olarak tanımlanmıştır.
+
+Yeni regression testi:
+
+    Supplier ADR capability validation
+
+Test, geçici ve kasıtlı olarak hatalı supplier datası üretir ve şu hataların yakalandığını doğrular:
+
+    duplicate class_7 capability
+    unknown capability
+    class_7 without adr
+    ADR equipment without adr
+
+Yeni evaluator hem CLI test suite hem de API test endpoint akışına bağlanmıştır.
+
+Test suite sonucu:
+
+    27 passed, 0 failed
+
+### Consequences
+
+- ADR capability veri hataları runtime öncesinde yakalanır.
+- Data Health supplier validation bu kuralları otomatik olarak uygular.
+- Yanlış ADR ekipman/capability kombinasyonları sessizce sisteme giremez.
+- CLI ve API test akışları aynı regression kontrolünü çalıştırır.

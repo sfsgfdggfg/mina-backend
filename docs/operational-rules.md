@@ -1823,3 +1823,28 @@ Regression testleri şu ayrımı korumalıdır:
     Class 3 → genel ADR supplier seçilebilir
 
 Bu kuralın amacı, yüksek riskli ADR sınıflarında genel ADR yetkinliğinin yanlışlıkla yeterli kabul edilmesini önlemektir.
+
+## RULE-082 — ADR Capability Data Must Be Internally Consistent
+
+Supplier capability datasında ADR bilgileri kendi içinde tutarlı olmalıdır.
+
+Zorunlu kurallar:
+
+    class_1 varsa adr da bulunmalıdır
+    class_7 varsa adr da bulunmalıdır
+
+    Special ADR Equipment varsa adr bulunmalıdır
+    ADR-Capable Equipment varsa adr bulunmalıdır
+
+Aynı special_capability bir supplier profilinde birden fazla kez bulunmamalıdır.
+
+Sistem tarafından tanınmayan special_capability isimleri validation hatası üretmelidir.
+
+ADR capability validation, supplier capability data health kontrolünün bir parçası olmalıdır.
+
+Regression testi en az şu hataları doğrulamalıdır:
+
+    duplicate capability
+    unknown capability
+    class-specific capability without adr
+    ADR equipment without adr
