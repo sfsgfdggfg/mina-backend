@@ -1763,3 +1763,37 @@ Yeni ADR parser veya regex değişikliklerinde şu regression testleri korunmal�
     Non-ADR negation
 
 Bu kuralın amacı, ADR yüklerinde yanlış sınıflandırma, yanlış ekipman ve erken fiyatlandırma riskini önlemektir.
+
+## RULE-080 — ADR Loads Require ADR-Capable Equipment and Suppliers
+
+ADR olarak belirlenmiş bir yükte standart ekipman ve ADR yetkinliği doğrulanmamış taşıyıcı kullanılmamalıdır.
+
+Ekipman kararı:
+
+    ADR sınıfı eksik:
+    ADR Equipment Review
+
+    ADR Class 1 veya 7:
+    Special ADR Equipment
+
+    Diğer bilinen ADR sınıfları:
+    ADR-Capable Equipment
+
+ADR yüklerinde seçilebilecek supplier:
+
+    special_capabilities listesinde adr yetkinliği bulunmalıdır
+
+ADR yetkinliği bulunmayan supplier adayları seçim aşamasında elenmelidir.
+
+Operational consistency, seçilmiş supplier için ADR yetkinliğini bağımsız olarak doğrulamalıdır.
+
+ADR sınıfı ve ADR statüsü zaten açıkça biliniyorsa müşteriden tekrar ADR statüsü istenmemelidir.
+
+Class 1 ve 7 için mevcut red risk ve management review kuralları korunmalıdır.
+
+Regression testleri en az şu senaryoları kapsamalıdır:
+
+    ADR Class 7
+    ADR class missing
+    Non-ADR negation
+    ADR Class 3 standard

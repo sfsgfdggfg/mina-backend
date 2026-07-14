@@ -3155,3 +3155,69 @@ Test suite sonucu:
 - Belirsiz ADR yükünde standart ekipman seçilmez.
 - Clarification email ADR sınıfını açıkça ister.
 - Operational consistency ADR belirsizliğini hata olarak gösterir.
+
+## DEC-072 — General ADR Equipment and Supplier Guard v1
+
+**Status:** Accepted  
+**Date:** 2026-07-14
+
+### Decision
+
+Class 1 ve 7 dışındaki ADR yüklerinde de standart ekipman ve genel taşıyıcı seçilmemesine karar verilmiştir.
+
+Yeni davranış:
+
+    ADR sınıfı eksik:
+    ADR Equipment Review
+
+    ADR Class 1 veya 7:
+    Special ADR Equipment
+
+    Diğer bilinen ADR sınıfları:
+    ADR-Capable Equipment
+
+ADR yüklerinde supplier selection yalnızca special_capabilities içinde adr yetkinliği bulunan tedarikçilere izin verir.
+
+Operational consistency, seçilen tedarikçinin ADR yetkinliğini ayrıca doğrular.
+
+### Implementation
+
+Güncellenen alanlar:
+
+    src/core/equipment.py
+    src/core/supplier_selection.py
+    src/core/operational_consistency.py
+    src/core/missing_info.py
+    src/simulation/ai_email_test_cases.py
+    src/simulation/test_reporter.py
+    data/supplier_capabilities.json
+
+ADR Secure Logistics profiline şu ekipman desteği eklenmiştir:
+
+    ADR-Capable Equipment
+
+Yeni regression senaryosu:
+
+    ADR Class 3 standard
+
+Bu senaryoda doğrulanan davranışlar:
+
+    is_adr = true
+    adr_class = 3
+    equipment = ADR-Capable Equipment
+    selected supplier = ADR Secure Logistics
+    non-ADR suppliers rejected
+    operational consistency passed
+
+Kimyasal ürün profilinde ADR sınıfı zaten açıkça biliniyorsa sistem müşteriden tekrar ADR statüsü istemez.
+
+Test suite sonucu:
+
+    26 passed, 0 failed
+
+### Consequences
+
+- Tüm ADR sınıflarında ADR uyumlu ekipman kararı zorunludur.
+- ADR yetkinliği olmayan tedarikçiler ADR yüklerinde elenir.
+- Supplier selection ve operational consistency aynı güvenlik kuralını uygular.
+- Bilinen ADR statüsü için gereksiz clarification soruları azaltılır.
