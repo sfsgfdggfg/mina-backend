@@ -3221,3 +3221,68 @@ Test suite sonucu:
 - ADR yetkinliği olmayan tedarikçiler ADR yüklerinde elenir.
 - Supplier selection ve operational consistency aynı güvenlik kuralını uygular.
 - Bilinen ADR statüsü için gereksiz clarification soruları azaltılır.
+
+## DEC-073 — ADR Supplier Class Capability Guard v1
+
+**Status:** Accepted  
+**Date:** 2026-07-14
+
+### Decision
+
+ADR Class 1 ve Class 7 yüklerinde genel ADR yetkinliğinin tek başına yeterli olmamasına karar verilmiştir.
+
+Yeni supplier capability kuralları:
+
+    ADR Class 1:
+    adr + class_1 zorunlu
+
+    ADR Class 7:
+    adr + class_7 zorunlu
+
+    Diğer ADR sınıfları:
+    genel adr yetkinliği yeterli
+
+Supplier selection, gerekli sınıf yetkinliği bulunmayan supplier adayını seçim aşamasında eler.
+
+Operational consistency, seçilen supplier için aynı sınıf yetkinliğini bağımsız olarak doğrular.
+
+### Implementation
+
+Güncellenen alanlar:
+
+    src/core/supplier_selection.py
+    src/core/operational_consistency.py
+    src/simulation/ai_email_test_cases.py
+    src/simulation/test_reporter.py
+    data/supplier_capabilities.json
+
+Regression amacıyla yeni demo supplier eklenmiştir:
+
+    General ADR Logistics
+
+Bu supplier:
+
+    adr = true
+    class_1 = false
+    class_7 = false
+
+Beklenen davranış:
+
+    ADR Class 7:
+    General ADR Logistics elenir
+
+    ADR Class 3:
+    General ADR Logistics seçilebilir
+
+Bu ayrım, genel ADR yetkinliği ile yüksek riskli ADR sınıf yetkinliğinin birbirinden bağımsız ele alınmasını sağlar.
+
+Test suite sonucu:
+
+    26 passed, 0 failed
+
+### Consequences
+
+- Class 1 ve Class 7 yüklerinde sınıf bazlı supplier doğrulaması zorunludur.
+- Genel ADR supplier yüksek riskli ADR sınıflarına otomatik olarak uygun sayılmaz.
+- Class 1/7 dışındaki ADR sınıflarında genel ADR supplier kullanılabilir.
+- Supplier selection ve operational consistency aynı sınıf yetkinliği kuralını uygular.

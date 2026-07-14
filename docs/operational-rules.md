@@ -1797,3 +1797,29 @@ Regression testleri en az şu senaryoları kapsamalıdır:
     ADR class missing
     Non-ADR negation
     ADR Class 3 standard
+
+## RULE-081 — High-Risk ADR Classes Require Class-Specific Supplier Capability
+
+ADR Class 1 ve ADR Class 7 yüklerinde genel ADR yetkinliği tek başına yeterli değildir.
+
+Supplier capability gereksinimleri:
+
+    ADR Class 1:
+    special_capabilities içinde adr ve class_1 bulunmalıdır
+
+    ADR Class 7:
+    special_capabilities içinde adr ve class_7 bulunmalıdır
+
+    Diğer ADR sınıfları:
+    special_capabilities içinde adr bulunması yeterlidir
+
+Gerekli sınıf yetkinliği bulunmayan supplier seçim aşamasında elenmelidir.
+
+Operational consistency, seçilmiş supplier için aynı sınıf bazlı yetkinliği bağımsız olarak doğrulamalıdır.
+
+Regression testleri şu ayrımı korumalıdır:
+
+    Class 7 → genel ADR supplier elenir
+    Class 3 → genel ADR supplier seçilebilir
+
+Bu kuralın amacı, yüksek riskli ADR sınıflarında genel ADR yetkinliğinin yanlışlıkla yeterli kabul edilmesini önlemektir.
