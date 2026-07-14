@@ -407,7 +407,6 @@ Teşekkürler.
             "expected_selected_supplier_name": "ADR Secure Logistics",
             "missing_fields": [
                 "msds/sds document",
-                "adr status",
                 "chemical packaging type",
             ],
             "action_type": "clarification",

@@ -54,7 +54,17 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
     profile_missing_fields = commodity_profile.get("missing_info_fields", [])
     if isinstance(profile_missing_fields, list):
         for field in profile_missing_fields:
-            if isinstance(field, str) and field not in missing_fields:
+            if not isinstance(field, str):
+                continue
+
+            if (
+                field == "adr status"
+                and shipment.is_adr
+                and shipment.adr_class
+            ):
+                continue
+
+            if field not in missing_fields:
                 missing_fields.append(field)
 
     # If critical missing info exists, stop quote flow
