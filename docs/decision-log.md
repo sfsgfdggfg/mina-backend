@@ -3471,3 +3471,77 @@ Test suite sonucu:
 - ADR class mapping kod değişikliği olmadan registry verisi üzerinden güncellenebilir.
 - Hatalı mapping ve duplicate capability Data Health aşamasında yakalanır.
 - CLI ve API test akışları registry validation regression testini çalıştırır.
+
+## DEC-077 — Supplier Capability Registry Runtime Integrity Guard v1
+
+**Status:** Accepted
+**Date:** 2026-07-14
+
+### Decision
+
+Supplier capability registry runtime yükleme hatalarının ham FileNotFoundError, JSONDecodeError veya ValueError olarak zincirleme yayılmamasına karar verilmiştir.
+
+Registry yükleme hataları tek tip kontrollü exception üzerinden yönetilecektir:
+
+    SupplierCapabilityRegistryError
+
+Runtime loader şu durumları açıkça ayırır:
+
+    registry file missing
+    invalid JSON
+    registry root is not an object
+
+Registry loader ayrıca test edilebilir hale getirilmiştir:
+
+    load_supplier_capability_registry(path)
+
+Bu sayede gerçek production registry dosyasına dokunmadan geçici test dosyalarıyla runtime integrity regression testi yapılabilir.
+
+### Implementation
+
+Güncellenen alanlar:
+
+    src/core/supplier_capability_registry.py
+    src/simulation/test_reporter.py
+    src/workflow/pipeline.py
+    src/api.py
+
+Yeni metadata fonksiyonu:
+
+    get_supplier_capability_registry_metadata()
+
+Metadata şu bilgileri döndürür:
+
+    source
+    loaded
+    allowed_capability_count
+    adr_class_mapping_count
+
+Yeni regression testi:
+
+    Supplier capability registry runtime integrity
+
+Test edilen runtime failure senaryoları:
+
+    missing file
+    invalid JSON
+    non-object root
+
+Bu senaryoların tamamında:
+
+    SupplierCapabilityRegistryError
+
+beklenir.
+
+Yeni evaluator hem CLI hem API test akışına bağlanmıştır.
+
+Test suite sonucu:
+
+    29 passed, 0 failed
+
+### Consequences
+
+- Registry runtime yükleme hataları kontrollü ve açıklayıcı hale gelir.
+- Import zincirindeki hata nedeni daha kolay teşhis edilir.
+- Gerçek registry dosyasına dokunmadan failure senaryoları test edilebilir.
+- Registry yükleme durumu metadata üzerinden gözlemlenebilir.

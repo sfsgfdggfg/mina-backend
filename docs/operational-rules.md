@@ -1907,3 +1907,29 @@ Regression testi en az şu hataları doğrulamalıdır:
 
     duplicate allowed capability
     unsupported ADR class mapping target
+
+## RULE-085 — Supplier Capability Registry Must Fail Fast With Controlled Errors
+
+Supplier capability registry runtime sırasında yüklenemiyorsa sistem sessiz fallback ile devam etmemelidir.
+
+Aşağıdaki durumlar kontrollü runtime error üretmelidir:
+
+    registry file missing
+    invalid JSON
+    registry root is not an object
+
+Bu hatalar ortak exception tipi üzerinden raporlanmalıdır:
+
+    SupplierCapabilityRegistryError
+
+Runtime loader test edilebilir olmalıdır ve alternatif path kabul etmelidir.
+
+Registry runtime integrity regression testi en az şu senaryoları kapsamalıdır:
+
+    missing file
+    invalid JSON
+    non-object root
+
+Registry yükleme durumu metadata olarak erişilebilir olmalıdır.
+
+Fail-fast davranışının amacı, capability registry bozukken sistemin yanlış supplier veya equipment kararı üretmesini önlemektir.
