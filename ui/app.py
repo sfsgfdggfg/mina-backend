@@ -34,22 +34,30 @@ def get_example_email_options() -> dict:
 
 
 def get_action_text(result_type: str) -> str:
-    if result_type == "quote":
-        return "Teklif taslağı hazırlandı."
+    if result_type == "quote_ready":
+        return "Teklif taslağı hazır ve gönderim öncesi son kontrol yapılabilir."
+    if result_type == "quote_with_review":
+        return "Teklif taslağı hazırlandı ancak operasyon kontrolü gerekli."
     if result_type == "clarification":
         return "Eksik bilgi var. Müşteriden bilgi istenmeli."
     if result_type == "management_review":
         return "RED risk var. Yönetici / senior operasyon onayı gerekli."
+    if result_type == "blocked":
+        return "Operasyonel tutarsızlık nedeniyle teklif akışı durduruldu."
     return "Sonuç tipi belirlenemedi."
 
 
 def get_result_label(result_type: str) -> str:
-    if result_type == "quote":
+    if result_type == "quote_ready":
         return "Teklif Hazır"
+    if result_type == "quote_with_review":
+        return "Teklif Hazır — Operasyon Kontrolü Gerekli"
     if result_type == "clarification":
         return "Eksik Bilgi Gerekli"
     if result_type == "management_review":
         return "Yönetici Onayı Gerekli"
+    if result_type == "blocked":
+        return "Operasyonel Tutarsızlık — Akış Durduruldu"
     return "Bilinmeyen Sonuç"
 
 
@@ -259,6 +267,8 @@ def render_summary(result: dict):
     missing = result.get("missing_info") or {}
     customer_memory = result.get("customer_memory") or {}
     commodity_profile = result.get("commodity_profile") or {}
+    operational_consistency = result.get("operational_consistency") or {}
+    quote_readiness = result.get("quote_readiness") or {}
     action_recommendation = result.get("action_recommendation") or {}
 
     result_type = result.get("result_type")
@@ -267,14 +277,57 @@ def render_summary(result: dict):
 
     st.markdown("## Operasyon Özeti")
 
-    if result_type == "quote":
+    if result_type == "quote_ready":
         st.success(result_label)
-    elif result_type == "clarification":
+    elif result_type in {"quote_with_review", "clarification"}:
         st.warning(result_label)
-    elif result_type == "management_review":
+    elif result_type in {"management_review", "blocked"}:
         st.error(result_label)
     else:
         st.info(result_label)
+
+    if quote_readiness:
+        st.markdown("### Quote Readiness")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Durum",
+                quote_readiness.get("result_type") or "-",
+            )
+
+        with col2:
+            st.metric(
+                "Teklif Üretilebilir",
+                "Evet" if quote_readiness.get("can_generate_quote") else "Hayır",
+            )
+
+        with col3:
+            st.metric(
+                "Human Review",
+                "Evet"
+                if quote_readiness.get("requires_human_review")
+                else "Hayır",
+            )
+
+        readiness_reasons = quote_readiness.get("reasons") or []
+        if readiness_reasons:
+            st.markdown("**Karar Nedenleri:**")
+            for reason in readiness_reasons:
+                st.write(f"- {reason}")
+
+    consistency_errors = operational_consistency.get("errors") or []
+    consistency_warnings = operational_consistency.get("warnings") or []
+
+    if consistency_errors or consistency_warnings:
+        st.markdown("### Operational Consistency")
+
+        for error in consistency_errors:
+            st.error(error)
+
+        for warning in consistency_warnings:
+            st.warning(warning)
 
     col1, col2, col3 = st.columns(3)
 
@@ -335,7 +388,7 @@ def render_summary(result: dict):
 def render_draft(result: dict):
     result_type = result.get("result_type")
 
-    if result_type == "quote":
+    if result_type in {"quote_ready", "quote_with_review"}:
         title = "Teklif Mail Taslağı"
         supplier_selection = result.get("supplier_selection")
         if supplier_selection:

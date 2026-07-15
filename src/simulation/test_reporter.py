@@ -796,3 +796,43 @@ def print_test_report(test_results: list[dict]) -> None:
 
     print("\nSUMMARY:")
     print(f"{passed_count} passed, {failed_count} failed")
+def evaluate_workflow_result_contract() -> dict:
+    from src.api import determine_result_type
+
+    cases = [
+        ("quote_ready", "quote_ready"),
+        ("quote_with_review", "quote_with_review"),
+        ("clarification", "clarification"),
+        ("management_review", "management_review"),
+        ("blocked", "blocked"),
+    ]
+
+    failures = []
+
+    class Readiness:
+        def __init__(self, result_type: str):
+            self.result_type = result_type
+
+    for readiness_type, expected in cases:
+        actual = determine_result_type(
+            {
+                "quote_readiness": Readiness(readiness_type),
+            }
+        )
+
+        if actual != expected:
+            failures.append(
+                f"{readiness_type}: expected {expected}, got {actual}"
+            )
+
+    unknown = determine_result_type({})
+    if unknown != "unknown":
+        failures.append(
+            f"missing quote_readiness: expected unknown, got {unknown}"
+        )
+
+    return {
+        "name": "Workflow result contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
