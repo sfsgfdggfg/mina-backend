@@ -42,6 +42,26 @@ def generate_action_recommendation(
 
     commodity_action_checklist = get_commodity_action_checklist(shipment.commodity)
 
+    if result_type == "blocked":
+        return ActionRecommendation(
+            action_type="blocked",
+            title="Operasyonel Tutarsızlık Nedeniyle Akış Durduruldu",
+            message=(
+                "Operasyonel tutarlılık kontrolünde hata bulundu. "
+                "Fiyat veya teklif oluşturulmadan önce insan kontrolü gereklidir."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "Operational consistency hatalarını incele.",
+                    "Ekipman ve supplier kararlarını doğrula.",
+                    "Tutarsızlık çözülmeden fiyat paylaşma.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="operational_consistency_engine",
+        )
+
     if result_type == "management_review":
         return ActionRecommendation(
             action_type="management_review",

@@ -2,7 +2,7 @@ import json
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata
+from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata
 from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.ai.quote_generator import generate_quote_draft
@@ -18,6 +18,7 @@ from src.core.supplier_selection import select_suppliers_for_shipment
 from src.core.operational_consistency import check_operational_consistency
 from src.core.pricing import calculate_customer_quote
 from src.core.commodity_profile import get_commodity_record
+from src.core.quote_readiness import decide_quote_readiness
 
 
 def process_shipment(shipment, email_text: str | None = None):
@@ -49,7 +50,40 @@ def process_shipment(shipment, email_text: str | None = None):
         supplier_quote=None,
     )
 
-    if risk_assessment.risk_level == "red":
+    quote_readiness = decide_quote_readiness(
+        missing_info=missing_info,
+        risk_assessment=risk_assessment,
+        operational_consistency=operational_consistency,
+    )
+
+    if quote_readiness.result_type == "blocked":
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="blocked",
+        )
+
+        return {
+            "shipment": shipment,
+            "customer_memory": customer_memory,
+            "commodity_profile": commodity_profile,
+            "missing_info": missing_info,
+            "equipment_decision": equipment_decision,
+            "risk_assessment": risk_assessment,
+            "supplier_selection": supplier_selection,
+            "operational_consistency": operational_consistency,
+            "quote_readiness": quote_readiness,
+            "supplier_quote": None,
+            "customer_quote": None,
+            "quote_draft": None,
+            "clarification_draft": None,
+            "management_review_draft": None,
+            "action_recommendation": action_recommendation,
+        }
+
+    if quote_readiness.result_type == "management_review":
         management_review_draft = generate_management_review_draft(
             shipment=shipment,
             risk_assessment=risk_assessment,
@@ -72,6 +106,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
             "operational_consistency": operational_consistency,
+            "quote_readiness": quote_readiness,
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -81,7 +116,7 @@ def process_shipment(shipment, email_text: str | None = None):
         }
 
     # 2. RED değilse kritik eksik bilgi kontrol edilir
-    if not missing_info.can_continue_to_quote:
+    if quote_readiness.result_type == "clarification":
         clarification_draft = generate_clarification_draft(
             shipment=shipment,
             missing_info=missing_info,
@@ -103,6 +138,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
             "operational_consistency": operational_consistency,
+            "quote_readiness": quote_readiness,
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -138,6 +174,7 @@ def process_shipment(shipment, email_text: str | None = None):
         "risk_assessment": risk_assessment,
         "supplier_selection": supplier_selection,
         "operational_consistency": operational_consistency,
+        "quote_readiness": quote_readiness,
         "supplier_quote": supplier_quote,
         "customer_quote": customer_quote,
         "quote_draft": quote_draft,
@@ -218,7 +255,6 @@ def run_ai_email_test_suite():
     test_results.append(evaluate_supplier_adr_capability_validation())
     test_results.append(evaluate_supplier_capability_registry_validation())
     test_results.append(evaluate_supplier_capability_registry_runtime_integrity())
-    test_results.append(evaluate_supplier_capability_registry_runtime_integrity())
     test_results.append(evaluate_customer_memory_validation())
     test_results.append(evaluate_hs_commodity_map_validation())
     test_results.append(evaluate_data_health_summary())
@@ -264,6 +300,7 @@ def print_result(result):
     supplier_quote = result.get("supplier_quote")
     supplier_selection = result.get("supplier_selection")
     operational_consistency = result.get("operational_consistency")
+    quote_readiness = result.get("quote_readiness")
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
     clarification_draft = result.get("clarification_draft")
@@ -285,6 +322,10 @@ def print_result(result):
     if operational_consistency:
         print("\n--- OPERATIONAL CONSISTENCY ---")
         print(json.dumps(operational_consistency, indent=2, ensure_ascii=False))
+
+    if quote_readiness:
+        print("\n--- QUOTE READINESS ---")
+        print(quote_readiness.model_dump_json(indent=2))
 
     if customer_memory:
         print("\n--- CUSTOMER MEMORY ---")

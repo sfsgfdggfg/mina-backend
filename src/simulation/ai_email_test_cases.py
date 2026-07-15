@@ -11,6 +11,7 @@ Teşekkürler.
 """,
         "expected": {
             "result_type": "quote",
+            "quote_readiness_result_type": "quote_with_review",
             "equipment": "Tenteli / Curtainsider",
             "service_type": "FTL",
             "risk_level": "yellow",
@@ -69,6 +70,7 @@ Saygılar.
 """,
         "expected": {
             "result_type": "management_review",
+            "quote_readiness_result_type": "management_review",
             "equipment": "Special ADR Equipment",
             "service_type": "FTL",
             "risk_level": "red",
@@ -356,6 +358,7 @@ Teşekkürler.
 """,
         "expected": {
             "result_type": "clarification",
+            "quote_readiness_result_type": "clarification",
             "equipment": "ADR Equipment Review",
             "service_type": "FTL",
             "risk_level": "yellow",
@@ -402,6 +405,7 @@ Teşekkürler.
 """,
         "expected": {
             "result_type": "clarification",
+            "quote_readiness_result_type": "clarification",
             "equipment": "ADR-Capable Equipment",
             "service_type": "FTL",
             "risk_level": "yellow",

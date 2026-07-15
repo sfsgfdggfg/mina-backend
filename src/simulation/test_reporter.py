@@ -152,6 +152,27 @@ def evaluate_test_result(test_case: dict, result: dict) -> dict:
             f"risk_level expected {expected_risk_level}, got {risk_assessment.risk_level}"
         )
     
+    expected_quote_readiness_result_type = expected.get(
+        "quote_readiness_result_type"
+    )
+    if expected_quote_readiness_result_type:
+        quote_readiness = result.get("quote_readiness")
+        actual_quote_readiness_result_type = (
+            getattr(quote_readiness, "result_type", None)
+            if quote_readiness
+            else None
+        )
+
+        if (
+            actual_quote_readiness_result_type
+            != expected_quote_readiness_result_type
+        ):
+            failures.append(
+                "quote readiness result_type expected "
+                f"{expected_quote_readiness_result_type}, "
+                f"got {actual_quote_readiness_result_type}"
+            )
+
     expected_action_type = expected.get("action_type")
     if expected_action_type:
         actual_action_type = (
