@@ -97,36 +97,39 @@ def generate_action_recommendation(
             source="missing_info_engine",
         )
 
-    if result_type == "quote":
-        if risk_assessment.risk_level == "yellow":
-            return ActionRecommendation(
-                action_type="quote_with_review",
-                title="Operasyon Kontrolü Sonrası Teklif Gönder",
-                message="Teklif taslağı üretildi ancak sarı risk var. Gönderimden önce operasyon kontrolü yapılmalı.",
-                priority="medium",
-                checklist=_extend_checklist(
-                    [
-                        "Risk nedenlerini kontrol et.",
-                        "Ekipman kararını doğrula.",
-                        "Transit süre ve termin uygunluğunu kontrol et.",
-                        "Teklif mailini kontrol edip gönderime hazırla.",
-                    ],
-                    commodity_action_checklist,
-                ),
-                source="workflow_engine",
-            )
+    if result_type == "quote_with_review":
+        return ActionRecommendation(
+            action_type="quote_with_review",
+            title="Operasyon Kontrolü Sonrası Teklif Gönder",
+            message="Teklif taslağı üretildi ancak operasyon kontrolü gerekli.",
+            priority="medium",
+            checklist=_extend_checklist(
+                [
+                    "Risk nedenlerini kontrol et.",
+                    "Ekipman kararını doğrula.",
+                    "Transit süre ve termin uygunluğunu kontrol et.",
+                    "Teklif mailini kontrol edip gönderime hazırla.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="workflow_engine",
+        )
 
+    if result_type == "quote_ready":
         return ActionRecommendation(
             action_type="quote_ready",
             title="Teklif Taslağı Hazır",
             message="Bilgi yeterli ve kritik risk yok. Teklif taslağı kontrol edilip müşteriye gönderilebilir.",
             priority="normal",
-            checklist=[
-                "Fiyatı kontrol et.",
-                "Transit süreyi kontrol et.",
-                "Teklif geçerliliği notunu kontrol et.",
-                "Mail taslağını gönderime hazırla.",
-            ],
+            checklist=_extend_checklist(
+                [
+                    "Fiyatı kontrol et.",
+                    "Transit süreyi kontrol et.",
+                    "Teklif geçerliliği notunu kontrol et.",
+                    "Mail taslağını gönderime hazırla.",
+                ],
+                commodity_action_checklist,
+            ),
             source="workflow_engine",
         )
 

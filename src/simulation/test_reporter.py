@@ -887,3 +887,43 @@ def evaluate_quote_readiness_blocked_state() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_action_recommendation_result_contract() -> dict:
+    from src.core.action_recommendation import generate_action_recommendation
+
+    class Shipment:
+        commodity = "Tekstil"
+
+    class EquipmentDecision:
+        selected_equipment = "Tenteli / Curtainsider"
+
+    class RiskAssessment:
+        risk_level = "green"
+        risk_reasons = []
+
+    class MissingInfo:
+        can_continue_to_quote = True
+        missing_fields = []
+
+    failures = []
+
+    for result_type in ("quote_ready", "quote_with_review"):
+        action = generate_action_recommendation(
+            shipment=Shipment(),
+            equipment_decision=EquipmentDecision(),
+            risk_assessment=RiskAssessment(),
+            missing_info=MissingInfo(),
+            result_type=result_type,
+        )
+
+        if action.action_type != result_type:
+            failures.append(
+                f"{result_type}: expected action_type {result_type}, "
+                f"got {action.action_type}"
+            )
+
+    return {
+        "name": "Action recommendation result contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
