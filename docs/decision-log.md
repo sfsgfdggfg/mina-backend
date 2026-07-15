@@ -3545,3 +3545,84 @@ Test suite sonucu:
 - Import zincirindeki hata nedeni daha kolay teşhis edilir.
 - Gerçek registry dosyasına dokunmadan failure senaryoları test edilebilir.
 - Registry yükleme durumu metadata üzerinden gözlemlenebilir.
+
+## DEC-078 — Quote Readiness Decision Engine v1
+
+**Status:** Accepted  
+**Date:** 2026-07-15
+
+### Decision
+
+Fiyat/teklif hazırlığı kararının farklı workflow koşullarından dolaylı olarak türetilmemesine karar verilmiştir.
+
+Yeni merkezi karar motoru:
+
+    src/core/quote_readiness.py
+
+Quote readiness karar önceliği:
+
+    1. RED risk -> management_review
+    2. Kritik eksik bilgi -> clarification
+    3. Kalan operational consistency error -> blocked
+    4. Yellow risk -> quote_with_review
+    5. Temiz akış -> quote_ready
+
+### Implementation
+
+Yeni model:
+
+    QuoteReadinessDecision
+
+Alanlar:
+
+    result_type
+    can_generate_quote
+    requires_human_review
+    reasons
+    source
+
+Yeni karar motoru:
+
+    decide_quote_readiness(...)
+
+Pipeline artık risk, missing info ve operational consistency sonuçlarını merkezi quote readiness motorunda birleştirir.
+
+Yeni result type:
+
+    blocked
+
+Blocked durumda:
+
+    teklif oluşturulmaz
+    insan kontrolü gerekir
+    operational consistency hataları neden olarak taşınır
+
+Action Recommendation sistemi blocked sonucunu destekler.
+
+Pipeline çıktısına yeni alan eklenmiştir:
+
+    quote_readiness
+
+Test reporter şu expectation alanını destekler:
+
+    quote_readiness_result_type
+
+Regression testleri şu akışları doğrular:
+
+    management_review
+    clarification
+    quote_with_review
+
+ADR class missing senaryosu, eksik bilgi kaynaklı consistency error bulunduğunda blocked yerine clarification önceliğini doğrular.
+
+Test suite sonucu:
+
+    29 passed, 0 failed
+
+### Consequences
+
+- Quote readiness kararı tek merkezden yönetilir.
+- Workflow karar önceliği açık ve deterministik hale gelir.
+- Operational consistency hataları sessizce göz ardı edilmez.
+- Eksik bilgi kaynaklı consistency hataları gereksiz blocked sonucuna dönüşmez.
+- Yeni readiness durumları ileride merkezi motora eklenebilir.

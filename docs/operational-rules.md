@@ -1933,3 +1933,29 @@ Registry runtime integrity regression testi en az şu senaryoları kapsamalıdı
 Registry yükleme durumu metadata olarak erişilebilir olmalıdır.
 
 Fail-fast davranışının amacı, capability registry bozukken sistemin yanlış supplier veya equipment kararı üretmesini önlemektir.
+
+## RULE-086 — Quote Readiness Decisions Must Follow a Single Priority Order
+
+Fiyat/teklif hazırlığı kararı tek bir merkezi karar motoru tarafından verilmelidir.
+
+Karar önceliği:
+
+    1. RED risk -> management_review
+    2. Kritik eksik bilgi -> clarification
+    3. Kalan operational consistency error -> blocked
+    4. Yellow risk -> quote_with_review
+    5. Temiz akış -> quote_ready
+
+Operational consistency error her durumda otomatik olarak blocked sonucu üretmemelidir.
+
+Eksik bilgiyle açıklanabilen consistency hatalarında clarification öncelikli olmalıdır.
+
+RED risk, diğer quote readiness durumlarından önce management review gerektirmelidir.
+
+Blocked durumda:
+
+    quote oluşturulmamalıdır
+    insan kontrolü zorunlu olmalıdır
+    hata nedenleri readiness sonucunda görünmelidir
+
+Pipeline, action recommendation ve test sistemi aynı quote readiness sonucunu kullanmalıdır.
