@@ -2,7 +2,7 @@ import json
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract
+from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state
 from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.ai.quote_generator import generate_quote_draft
@@ -263,6 +263,7 @@ def run_ai_email_test_suite():
     test_results.append(evaluate_data_health_registry_integrity())
     test_results.append(evaluate_data_health_summary_check_metadata())
     test_results.append(evaluate_workflow_result_contract())
+    test_results.append(evaluate_quote_readiness_blocked_state())
 
     for index, test_case in enumerate(AI_EMAIL_TEST_CASES, start=1):
         print("\n\n########################################")

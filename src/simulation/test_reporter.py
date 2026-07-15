@@ -836,3 +836,54 @@ def evaluate_workflow_result_contract() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_quote_readiness_blocked_state() -> dict:
+    from src.core.quote_readiness import decide_quote_readiness
+
+    class MissingInfo:
+        can_continue_to_quote = True
+        missing_fields = []
+
+    class RiskAssessment:
+        risk_level = "green"
+        risk_reasons = []
+
+    decision = decide_quote_readiness(
+        missing_info=MissingInfo(),
+        risk_assessment=RiskAssessment(),
+        operational_consistency={
+            "passed": False,
+            "warnings": [],
+            "errors": [
+                "Selected supplier capability does not support required equipment."
+            ],
+        },
+    )
+
+    failures = []
+
+    if decision.result_type != "blocked":
+        failures.append(
+            f"expected blocked, got {decision.result_type}"
+        )
+
+    if decision.can_generate_quote:
+        failures.append(
+            "blocked state must not allow quote generation"
+        )
+
+    if not decision.requires_human_review:
+        failures.append(
+            "blocked state must require human review"
+        )
+
+    if not decision.reasons:
+        failures.append(
+            "blocked state must preserve operational consistency errors"
+        )
+
+    return {
+        "name": "Quote readiness blocked state",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
