@@ -1172,32 +1172,70 @@ def evaluate_supplier_rfq_contact_propagation() -> dict:
     }
 
 def evaluate_supplier_rfq_response_simulation() -> dict:
+    from src.ai.supplier_rfq_generator import (
+        generate_supplier_rfq_drafts,
+    )
     from src.simulation.supplier_simulator import (
         simulate_supplier_rfq_responses,
     )
 
     class Shipment:
-        pass
+        pickup_city = "Adana"
+        pickup_country = "Türkiye"
+        delivery_city = "Hamburg"
+        delivery_country = "Germany"
+        commodity = "Textile"
+        gross_weight_kg = 20000
+        service_type = "FTL"
+        cargo_ready_date = "2026-07-20"
 
     class EquipmentDecision:
         selected_equipment = "Tenteli / Curtainsider"
 
     supplier_selection = {
         "selected_suppliers": [
-            {"supplier_name": "Supplier A", "priority": 1},
-            {"supplier_name": "Supplier B", "priority": 2},
-            {"supplier_name": "Supplier C", "priority": 3},
-            {"supplier_name": "Supplier D", "priority": 4},
+            {
+                "supplier_name": "Supplier A",
+                "priority": 1,
+                "recipient_email": "a@example.invalid",
+            },
+            {
+                "supplier_name": "Supplier B",
+                "priority": 2,
+                "recipient_email": "b@example.invalid",
+            },
+            {
+                "supplier_name": "Supplier C",
+                "priority": 3,
+                "recipient_email": "c@example.invalid",
+            },
+            {
+                "supplier_name": "Supplier D",
+                "priority": 4,
+                "recipient_email": "d@example.invalid",
+            },
         ]
     }
 
-    responses = simulate_supplier_rfq_responses(
+    rfq_drafts = generate_supplier_rfq_drafts(
         shipment=Shipment(),
         equipment_decision=EquipmentDecision(),
         supplier_selection=supplier_selection,
     )
 
+    responses = simulate_supplier_rfq_responses(
+        shipment=Shipment(),
+        equipment_decision=EquipmentDecision(),
+        supplier_selection=supplier_selection,
+        rfq_drafts=rfq_drafts,
+    )
+
     failures = []
+
+    if len(rfq_drafts) != 3:
+        failures.append(
+            f"expected 3 RFQ drafts, got {len(rfq_drafts)}"
+        )
 
     if len(responses) != 3:
         failures.append(
@@ -1217,10 +1255,25 @@ def evaluate_supplier_rfq_response_simulation() -> dict:
         )
 
     for index, response in enumerate(responses, start=1):
-        if response.rfq_priority != index:
+        draft = rfq_drafts[index - 1]
+
+        if response.rfq_id != draft.rfq_id:
             failures.append(
-                f"{response.supplier_name}: expected priority {index}, "
-                f"got {response.rfq_priority}"
+                f"{response.supplier_name}: response RFQ ID "
+                f"{response.rfq_id} does not match draft RFQ ID "
+                f"{draft.rfq_id}"
+            )
+
+        if response.supplier_name != draft.supplier_name:
+            failures.append(
+                f"draft/response supplier mismatch: "
+                f"{draft.supplier_name} != {response.supplier_name}"
+            )
+
+        if response.rfq_priority != draft.priority:
+            failures.append(
+                f"{response.supplier_name}: expected priority "
+                f"{draft.priority}, got {response.rfq_priority}"
             )
 
         if response.status != "quoted":

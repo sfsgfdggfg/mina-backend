@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal, Optional
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -26,6 +27,7 @@ class SupplierContact(BaseModel):
 
 
 class SupplierRFQDraft(BaseModel):
+    rfq_id: str = Field(default_factory=lambda: str(uuid4()))
     supplier_name: str
     priority: int
     recipient_email: Optional[str] = None
@@ -51,6 +53,7 @@ SupplierRFQResponseStatus = Literal[
 
 
 class SupplierRFQResponse(BaseModel):
+    rfq_id: str = Field(default_factory=lambda: str(uuid4()))
     supplier_name: str
     rfq_priority: int
     status: SupplierRFQResponseStatus

@@ -166,6 +166,7 @@ def process_shipment(shipment, email_text: str | None = None):
         shipment=shipment,
         equipment_decision=equipment_decision,
         supplier_selection=supplier_selection,
+        rfq_drafts=supplier_rfq_drafts,
     )
 
     supplier_quote = select_supplier_quote_from_responses(
