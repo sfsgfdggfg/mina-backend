@@ -1,6 +1,7 @@
 from typing import Any, Optional
 
 from src.core.models import Shipment, EquipmentDecision, SupplierQuote
+from src.core.supplier_rfq import SupplierRFQResponse
 
 
 def _get_selected_supplier_name(supplier_selection: Optional[dict[str, Any]]) -> str:
@@ -48,3 +49,50 @@ def simulate_supplier_quote(
         transit_time="5-7 days",
         notes=f"Simulated supplier quote for {equipment_decision.selected_equipment}",
     )
+
+def simulate_supplier_rfq_responses(
+    shipment: Shipment,
+    equipment_decision: EquipmentDecision,
+    supplier_selection: Optional[dict[str, Any]] = None,
+) -> list[SupplierRFQResponse]:
+    selected_suppliers = (
+        supplier_selection.get("selected_suppliers", [])
+        if supplier_selection
+        else []
+    )
+
+    responses: list[SupplierRFQResponse] = []
+
+    for index, supplier in enumerate(selected_suppliers[:3], start=1):
+        base_cost = 2000.0 + ((index - 1) * 120)
+
+        if "Reefer" in equipment_decision.selected_equipment:
+            base_cost += 600
+
+        if "Lowbed" in equipment_decision.selected_equipment:
+            base_cost += 1200
+
+        if "Mega" in equipment_decision.selected_equipment:
+            base_cost += 300
+
+        if "Box" in equipment_decision.selected_equipment:
+            base_cost += 250
+
+        responses.append(
+            SupplierRFQResponse(
+                supplier_name=supplier.get(
+                    "supplier_name",
+                    f"Supplier {index}",
+                ),
+                rfq_priority=int(supplier.get("priority") or index),
+                status="quoted",
+                cost=base_cost,
+                currency="EUR",
+                transit_time=f"{4 + index}-{6 + index} days",
+                equipment_type=equipment_decision.selected_equipment,
+                notes="Simulated supplier RFQ response.",
+                source="simulation",
+            )
+        )
+
+    return responses

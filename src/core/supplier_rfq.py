@@ -40,3 +40,35 @@ class SupplierRFQDraft(BaseModel):
     @property
     def has_recipient(self) -> bool:
         return bool(self.recipient_email)
+
+
+SupplierRFQResponseStatus = Literal[
+    "quoted",
+    "no_capacity",
+    "declined",
+    "needs_clarification",
+]
+
+
+class SupplierRFQResponse(BaseModel):
+    supplier_name: str
+    rfq_priority: int
+    status: SupplierRFQResponseStatus
+
+    cost: Optional[float] = None
+    currency: str = "EUR"
+    transit_time: Optional[str] = None
+    validity_date: Optional[str] = None
+    equipment_type: Optional[str] = None
+    notes: Optional[str] = None
+
+    source: Literal["simulation", "email", "portal", "api", "manual"] = "manual"
+    received_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @property
+    def is_price_usable(self) -> bool:
+        return (
+            self.status == "quoted"
+            and self.cost is not None
+            and self.cost > 0
+        )

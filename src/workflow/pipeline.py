@@ -2,7 +2,7 @@ import json
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation
+from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection
 from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.ai.quote_generator import generate_quote_draft
@@ -14,12 +14,13 @@ from src.core.customer_memory import enrich_shipment_with_customer_memory
 from src.core.equipment import decide_equipment
 from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
-from src.simulation.supplier_simulator import simulate_supplier_quote
+from src.simulation.supplier_simulator import simulate_supplier_rfq_responses
 from src.core.supplier_selection import select_suppliers_for_shipment
 from src.core.operational_consistency import check_operational_consistency
 from src.core.pricing import calculate_customer_quote
 from src.core.commodity_profile import get_commodity_record
 from src.core.quote_readiness import decide_quote_readiness
+from src.core.supplier_quote_selection import select_supplier_quote_from_responses
 
 
 def process_shipment(shipment, email_text: str | None = None):
@@ -77,6 +78,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "operational_consistency": operational_consistency,
             "quote_readiness": quote_readiness,
             "supplier_rfq_drafts": [],
+            "supplier_rfq_responses": [],
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -110,6 +112,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "operational_consistency": operational_consistency,
             "quote_readiness": quote_readiness,
             "supplier_rfq_drafts": [],
+            "supplier_rfq_responses": [],
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -143,6 +146,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "operational_consistency": operational_consistency,
             "quote_readiness": quote_readiness,
             "supplier_rfq_drafts": [],
+            "supplier_rfq_responses": [],
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -158,11 +162,21 @@ def process_shipment(shipment, email_text: str | None = None):
         supplier_selection=supplier_selection,
     )
 
-    supplier_quote = simulate_supplier_quote(
-        shipment,
-        equipment_decision,
+    supplier_rfq_responses = simulate_supplier_rfq_responses(
+        shipment=shipment,
+        equipment_decision=equipment_decision,
         supplier_selection=supplier_selection,
     )
+
+    supplier_quote = select_supplier_quote_from_responses(
+        supplier_rfq_responses
+    )
+
+    if supplier_quote is None:
+        raise RuntimeError(
+            "Kullanılabilir supplier RFQ cevabı bulunamadı."
+        )
+
     customer_quote = calculate_customer_quote(supplier_quote)
 
     quote_draft = generate_quote_draft(
@@ -191,6 +205,7 @@ def process_shipment(shipment, email_text: str | None = None):
         "operational_consistency": operational_consistency,
         "quote_readiness": quote_readiness,
         "supplier_rfq_drafts": supplier_rfq_drafts,
+        "supplier_rfq_responses": supplier_rfq_responses,
         "supplier_quote": supplier_quote,
         "customer_quote": customer_quote,
         "quote_draft": quote_draft,
@@ -283,6 +298,8 @@ def run_ai_email_test_suite():
     test_results.append(evaluate_supplier_rfq_draft_generation())
     test_results.append(evaluate_supplier_rfq_workflow_contract())
     test_results.append(evaluate_supplier_rfq_contact_propagation())
+    test_results.append(evaluate_supplier_rfq_response_simulation())
+    test_results.append(evaluate_supplier_quote_selection())
 
     for index, test_case in enumerate(AI_EMAIL_TEST_CASES, start=1):
         print("\n\n########################################")

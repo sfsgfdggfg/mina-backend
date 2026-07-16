@@ -1170,3 +1170,169 @@ def evaluate_supplier_rfq_contact_propagation() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_rfq_response_simulation() -> dict:
+    from src.simulation.supplier_simulator import (
+        simulate_supplier_rfq_responses,
+    )
+
+    class Shipment:
+        pass
+
+    class EquipmentDecision:
+        selected_equipment = "Tenteli / Curtainsider"
+
+    supplier_selection = {
+        "selected_suppliers": [
+            {"supplier_name": "Supplier A", "priority": 1},
+            {"supplier_name": "Supplier B", "priority": 2},
+            {"supplier_name": "Supplier C", "priority": 3},
+            {"supplier_name": "Supplier D", "priority": 4},
+        ]
+    }
+
+    responses = simulate_supplier_rfq_responses(
+        shipment=Shipment(),
+        equipment_decision=EquipmentDecision(),
+        supplier_selection=supplier_selection,
+    )
+
+    failures = []
+
+    if len(responses) != 3:
+        failures.append(
+            f"expected 3 RFQ responses, got {len(responses)}"
+        )
+
+    expected_suppliers = ["Supplier A", "Supplier B", "Supplier C"]
+    actual_suppliers = [
+        response.supplier_name
+        for response in responses
+    ]
+
+    if actual_suppliers != expected_suppliers:
+        failures.append(
+            f"expected suppliers {expected_suppliers}, "
+            f"got {actual_suppliers}"
+        )
+
+    for index, response in enumerate(responses, start=1):
+        if response.rfq_priority != index:
+            failures.append(
+                f"{response.supplier_name}: expected priority {index}, "
+                f"got {response.rfq_priority}"
+            )
+
+        if response.status != "quoted":
+            failures.append(
+                f"{response.supplier_name}: expected quoted status, "
+                f"got {response.status}"
+            )
+
+        if not response.is_price_usable:
+            failures.append(
+                f"{response.supplier_name}: price should be usable"
+            )
+
+        if response.source != "simulation":
+            failures.append(
+                f"{response.supplier_name}: expected simulation source, "
+                f"got {response.source}"
+            )
+
+    if responses:
+        expected_costs = [2000.0, 2120.0, 2240.0]
+        actual_costs = [
+            response.cost
+            for response in responses
+        ]
+
+        if actual_costs != expected_costs:
+            failures.append(
+                f"expected costs {expected_costs}, got {actual_costs}"
+            )
+
+    return {
+        "name": "Supplier RFQ response simulation",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+def evaluate_supplier_quote_selection() -> dict:
+    from src.core.supplier_quote_selection import (
+        select_supplier_quote_from_responses,
+    )
+    from src.core.supplier_rfq import SupplierRFQResponse
+
+    responses = [
+        SupplierRFQResponse(
+            supplier_name="Priority Supplier",
+            rfq_priority=1,
+            status="quoted",
+            cost=2300,
+            currency="EUR",
+            transit_time="5-7 days",
+            source="simulation",
+        ),
+        SupplierRFQResponse(
+            supplier_name="Cheaper Supplier",
+            rfq_priority=2,
+            status="quoted",
+            cost=1900,
+            currency="EUR",
+            transit_time="6-8 days",
+            source="simulation",
+        ),
+        SupplierRFQResponse(
+            supplier_name="Unavailable Supplier",
+            rfq_priority=3,
+            status="no_capacity",
+            source="simulation",
+        ),
+    ]
+
+    selected = select_supplier_quote_from_responses(responses)
+
+    failures = []
+
+    if selected is None:
+        failures.append("expected a selected supplier quote")
+    else:
+        if selected.supplier_name != "Priority Supplier":
+            failures.append(
+                "expected Priority Supplier, "
+                f"got {selected.supplier_name}"
+            )
+
+        if selected.cost != 2300:
+            failures.append(
+                f"expected selected cost 2300, got {selected.cost}"
+            )
+
+    no_quote = select_supplier_quote_from_responses(
+        [
+            SupplierRFQResponse(
+                supplier_name="No Capacity",
+                rfq_priority=1,
+                status="no_capacity",
+                source="simulation",
+            ),
+            SupplierRFQResponse(
+                supplier_name="Declined",
+                rfq_priority=2,
+                status="declined",
+                source="simulation",
+            ),
+        ]
+    )
+
+    if no_quote is not None:
+        failures.append(
+            "expected no selected quote when no usable response exists"
+        )
+
+    return {
+        "name": "Supplier quote selection",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
