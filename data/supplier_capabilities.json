@@ -29,7 +29,16 @@
     "reliability_score": 0.9,
     "price_score": 0.76,
     "speed_score": 0.84,
-    "notes": "Türkiye - Batı Avrupa hattında güçlü genel karayolu tedarikçisi."
+    "notes": "Türkiye - Batı Avrupa hattında güçlü genel karayolu tedarikçisi.",
+    "contacts": [
+      {
+        "contact_name": "Pricing Desk",
+        "email": "pricing@anatoliaroad.invalid",
+        "role": "pricing",
+        "is_primary": true,
+        "active": true
+      }
+    ]
   },
   {
     "supplier_name": "EuroBridge Logistics",
@@ -62,7 +71,16 @@
     "reliability_score": 0.8,
     "price_score": 0.9,
     "speed_score": 0.78,
-    "notes": "Fiyat rekabeti güçlü, Avrupa geneli alternatif tedarikçi."
+    "notes": "Fiyat rekabeti güçlü, Avrupa geneli alternatif tedarikçi.",
+    "contacts": [
+      {
+        "contact_name": "RFQ Desk",
+        "email": "rfq@eurobridge.invalid",
+        "role": "pricing",
+        "is_primary": true,
+        "active": true
+      }
+    ]
   },
   {
     "supplier_name": "ColdChain Europe",

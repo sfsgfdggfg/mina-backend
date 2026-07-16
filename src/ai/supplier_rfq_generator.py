@@ -2,17 +2,8 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from pydantic import BaseModel
-
 from src.core.models import EquipmentDecision, Shipment
-
-
-class SupplierRFQDraft(BaseModel):
-    supplier_name: str
-    priority: int
-    subject: str
-    body: str
-    source: str = "supplier_rfq_generator"
+from src.core.supplier_rfq import SupplierRFQDraft
 
 
 def generate_supplier_rfq_drafts(
@@ -27,6 +18,7 @@ def generate_supplier_rfq_drafts(
 
     for supplier in selected_suppliers:
         supplier_name = supplier.get("supplier_name") or "Tedarikçi"
+        recipient_email = supplier.get("recipient_email")
         priority = int(supplier.get("priority") or 0)
 
         subject = (
@@ -65,6 +57,7 @@ MINAI Freight OS
             SupplierRFQDraft(
                 supplier_name=supplier_name,
                 priority=priority,
+                recipient_email=recipient_email,
                 subject=subject,
                 body=body,
             )

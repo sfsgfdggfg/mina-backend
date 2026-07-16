@@ -64,6 +64,69 @@ def _validate_string_list(
     return cleaned_values
 
 
+def _validate_supplier_contacts(
+    *,
+    value: Any,
+    supplier: str,
+    errors: List[str],
+    warnings: List[str],
+) -> None:
+    if value is None:
+        warnings.append(
+            f"{supplier}: contacts not defined; RFQ draft cannot be sent."
+        )
+        return
+
+    if not isinstance(value, list):
+        errors.append(f"{supplier}: contacts must be a list.")
+        return
+
+    seen_emails: set[str] = set()
+    active_primary_count = 0
+
+    for index, contact in enumerate(value):
+        prefix = f"{supplier}: contacts[{index}]"
+
+        if not isinstance(contact, dict):
+            errors.append(f"{prefix} must be an object.")
+            continue
+
+        email = contact.get("email")
+        if not _is_non_empty_string(email) or "@" not in str(email):
+            errors.append(f"{prefix}.email must be a valid email address.")
+        else:
+            normalized_email = str(email).strip().lower()
+
+            if normalized_email in seen_emails:
+                errors.append(
+                    f"{supplier}: duplicate contact email '{normalized_email}'."
+                )
+
+            seen_emails.add(normalized_email)
+
+        active = contact.get("active", True)
+        is_primary = contact.get("is_primary", False)
+
+        if not isinstance(active, bool):
+            errors.append(f"{prefix}.active must be boolean.")
+
+        if not isinstance(is_primary, bool):
+            errors.append(f"{prefix}.is_primary must be boolean.")
+
+        if active is True and is_primary is True:
+            active_primary_count += 1
+
+    if active_primary_count > 1:
+        errors.append(
+            f"{supplier}: only one active primary contact is allowed."
+        )
+
+    if value and active_primary_count == 0:
+        warnings.append(
+            f"{supplier}: no active primary RFQ contact defined."
+        )
+
+
 def _validate_score(
     *,
     value: Any,
@@ -250,6 +313,13 @@ def validate_supplier_capabilities_file(
                     f"{supplier}: ADR equipment requires general "
                     "'adr' capability."
                 )
+
+        _validate_supplier_contacts(
+            value=item.get("contacts"),
+            supplier=supplier,
+            errors=errors,
+            warnings=warnings,
+        )
 
         for score_field in SCORE_FIELDS:
             if score_field not in item:

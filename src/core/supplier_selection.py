@@ -11,6 +11,30 @@ from src.core.supplier_capability_registry import (
 )
 
 
+def _get_primary_contact_email(raw_supplier: Dict[str, Any]) -> Optional[str]:
+    contacts = raw_supplier.get("contacts") or []
+
+    if not isinstance(contacts, list):
+        return None
+
+    active_contacts = [
+        contact
+        for contact in contacts
+        if isinstance(contact, dict)
+        and contact.get("active", True)
+        and contact.get("email")
+    ]
+
+    for contact in active_contacts:
+        if contact.get("is_primary", False):
+            return str(contact["email"]).strip()
+
+    if active_contacts:
+        return str(active_contacts[0]["email"]).strip()
+
+    return None
+
+
 def _normalize(value: Optional[str]) -> str:
     if value is None:
         return ""
@@ -40,6 +64,7 @@ def _load_supplier_profiles(path: Path = SUPPLIER_CAPABILITIES_PATH) -> List[Dic
         profiles.append(
             {
                 "supplier_name": raw["supplier_name"],
+                "recipient_email": _get_primary_contact_email(raw),
                 "active": raw.get("active", True),
                 "role": raw.get("role", "backup"),
                 "supported_countries": [
@@ -234,6 +259,7 @@ def select_suppliers_for_shipment(
         scored_suppliers.append(
             {
                 "supplier_name": supplier["supplier_name"],
+                "recipient_email": supplier.get("recipient_email"),
                 "priority": 0,
                 "total_score": round(total_score, 3),
                 "route_score": round(route_score, 3),

@@ -946,10 +946,26 @@ def evaluate_supplier_rfq_draft_generation() -> dict:
 
     supplier_selection = {
         "selected_suppliers": [
-            {"supplier_name": "Supplier A", "priority": 1},
-            {"supplier_name": "Supplier B", "priority": 2},
-            {"supplier_name": "Supplier C", "priority": 3},
-            {"supplier_name": "Supplier D", "priority": 4},
+            {
+                "supplier_name": "Supplier A",
+                "recipient_email": "pricing@supplier-a.invalid",
+                "priority": 1,
+            },
+            {
+                "supplier_name": "Supplier B",
+                "recipient_email": None,
+                "priority": 2,
+            },
+            {
+                "supplier_name": "Supplier C",
+                "recipient_email": "rfq@supplier-c.invalid",
+                "priority": 3,
+            },
+            {
+                "supplier_name": "Supplier D",
+                "recipient_email": "rfq@supplier-d.invalid",
+                "priority": 4,
+            },
         ]
     }
 
@@ -977,6 +993,29 @@ def evaluate_supplier_rfq_draft_generation() -> dict:
 
         if first.priority != 1:
             failures.append(f"expected priority 1, got {first.priority}")
+
+        if first.recipient_email != "pricing@supplier-a.invalid":
+            failures.append(
+                "expected first RFQ recipient_email "
+                "pricing@supplier-a.invalid, "
+                f"got {first.recipient_email}"
+            )
+
+        if first.status != "draft":
+            failures.append(
+                f"expected first RFQ status draft, got {first.status}"
+            )
+
+        if not first.has_recipient:
+            failures.append(
+                "first RFQ draft should report has_recipient=True"
+            )
+
+        second = drafts[1] if len(drafts) > 1 else None
+        if second and second.has_recipient:
+            failures.append(
+                "second RFQ draft should report has_recipient=False"
+            )
 
         for expected_text in (
             "Adana, Türkiye",
@@ -1050,6 +1089,84 @@ def evaluate_supplier_rfq_workflow_contract() -> dict:
 
     return {
         "name": "Supplier RFQ workflow contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+def evaluate_supplier_rfq_contact_propagation() -> dict:
+    from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
+    from src.core.supplier_selection import select_suppliers_for_shipment
+
+    class Shipment:
+        pickup_country = "Türkiye"
+        pickup_city = "Adana"
+        delivery_country = "Almanya"
+        delivery_city = "Hamburg"
+        commodity = "Tekstil"
+        gross_weight_kg = 20000
+        service_type = "FTL"
+        cargo_ready_date = "2026-07-20"
+        equipment_type = None
+        is_adr = False
+        adr_class = None
+
+    class EquipmentDecision:
+        selected_equipment = "Tenteli / Curtainsider"
+
+    class RiskAssessment:
+        risk_level = "green"
+
+    supplier_selection = select_suppliers_for_shipment(
+        shipment=Shipment(),
+        equipment_decision=EquipmentDecision(),
+        risk_assessment=RiskAssessment(),
+    )
+
+    drafts = generate_supplier_rfq_drafts(
+        shipment=Shipment(),
+        equipment_decision=EquipmentDecision(),
+        supplier_selection=supplier_selection,
+    )
+
+    failures = []
+
+    if not drafts:
+        failures.append("expected at least one supplier RFQ draft")
+    else:
+        selected_suppliers = supplier_selection.get("selected_suppliers") or []
+        expected_by_supplier = {
+            supplier.get("supplier_name"): supplier.get("recipient_email")
+            for supplier in selected_suppliers
+        }
+
+        for draft in drafts:
+            expected_email = expected_by_supplier.get(draft.supplier_name)
+
+            if draft.recipient_email != expected_email:
+                failures.append(
+                    f"{draft.supplier_name}: expected recipient "
+                    f"{expected_email}, got {draft.recipient_email}"
+                )
+
+        contacted_drafts = [
+            draft
+            for draft in drafts
+            if draft.recipient_email
+        ]
+
+        if not contacted_drafts:
+            failures.append(
+                "expected at least one RFQ draft with recipient email"
+            )
+
+        for draft in contacted_drafts:
+            if not draft.has_recipient:
+                failures.append(
+                    f"{draft.supplier_name}: has_recipient should be True"
+                )
+
+    return {
+        "name": "Supplier RFQ contact propagation",
         "passed": len(failures) == 0,
         "failures": failures,
     }
