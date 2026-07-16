@@ -415,6 +415,32 @@ def render_draft(result: dict):
             else:
                 st.info("Uygun supplier bulunamadı.")
 
+        supplier_rfq_drafts = result.get("supplier_rfq_drafts") or []
+
+        if supplier_rfq_drafts:
+            st.markdown("## Supplier RFQ Taslakları")
+            st.caption(
+                "Bu taslaklar seçilen en fazla 3 tedarikçi için hazırlanmıştır. "
+                "Henüz gönderilmemiştir."
+            )
+
+            for rfq in supplier_rfq_drafts:
+                supplier_name = rfq.get("supplier_name") or "Tedarikçi"
+                priority = rfq.get("priority") or "-"
+                subject = rfq.get("subject") or ""
+                body = rfq.get("body") or ""
+
+                with st.expander(
+                    f"{priority}. {supplier_name} — RFQ Taslağı"
+                ):
+                    st.write(f"**Subject:** {subject}")
+                    st.text_area(
+                        f"RFQ Metni — {supplier_name}",
+                        value=body,
+                        height=280,
+                        key=f"supplier_rfq_{priority}_{supplier_name}",
+                    )
+
         draft = result.get("quote_draft")
 
     elif result_type == "clarification":

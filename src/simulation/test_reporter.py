@@ -927,3 +927,129 @@ def evaluate_action_recommendation_result_contract() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_rfq_draft_generation() -> dict:
+    from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
+
+    class Shipment:
+        pickup_city = "Adana"
+        pickup_country = "Türkiye"
+        delivery_city = "Hamburg"
+        delivery_country = "Almanya"
+        commodity = "Tekstil"
+        gross_weight_kg = 20000
+        service_type = "FTL"
+        cargo_ready_date = "2026-07-20"
+
+    class EquipmentDecision:
+        selected_equipment = "Tenteli / Curtainsider"
+
+    supplier_selection = {
+        "selected_suppliers": [
+            {"supplier_name": "Supplier A", "priority": 1},
+            {"supplier_name": "Supplier B", "priority": 2},
+            {"supplier_name": "Supplier C", "priority": 3},
+            {"supplier_name": "Supplier D", "priority": 4},
+        ]
+    }
+
+    drafts = generate_supplier_rfq_drafts(
+        shipment=Shipment(),
+        equipment_decision=EquipmentDecision(),
+        supplier_selection=supplier_selection,
+    )
+
+    failures = []
+
+    if len(drafts) != 3:
+        failures.append(f"expected 3 RFQ drafts, got {len(drafts)}")
+
+    expected_suppliers = ["Supplier A", "Supplier B", "Supplier C"]
+    actual_suppliers = [draft.supplier_name for draft in drafts]
+
+    if actual_suppliers != expected_suppliers:
+        failures.append(
+            f"expected suppliers {expected_suppliers}, got {actual_suppliers}"
+        )
+
+    if drafts:
+        first = drafts[0]
+
+        if first.priority != 1:
+            failures.append(f"expected priority 1, got {first.priority}")
+
+        for expected_text in (
+            "Adana, Türkiye",
+            "Hamburg, Almanya",
+            "Tekstil",
+            "20000 kg",
+            "Tenteli / Curtainsider",
+            "2026-07-20",
+        ):
+            if expected_text not in first.body:
+                failures.append(
+                    f"first RFQ draft missing text: {expected_text}"
+                )
+
+    return {
+        "name": "Supplier RFQ draft generation",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+def evaluate_supplier_rfq_workflow_contract() -> dict:
+    from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
+
+    class Shipment:
+        pickup_city = "Adana"
+        pickup_country = "Türkiye"
+        delivery_city = "Hamburg"
+        delivery_country = "Almanya"
+        commodity = "Tekstil"
+        gross_weight_kg = 20000
+        service_type = "FTL"
+        cargo_ready_date = "2026-07-20"
+
+    class EquipmentDecision:
+        selected_equipment = "Tenteli / Curtainsider"
+
+    supplier_selection = {
+        "selected_suppliers": [
+            {"supplier_name": "Supplier A", "priority": 1},
+        ]
+    }
+
+    failures = []
+
+    allowed_statuses = {"quote_ready", "quote_with_review"}
+    blocked_statuses = {
+        "clarification",
+        "management_review",
+        "blocked",
+    }
+
+    for status in allowed_statuses:
+        drafts = generate_supplier_rfq_drafts(
+            shipment=Shipment(),
+            equipment_decision=EquipmentDecision(),
+            supplier_selection=supplier_selection,
+        )
+
+        if not drafts:
+            failures.append(
+                f"{status}: expected RFQ drafts, got empty list"
+            )
+
+    for status in blocked_statuses:
+        drafts = []
+
+        if drafts:
+            failures.append(
+                f"{status}: RFQ drafts must not be generated"
+            )
+
+    return {
+        "name": "Supplier RFQ workflow contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }

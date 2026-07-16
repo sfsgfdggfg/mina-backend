@@ -22,7 +22,7 @@ from src.core.customer_memory import (
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract
+from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract
 
 
 app = FastAPI(
@@ -456,6 +456,8 @@ def run_test_suite():
     test_results.append(evaluate_workflow_result_contract())
     test_results.append(evaluate_quote_readiness_blocked_state())
     test_results.append(evaluate_action_recommendation_result_contract())
+    test_results.append(evaluate_supplier_rfq_draft_generation())
+    test_results.append(evaluate_supplier_rfq_workflow_contract())
 
     for test_case in AI_EMAIL_TEST_CASES:
         shipment = parse_email_with_ai(test_case["email"])
@@ -626,6 +628,7 @@ def serialize_result(result: dict) -> dict:
     supplier_selection = result.get("supplier_selection")
     operational_consistency = result.get("operational_consistency")
     quote_readiness = result.get("quote_readiness")
+    supplier_rfq_drafts = result.get("supplier_rfq_drafts") or []
     supplier_quote = result.get("supplier_quote")
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
@@ -643,6 +646,10 @@ def serialize_result(result: dict) -> dict:
         "supplier_selection": supplier_selection,
         "operational_consistency": operational_consistency,
         "quote_readiness": quote_readiness.model_dump() if quote_readiness else None,
+        "supplier_rfq_drafts": [
+            draft.model_dump() if hasattr(draft, "model_dump") else draft
+            for draft in supplier_rfq_drafts
+        ],
         "supplier_quote": supplier_quote.model_dump() if supplier_quote else None,
         "customer_quote": customer_quote.model_dump() if customer_quote else None,
         "quote_draft": quote_draft.model_dump() if quote_draft else None,
