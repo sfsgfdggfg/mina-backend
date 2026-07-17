@@ -1554,3 +1554,117 @@ def evaluate_supplier_fallback_consistency() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_final_quote_consistency_block() -> dict:
+    from src.core.models import Package, Shipment
+    from src.core.supplier_rfq import SupplierRFQResponse
+    from src.workflow import pipeline
+
+    failures = []
+
+    shipment = Shipment(
+        customer_name="Known Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-07-20",
+        packages=[
+            Package(
+                package_type="pallet",
+                quantity=20,
+                length_cm=120,
+                width_cm=80,
+                height_cm=150,
+                weight_kg=1000,
+            )
+        ],
+    )
+
+    original_simulator = pipeline.simulate_supplier_rfq_responses
+
+    def simulate_outsider_response(
+        shipment,
+        equipment_decision,
+        supplier_selection=None,
+        rfq_drafts=None,
+    ):
+        return [
+            SupplierRFQResponse(
+                supplier_name="Outside Selection Supplier",
+                rfq_priority=1,
+                status="quoted",
+                cost=1800,
+                currency="EUR",
+                transit_time="4-6 days",
+                equipment_type=equipment_decision.selected_equipment,
+                notes="Intentional outsider response for regression test.",
+                source="simulation",
+            )
+        ]
+
+    try:
+        pipeline.simulate_supplier_rfq_responses = (
+            simulate_outsider_response
+        )
+
+        result = pipeline.process_shipment(
+            shipment=shipment,
+            email_text=(
+                "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+                "komple araç fiyatı rica ederiz. "
+                "Yük 20.07.2026 tarihinde hazırdır."
+            ),
+        )
+    finally:
+        pipeline.simulate_supplier_rfq_responses = (
+            original_simulator
+        )
+
+    quote_readiness = result.get("quote_readiness")
+    operational_consistency = (
+        result.get("operational_consistency") or {}
+    )
+
+    if quote_readiness is None:
+        failures.append("quote_readiness result is missing")
+    elif quote_readiness.result_type != "blocked":
+        failures.append(
+            "outsider supplier quote should produce blocked result, "
+            f"got {quote_readiness.result_type}"
+        )
+
+    if result.get("customer_quote") is not None:
+        failures.append(
+            "blocked final consistency must not create customer quote"
+        )
+
+    if result.get("quote_draft") is not None:
+        failures.append(
+            "blocked final consistency must not create quote draft"
+        )
+
+    if result.get("supplier_quote") is None:
+        failures.append(
+            "blocked result should preserve rejected supplier quote "
+            "for audit"
+        )
+
+    errors = operational_consistency.get("errors", [])
+
+    if not any(
+        "Supplier Selection listesinde bulunmayan" in error
+        for error in errors
+    ):
+        failures.append(
+            "final consistency error was not preserved"
+        )
+
+    return {
+        "name": "Final quote consistency block",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
