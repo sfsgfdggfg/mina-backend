@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 SupplierRFQStatus = Literal[
@@ -67,6 +67,16 @@ class SupplierRFQResponse(BaseModel):
 
     source: Literal["simulation", "email", "portal", "api", "manual"] = "manual"
     received_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @model_validator(mode="after")
+    def validate_quoted_price(self):
+        if self.status == "quoted":
+            if self.cost is None or self.cost <= 0:
+                raise ValueError(
+                    "Quoted RFQ response must have a positive cost."
+                )
+
+        return self
 
     @property
     def is_price_usable(self) -> bool:

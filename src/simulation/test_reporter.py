@@ -1389,3 +1389,79 @@ def evaluate_supplier_quote_selection() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_rfq_response_validation() -> dict:
+    from pydantic import ValidationError
+
+    from src.core.supplier_rfq import SupplierRFQResponse
+
+    failures = []
+
+    try:
+        valid_response = SupplierRFQResponse(
+            supplier_name="Valid Supplier",
+            rfq_priority=1,
+            status="quoted",
+            cost=2100,
+            currency="EUR",
+            source="simulation",
+        )
+
+        if not valid_response.is_price_usable:
+            failures.append(
+                "quoted response with positive cost should be usable"
+            )
+    except ValidationError as exc:
+        failures.append(
+            f"positive quoted response was rejected: {exc}"
+        )
+
+    try:
+        SupplierRFQResponse(
+            supplier_name="Missing Cost Supplier",
+            rfq_priority=2,
+            status="quoted",
+            source="simulation",
+        )
+        failures.append(
+            "quoted response without cost should be rejected"
+        )
+    except ValidationError:
+        pass
+
+    try:
+        SupplierRFQResponse(
+            supplier_name="Negative Cost Supplier",
+            rfq_priority=3,
+            status="quoted",
+            cost=-100,
+            source="simulation",
+        )
+        failures.append(
+            "quoted response with negative cost should be rejected"
+        )
+    except ValidationError:
+        pass
+
+    try:
+        no_capacity_response = SupplierRFQResponse(
+            supplier_name="No Capacity Supplier",
+            rfq_priority=4,
+            status="no_capacity",
+            source="simulation",
+        )
+
+        if no_capacity_response.is_price_usable:
+            failures.append(
+                "no_capacity response should not be price usable"
+            )
+    except ValidationError as exc:
+        failures.append(
+            f"no_capacity response without cost was rejected: {exc}"
+        )
+
+    return {
+        "name": "Supplier RFQ response validation",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
