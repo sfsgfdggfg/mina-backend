@@ -166,6 +166,11 @@ def check_operational_consistency(
 
     selected_suppliers = _get_selected_suppliers(supplier_selection)
     selected_supplier_name = _get_first_selected_supplier_name(supplier_selection)
+    selected_supplier_names = {
+        _get_attr(supplier, "supplier_name")
+        for supplier in selected_suppliers
+        if _get_attr(supplier, "supplier_name")
+    }
     quote_supplier_name = _get_attr(supplier_quote, "supplier_name")
 
     supplier_capabilities = _load_supplier_capabilities()
@@ -210,11 +215,11 @@ def check_operational_consistency(
             "Supplier Quote üretildi ancak Supplier Selection sonucu boş."
         )
 
-    if selected_supplier_name and quote_supplier_name:
-        if selected_supplier_name != quote_supplier_name:
+    if quote_supplier_name and selected_suppliers:
+        if quote_supplier_name not in selected_supplier_names:
             errors.append(
-                "Supplier Selection ile Supplier Quote farklı supplier kullanıyor: "
-                f"{selected_supplier_name} != {quote_supplier_name}"
+                "Supplier Quote, Supplier Selection listesinde bulunmayan "
+                f"bir supplier kullanıyor: {quote_supplier_name}"
             )
 
     if pickup_country in ["turkiye", "turkey"] and delivery_country in ["turkiye", "turkey"]:

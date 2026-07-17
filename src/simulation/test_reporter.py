@@ -1465,3 +1465,92 @@ def evaluate_supplier_rfq_response_validation() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_fallback_consistency() -> dict:
+    from src.core.operational_consistency import (
+        check_operational_consistency,
+    )
+    from src.core.models import SupplierQuote
+
+    class Shipment:
+        pickup_country = "Türkiye"
+        delivery_country = "Almanya"
+        service_type = "FTL"
+        adr_class = None
+        is_adr = False
+        special_notes = ""
+
+    class EquipmentDecision:
+        selected_equipment = "Tenteli / Curtainsider"
+
+    class RiskAssessment:
+        risk_level = "green"
+
+    supplier_selection = {
+        "selected_suppliers": [
+            {
+                "supplier_name": "Primary Supplier",
+                "priority": 1,
+            },
+            {
+                "supplier_name": "Fallback Supplier",
+                "priority": 2,
+            },
+        ]
+    }
+
+    failures = []
+
+    fallback_quote = SupplierQuote(
+        supplier_name="Fallback Supplier",
+        cost=2100,
+        currency="EUR",
+        transit_time="5-7 days",
+    )
+
+    fallback_result = check_operational_consistency(
+        shipment=Shipment(),
+        equipment_decision=EquipmentDecision(),
+        risk_assessment=RiskAssessment(),
+        supplier_selection=supplier_selection,
+        supplier_quote=fallback_quote,
+    )
+
+    fallback_errors = fallback_result.get("errors", [])
+
+    if fallback_errors:
+        failures.append(
+            "selected fallback supplier should be accepted, "
+            f"got errors: {fallback_errors}"
+        )
+
+    outsider_quote = SupplierQuote(
+        supplier_name="Unknown Supplier",
+        cost=1900,
+        currency="EUR",
+        transit_time="5-7 days",
+    )
+
+    outsider_result = check_operational_consistency(
+        shipment=Shipment(),
+        equipment_decision=EquipmentDecision(),
+        risk_assessment=RiskAssessment(),
+        supplier_selection=supplier_selection,
+        supplier_quote=outsider_quote,
+    )
+
+    outsider_errors = outsider_result.get("errors", [])
+
+    if not any(
+        "Supplier Selection listesinde bulunmayan" in error
+        for error in outsider_errors
+    ):
+        failures.append(
+            "supplier outside selection list should be rejected"
+        )
+
+    return {
+        "name": "Supplier fallback consistency",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
