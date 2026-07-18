@@ -1668,3 +1668,146 @@ def evaluate_final_quote_consistency_block() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_response_required_state() -> dict:
+    from src.api import determine_result_type
+    from src.core.models import Package, Shipment
+    from src.core.supplier_rfq import SupplierRFQResponse
+    from src.workflow import pipeline
+
+    failures = []
+
+    shipment = Shipment(
+        customer_name="Known Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-07-20",
+        packages=[
+            Package(
+                package_type="pallet",
+                quantity=20,
+                length_cm=120,
+                width_cm=80,
+                height_cm=150,
+                weight_kg=1000,
+            )
+        ],
+    )
+
+    original_simulator = pipeline.simulate_supplier_rfq_responses
+
+    def simulate_unusable_responses(
+        shipment,
+        equipment_decision,
+        supplier_selection=None,
+        rfq_drafts=None,
+    ):
+        drafts = list(rfq_drafts or [])
+
+        responses = []
+
+        if drafts:
+            responses.append(
+                SupplierRFQResponse(
+                    rfq_id=drafts[0].rfq_id,
+                    supplier_name=drafts[0].supplier_name,
+                    rfq_priority=drafts[0].priority,
+                    status="no_capacity",
+                    notes="No vehicle capacity.",
+                    source="simulation",
+                )
+            )
+
+        if len(drafts) > 1:
+            responses.append(
+                SupplierRFQResponse(
+                    rfq_id=drafts[1].rfq_id,
+                    supplier_name=drafts[1].supplier_name,
+                    rfq_priority=drafts[1].priority,
+                    status="declined",
+                    notes="Supplier declined the request.",
+                    source="simulation",
+                )
+            )
+
+        return responses
+
+    try:
+        pipeline.simulate_supplier_rfq_responses = (
+            simulate_unusable_responses
+        )
+
+        result = pipeline.process_shipment(
+            shipment=shipment,
+            email_text=(
+                "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+                "komple araç fiyatı rica ederiz. "
+                "Yük 20.07.2026 tarihinde hazırdır."
+            ),
+        )
+    finally:
+        pipeline.simulate_supplier_rfq_responses = (
+            original_simulator
+        )
+
+    actual_result_type = determine_result_type(result)
+
+    if actual_result_type != "supplier_response_required":
+        failures.append(
+            "expected supplier_response_required, "
+            f"got {actual_result_type}"
+        )
+
+    if result.get("quote_readiness") is not None:
+        failures.append(
+            "supplier response state should not retain stale "
+            "quote_readiness"
+        )
+
+    if result.get("supplier_quote") is not None:
+        failures.append(
+            "no usable supplier response must not create supplier quote"
+        )
+
+    if result.get("customer_quote") is not None:
+        failures.append(
+            "no usable supplier response must not create customer quote"
+        )
+
+    if result.get("quote_draft") is not None:
+        failures.append(
+            "no usable supplier response must not create quote draft"
+        )
+
+    responses = result.get("supplier_rfq_responses") or []
+
+    if not responses:
+        failures.append(
+            "supplier responses should be preserved for audit"
+        )
+
+    if any(response.is_price_usable for response in responses):
+        failures.append(
+            "test responses should all be unusable for pricing"
+        )
+
+    action = result.get("action_recommendation")
+
+    if action is None:
+        failures.append("action recommendation is missing")
+    elif action.action_type != "supplier_response_required":
+        failures.append(
+            "expected supplier_response_required action, "
+            f"got {action.action_type}"
+        )
+
+    return {
+        "name": "Supplier response required state",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }

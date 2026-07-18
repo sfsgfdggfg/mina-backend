@@ -679,4 +679,9 @@ def determine_result_type(result: dict) -> str:
     if quote_readiness:
         return quote_readiness.result_type
 
+    direct_result_type = result.get("result_type")
+
+    if direct_result_type:
+        return str(direct_result_type)
+
     return "unknown"

@@ -42,6 +42,30 @@ def generate_action_recommendation(
 
     commodity_action_checklist = get_commodity_action_checklist(shipment.commodity)
 
+    if result_type == "supplier_response_required":
+        return ActionRecommendation(
+            action_type="supplier_response_required",
+            title="Kullanılabilir Tedarikçi Teklifi Bekleniyor",
+            message=(
+                "Seçilen tedarikçilerden fiyatlandırmada kullanılabilir "
+                "bir cevap alınamadı. Müşteri teklifi oluşturulmadan önce "
+                "yeni cevap beklenmeli veya alternatif tedarikçilere RFQ "
+                "gönderilmelidir."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "Tedarikçi cevap durumlarını kontrol et.",
+                    "No capacity veya declined cevaplarını incele.",
+                    "Needs clarification cevabı varsa gerekli bilgiyi paylaş.",
+                    "Gerekirse alternatif tedarikçilere RFQ gönder.",
+                    "Geçerli fiyat alınmadan müşteriye teklif oluşturma.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="supplier_rfq_engine",
+        )
+
     if result_type == "blocked":
         return ActionRecommendation(
             action_type="blocked",
