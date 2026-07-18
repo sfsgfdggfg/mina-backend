@@ -1811,3 +1811,132 @@ def evaluate_supplier_response_required_state() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_rfq_lifecycle_synchronization() -> dict:
+    from datetime import datetime, timedelta
+
+    from src.core.supplier_rfq import (
+        SupplierRFQDraft,
+        SupplierRFQResponse,
+    )
+    from src.core.supplier_rfq_lifecycle import (
+        synchronize_supplier_rfq_lifecycle,
+    )
+
+    failures = []
+
+    base_time = datetime(2026, 7, 20, 10, 0, 0)
+
+    draft_with_response = SupplierRFQDraft(
+        rfq_id="rfq-1",
+        supplier_name="Supplier A",
+        priority=1,
+        subject="RFQ A",
+        body="Body A",
+        status="awaiting_response",
+    )
+
+    draft_without_response = SupplierRFQDraft(
+        rfq_id="rfq-2",
+        supplier_name="Supplier B",
+        priority=2,
+        subject="RFQ B",
+        body="Body B",
+        status="sent",
+    )
+
+    older_response = SupplierRFQResponse(
+        rfq_id="rfq-1",
+        supplier_name="Supplier A",
+        rfq_priority=1,
+        status="declined",
+        notes="Older response.",
+        source="simulation",
+        received_at=base_time,
+    )
+
+    latest_response = SupplierRFQResponse(
+        rfq_id="rfq-1",
+        supplier_name="Supplier A",
+        rfq_priority=1,
+        status="quoted",
+        cost=2100,
+        currency="EUR",
+        notes="Latest response.",
+        source="simulation",
+        received_at=base_time + timedelta(minutes=15),
+    )
+
+    unknown_response = SupplierRFQResponse(
+        rfq_id="unknown-rfq",
+        supplier_name="Unknown Supplier",
+        rfq_priority=3,
+        status="no_capacity",
+        source="simulation",
+        received_at=base_time + timedelta(minutes=30),
+    )
+
+    synchronized = synchronize_supplier_rfq_lifecycle(
+        drafts=[
+            draft_with_response,
+            draft_without_response,
+        ],
+        responses=[
+            older_response,
+            latest_response,
+            unknown_response,
+        ],
+    )
+
+    if len(synchronized) != 2:
+        failures.append(
+            f"expected 2 synchronized drafts, got {len(synchronized)}"
+        )
+
+    synchronized_by_id = {
+        draft.rfq_id: draft
+        for draft in synchronized
+    }
+
+    updated_draft = synchronized_by_id.get("rfq-1")
+
+    if updated_draft is None:
+        failures.append("draft with response is missing")
+    else:
+        if updated_draft.status != "responded":
+            failures.append(
+                "draft with response should have responded status, "
+                f"got {updated_draft.status}"
+            )
+
+        if updated_draft.responded_at != latest_response.received_at:
+            failures.append(
+                "responded_at should use latest response received_at"
+            )
+
+    untouched_draft = synchronized_by_id.get("rfq-2")
+
+    if untouched_draft is None:
+        failures.append("draft without response is missing")
+    else:
+        if untouched_draft.status != "sent":
+            failures.append(
+                "draft without response should preserve status, "
+                f"got {untouched_draft.status}"
+            )
+
+        if untouched_draft.responded_at is not None:
+            failures.append(
+                "draft without response should not have responded_at"
+            )
+
+    if draft_with_response.status != "awaiting_response":
+        failures.append(
+            "lifecycle synchronization should not mutate original draft"
+        )
+
+    return {
+        "name": "Supplier RFQ lifecycle synchronization",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
