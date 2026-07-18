@@ -1940,3 +1940,141 @@ def evaluate_supplier_rfq_lifecycle_synchronization() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_rfq_response_link_integrity() -> dict:
+    from src.core.supplier_quote_selection import (
+        select_supplier_quote_from_responses,
+    )
+    from src.core.supplier_rfq import (
+        SupplierRFQDraft,
+        SupplierRFQResponse,
+    )
+    from src.core.supplier_rfq_lifecycle import (
+        filter_valid_supplier_rfq_responses,
+        synchronize_supplier_rfq_lifecycle,
+    )
+
+    failures = []
+
+    draft = SupplierRFQDraft(
+        rfq_id="rfq-integrity-1",
+        supplier_name="Expected Supplier",
+        priority=1,
+        subject="Integrity RFQ",
+        body="Integrity test body",
+        status="awaiting_response",
+    )
+
+    valid_response = SupplierRFQResponse(
+        rfq_id="rfq-integrity-1",
+        supplier_name="Expected Supplier",
+        rfq_priority=1,
+        status="quoted",
+        cost=2200,
+        currency="EUR",
+        source="simulation",
+    )
+
+    wrong_supplier_response = SupplierRFQResponse(
+        rfq_id="rfq-integrity-1",
+        supplier_name="Wrong Supplier",
+        rfq_priority=1,
+        status="quoted",
+        cost=1500,
+        currency="EUR",
+        source="simulation",
+    )
+
+    wrong_priority_response = SupplierRFQResponse(
+        rfq_id="rfq-integrity-1",
+        supplier_name="Expected Supplier",
+        rfq_priority=2,
+        status="quoted",
+        cost=1400,
+        currency="EUR",
+        source="simulation",
+    )
+
+    valid_responses = filter_valid_supplier_rfq_responses(
+        drafts=[draft],
+        responses=[
+            wrong_supplier_response,
+            wrong_priority_response,
+            valid_response,
+        ],
+    )
+
+    if len(valid_responses) != 1:
+        failures.append(
+            f"expected 1 valid response, got {len(valid_responses)}"
+        )
+    elif valid_responses[0] is not valid_response:
+        failures.append(
+            "expected only the fully matching response to be accepted"
+        )
+
+    selected_quote = select_supplier_quote_from_responses(
+        valid_responses
+    )
+
+    if selected_quote is None:
+        failures.append(
+            "valid linked response should produce supplier quote"
+        )
+    else:
+        if selected_quote.supplier_name != "Expected Supplier":
+            failures.append(
+                "invalid supplier response affected quote selection"
+            )
+
+        if selected_quote.cost != 2200:
+            failures.append(
+                f"expected selected cost 2200, got {selected_quote.cost}"
+            )
+
+    invalid_only = filter_valid_supplier_rfq_responses(
+        drafts=[draft],
+        responses=[
+            wrong_supplier_response,
+            wrong_priority_response,
+        ],
+    )
+
+    if invalid_only:
+        failures.append(
+            "identity-mismatched responses should all be rejected"
+        )
+
+    synchronized = synchronize_supplier_rfq_lifecycle(
+        drafts=[draft],
+        responses=[
+            wrong_supplier_response,
+            wrong_priority_response,
+        ],
+    )
+
+    if not synchronized:
+        failures.append("synchronized draft is missing")
+    else:
+        synchronized_draft = synchronized[0]
+
+        if synchronized_draft.status != "awaiting_response":
+            failures.append(
+                "invalid response must not change draft status"
+            )
+
+        if synchronized_draft.responded_at is not None:
+            failures.append(
+                "invalid response must not set responded_at"
+            )
+
+    if select_supplier_quote_from_responses(invalid_only) is not None:
+        failures.append(
+            "invalid-only responses must not produce supplier quote"
+        )
+
+    return {
+        "name": "Supplier RFQ response link integrity",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
