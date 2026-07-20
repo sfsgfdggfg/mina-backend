@@ -22,7 +22,7 @@ from src.core.customer_memory import (
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity
+from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
 
 app = FastAPI(
@@ -467,6 +467,9 @@ def run_test_suite():
     test_results.append(evaluate_supplier_response_required_state())
     test_results.append(evaluate_supplier_rfq_lifecycle_synchronization())
     test_results.append(evaluate_supplier_rfq_response_link_integrity())
+    test_results.append(evaluate_supplier_rfq_response_validation_report())
+    test_results.append(evaluate_supplier_rfq_response_validation_report())
+    test_results.append(evaluate_supplier_rfq_response_validation_report())
 
     for test_case in AI_EMAIL_TEST_CASES:
         shipment = parse_email_with_ai(test_case["email"])
@@ -639,6 +642,9 @@ def serialize_result(result: dict) -> dict:
     quote_readiness = result.get("quote_readiness")
     supplier_rfq_drafts = result.get("supplier_rfq_drafts") or []
     supplier_rfq_responses = result.get("supplier_rfq_responses") or []
+    supplier_rfq_response_validation = result.get(
+        "supplier_rfq_response_validation"
+    )
     supplier_quote = result.get("supplier_quote")
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
@@ -664,6 +670,11 @@ def serialize_result(result: dict) -> dict:
             response.model_dump() if hasattr(response, "model_dump") else response
             for response in supplier_rfq_responses
         ],
+        "supplier_rfq_response_validation": (
+            supplier_rfq_response_validation.model_dump()
+            if hasattr(supplier_rfq_response_validation, "model_dump")
+            else supplier_rfq_response_validation
+        ),
         "supplier_quote": supplier_quote.model_dump() if supplier_quote else None,
         "customer_quote": customer_quote.model_dump() if customer_quote else None,
         "quote_draft": quote_draft.model_dump() if quote_draft else None,

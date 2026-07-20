@@ -2078,3 +2078,110 @@ def evaluate_supplier_rfq_response_link_integrity() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_rfq_response_validation_report() -> dict:
+    from src.core.supplier_rfq import (
+        SupplierRFQDraft,
+        SupplierRFQResponse,
+    )
+    from src.core.supplier_rfq_lifecycle import (
+        validate_supplier_rfq_responses,
+    )
+
+    failures = []
+
+    draft = SupplierRFQDraft(
+        rfq_id="rfq-report-1",
+        supplier_name="Expected Supplier",
+        priority=1,
+        subject="RFQ Report Test",
+        body="RFQ report test body",
+        status="awaiting_response",
+    )
+
+    valid_response = SupplierRFQResponse(
+        rfq_id="rfq-report-1",
+        supplier_name="Expected Supplier",
+        rfq_priority=1,
+        status="quoted",
+        cost=2200,
+        currency="EUR",
+        source="simulation",
+    )
+
+    unknown_rfq_response = SupplierRFQResponse(
+        rfq_id="unknown-rfq",
+        supplier_name="Unknown Supplier",
+        rfq_priority=1,
+        status="no_capacity",
+        source="simulation",
+    )
+
+    supplier_mismatch_response = SupplierRFQResponse(
+        rfq_id="rfq-report-1",
+        supplier_name="Wrong Supplier",
+        rfq_priority=1,
+        status="declined",
+        source="simulation",
+    )
+
+    priority_mismatch_response = SupplierRFQResponse(
+        rfq_id="rfq-report-1",
+        supplier_name="Expected Supplier",
+        rfq_priority=2,
+        status="needs_clarification",
+        source="simulation",
+    )
+
+    valid_responses, report = validate_supplier_rfq_responses(
+        drafts=[draft],
+        responses=[
+            valid_response,
+            unknown_rfq_response,
+            supplier_mismatch_response,
+            priority_mismatch_response,
+        ],
+    )
+
+    if len(valid_responses) != 1:
+        failures.append(
+            f"expected 1 valid response, got {len(valid_responses)}"
+        )
+
+    if report.valid_count != 1:
+        failures.append(
+            f"expected valid_count 1, got {report.valid_count}"
+        )
+
+    if report.rejected_count != 3:
+        failures.append(
+            f"expected rejected_count 3, got {report.rejected_count}"
+        )
+
+    actual_reasons = {
+        item.reason
+        for item in report.rejected_responses
+    }
+
+    expected_reasons = {
+        "unknown_rfq_id",
+        "supplier_name_mismatch",
+        "priority_mismatch",
+    }
+
+    if actual_reasons != expected_reasons:
+        failures.append(
+            f"expected reasons {expected_reasons}, "
+            f"got {actual_reasons}"
+        )
+
+    if report.source != "supplier_rfq_response_validator":
+        failures.append(
+            f"unexpected report source: {report.source}"
+        )
+
+    return {
+        "name": "Supplier RFQ response validation report",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
