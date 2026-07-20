@@ -2261,3 +2261,153 @@ def evaluate_supplier_rfq_response_status_rules() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_rfq_api_contract() -> dict:
+    from src.api import serialize_result
+    from src.core.models import Package, Shipment
+    from src.workflow import pipeline
+
+    failures = []
+
+    shipment = Shipment(
+        customer_name="Known Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-07-20",
+        packages=[
+            Package(
+                package_type="pallet",
+                quantity=20,
+                length_cm=120,
+                width_cm=80,
+                height_cm=150,
+                weight_kg=1000,
+            )
+        ],
+    )
+
+    quote_result = pipeline.process_shipment(
+        shipment=shipment,
+        email_text=(
+            "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+            "komple araç fiyatı rica ederiz. "
+            "Yük 20.07.2026 tarihinde hazırdır."
+        ),
+    )
+
+    serialized_quote = serialize_result(quote_result)
+
+    required_fields = {
+        "supplier_rfq_responses",
+        "valid_supplier_rfq_responses",
+        "supplier_rfq_response_validation",
+    }
+
+    missing_quote_fields = required_fields - serialized_quote.keys()
+
+    if missing_quote_fields:
+        failures.append(
+            "quote result missing RFQ contract fields: "
+            f"{sorted(missing_quote_fields)}"
+        )
+
+    if not isinstance(
+        serialized_quote.get("supplier_rfq_responses"),
+        list,
+    ):
+        failures.append(
+            "supplier_rfq_responses should serialize as a list"
+        )
+
+    if not isinstance(
+        serialized_quote.get("valid_supplier_rfq_responses"),
+        list,
+    ):
+        failures.append(
+            "valid_supplier_rfq_responses should serialize as a list"
+        )
+
+    validation_report = serialized_quote.get(
+        "supplier_rfq_response_validation"
+    )
+
+    if not isinstance(validation_report, dict):
+        failures.append(
+            "quote result should include serialized validation report"
+        )
+    else:
+        for key in (
+            "valid_count",
+            "rejected_count",
+            "rejected_responses",
+            "source",
+        ):
+            if key not in validation_report:
+                failures.append(
+                    f"validation report missing field: {key}"
+                )
+
+    clarification_shipment = shipment.model_copy(
+        update={
+            "commodity": "Makina",
+            "gross_weight_kg": None,
+            "packages": [],
+        }
+    )
+
+    clarification_result = pipeline.process_shipment(
+        shipment=clarification_shipment,
+        email_text=(
+            "Adana'dan Hamburg'a makina yükü için fiyat rica ederiz."
+        ),
+    )
+
+    serialized_clarification = serialize_result(
+        clarification_result
+    )
+
+    missing_early_fields = (
+        required_fields - serialized_clarification.keys()
+    )
+
+    if missing_early_fields:
+        failures.append(
+            "early-stop result missing RFQ contract fields: "
+            f"{sorted(missing_early_fields)}"
+        )
+
+    if serialized_clarification.get("supplier_rfq_responses") != []:
+        failures.append(
+            "early-stop raw RFQ responses should be an empty list"
+        )
+
+    if (
+        serialized_clarification.get(
+            "valid_supplier_rfq_responses"
+        )
+        != []
+    ):
+        failures.append(
+            "early-stop valid RFQ responses should be an empty list"
+        )
+
+    if (
+        serialized_clarification.get(
+            "supplier_rfq_response_validation"
+        )
+        is not None
+    ):
+        failures.append(
+            "early-stop validation report should be None"
+        )
+
+    return {
+        "name": "Supplier RFQ API contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
