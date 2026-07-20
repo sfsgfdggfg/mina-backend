@@ -69,12 +69,17 @@ class SupplierRFQResponse(BaseModel):
     received_at: datetime = Field(default_factory=datetime.utcnow)
 
     @model_validator(mode="after")
-    def validate_quoted_price(self):
+    def validate_status_data_consistency(self):
         if self.status == "quoted":
             if self.cost is None or self.cost <= 0:
                 raise ValueError(
                     "Quoted RFQ response must have a positive cost."
                 )
+
+        elif self.cost is not None:
+            raise ValueError(
+                "Non-quoted RFQ response must not include a cost."
+            )
 
         return self
 

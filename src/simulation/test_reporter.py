@@ -2185,3 +2185,79 @@ def evaluate_supplier_rfq_response_validation_report() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+def evaluate_supplier_rfq_response_status_rules() -> dict:
+    from pydantic import ValidationError
+
+    from src.core.supplier_rfq import SupplierRFQResponse
+
+    failures = []
+
+    invalid_cases = [
+        ("no_capacity", 1800),
+        ("declined", 1900),
+        ("needs_clarification", 2000),
+    ]
+
+    for status, cost in invalid_cases:
+        try:
+            SupplierRFQResponse(
+                supplier_name=f"{status} Supplier",
+                rfq_priority=1,
+                status=status,
+                cost=cost,
+                currency="EUR",
+                source="simulation",
+            )
+            failures.append(
+                f"{status} response with cost should be rejected"
+            )
+        except ValidationError:
+            pass
+
+    for status in (
+        "no_capacity",
+        "declined",
+        "needs_clarification",
+    ):
+        try:
+            response = SupplierRFQResponse(
+                supplier_name=f"{status} Supplier",
+                rfq_priority=1,
+                status=status,
+                source="simulation",
+            )
+
+            if response.is_price_usable:
+                failures.append(
+                    f"{status} response must not be price usable"
+                )
+        except ValidationError as exc:
+            failures.append(
+                f"{status} response without cost was rejected: {exc}"
+            )
+
+    try:
+        quoted_response = SupplierRFQResponse(
+            supplier_name="Quoted Supplier",
+            rfq_priority=1,
+            status="quoted",
+            cost=2100,
+            currency="EUR",
+            source="simulation",
+        )
+
+        if not quoted_response.is_price_usable:
+            failures.append(
+                "quoted response with positive cost should be usable"
+            )
+    except ValidationError as exc:
+        failures.append(
+            f"valid quoted response was rejected: {exc}"
+        )
+
+    return {
+        "name": "Supplier RFQ response status rules",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
