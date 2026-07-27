@@ -1556,6 +1556,7 @@ def evaluate_supplier_fallback_consistency() -> dict:
     }
 
 def evaluate_final_quote_consistency_block() -> dict:
+    from src.api import determine_result_type
     from src.core.models import Package, Shipment
     from src.core.supplier_rfq import SupplierRFQResponse
     from src.workflow import pipeline
@@ -1594,6 +1595,7 @@ def evaluate_final_quote_consistency_block() -> dict:
     ):
         return [
             SupplierRFQResponse(
+                rfq_id="unknown-outsider-rfq",
                 supplier_name="Outside Selection Supplier",
                 rfq_priority=1,
                 status="quoted",
@@ -1624,43 +1626,70 @@ def evaluate_final_quote_consistency_block() -> dict:
             original_simulator
         )
 
-    quote_readiness = result.get("quote_readiness")
-    operational_consistency = (
-        result.get("operational_consistency") or {}
-    )
+    result_type = determine_result_type(result)
 
-    if quote_readiness is None:
-        failures.append("quote_readiness result is missing")
-    elif quote_readiness.result_type != "blocked":
+    if result_type != "supplier_response_required":
         failures.append(
-            "outsider supplier quote should produce blocked result, "
-            f"got {quote_readiness.result_type}"
+            "identity-invalid response should produce "
+            "supplier_response_required, "
+            f"got {result_type}"
+        )
+
+    if result.get("supplier_quote") is not None:
+        failures.append(
+            "identity-invalid response must not create supplier quote"
         )
 
     if result.get("customer_quote") is not None:
         failures.append(
-            "blocked final consistency must not create customer quote"
+            "identity-invalid response must not create customer quote"
         )
 
     if result.get("quote_draft") is not None:
         failures.append(
-            "blocked final consistency must not create quote draft"
+            "identity-invalid response must not create quote draft"
         )
 
-    if result.get("supplier_quote") is None:
+    validation = result.get("supplier_rfq_response_validation")
+
+    if validation is None:
+        failures.append("RFQ response validation report is missing")
+    else:
+        if validation.valid_count != 0:
+            failures.append(
+                f"expected valid_count 0, got {validation.valid_count}"
+            )
+
+        if validation.rejected_count != 1:
+            failures.append(
+                "expected rejected_count 1, "
+                f"got {validation.rejected_count}"
+            )
+
+        reasons = {
+            item.reason
+            for item in validation.rejected_responses
+        }
+
+        if "unknown_rfq_id" not in reasons:
+            failures.append(
+                "outsider response rejection reason was not preserved"
+            )
+
+    raw_responses = result.get("supplier_rfq_responses") or []
+
+    if len(raw_responses) != 1:
         failures.append(
-            "blocked result should preserve rejected supplier quote "
-            "for audit"
+            "rejected raw response should be preserved for audit"
         )
 
-    errors = operational_consistency.get("errors", [])
+    valid_responses = (
+        result.get("valid_supplier_rfq_responses") or []
+    )
 
-    if not any(
-        "Supplier Selection listesinde bulunmayan" in error
-        for error in errors
-    ):
+    if valid_responses:
         failures.append(
-            "final consistency error was not preserved"
+            "identity-invalid response must not enter valid responses"
         )
 
     return {
@@ -2352,27 +2381,29 @@ def evaluate_supplier_rfq_api_contract() -> dict:
                     f"validation report missing field: {key}"
                 )
 
-    clarification_shipment = shipment.model_copy(
+    early_stop_shipment = shipment.model_copy(
         update={
-            "commodity": "Makina",
-            "gross_weight_kg": None,
-            "packages": [],
+            "commodity": "Kimyasal Ürün",
+            "is_adr": True,
+            "adr_class": None,
+            "special_notes": None,
         }
     )
 
-    clarification_result = pipeline.process_shipment(
-        shipment=clarification_shipment,
+    early_stop_result = pipeline.process_shipment(
+        shipment=early_stop_shipment,
         email_text=(
-            "Adana'dan Hamburg'a makina yükü için fiyat rica ederiz."
+            "Adana'dan Hamburg'a ADR kapsamındaki kimyasal yük için "
+            "komple araç fiyatı rica ederiz. ADR sınıfı henüz belli değil."
         ),
     )
 
-    serialized_clarification = serialize_result(
-        clarification_result
+    serialized_early_stop = serialize_result(
+        early_stop_result
     )
 
     missing_early_fields = (
-        required_fields - serialized_clarification.keys()
+        required_fields - serialized_early_stop.keys()
     )
 
     if missing_early_fields:
@@ -2381,13 +2412,13 @@ def evaluate_supplier_rfq_api_contract() -> dict:
             f"{sorted(missing_early_fields)}"
         )
 
-    if serialized_clarification.get("supplier_rfq_responses") != []:
+    if serialized_early_stop.get("supplier_rfq_responses") != []:
         failures.append(
             "early-stop raw RFQ responses should be an empty list"
         )
 
     if (
-        serialized_clarification.get(
+        serialized_early_stop.get(
             "valid_supplier_rfq_responses"
         )
         != []
@@ -2397,7 +2428,7 @@ def evaluate_supplier_rfq_api_contract() -> dict:
         )
 
     if (
-        serialized_clarification.get(
+        serialized_early_stop.get(
             "supplier_rfq_response_validation"
         )
         is not None
@@ -2408,6 +2439,160 @@ def evaluate_supplier_rfq_api_contract() -> dict:
 
     return {
         "name": "Supplier RFQ API contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+def evaluate_supplier_quote_comparison_model() -> dict:
+    from src.core.supplier_quote_comparison import (
+        build_supplier_quote_comparisons,
+    )
+    from src.core.supplier_rfq import SupplierRFQResponse
+
+    failures = []
+
+    supplier_selection = {
+        "selected_suppliers": [
+            {
+                "supplier_name": "Supplier A",
+                "priority": 1,
+                "total_score": 0.91,
+                "route_score": 1.0,
+                "equipment_score": 0.9,
+                "risk_score": 0.8,
+                "price_score": 0.7,
+                "speed_score": 0.6,
+            },
+            {
+                "supplier_name": "Supplier B",
+                "priority": 2,
+                "total_score": 0.84,
+                "route_score": 0.9,
+                "equipment_score": 0.8,
+                "risk_score": 0.7,
+                "price_score": 0.9,
+                "speed_score": 0.8,
+            },
+        ]
+    }
+
+    responses = [
+        SupplierRFQResponse(
+            rfq_id="rfq-a",
+            supplier_name="Supplier A",
+            rfq_priority=1,
+            status="quoted",
+            cost=2200,
+            currency="EUR",
+            transit_time="5-7 days",
+            source="simulation",
+        ),
+        SupplierRFQResponse(
+            rfq_id="rfq-b",
+            supplier_name="Supplier B",
+            rfq_priority=2,
+            status="quoted",
+            cost=2050,
+            currency="EUR",
+            transit_time="6-8 days",
+            source="simulation",
+        ),
+        SupplierRFQResponse(
+            rfq_id="rfq-c",
+            supplier_name="Supplier C",
+            rfq_priority=3,
+            status="quoted",
+            cost=1900,
+            currency="EUR",
+            source="simulation",
+        ),
+        SupplierRFQResponse(
+            rfq_id="rfq-a-declined",
+            supplier_name="Supplier A",
+            rfq_priority=1,
+            status="declined",
+            source="simulation",
+        ),
+    ]
+
+    comparisons = build_supplier_quote_comparisons(
+        responses=responses,
+        supplier_selection=supplier_selection,
+    )
+
+    if len(comparisons) != 2:
+        failures.append(
+            f"expected 2 comparisons, got {len(comparisons)}"
+        )
+
+    comparison_by_supplier = {
+        item.supplier_name: item
+        for item in comparisons
+    }
+
+    supplier_a = comparison_by_supplier.get("Supplier A")
+
+    if supplier_a is None:
+        failures.append("Supplier A comparison is missing")
+    else:
+        if supplier_a.rfq_id != "rfq-a":
+            failures.append(
+                f"expected Supplier A rfq-a, got {supplier_a.rfq_id}"
+            )
+
+        if supplier_a.cost != 2200:
+            failures.append(
+                f"expected Supplier A cost 2200, got {supplier_a.cost}"
+            )
+
+        if supplier_a.supplier_score != 0.91:
+            failures.append(
+                "Supplier A supplier_score mismatch: "
+                f"{supplier_a.supplier_score}"
+            )
+
+        if supplier_a.operational_score != 0.9:
+            failures.append(
+                "Supplier A operational_score mismatch: "
+                f"{supplier_a.operational_score}"
+            )
+
+        if supplier_a.commercial_score != 0.65:
+            failures.append(
+                "Supplier A commercial_score mismatch: "
+                f"{supplier_a.commercial_score}"
+            )
+
+        if supplier_a.total_score != 0.91:
+            failures.append(
+                "Supplier A total_score should initially preserve "
+                f"supplier score, got {supplier_a.total_score}"
+            )
+
+    supplier_b = comparison_by_supplier.get("Supplier B")
+
+    if supplier_b is None:
+        failures.append("Supplier B comparison is missing")
+    else:
+        if supplier_b.operational_score != 0.8:
+            failures.append(
+                "Supplier B operational_score mismatch: "
+                f"{supplier_b.operational_score}"
+            )
+
+        if supplier_b.commercial_score != 0.85:
+            failures.append(
+                "Supplier B commercial_score mismatch: "
+                f"{supplier_b.commercial_score}"
+            )
+
+    if "Supplier C" in comparison_by_supplier:
+        failures.append(
+            "supplier outside Supplier Selection should be skipped"
+        )
+
+    return {
+        "name": "Supplier quote comparison model",
         "passed": len(failures) == 0,
         "failures": failures,
     }
