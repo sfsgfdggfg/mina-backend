@@ -30,3 +30,39 @@ def select_supplier_quote_from_responses(
         transit_time=selected.transit_time,
         notes=selected.notes,
     )
+
+
+def select_supplier_quote_from_comparisons(
+    comparisons,
+    responses: Iterable[SupplierRFQResponse],
+) -> Optional[SupplierQuote]:
+    response_by_rfq_id = {
+        response.rfq_id: response
+        for response in responses
+        if response.is_price_usable
+    }
+
+    ranked_comparisons = sorted(
+        comparisons,
+        key=lambda comparison: (
+            -comparison.total_score,
+            comparison.priority,
+            comparison.cost,
+        ),
+    )
+
+    for comparison in ranked_comparisons:
+        response = response_by_rfq_id.get(comparison.rfq_id)
+
+        if response is None:
+            continue
+
+        return SupplierQuote(
+            supplier_name=response.supplier_name,
+            cost=float(response.cost),
+            currency=response.currency,
+            transit_time=response.transit_time,
+            notes=response.notes,
+        )
+
+    return None

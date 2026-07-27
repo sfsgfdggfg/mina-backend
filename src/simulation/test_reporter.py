@@ -2563,10 +2563,22 @@ def evaluate_supplier_quote_comparison_model() -> dict:
                 f"{supplier_a.commercial_score}"
             )
 
-        if supplier_a.total_score != 0.91:
+        if supplier_a.actual_price_score != 0.932:
             failures.append(
-                "Supplier A total_score should initially preserve "
-                f"supplier score, got {supplier_a.total_score}"
+                "Supplier A actual_price_score mismatch: "
+                f"{supplier_a.actual_price_score}"
+            )
+
+        if supplier_a.transit_score != 1.0:
+            failures.append(
+                "Supplier A transit_score mismatch: "
+                f"{supplier_a.transit_score}"
+            )
+
+        if supplier_a.total_score != 0.923:
+            failures.append(
+                "Supplier A total_score mismatch: "
+                f"{supplier_a.total_score}"
             )
 
     supplier_b = comparison_by_supplier.get("Supplier B")
@@ -2586,6 +2598,24 @@ def evaluate_supplier_quote_comparison_model() -> dict:
                 f"{supplier_b.commercial_score}"
             )
 
+        if supplier_b.actual_price_score != 1.0:
+            failures.append(
+                "Supplier B actual_price_score mismatch: "
+                f"{supplier_b.actual_price_score}"
+            )
+
+        if supplier_b.transit_score != 0.833:
+            failures.append(
+                "Supplier B transit_score mismatch: "
+                f"{supplier_b.transit_score}"
+            )
+
+        if supplier_b.total_score != 0.871:
+            failures.append(
+                "Supplier B total_score mismatch: "
+                f"{supplier_b.total_score}"
+            )
+
     if "Supplier C" in comparison_by_supplier:
         failures.append(
             "supplier outside Supplier Selection should be skipped"
@@ -2593,6 +2623,115 @@ def evaluate_supplier_quote_comparison_model() -> dict:
 
     return {
         "name": "Supplier quote comparison model",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+def evaluate_multi_criteria_supplier_quote_selection() -> dict:
+    from src.core.supplier_quote_comparison import (
+        SupplierQuoteComparison,
+    )
+    from src.core.supplier_quote_selection import (
+        select_supplier_quote_from_comparisons,
+    )
+    from src.core.supplier_rfq import SupplierRFQResponse
+
+    failures = []
+
+    responses = [
+        SupplierRFQResponse(
+            rfq_id="rfq-reliable",
+            supplier_name="Reliable Supplier",
+            rfq_priority=1,
+            status="quoted",
+            cost=2300,
+            currency="EUR",
+            transit_time="5-7 days",
+            notes="Higher operational score.",
+            source="simulation",
+        ),
+        SupplierRFQResponse(
+            rfq_id="rfq-cheapest",
+            supplier_name="Cheapest Supplier",
+            rfq_priority=2,
+            status="quoted",
+            cost=1900,
+            currency="EUR",
+            transit_time="7-9 days",
+            notes="Lowest price.",
+            source="simulation",
+        ),
+    ]
+
+    comparisons = [
+        SupplierQuoteComparison(
+            rfq_id="rfq-reliable",
+            supplier_name="Reliable Supplier",
+            priority=1,
+            cost=2300,
+            currency="EUR",
+            transit_time="5-7 days",
+            supplier_score=0.96,
+            commercial_score=0.75,
+            operational_score=0.97,
+            actual_price_score=0.826,
+            transit_score=1.0,
+            total_score=0.937,
+        ),
+        SupplierQuoteComparison(
+            rfq_id="rfq-cheapest",
+            supplier_name="Cheapest Supplier",
+            priority=2,
+            cost=1900,
+            currency="EUR",
+            transit_time="7-9 days",
+            supplier_score=0.78,
+            commercial_score=0.90,
+            operational_score=0.76,
+            actual_price_score=1.0,
+            transit_score=0.714,
+            total_score=0.817,
+        ),
+    ]
+
+    selected = select_supplier_quote_from_comparisons(
+        comparisons=comparisons,
+        responses=responses,
+    )
+
+    if selected is None:
+        failures.append("expected a selected supplier quote")
+    else:
+        if selected.supplier_name != "Reliable Supplier":
+            failures.append(
+                "expected highest total-score supplier, "
+                f"got {selected.supplier_name}"
+            )
+
+        if selected.cost != 2300:
+            failures.append(
+                f"expected selected cost 2300, got {selected.cost}"
+            )
+
+    tie_comparisons = [
+        comparison.model_copy(update={"total_score": 0.90})
+        for comparison in comparisons
+    ]
+
+    tie_selected = select_supplier_quote_from_comparisons(
+        comparisons=tie_comparisons,
+        responses=responses,
+    )
+
+    if tie_selected is None:
+        failures.append("expected a selection in tie case")
+    elif tie_selected.supplier_name != "Reliable Supplier":
+        failures.append(
+            "equal scores should prefer lower RFQ priority number"
+        )
+
+    return {
+        "name": "Multi-criteria supplier quote selection",
         "passed": len(failures) == 0,
         "failures": failures,
     }

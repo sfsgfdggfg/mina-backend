@@ -2,7 +2,7 @@ import json
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model
+from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection
 from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.ai.quote_generator import generate_quote_draft
@@ -20,7 +20,8 @@ from src.core.operational_consistency import check_operational_consistency
 from src.core.pricing import calculate_customer_quote
 from src.core.commodity_profile import get_commodity_record
 from src.core.quote_readiness import decide_quote_readiness
-from src.core.supplier_quote_selection import select_supplier_quote_from_responses
+from src.core.supplier_quote_selection import select_supplier_quote_from_comparisons
+from src.core.supplier_quote_comparison import build_supplier_quote_comparisons
 from src.core.supplier_rfq_lifecycle import (
     synchronize_supplier_rfq_lifecycle,
     validate_supplier_rfq_responses,
@@ -85,6 +86,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "supplier_rfq_responses": [],
             "valid_supplier_rfq_responses": [],
             "supplier_rfq_response_validation": None,
+            "supplier_quote_comparisons": [],
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -121,6 +123,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "supplier_rfq_responses": [],
             "valid_supplier_rfq_responses": [],
             "supplier_rfq_response_validation": None,
+            "supplier_quote_comparisons": [],
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -157,6 +160,7 @@ def process_shipment(shipment, email_text: str | None = None):
             "supplier_rfq_responses": [],
             "valid_supplier_rfq_responses": [],
             "supplier_rfq_response_validation": None,
+            "supplier_quote_comparisons": [],
             "supplier_quote": None,
             "customer_quote": None,
             "quote_draft": None,
@@ -192,8 +196,14 @@ def process_shipment(shipment, email_text: str | None = None):
         responses=valid_supplier_rfq_responses,
     )
 
-    supplier_quote = select_supplier_quote_from_responses(
-        valid_supplier_rfq_responses
+    supplier_quote_comparisons = build_supplier_quote_comparisons(
+        responses=valid_supplier_rfq_responses,
+        supplier_selection=supplier_selection,
+    )
+
+    supplier_quote = select_supplier_quote_from_comparisons(
+        comparisons=supplier_quote_comparisons,
+        responses=valid_supplier_rfq_responses,
     )
 
     if supplier_quote is None:
@@ -222,6 +232,9 @@ def process_shipment(shipment, email_text: str | None = None):
             ),
             "supplier_rfq_response_validation": (
                 supplier_rfq_response_validation
+            ),
+            "supplier_quote_comparisons": (
+                supplier_quote_comparisons
             ),
             "supplier_quote": None,
             "customer_quote": None,
@@ -273,6 +286,9 @@ def process_shipment(shipment, email_text: str | None = None):
             "supplier_rfq_response_validation": (
                 supplier_rfq_response_validation
             ),
+            "supplier_quote_comparisons": (
+                supplier_quote_comparisons
+            ),
             "supplier_quote": supplier_quote,
             "customer_quote": None,
             "quote_draft": None,
@@ -315,6 +331,9 @@ def process_shipment(shipment, email_text: str | None = None):
         ),
         "supplier_rfq_response_validation": (
             supplier_rfq_response_validation
+        ),
+        "supplier_quote_comparisons": (
+            supplier_quote_comparisons
         ),
         "supplier_quote": supplier_quote,
         "customer_quote": customer_quote,
@@ -420,6 +439,7 @@ def run_ai_email_test_suite():
     test_results.append(evaluate_supplier_rfq_response_status_rules())
     test_results.append(evaluate_supplier_rfq_api_contract())
     test_results.append(evaluate_supplier_quote_comparison_model())
+    test_results.append(evaluate_multi_criteria_supplier_quote_selection())
 
     for index, test_case in enumerate(AI_EMAIL_TEST_CASES, start=1):
         print("\n\n########################################")
