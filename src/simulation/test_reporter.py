@@ -2858,3 +2858,112 @@ def evaluate_supplier_quote_selection_traceability() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_supplier_rfq_repository() -> dict:
+    from src.core.supplier_rfq import (
+        SupplierRFQDraft,
+        SupplierRFQResponse,
+    )
+    from src.core.supplier_rfq_repository import (
+        InMemorySupplierRFQRepository,
+    )
+
+    failures = []
+    repository = InMemorySupplierRFQRepository()
+
+    first_draft = SupplierRFQDraft(
+        rfq_id="rfq-repository-1",
+        supplier_name="Supplier A",
+        priority=1,
+        recipient_email="pricing@example.invalid",
+        subject="RFQ",
+        body="Please quote.",
+    )
+    second_draft = SupplierRFQDraft(
+        rfq_id="rfq-repository-2",
+        supplier_name="Supplier B",
+        priority=2,
+        recipient_email="rfq@example.invalid",
+        subject="RFQ",
+        body="Please quote.",
+    )
+
+    saved_drafts = repository.save_drafts(
+        [first_draft, second_draft]
+    )
+
+    if len(saved_drafts) != 2:
+        failures.append("expected two saved RFQ drafts")
+
+    if repository.get_draft(first_draft.rfq_id) != first_draft:
+        failures.append("saved RFQ draft could not be retrieved")
+
+    updated_first_draft = first_draft.model_copy(
+        update={"status": "sent"}
+    )
+    repository.save_drafts([updated_first_draft])
+
+    stored_updated_draft = repository.get_draft(
+        first_draft.rfq_id
+    )
+
+    if (
+        stored_updated_draft is None
+        or stored_updated_draft.status != "sent"
+    ):
+        failures.append(
+            "saving the same RFQ ID should update the draft"
+        )
+
+    first_response = SupplierRFQResponse(
+        rfq_id=first_draft.rfq_id,
+        supplier_name=first_draft.supplier_name,
+        rfq_priority=first_draft.priority,
+        status="quoted",
+        cost=2100,
+        currency="EUR",
+        source="simulation",
+    )
+    second_response = SupplierRFQResponse(
+        rfq_id=second_draft.rfq_id,
+        supplier_name=second_draft.supplier_name,
+        rfq_priority=second_draft.priority,
+        status="declined",
+        source="simulation",
+    )
+
+    repository.save_responses(
+        [first_response, second_response]
+    )
+
+    first_rfq_responses = repository.list_responses(
+        rfq_id=first_draft.rfq_id
+    )
+
+    if first_rfq_responses != [first_response]:
+        failures.append(
+            "RFQ response filtering returned incorrect records"
+        )
+
+    listed_drafts = repository.list_drafts()
+    listed_drafts.clear()
+
+    if len(repository.list_drafts()) != 2:
+        failures.append(
+            "repository draft listing should return a copy"
+        )
+
+    listed_responses = repository.list_responses()
+    listed_responses.clear()
+
+    if len(repository.list_responses()) != 2:
+        failures.append(
+            "repository response listing should return a copy"
+        )
+
+    return {
+        "name": "Supplier RFQ repository",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
