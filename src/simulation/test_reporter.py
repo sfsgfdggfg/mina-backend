@@ -2735,3 +2735,126 @@ def evaluate_multi_criteria_supplier_quote_selection() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_supplier_quote_selection_traceability() -> dict:
+    from src.core.supplier_quote_comparison import (
+        SupplierQuoteComparison,
+    )
+    from src.core.supplier_quote_selection import (
+        build_supplier_quote_selection_decision,
+    )
+
+    failures = []
+
+    comparisons = [
+        SupplierQuoteComparison(
+            rfq_id="rfq-reliable",
+            supplier_name="Reliable Supplier",
+            priority=1,
+            cost=2300,
+            currency="EUR",
+            transit_time="5-7 days",
+            supplier_score=0.96,
+            commercial_score=0.75,
+            operational_score=0.97,
+            actual_price_score=0.826,
+            transit_score=1.0,
+            total_score=0.937,
+        ),
+        SupplierQuoteComparison(
+            rfq_id="rfq-cheapest",
+            supplier_name="Cheapest Supplier",
+            priority=2,
+            cost=1900,
+            currency="EUR",
+            transit_time="7-9 days",
+            supplier_score=0.78,
+            commercial_score=0.90,
+            operational_score=0.76,
+            actual_price_score=1.0,
+            transit_score=0.714,
+            total_score=0.817,
+        ),
+    ]
+
+    decision = build_supplier_quote_selection_decision(
+        comparisons=comparisons,
+    )
+
+    if decision is None:
+        failures.append("expected a selection decision")
+    else:
+        if decision.selected_supplier != "Reliable Supplier":
+            failures.append(
+                "selected supplier mismatch: "
+                f"{decision.selected_supplier}"
+            )
+
+        if decision.selected_rfq_id != "rfq-reliable":
+            failures.append(
+                "selected RFQ identity mismatch: "
+                f"{decision.selected_rfq_id}"
+            )
+
+        if decision.selected_total_score != 0.937:
+            failures.append(
+                "selected total score mismatch: "
+                f"{decision.selected_total_score}"
+            )
+
+        if decision.score_difference != 0.12:
+            failures.append(
+                "runner-up score difference mismatch: "
+                f"{decision.score_difference}"
+            )
+
+        if decision.price_difference != 400:
+            failures.append(
+                "runner-up price difference mismatch: "
+                f"{decision.price_difference}"
+            )
+
+        if "daha pahalı" not in decision.selection_reason:
+            failures.append(
+                "selection reason should explain higher price"
+            )
+
+        if len(decision.rejected_alternatives) != 1:
+            failures.append(
+                "expected one rejected alternative"
+            )
+        else:
+            alternative = decision.rejected_alternatives[0]
+
+            if alternative.supplier_name != "Cheapest Supplier":
+                failures.append(
+                    "rejected alternative supplier mismatch"
+                )
+
+            if alternative.score_difference != 0.12:
+                failures.append(
+                    "alternative score difference mismatch: "
+                    f"{alternative.score_difference}"
+                )
+
+            if alternative.price_difference != -400:
+                failures.append(
+                    "alternative price difference mismatch: "
+                    f"{alternative.price_difference}"
+                )
+
+    empty_decision = build_supplier_quote_selection_decision(
+        comparisons=[],
+    )
+
+    if empty_decision is not None:
+        failures.append(
+            "empty comparison list should not produce a decision"
+        )
+
+    return {
+        "name": "Supplier quote selection traceability",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
