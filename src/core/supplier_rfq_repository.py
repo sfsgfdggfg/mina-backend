@@ -38,10 +38,30 @@ class SupplierRFQRepository(Protocol):
         ...
 
 
+def _supplier_rfq_response_key(
+    response: SupplierRFQResponse,
+) -> tuple:
+    return (
+        response.rfq_id,
+        response.supplier_name,
+        response.rfq_priority,
+        response.status,
+        response.cost,
+        response.currency,
+        response.transit_time,
+        response.validity_date,
+        response.equipment_type,
+        response.notes,
+        response.source,
+        response.received_at,
+    )
+
+
 class InMemorySupplierRFQRepository:
     def __init__(self) -> None:
         self._drafts: dict[str, SupplierRFQDraft] = {}
         self._responses: list[SupplierRFQResponse] = []
+        self._response_keys: set[tuple] = set()
 
     def save_drafts(
         self,
@@ -59,8 +79,18 @@ class InMemorySupplierRFQRepository:
         self,
         responses: Iterable[SupplierRFQResponse],
     ) -> list[SupplierRFQResponse]:
-        saved = list(responses)
-        self._responses.extend(saved)
+        saved = []
+
+        for response in responses:
+            response_key = _supplier_rfq_response_key(response)
+
+            if response_key in self._response_keys:
+                continue
+
+            self._response_keys.add(response_key)
+            self._responses.append(response)
+            saved.append(response)
+
         return saved
 
     def get_draft(

@@ -2937,11 +2937,49 @@ def evaluate_supplier_rfq_repository() -> dict:
         [first_response, second_response]
     )
 
+    duplicate_saved = repository.save_responses(
+        [first_response]
+    )
+
+    if duplicate_saved:
+        failures.append(
+            "identical RFQ response should not be saved twice"
+        )
+
+    if len(repository.list_responses()) != 2:
+        failures.append(
+            "duplicate RFQ response should not increase record count"
+        )
+
+    revised_first_response = first_response.model_copy(
+        update={
+            "cost": 2050,
+            "notes": "Revised supplier quote.",
+        }
+    )
+
+    revised_saved = repository.save_responses(
+        [revised_first_response]
+    )
+
+    if revised_saved != [revised_first_response]:
+        failures.append(
+            "revised RFQ response should be stored as a new record"
+        )
+
+    if len(repository.list_responses()) != 3:
+        failures.append(
+            "revised RFQ response should increase record count"
+        )
+
     first_rfq_responses = repository.list_responses(
         rfq_id=first_draft.rfq_id
     )
 
-    if first_rfq_responses != [first_response]:
+    if first_rfq_responses != [
+        first_response,
+        revised_first_response,
+    ]:
         failures.append(
             "RFQ response filtering returned incorrect records"
         )
@@ -2957,7 +2995,7 @@ def evaluate_supplier_rfq_repository() -> dict:
     listed_responses = repository.list_responses()
     listed_responses.clear()
 
-    if len(repository.list_responses()) != 2:
+    if len(repository.list_responses()) != 3:
         failures.append(
             "repository response listing should return a copy"
         )
