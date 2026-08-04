@@ -2967,3 +2967,115 @@ def evaluate_supplier_rfq_repository() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_supplier_rfq_repository_workflow_integration() -> dict:
+    from src.core.models import Shipment
+    from src.core.supplier_rfq_repository import (
+        InMemorySupplierRFQRepository,
+    )
+    from src.workflow import pipeline
+
+    failures = []
+    repository = InMemorySupplierRFQRepository()
+
+    shipment = Shipment(
+        customer_name="Repository Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-08-10",
+        is_adr=False,
+        is_temperature_controlled=False,
+    )
+
+    result = pipeline.process_shipment(
+        shipment=shipment,
+        email_text=(
+            "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+            "komple tenteli araç fiyatı rica ederiz. "
+            "Yük ADR değildir ve 10.08.2026 tarihinde hazırdır."
+        ),
+        rfq_repository=repository,
+    )
+
+    result_drafts = result.get("supplier_rfq_drafts") or []
+    result_responses = result.get("supplier_rfq_responses") or []
+
+    stored_drafts = repository.list_drafts()
+    stored_responses = repository.list_responses()
+
+    if not result_drafts:
+        failures.append(
+            "workflow should generate supplier RFQ drafts"
+        )
+
+    if not result_responses:
+        failures.append(
+            "workflow should generate supplier RFQ responses"
+        )
+
+    if len(stored_drafts) != len(result_drafts):
+        failures.append(
+            "repository draft count should match workflow result"
+        )
+
+    if len(stored_responses) != len(result_responses):
+        failures.append(
+            "repository response count should match workflow result"
+        )
+
+    result_draft_ids = {
+        draft.rfq_id
+        for draft in result_drafts
+    }
+    stored_draft_ids = {
+        draft.rfq_id
+        for draft in stored_drafts
+    }
+
+    if stored_draft_ids != result_draft_ids:
+        failures.append(
+            "repository and workflow draft RFQ IDs should match"
+        )
+
+    result_response_ids = {
+        response.rfq_id
+        for response in result_responses
+    }
+    stored_response_ids = {
+        response.rfq_id
+        for response in stored_responses
+    }
+
+    if stored_response_ids != result_response_ids:
+        failures.append(
+            "repository and workflow response RFQ IDs should match"
+        )
+
+    if stored_drafts and any(
+        draft.status != "responded"
+        for draft in stored_drafts
+    ):
+        failures.append(
+            "stored RFQ drafts should contain synchronized "
+            "responded lifecycle status"
+        )
+
+    for response in stored_responses:
+        stored_draft = repository.get_draft(response.rfq_id)
+
+        if stored_draft is None:
+            failures.append(
+                f"response references missing draft {response.rfq_id}"
+            )
+
+    return {
+        "name": "Supplier RFQ repository workflow integration",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
