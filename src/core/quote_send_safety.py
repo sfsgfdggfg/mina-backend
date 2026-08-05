@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel
+
+from src.core.models import (
+    CustomerQuote,
+    QuoteDraft,
+    SupplierQuote,
+)
+from src.core.quote_approval import QuoteApproval
+
+
+QuoteSendBlockReason = Literal[
+    "approval_missing",
+    "approval_pending",
+    "approval_rejected",
+    "approval_invalidated",
+    "quote_snapshot_mismatch",
+]
+
+
+class QuoteSendSafetyDecision(BaseModel):
+    can_send: bool
+    reason: str
+    block_reason: QuoteSendBlockReason | None = None
+    approval_id: str | None = None
+    approved_by: str | None = None
+    source: str = "quote_send_safety_engine"
+
+
+def evaluate_quote_send_safety(
+    approval: QuoteApproval | None,
+    supplier_quote: SupplierQuote,
+    customer_quote: CustomerQuote,
+    quote_draft: QuoteDraft,
+) -> QuoteSendSafetyDecision:
+    if approval is None:
+        return QuoteSendSafetyDecision(
+            can_send=False,
+            block_reason="approval_missing",
+            reason=(
+                "Teklif gönderilemez. İnsan onay kaydı bulunmuyor."
+            ),
+        )
+
+    if approval.approval_status == "pending":
+        return QuoteSendSafetyDecision(
+            can_send=False,
+            block_reason="approval_pending",
+            approval_id=approval.approval_id,
+            reason=(
+                "Teklif gönderilemez. İnsan onayı henüz bekleniyor."
+            ),
+        )
+
+    if approval.approval_status == "rejected":
+        return QuoteSendSafetyDecision(
+            can_send=False,
+            block_reason="approval_rejected",
+            approval_id=approval.approval_id,
+            reason=(
+                "Teklif gönderilemez. Onay kaydı reddedilmiş."
+            ),
+        )
+
+    if approval.approval_status == "invalidated":
+        return QuoteSendSafetyDecision(
+            can_send=False,
+            block_reason="approval_invalidated",
+            approval_id=approval.approval_id,
+            reason=(
+                "Teklif gönderilemez. Önceki onay geçersiz kılınmış."
+            ),
+        )
+
+    if not approval.is_valid_for_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    ):
+        return QuoteSendSafetyDecision(
+            can_send=False,
+            block_reason="quote_snapshot_mismatch",
+            approval_id=approval.approval_id,
+            approved_by=approval.approved_by,
+            reason=(
+                "Teklif gönderilemez. Onaylanan teklif snapshot'ı "
+                "güncel teklif ile eşleşmiyor."
+            ),
+        )
+
+    return QuoteSendSafetyDecision(
+        can_send=True,
+        approval_id=approval.approval_id,
+        approved_by=approval.approved_by,
+        reason=(
+            "Teklif gönderilebilir. Geçerli insan onayı mevcut ve "
+            "onay snapshot'ı güncel teklif ile eşleşiyor."
+        ),
+    )

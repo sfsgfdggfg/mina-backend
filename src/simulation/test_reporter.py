@@ -3316,6 +3316,7 @@ def evaluate_quote_approval_workflow_contract() -> dict:
     customer_quote = quote_result.get("customer_quote")
     quote_draft = quote_result.get("quote_draft")
     quote_approval = quote_result.get("quote_approval")
+    quote_send_safety = quote_result.get("quote_send_safety")
 
     if supplier_quote is None:
         failures.append(
@@ -3361,6 +3362,33 @@ def evaluate_quote_approval_workflow_contract() -> dict:
                 "workflow approval snapshot should match quote"
             )
 
+    if quote_send_safety is None:
+        failures.append(
+            "successful workflow should generate send safety decision"
+        )
+    else:
+        if quote_send_safety.can_send:
+            failures.append(
+                "pending approval must block quote sending"
+            )
+
+        if (
+            quote_send_safety.block_reason
+            != "approval_pending"
+        ):
+            failures.append(
+                "new quote should be blocked by pending approval"
+            )
+
+        if (
+            quote_approval is not None
+            and quote_send_safety.approval_id
+            != quote_approval.approval_id
+        ):
+            failures.append(
+                "send safety should preserve approval identity"
+            )
+
     early_stop_shipment = quote_shipment.model_copy(
         update={
             "commodity": "Kimyasal Ürün",
@@ -3388,8 +3416,189 @@ def evaluate_quote_approval_workflow_contract() -> dict:
             "early-stop workflow must not generate quote approval"
         )
 
+    if early_stop_result.get("quote_send_safety") is not None:
+        failures.append(
+            "early-stop workflow must not generate send safety decision"
+        )
+
     return {
         "name": "Quote approval workflow contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_quote_send_safety_regression() -> dict:
+    from datetime import datetime
+
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+    from src.core.quote_send_safety import (
+        evaluate_quote_send_safety,
+    )
+
+    failures = []
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    snapshot = QuoteApprovalSnapshot.from_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    missing_decision = evaluate_quote_send_safety(
+        approval=None,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    if (
+        missing_decision.can_send
+        or missing_decision.block_reason != "approval_missing"
+    ):
+        failures.append(
+            "missing approval should block quote sending"
+        )
+
+    pending = QuoteApproval(
+        quote_snapshot=snapshot,
+    )
+    pending_decision = evaluate_quote_send_safety(
+        approval=pending,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    if (
+        pending_decision.can_send
+        or pending_decision.block_reason != "approval_pending"
+    ):
+        failures.append(
+            "pending approval should block quote sending"
+        )
+
+    rejected = QuoteApproval(
+        approval_status="rejected",
+        rejection_reason="Margin requires revision.",
+        quote_snapshot=snapshot,
+    )
+    rejected_decision = evaluate_quote_send_safety(
+        approval=rejected,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    if (
+        rejected_decision.can_send
+        or rejected_decision.block_reason != "approval_rejected"
+    ):
+        failures.append(
+            "rejected approval should block quote sending"
+        )
+
+    invalidated = QuoteApproval(
+        approval_status="invalidated",
+        quote_snapshot=snapshot,
+    )
+    invalidated_decision = evaluate_quote_send_safety(
+        approval=invalidated,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    if (
+        invalidated_decision.can_send
+        or invalidated_decision.block_reason
+        != "approval_invalidated"
+    ):
+        failures.append(
+            "invalidated approval should block quote sending"
+        )
+
+    approved = QuoteApproval(
+        approval_status="approved",
+        approved_by="operations.manager@example.invalid",
+        approved_at=datetime(2026, 8, 5, 16, 0, 0),
+        quote_snapshot=snapshot,
+    )
+
+    changed_customer_quote = customer_quote.model_copy(
+        update={"final_price": 2350}
+    )
+    mismatch_decision = evaluate_quote_send_safety(
+        approval=approved,
+        supplier_quote=supplier_quote,
+        customer_quote=changed_customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    if (
+        mismatch_decision.can_send
+        or mismatch_decision.block_reason
+        != "quote_snapshot_mismatch"
+    ):
+        failures.append(
+            "changed quote should invalidate previous approval"
+        )
+
+    approved_decision = evaluate_quote_send_safety(
+        approval=approved,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    if not approved_decision.can_send:
+        failures.append(
+            "valid approved quote should be sendable"
+        )
+
+    if approved_decision.block_reason is not None:
+        failures.append(
+            "sendable quote should not include block reason"
+        )
+
+    if approved_decision.approval_id != approved.approval_id:
+        failures.append(
+            "send decision should preserve approval identity"
+        )
+
+    if approved_decision.approved_by != approved.approved_by:
+        failures.append(
+            "send decision should preserve approver identity"
+        )
+
+    return {
+        "name": "Quote send safety",
         "passed": len(failures) == 0,
         "failures": failures,
     }
