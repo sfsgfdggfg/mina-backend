@@ -22,7 +22,7 @@ from src.core.customer_memory import (
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
+from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
 
 app = FastAPI(
@@ -475,6 +475,8 @@ def run_test_suite():
     test_results.append(evaluate_supplier_quote_selection_traceability())
     test_results.append(evaluate_supplier_rfq_repository())
     test_results.append(evaluate_supplier_rfq_repository_workflow_integration())
+    test_results.append(evaluate_quote_approval_model())
+    test_results.append(evaluate_quote_approval_workflow_contract())
     test_results.append(evaluate_supplier_rfq_response_validation_report())
     test_results.append(evaluate_supplier_rfq_response_validation_report())
 
@@ -664,6 +666,7 @@ def serialize_result(result: dict) -> dict:
     supplier_quote = result.get("supplier_quote")
     customer_quote = result.get("customer_quote")
     quote_draft = result.get("quote_draft")
+    quote_approval = result.get("quote_approval")
     clarification_draft = result.get("clarification_draft")
     management_review_draft = result.get("management_review_draft")
     customer_memory = result.get("customer_memory")
@@ -712,6 +715,11 @@ def serialize_result(result: dict) -> dict:
         "supplier_quote": supplier_quote.model_dump() if supplier_quote else None,
         "customer_quote": customer_quote.model_dump() if customer_quote else None,
         "quote_draft": quote_draft.model_dump() if quote_draft else None,
+        "quote_approval": (
+            quote_approval.model_dump()
+            if hasattr(quote_approval, "model_dump")
+            else quote_approval
+        ),
         "clarification_draft": clarification_draft.model_dump() if clarification_draft else None,
         "management_review_draft": management_review_draft.model_dump() if management_review_draft else None,
         "customer_memory": customer_memory.model_dump() if customer_memory else None,

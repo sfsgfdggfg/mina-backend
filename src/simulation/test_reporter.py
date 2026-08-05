@@ -3117,3 +3117,279 @@ def evaluate_supplier_rfq_repository_workflow_integration() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_quote_approval_model() -> dict:
+    from datetime import datetime
+
+    from pydantic import ValidationError
+
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+
+    failures = []
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    snapshot = QuoteApprovalSnapshot.from_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    pending = QuoteApproval(
+        quote_snapshot=snapshot,
+    )
+
+    if pending.approval_status != "pending":
+        failures.append(
+            "new quote approval should start as pending"
+        )
+
+    if pending.is_approved:
+        failures.append(
+            "pending quote approval must not be approved"
+        )
+
+    approved = QuoteApproval(
+        approval_status="approved",
+        approved_by="operations.manager@example.invalid",
+        approved_at=datetime(2026, 8, 5, 14, 0, 0),
+        quote_snapshot=snapshot,
+    )
+
+    if not approved.is_valid_for_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    ):
+        failures.append(
+            "approved snapshot should be valid for unchanged quote"
+        )
+
+    changed_customer_quote = customer_quote.model_copy(
+        update={"final_price": 2350}
+    )
+
+    if approved.is_valid_for_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=changed_customer_quote,
+        quote_draft=quote_draft,
+    ):
+        failures.append(
+            "price change should invalidate previous approval"
+        )
+
+    changed_supplier_quote = supplier_quote.model_copy(
+        update={"supplier_name": "Different Supplier"}
+    )
+
+    if approved.is_valid_for_quote(
+        supplier_quote=changed_supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    ):
+        failures.append(
+            "supplier change should invalidate previous approval"
+        )
+
+    changed_quote_draft = quote_draft.model_copy(
+        update={"body": "Fiyat: 2300 EUR. Yeni şartlar."}
+    )
+
+    if approved.is_valid_for_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=changed_quote_draft,
+    ):
+        failures.append(
+            "quote draft change should invalidate previous approval"
+        )
+
+    rejected = QuoteApproval(
+        approval_status="rejected",
+        rejection_reason="Margin requires revision.",
+        quote_snapshot=snapshot,
+    )
+
+    if rejected.is_approved:
+        failures.append(
+            "rejected quote must not be approved"
+        )
+
+    invalid_cases = [
+        {
+            "approval_status": "approved",
+            "approved_by": None,
+            "approved_at": datetime(2026, 8, 5, 14, 0, 0),
+        },
+        {
+            "approval_status": "approved",
+            "approved_by": "manager@example.invalid",
+            "approved_at": None,
+        },
+        {
+            "approval_status": "rejected",
+            "rejection_reason": None,
+        },
+        {
+            "approval_status": "pending",
+            "approved_by": "manager@example.invalid",
+        },
+    ]
+
+    for case in invalid_cases:
+        try:
+            QuoteApproval(
+                quote_snapshot=snapshot,
+                **case,
+            )
+        except ValidationError:
+            continue
+
+        failures.append(
+            "invalid quote approval state was accepted: "
+            f"{case}"
+        )
+
+    return {
+        "name": "Quote approval model",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_quote_approval_workflow_contract() -> dict:
+    from src.core.models import Shipment
+    from src.workflow import pipeline
+
+    failures = []
+
+    quote_shipment = Shipment(
+        customer_name="Approval Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-08-12",
+        is_adr=False,
+        is_temperature_controlled=False,
+    )
+
+    quote_result = pipeline.process_shipment(
+        shipment=quote_shipment,
+        email_text=(
+            "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+            "komple tenteli araç fiyatı rica ederiz. "
+            "Yük ADR değildir ve 12.08.2026 tarihinde hazırdır."
+        ),
+    )
+
+    supplier_quote = quote_result.get("supplier_quote")
+    customer_quote = quote_result.get("customer_quote")
+    quote_draft = quote_result.get("quote_draft")
+    quote_approval = quote_result.get("quote_approval")
+
+    if supplier_quote is None:
+        failures.append(
+            "successful workflow should generate supplier quote"
+        )
+
+    if customer_quote is None:
+        failures.append(
+            "successful workflow should generate customer quote"
+        )
+
+    if quote_draft is None:
+        failures.append(
+            "successful workflow should generate quote draft"
+        )
+
+    if quote_approval is None:
+        failures.append(
+            "successful workflow should generate quote approval"
+        )
+    else:
+        if quote_approval.approval_status != "pending":
+            failures.append(
+                "new workflow quote approval should be pending"
+            )
+
+        if quote_approval.is_approved:
+            failures.append(
+                "new workflow quote must not be pre-approved"
+            )
+
+        if (
+            supplier_quote is not None
+            and customer_quote is not None
+            and quote_draft is not None
+            and not quote_approval.quote_snapshot.matches_quote(
+                supplier_quote=supplier_quote,
+                customer_quote=customer_quote,
+                quote_draft=quote_draft,
+            )
+        ):
+            failures.append(
+                "workflow approval snapshot should match quote"
+            )
+
+    early_stop_shipment = quote_shipment.model_copy(
+        update={
+            "commodity": "Kimyasal Ürün",
+            "is_adr": True,
+            "adr_class": None,
+            "special_notes": None,
+        }
+    )
+
+    early_stop_result = pipeline.process_shipment(
+        shipment=early_stop_shipment,
+        email_text=(
+            "Adana'dan Hamburg'a ADR kapsamındaki kimyasal "
+            "yük için fiyat rica ederiz. ADR sınıfı belli değil."
+        ),
+    )
+
+    if early_stop_result.get("quote_draft") is not None:
+        failures.append(
+            "early-stop workflow must not generate quote draft"
+        )
+
+    if early_stop_result.get("quote_approval") is not None:
+        failures.append(
+            "early-stop workflow must not generate quote approval"
+        )
+
+    return {
+        "name": "Quote approval workflow contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
