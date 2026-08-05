@@ -3626,3 +3626,277 @@ Test suite sonucu:
 - Operational consistency hataları sessizce göz ardı edilmez.
 - Eksik bilgi kaynaklı consistency hataları gereksiz blocked sonucuna dönüşmez.
 - Yeni readiness durumları ileride merkezi motora eklenebilir.
+
+## DEC-079 — Supplier RFQ Response Integrity and Stable Workflow Contract
+
+**Status:** Accepted
+**Date:** 2026-08-05
+
+### Decision
+
+Supplier RFQ cevaplarının fiyat seçiminde kullanılmadan önce oluşturulan RFQ taslaklarıyla kimlik ve bağlam bütünlüğü açısından doğrulanmasına karar verilmiştir.
+
+Her supplier cevabı en az şu alanlarla ilgili RFQ taslağına bağlanmalıdır:
+
+    rfq_id
+    supplier_name
+    rfq_priority
+
+Aşağıdaki cevaplar geçersiz kabul edilmelidir:
+
+    unknown_rfq_id
+    supplier_name_mismatch
+    priority_mismatch
+
+Ham supplier cevapları denetim amacıyla korunmalı; ancak yalnızca doğrulanmış cevaplar lifecycle synchronization, supplier quote selection ve müşteri teklifi aşamalarında kullanılmalıdır.
+
+Quoted cevaplarda pozitif maliyet zorunludur. Quoted olmayan cevaplarda maliyet bulunmamalıdır.
+
+Geçerli fiyat cevabı bulunmadığında sistem fallback fiyat üretmemeli ve kontrollü sonuç döndürmelidir:
+
+    supplier_response_required
+
+Workflow ve API kontratında şu alanlar ayrıştırılmıştır:
+
+    supplier_rfq_responses
+    valid_supplier_rfq_responses
+    supplier_rfq_response_validation
+
+### Consequences
+
+- Başka bir RFQ’ye veya tedarikçiye ait fiyat yanlışlıkla kullanılamaz.
+- Geçersiz cevaplar sessizce kaybolmaz; rejection reason ile raporlanır.
+- Supplier cevabı yokken yapay müşteri teklifi oluşturulmaz.
+- API ve workflow aynı doğrulanmış veri kaynağını kullanır.
+- RFQ lifecycle yalnızca geçerli cevaplarla `responded` durumuna geçer.
+
+---
+
+## DEC-080 — Multi-Criteria Supplier Quote Comparison and Traceable Selection
+
+**Status:** Accepted
+**Date:** 2026-08-05
+
+### Decision
+
+Supplier teklif seçiminin yalnızca RFQ önceliğine veya en düşük fiyata göre yapılmamasına karar verilmiştir.
+
+Her kullanılabilir supplier cevabı için merkezi karşılaştırma kaydı oluşturulur:
+
+    SupplierQuoteComparison
+
+Karşılaştırma en az şu verileri taşır:
+
+    rfq_id
+    supplier_name
+    priority
+    cost
+    currency
+    transit_time
+    supplier_score
+    commercial_score
+    operational_score
+    actual_price_score
+    transit_score
+    total_score
+
+Mevcut veri seti için seçim skoru:
+
+    supplier_score      %70
+    actual_price_score  %20
+    transit_score       %10
+
+Aynı para birimindeki en düşük fiyat `1.0` gerçek fiyat skoru alır. Diğer teklifler:
+
+    minimum_cost / offered_cost
+
+oranıyla puanlanır.
+
+Transit süresi sayısal olarak okunabiliyorsa en kısa başlangıç süresi `1.0` puan alır. Transit bilgisi kullanılamıyorsa nötr `0.5` skoru uygulanır.
+
+Seçim sırası:
+
+    1. En yüksek total_score
+    2. Eşitlikte daha düşük RFQ priority değeri
+    3. Hâlâ eşitse daha düşük cost
+
+Seçim kararı ayrıca açıklanabilir ve denetlenebilir olmalıdır:
+
+    SupplierQuoteSelectionDecision
+
+Karar; seçilen RFQ kimliğini, skor ve fiyat farklarını, seçim nedenini ve elenen alternatifleri taşımalıdır.
+
+### Consequences
+
+- En ucuz teklif operasyonel açıdan zayıfsa otomatik seçilmez.
+- Seçimin neden yapıldığı kullanıcıya ve denetim katmanına açıklanabilir.
+- Seçilen supplier cevabı `rfq_id` üzerinden özgün cevaba bağlanır.
+- Alternatif tekliflerin fiyat ve skor farkları kaybolmaz.
+- İleride yeni scorecard alanları eklendiğinde karşılaştırma modeli genişletilebilir.
+
+---
+
+## DEC-081 — Supplier RFQ Repository and Lifecycle Persistence Boundary
+
+**Status:** Accepted
+**Date:** 2026-08-05
+
+### Decision
+
+Supplier RFQ taslakları ve cevaplarının doğrudan workflow belleğine bağlı kalmaması için repository sınırı oluşturulmasına karar verilmiştir.
+
+Merkezi sözleşme:
+
+    SupplierRFQRepository
+
+İlk uygulama:
+
+    InMemorySupplierRFQRepository
+
+Repository şu işlemleri destekler:
+
+    save_drafts
+    save_responses
+    get_draft
+    list_drafts
+    list_responses
+
+`process_shipment` isteğe bağlı repository bağımlılığı kabul eder. Repository verilmezse her workflow çalışması için bellek içi repository kullanılır.
+
+Workflow şu kayıt sırasını uygular:
+
+    1. RFQ taslaklarını oluştur ve kaydet
+    2. Supplier cevaplarını al ve kaydet
+    3. Cevapları doğrula
+    4. RFQ lifecycle durumlarını senkronize et
+    5. Güncel taslakları tekrar repository’ye kaydet
+
+Aynı RFQ cevabının birebir tekrar kaydedilmesi engellenmelidir. Bununla birlikte daha sonra gelen ve fiyat, durum, not veya `received_at` gibi alanları değişmiş yeni cevap ayrı kayıt olarak korunmalıdır.
+
+### Consequences
+
+- Workflow gelecekte SQLite veya başka kalıcı storage ile değiştirilebilir.
+- Pipeline kodu storage teknolojisine doğrudan bağlanmaz.
+- RFQ taslağının son lifecycle durumu repository’den okunabilir.
+- Birebir duplicate cevaplar kayıt sayısını şişirmez.
+- Gerçek revize supplier teklifleri geçmiş kaydı olarak korunur.
+
+---
+
+## DEC-082 — Quote Approval Snapshot and Human Approval Requirement
+
+**Status:** Accepted
+**Date:** 2026-08-05
+
+### Decision
+
+Müşteri teklifinin açık insan onayı olmadan gönderilebilir kabul edilmemesine karar verilmiştir.
+
+Her başarılı quote workflow’u şu durumda bir onay kaydı üretir:
+
+    approval_status = pending
+
+Onay modeli:
+
+    QuoteApproval
+
+Durumlar:
+
+    pending
+    approved
+    rejected
+    invalidated
+
+Onay kaydı, karar anındaki teklifin değişmez snapshot’ını taşır:
+
+    supplier_name
+    supplier_cost
+    final_price
+    currency
+    transit_time
+    quote_subject
+    quote_body
+
+Approved durumda şu alanlar zorunludur:
+
+    approved_by
+    approved_at
+
+Rejected durumda şu alan zorunludur:
+
+    rejection_reason
+
+Teklif fiyatı, supplier, transit süresi, konu veya gövde değişirse önceki onay güncel teklif için geçerli sayılmamalıdır.
+
+Teklif üretilemeyen workflow branch’lerinde:
+
+    quote_approval = None
+
+olmalıdır.
+
+### Consequences
+
+- Sistem yeni teklifleri otomatik onaylamaz.
+- Onayın tam olarak hangi teklif için verildiği kanıtlanabilir.
+- Onaydan sonra yapılan içerik veya fiyat değişikliği eski onayı geçersiz kılar.
+- Rejected ve invalidated kayıtlar gönderim yetkisi vermez.
+- Workflow ve API aynı approval modelini döndürür.
+
+---
+
+## DEC-083 — Central Quote Send Safety and Non-Sending Preparation Service
+
+**Status:** Accepted
+**Date:** 2026-08-05
+
+### Decision
+
+Teklif gönderilebilirliği için merkezi bir güvenlik motoru kullanılmasına karar verilmiştir:
+
+    evaluate_quote_send_safety(...)
+
+Gönderim yalnızca şu iki koşul birlikte sağlandığında güvenli kabul edilir:
+
+    approval_status = approved
+    approval snapshot güncel teklif ile eşleşiyor
+
+Kontrollü block reason değerleri:
+
+    approval_missing
+    approval_pending
+    approval_rejected
+    approval_invalidated
+    quote_snapshot_mismatch
+
+Başarılı quote workflow’u varsayılan olarak pending onay ürettiğinden ilk gönderim güvenliği sonucu:
+
+    can_send = false
+    block_reason = approval_pending
+
+Gerçek e-posta sağlayıcısını çalıştırmayan hazırlık servisi oluşturulmuştur:
+
+    prepare_quote_for_sending(...)
+
+Servis yalnızca şu durumları döndürür:
+
+    blocked
+    send_ready
+
+Bu aşamada servis hiçbir koşulda gerçek gönderim yapmaz:
+
+    sent = false
+
+API endpoint’i:
+
+    POST /quotes/prepare-send
+
+Endpoint geçerli onay ve güncel snapshot varsa `send_ready`, diğer durumlarda kontrollü `blocked` sonucu döndürür. Boş recipient email HTTP 422 ile reddedilir.
+
+### Consequences
+
+- Onaysız teklif gönderim katmanına geçemez.
+- Onaydan sonra değişmiş teklif gönderilemez.
+- Hazırlık ve gerçek teslimat sorumlulukları ayrılmıştır.
+- Mevcut endpoint gerçek müşteriye e-posta çıkarmaz.
+- Gerçek email adapter eklenmeden önce güvenlik kontratı tamamlanmıştır.
+- TASK-126 sonunda test suite sonucu `56 passed, 0 failed` olmuştur.

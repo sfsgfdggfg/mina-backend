@@ -1959,3 +1959,276 @@ Blocked durumda:
     hata nedenleri readiness sonucunda görünmelidir
 
 Pipeline, action recommendation ve test sistemi aynı quote readiness sonucunu kullanmalıdır.
+
+## RULE-087 — Supplier RFQ Responses Must Be Validated Before Use
+
+Supplier RFQ cevapları fiyat seçimi, lifecycle synchronization veya müşteri teklifi üretiminde kullanılmadan önce ilgili RFQ taslağıyla doğrulanmalıdır.
+
+Zorunlu eşleşmeler:
+
+    response.rfq_id == draft.rfq_id
+    response.supplier_name == draft.supplier_name
+    response.rfq_priority == draft.priority
+
+Geçersiz cevap nedenleri kontrollü olarak raporlanmalıdır:
+
+    unknown_rfq_id
+    supplier_name_mismatch
+    priority_mismatch
+
+Ham cevaplar denetim amacıyla korunabilir; ancak yalnızca doğrulanmış cevaplar fiyat seçiminde kullanılmalıdır.
+
+Geçersiz supplier cevabı hiçbir koşulda müşteri teklifine dönüşmemelidir.
+
+---
+
+## RULE-088 — Supplier Response Status and Price Data Must Be Consistent
+
+`quoted` durumundaki supplier cevabı pozitif bir maliyet içermelidir.
+
+Zorunlu kural:
+
+    status = quoted
+    cost > 0
+
+Aşağıdaki durumlarda `cost` bulunmamalıdır:
+
+    no_capacity
+    declined
+    needs_clarification
+
+Kullanılabilir supplier fiyatı bulunmuyorsa sistem fallback veya tahmini fiyat üretmemelidir.
+
+Bu durumda workflow sonucu:
+
+    supplier_response_required
+
+olmalıdır.
+
+---
+
+## RULE-089 — Supplier RFQ Lifecycle Must Use Only Valid Responses
+
+RFQ taslağı yalnızca doğrulanmış supplier cevabı bulunduğunda:
+
+    status = responded
+
+durumuna geçmelidir.
+
+`responded_at`, aynı RFQ için mevcut geçerli cevaplar arasındaki en güncel:
+
+    received_at
+
+değerinden türetilmelidir.
+
+Bilinmeyen RFQ kimliği, yanlış supplier veya yanlış priority içeren cevap RFQ lifecycle durumunu değiştirmemelidir.
+
+---
+
+## RULE-090 — Supplier Quote Selection Must Be Multi-Criteria and Traceable
+
+Supplier teklif seçimi yalnızca en düşük fiyat veya ilk RFQ önceliğine göre yapılmamalıdır.
+
+Mevcut v1 seçim ağırlıkları:
+
+    supplier_score      %70
+    actual_price_score  %20
+    transit_score       %10
+
+Aynı para birimindeki en düşük teklif:
+
+    actual_price_score = 1.0
+
+almalıdır.
+
+Diğer teklifler:
+
+    minimum_cost / offered_cost
+
+oranıyla puanlanmalıdır.
+
+Transit süresi okunamıyorsa sistem sahte kesinlik üretmemeli ve nötr skor kullanmalıdır:
+
+    transit_score = 0.5
+
+Seçim sırası:
+
+    1. En yüksek total_score
+    2. Eşitlikte daha düşük RFQ priority
+    3. Hâlâ eşitse daha düşük maliyet
+
+Seçim sonucu en az şu bilgileri taşımalıdır:
+
+    selected_supplier
+    selected_rfq_id
+    selected_total_score
+    selection_reason
+    price_difference
+    score_difference
+    rejected_alternatives
+
+---
+
+## RULE-091 — Supplier RFQ Repository Must Preserve Lifecycle State
+
+RFQ taslakları ve cevapları repository sınırı üzerinden saklanmalıdır.
+
+Workflow sırası:
+
+    1. Taslakları oluştur
+    2. Taslakları repository’ye kaydet
+    3. Supplier cevaplarını al
+    4. Cevapları repository’ye kaydet
+    5. Cevapları doğrula
+    6. Lifecycle durumunu senkronize et
+    7. Güncel taslakları tekrar kaydet
+
+Aynı `rfq_id` ile kaydedilen taslak mevcut kaydı güncellemelidir.
+
+Repository’den dönen liste üzerinde yapılan dış değişiklik repository iç durumunu değiştirmemelidir.
+
+Storage teknolojisi pipeline içine gömülmemeli; repository sözleşmesi üzerinden değiştirilmelidir.
+
+---
+
+## RULE-092 — Identical Supplier Responses Must Not Be Stored Twice
+
+Aynı supplier cevabının birebir tekrar kaydedilmesi engellenmelidir.
+
+Duplicate kontrolü en az şu alanları dikkate almalıdır:
+
+    rfq_id
+    supplier_name
+    rfq_priority
+    status
+    cost
+    currency
+    transit_time
+    validity_date
+    equipment_type
+    notes
+    source
+    received_at
+
+Aynı cevap yeniden gelirse repository kayıt sayısı artmamalıdır.
+
+Aşağıdaki değişikliklerden biri varsa cevap yeni revision olarak korunmalıdır:
+
+    cost değişikliği
+    status değişikliği
+    notes değişikliği
+    yeni received_at
+    diğer ticari veya operasyonel alan değişiklikleri
+
+---
+
+## RULE-093 — Every Customer Quote Must Start With Pending Human Approval
+
+Başarılı teklif workflow’u hiçbir zaman önceden onaylanmış kayıt üretmemelidir.
+
+Yeni teklif onay durumu:
+
+    pending
+
+olmalıdır.
+
+Teklif üretilemeyen branch’lerde:
+
+    quote_approval = None
+
+olmalıdır.
+
+Approved onay için zorunlu alanlar:
+
+    approved_by
+    approved_at
+
+Rejected onay için zorunlu alan:
+
+    rejection_reason
+
+Pending veya invalidated onay, approval metadata taşımamalıdır.
+
+---
+
+## RULE-094 — Quote Approval Must Be Bound to an Exact Snapshot
+
+İnsan onayı belirli bir teklif snapshot’ına bağlı olmalıdır.
+
+Snapshot en az şu alanları içermelidir:
+
+    supplier_name
+    supplier_cost
+    final_price
+    currency
+    transit_time
+    quote_subject
+    quote_body
+
+Aşağıdaki alanlardan herhangi biri değişirse önceki onay geçerli sayılmamalıdır:
+
+    seçilen supplier
+    supplier cost
+    customer final price
+    currency
+    transit time
+    email subject
+    email body
+
+Onay yalnızca:
+
+    approval_status = approved
+
+ve snapshot güncel teklif ile birebir eşleşiyorsa geçerlidir.
+
+---
+
+## RULE-095 — Quote Sending Must Fail Closed
+
+Teklif gönderim kararı merkezi güvenlik servisi tarafından verilmelidir.
+
+Gönderimi bloklayan durumlar:
+
+    approval_missing
+    approval_pending
+    approval_rejected
+    approval_invalidated
+    quote_snapshot_mismatch
+
+Yalnızca şu koşullar birlikte sağlanırsa:
+
+    approval_status = approved
+    approval snapshot güncel teklif ile eşleşiyor
+
+`can_send = true` sonucu üretilebilir.
+
+Belirsizlik, eksik onay veya snapshot uyuşmazlığında sistem gönderime izin vermemelidir.
+
+---
+
+## RULE-096 — Send Preparation Must Not Perform Real Delivery
+
+`prepare_quote_for_sending(...)` servisi gerçek e-posta gönderimi yapmamalıdır.
+
+İzin verilen sonuçlar:
+
+    blocked
+    send_ready
+
+Bu aşamada her iki durumda da:
+
+    sent = false
+
+olmalıdır.
+
+`send_ready`, yalnızca güvenlik kontrollerinin geçtiğini ifade eder; teslimatın gerçekleştiğini ifade etmez.
+
+Boş recipient email reddedilmelidir.
+
+API endpoint’i:
+
+    POST /quotes/prepare-send
+
+gerçek email provider veya SMTP adapter çağırmamalıdır.
+
+Gerçek gönderim, ayrı adapter ve idempotency kuralları tamamlanmadan etkinleştirilmemelidir.
