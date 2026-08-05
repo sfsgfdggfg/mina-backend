@@ -3602,3 +3602,291 @@ def evaluate_quote_send_safety_regression() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_quote_send_service() -> dict:
+    from datetime import datetime
+
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+    from src.core.quote_send_service import (
+        prepare_quote_for_sending,
+    )
+
+    failures = []
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    snapshot = QuoteApprovalSnapshot.from_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    pending = QuoteApproval(
+        quote_snapshot=snapshot,
+    )
+
+    blocked_result = prepare_quote_for_sending(
+        recipient_email="customer@example.invalid",
+        approval=pending,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    if blocked_result.status != "blocked":
+        failures.append(
+            "pending approval should produce blocked status"
+        )
+
+    if blocked_result.sent:
+        failures.append(
+            "blocked quote must not be marked as sent"
+        )
+
+    if (
+        blocked_result.safety_decision.block_reason
+        != "approval_pending"
+    ):
+        failures.append(
+            "blocked result should preserve approval_pending reason"
+        )
+
+    approved = QuoteApproval(
+        approval_status="approved",
+        approved_by="operations.manager@example.invalid",
+        approved_at=datetime(2026, 8, 5, 17, 0, 0),
+        quote_snapshot=snapshot,
+    )
+
+    ready_result = prepare_quote_for_sending(
+        recipient_email="  customer@example.invalid  ",
+        approval=approved,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    if ready_result.status != "send_ready":
+        failures.append(
+            "valid approved quote should be send-ready"
+        )
+
+    if ready_result.sent:
+        failures.append(
+            "send-ready quote must not be marked as sent"
+        )
+
+    if not ready_result.safety_decision.can_send:
+        failures.append(
+            "send-ready result should preserve positive safety decision"
+        )
+
+    if (
+        ready_result.recipient_email
+        != "customer@example.invalid"
+    ):
+        failures.append(
+            "recipient email should be normalized"
+        )
+
+    if ready_result.subject != quote_draft.subject:
+        failures.append(
+            "send-ready subject should match quote draft"
+        )
+
+    if ready_result.body != quote_draft.body:
+        failures.append(
+            "send-ready body should match quote draft"
+        )
+
+    try:
+        prepare_quote_for_sending(
+            recipient_email="   ",
+            approval=approved,
+            supplier_quote=supplier_quote,
+            customer_quote=customer_quote,
+            quote_draft=quote_draft,
+        )
+    except ValueError:
+        pass
+    else:
+        failures.append(
+            "empty recipient email should be rejected"
+        )
+
+    return {
+        "name": "Quote send service",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_quote_send_api_contract() -> dict:
+    from datetime import datetime
+
+    from fastapi import HTTPException
+
+    from src.api import (
+        PrepareQuoteSendRequest,
+        prepare_quote_send,
+    )
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+
+    failures = []
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    snapshot = QuoteApprovalSnapshot.from_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    pending = QuoteApproval(
+        quote_snapshot=snapshot,
+    )
+
+    blocked_response = prepare_quote_send(
+        PrepareQuoteSendRequest(
+            recipient_email="customer@example.invalid",
+            approval=pending,
+            supplier_quote=supplier_quote,
+            customer_quote=customer_quote,
+            quote_draft=quote_draft,
+        )
+    )
+
+    if blocked_response.get("status") != "blocked":
+        failures.append(
+            "pending approval API response should be blocked"
+        )
+
+    if blocked_response.get("sent") is not False:
+        failures.append(
+            "blocked API response must report sent=false"
+        )
+
+    blocked_safety = blocked_response.get(
+        "safety_decision"
+    ) or {}
+
+    if (
+        blocked_safety.get("block_reason")
+        != "approval_pending"
+    ):
+        failures.append(
+            "blocked API response should expose approval_pending"
+        )
+
+    approved = QuoteApproval(
+        approval_status="approved",
+        approved_by="operations.manager@example.invalid",
+        approved_at=datetime(2026, 8, 5, 17, 30, 0),
+        quote_snapshot=snapshot,
+    )
+
+    ready_response = prepare_quote_send(
+        PrepareQuoteSendRequest(
+            recipient_email="customer@example.invalid",
+            approval=approved,
+            supplier_quote=supplier_quote,
+            customer_quote=customer_quote,
+            quote_draft=quote_draft,
+        )
+    )
+
+    if ready_response.get("status") != "send_ready":
+        failures.append(
+            "approved API response should be send_ready"
+        )
+
+    if ready_response.get("sent") is not False:
+        failures.append(
+            "send-ready API response must report sent=false"
+        )
+
+    ready_safety = ready_response.get(
+        "safety_decision"
+    ) or {}
+
+    if ready_safety.get("can_send") is not True:
+        failures.append(
+            "send-ready API response should expose can_send=true"
+        )
+
+    try:
+        prepare_quote_send(
+            PrepareQuoteSendRequest(
+                recipient_email="   ",
+                approval=approved,
+                supplier_quote=supplier_quote,
+                customer_quote=customer_quote,
+                quote_draft=quote_draft,
+            )
+        )
+    except HTTPException as exc:
+        if exc.status_code != 422:
+            failures.append(
+                "empty recipient should return HTTP 422"
+            )
+    else:
+        failures.append(
+            "empty recipient API request should fail"
+        )
+
+    return {
+        "name": "Quote send API contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }

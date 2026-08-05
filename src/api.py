@@ -21,8 +21,15 @@ from src.core.customer_memory import (
 )
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
+from src.core.models import (
+    CustomerQuote,
+    QuoteDraft,
+    SupplierQuote,
+)
+from src.core.quote_approval import QuoteApproval
+from src.core.quote_send_service import prepare_quote_for_sending
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_send_safety_regression, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
+from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
 
 app = FastAPI(
@@ -34,6 +41,14 @@ app = FastAPI(
 
 class ProcessEmailRequest(BaseModel):
     email_text: str
+
+
+class PrepareQuoteSendRequest(BaseModel):
+    recipient_email: str
+    approval: QuoteApproval | None
+    supplier_quote: SupplierQuote
+    customer_quote: CustomerQuote
+    quote_draft: QuoteDraft
 
 class CustomerMemoryCreateRequest(BaseModel):
     customer_name: str
@@ -427,6 +442,25 @@ def health_check():
     }
 
 
+@app.post("/quotes/prepare-send")
+def prepare_quote_send(request: PrepareQuoteSendRequest):
+    try:
+        result = prepare_quote_for_sending(
+            recipient_email=request.recipient_email,
+            approval=request.approval,
+            supplier_quote=request.supplier_quote,
+            customer_quote=request.customer_quote,
+            quote_draft=request.quote_draft,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    return result.model_dump()
+
+
 @app.post("/process-email")
 def process_email(request: ProcessEmailRequest):
     shipment = parse_email_with_ai(request.email_text)
@@ -478,6 +512,8 @@ def run_test_suite():
     test_results.append(evaluate_quote_approval_model())
     test_results.append(evaluate_quote_approval_workflow_contract())
     test_results.append(evaluate_quote_send_safety_regression())
+    test_results.append(evaluate_quote_send_service())
+    test_results.append(evaluate_quote_send_api_contract())
     test_results.append(evaluate_supplier_rfq_response_validation_report())
     test_results.append(evaluate_supplier_rfq_response_validation_report())
 
