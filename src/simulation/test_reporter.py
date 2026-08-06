@@ -4110,3 +4110,226 @@ def evaluate_quote_approval_repository_workflow_integration() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_quote_approval_service() -> dict:
+    from datetime import datetime
+
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+    from src.core.quote_approval_repository import (
+        InMemoryQuoteApprovalRepository,
+    )
+    from src.core.quote_approval_service import (
+        QuoteApprovalNotFoundError,
+        QuoteApprovalTransitionError,
+        approve_quote,
+        invalidate_quote_approval,
+        reject_quote,
+    )
+
+    failures = []
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    snapshot = QuoteApprovalSnapshot.from_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    repository = InMemoryQuoteApprovalRepository()
+
+    pending_for_approval = repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    approved_at = datetime(2026, 8, 6, 19, 0, 0)
+    approved = approve_quote(
+        repository=repository,
+        approval_id=pending_for_approval.approval_id,
+        approved_by="  operations.manager@example.invalid  ",
+        approved_at=approved_at,
+    )
+
+    if approved.approval_status != "approved":
+        failures.append(
+            "pending approval should transition to approved"
+        )
+
+    if approved.approved_by != "operations.manager@example.invalid":
+        failures.append(
+            "approved_by should be normalized"
+        )
+
+    if approved.approved_at != approved_at:
+        failures.append(
+            "approved_at should preserve explicit timestamp"
+        )
+
+    try:
+        approve_quote(
+            repository=repository,
+            approval_id=approved.approval_id,
+            approved_by="manager@example.invalid",
+        )
+    except QuoteApprovalTransitionError:
+        pass
+    else:
+        failures.append(
+            "approved approval must not be approved again"
+        )
+
+    invalidated = invalidate_quote_approval(
+        repository=repository,
+        approval_id=approved.approval_id,
+    )
+
+    if invalidated.approval_status != "invalidated":
+        failures.append(
+            "approved approval should transition to invalidated"
+        )
+
+    if (
+        invalidated.approved_by is not None
+        or invalidated.approved_at is not None
+    ):
+        failures.append(
+            "invalidated approval must clear approval metadata"
+        )
+
+    pending_for_rejection = repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    rejected = reject_quote(
+        repository=repository,
+        approval_id=pending_for_rejection.approval_id,
+        rejection_reason="  Fiyat revize edilmeli.  ",
+    )
+
+    if rejected.approval_status != "rejected":
+        failures.append(
+            "pending approval should transition to rejected"
+        )
+
+    if rejected.rejection_reason != "Fiyat revize edilmeli.":
+        failures.append(
+            "rejection_reason should be normalized"
+        )
+
+    try:
+        invalidate_quote_approval(
+            repository=repository,
+            approval_id=rejected.approval_id,
+        )
+    except QuoteApprovalTransitionError:
+        pass
+    else:
+        failures.append(
+            "rejected approval must be terminal"
+        )
+
+    pending_for_invalidation = repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    pending_invalidated = invalidate_quote_approval(
+        repository=repository,
+        approval_id=pending_for_invalidation.approval_id,
+    )
+
+    if pending_invalidated.approval_status != "invalidated":
+        failures.append(
+            "pending approval should transition to invalidated"
+        )
+
+    try:
+        approve_quote(
+            repository=repository,
+            approval_id=pending_invalidated.approval_id,
+            approved_by="manager@example.invalid",
+        )
+    except QuoteApprovalTransitionError:
+        pass
+    else:
+        failures.append(
+            "invalidated approval must be terminal"
+        )
+
+    try:
+        approve_quote(
+            repository=repository,
+            approval_id="unknown-approval-id",
+            approved_by="manager@example.invalid",
+        )
+    except QuoteApprovalNotFoundError:
+        pass
+    else:
+        failures.append(
+            "unknown approval_id should raise not found error"
+        )
+
+    pending_for_empty_actor = repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    try:
+        approve_quote(
+            repository=repository,
+            approval_id=pending_for_empty_actor.approval_id,
+            approved_by="   ",
+        )
+    except ValueError:
+        pass
+    else:
+        failures.append(
+            "empty approved_by should be rejected"
+        )
+
+    pending_for_empty_reason = repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    try:
+        reject_quote(
+            repository=repository,
+            approval_id=pending_for_empty_reason.approval_id,
+            rejection_reason="   ",
+        )
+    except ValueError:
+        pass
+    else:
+        failures.append(
+            "empty rejection_reason should be rejected"
+        )
+
+    return {
+        "name": "Quote approval service",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
