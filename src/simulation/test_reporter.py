@@ -3748,13 +3748,14 @@ def evaluate_quote_send_service() -> dict:
 
 
 def evaluate_quote_send_api_contract() -> dict:
-    from datetime import datetime
-
     from fastapi import HTTPException
 
     from src.api import (
         PrepareQuoteSendRequest,
+        approve_quote_approval,
         prepare_quote_send,
+        quote_approval_repository,
+        QuoteApprovalApproveRequest,
     )
     from src.core.models import (
         CustomerQuote,
@@ -3793,14 +3794,16 @@ def evaluate_quote_send_api_contract() -> dict:
         quote_draft=quote_draft,
     )
 
-    pending = QuoteApproval(
-        quote_snapshot=snapshot,
+    pending = quote_approval_repository.save(
+        QuoteApproval(
+            quote_snapshot=snapshot,
+        )
     )
 
     blocked_response = prepare_quote_send(
         PrepareQuoteSendRequest(
             recipient_email="customer@example.invalid",
-            approval=pending,
+            approval_id=pending.approval_id,
             supplier_quote=supplier_quote,
             customer_quote=customer_quote,
             quote_draft=quote_draft,
@@ -3829,17 +3832,22 @@ def evaluate_quote_send_api_contract() -> dict:
             "blocked API response should expose approval_pending"
         )
 
-    approved = QuoteApproval(
-        approval_status="approved",
-        approved_by="operations.manager@example.invalid",
-        approved_at=datetime(2026, 8, 5, 17, 30, 0),
-        quote_snapshot=snapshot,
+    approved_response = approve_quote_approval(
+        approval_id=pending.approval_id,
+        request=QuoteApprovalApproveRequest(
+            approved_by="operations.manager@example.invalid",
+        ),
     )
+
+    if approved_response.get("approval_status") != "approved":
+        failures.append(
+            "approval API should transition pending to approved"
+        )
 
     ready_response = prepare_quote_send(
         PrepareQuoteSendRequest(
             recipient_email="customer@example.invalid",
-            approval=approved,
+            approval_id=pending.approval_id,
             supplier_quote=supplier_quote,
             customer_quote=customer_quote,
             quote_draft=quote_draft,
@@ -3868,8 +3876,28 @@ def evaluate_quote_send_api_contract() -> dict:
     try:
         prepare_quote_send(
             PrepareQuoteSendRequest(
+                recipient_email="customer@example.invalid",
+                approval_id="unknown-approval-id",
+                supplier_quote=supplier_quote,
+                customer_quote=customer_quote,
+                quote_draft=quote_draft,
+            )
+        )
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            failures.append(
+                "unknown approval_id should return HTTP 404"
+            )
+    else:
+        failures.append(
+            "unknown approval_id API request should fail"
+        )
+
+    try:
+        prepare_quote_send(
+            PrepareQuoteSendRequest(
                 recipient_email="   ",
-                approval=approved,
+                approval_id=pending.approval_id,
                 supplier_quote=supplier_quote,
                 customer_quote=customer_quote,
                 quote_draft=quote_draft,
@@ -3890,7 +3918,6 @@ def evaluate_quote_send_api_contract() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
-
 
 def evaluate_quote_approval_repository() -> dict:
     from datetime import datetime
@@ -4330,6 +4357,201 @@ def evaluate_quote_approval_service() -> dict:
 
     return {
         "name": "Quote approval service",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_quote_approval_api_contract() -> dict:
+    from fastapi import HTTPException
+
+    from src.api import (
+        QuoteApprovalApproveRequest,
+        QuoteApprovalRejectRequest,
+        approve_quote_approval,
+        get_quote_approval,
+        invalidate_quote_approval_endpoint,
+        list_quote_approvals,
+        quote_approval_repository,
+        reject_quote_approval,
+    )
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+
+    failures = []
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    snapshot = QuoteApprovalSnapshot.from_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    pending_for_approval = quote_approval_repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    loaded = get_quote_approval(
+        pending_for_approval.approval_id
+    )
+
+    if loaded.get("approval_id") != pending_for_approval.approval_id:
+        failures.append(
+            "get endpoint should return requested approval"
+        )
+
+    approved = approve_quote_approval(
+        approval_id=pending_for_approval.approval_id,
+        request=QuoteApprovalApproveRequest(
+            approved_by="operations.manager@example.invalid",
+        ),
+    )
+
+    if approved.get("approval_status") != "approved":
+        failures.append(
+            "approve endpoint should return approved status"
+        )
+
+    try:
+        approve_quote_approval(
+            approval_id=pending_for_approval.approval_id,
+            request=QuoteApprovalApproveRequest(
+                approved_by="manager@example.invalid",
+            ),
+        )
+    except HTTPException as exc:
+        if exc.status_code != 409:
+            failures.append(
+                "invalid approval transition should return HTTP 409"
+            )
+    else:
+        failures.append(
+            "approved record must not be approved again"
+        )
+
+    invalidated = invalidate_quote_approval_endpoint(
+        pending_for_approval.approval_id
+    )
+
+    if invalidated.get("approval_status") != "invalidated":
+        failures.append(
+            "invalidate endpoint should return invalidated status"
+        )
+
+    pending_for_rejection = quote_approval_repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    rejected = reject_quote_approval(
+        approval_id=pending_for_rejection.approval_id,
+        request=QuoteApprovalRejectRequest(
+            rejection_reason="Fiyat revize edilmeli.",
+        ),
+    )
+
+    if rejected.get("approval_status") != "rejected":
+        failures.append(
+            "reject endpoint should return rejected status"
+        )
+
+    approvals_response = list_quote_approvals()
+    approvals = approvals_response.get("approvals") or []
+    approval_ids = {
+        approval.get("approval_id")
+        for approval in approvals
+    }
+
+    if pending_for_approval.approval_id not in approval_ids:
+        failures.append(
+            "list endpoint should include invalidated approval"
+        )
+
+    if pending_for_rejection.approval_id not in approval_ids:
+        failures.append(
+            "list endpoint should include rejected approval"
+        )
+
+    try:
+        get_quote_approval("unknown-approval-id")
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            failures.append(
+                "unknown approval should return HTTP 404"
+            )
+    else:
+        failures.append(
+            "unknown approval get request should fail"
+        )
+
+    pending_for_empty_actor = quote_approval_repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    try:
+        approve_quote_approval(
+            approval_id=pending_for_empty_actor.approval_id,
+            request=QuoteApprovalApproveRequest(
+                approved_by="   ",
+            ),
+        )
+    except HTTPException as exc:
+        if exc.status_code != 422:
+            failures.append(
+                "empty approved_by should return HTTP 422"
+            )
+    else:
+        failures.append(
+            "empty approved_by request should fail"
+        )
+
+    pending_for_empty_reason = quote_approval_repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+
+    try:
+        reject_quote_approval(
+            approval_id=pending_for_empty_reason.approval_id,
+            request=QuoteApprovalRejectRequest(
+                rejection_reason="   ",
+            ),
+        )
+    except HTTPException as exc:
+        if exc.status_code != 422:
+            failures.append(
+                "empty rejection reason should return HTTP 422"
+            )
+    else:
+        failures.append(
+            "empty rejection reason request should fail"
+        )
+
+    return {
+        "name": "Quote approval API contract",
         "passed": len(failures) == 0,
         "failures": failures,
     }

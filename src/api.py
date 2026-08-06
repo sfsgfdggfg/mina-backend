@@ -27,9 +27,19 @@ from src.core.models import (
     SupplierQuote,
 )
 from src.core.quote_approval import QuoteApproval
+from src.core.quote_approval_repository import (
+    InMemoryQuoteApprovalRepository,
+)
+from src.core.quote_approval_service import (
+    QuoteApprovalNotFoundError,
+    QuoteApprovalTransitionError,
+    approve_quote,
+    invalidate_quote_approval,
+    reject_quote,
+)
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
+from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
 
 app = FastAPI(
@@ -38,6 +48,8 @@ app = FastAPI(
     version="0.1.0",
 )
 
+quote_approval_repository = InMemoryQuoteApprovalRepository()
+
 
 class ProcessEmailRequest(BaseModel):
     email_text: str
@@ -45,10 +57,19 @@ class ProcessEmailRequest(BaseModel):
 
 class PrepareQuoteSendRequest(BaseModel):
     recipient_email: str
-    approval: QuoteApproval | None
+    approval_id: str
     supplier_quote: SupplierQuote
     customer_quote: CustomerQuote
     quote_draft: QuoteDraft
+
+
+class QuoteApprovalApproveRequest(BaseModel):
+    approved_by: str
+
+
+class QuoteApprovalRejectRequest(BaseModel):
+    rejection_reason: str
+
 
 class CustomerMemoryCreateRequest(BaseModel):
     customer_name: str
@@ -442,12 +463,129 @@ def health_check():
     }
 
 
+@app.get("/quote-approvals")
+def list_quote_approvals():
+    return {
+        "approvals": [
+            approval.model_dump()
+            for approval in quote_approval_repository.list_all()
+        ]
+    }
+
+
+@app.get("/quote-approvals/{approval_id}")
+def get_quote_approval(approval_id: str):
+    approval = quote_approval_repository.get(approval_id)
+
+    if approval is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Quote approval not found: {approval_id}",
+        )
+
+    return approval.model_dump()
+
+
+@app.post("/quote-approvals/{approval_id}/approve")
+def approve_quote_approval(
+    approval_id: str,
+    request: QuoteApprovalApproveRequest,
+):
+    try:
+        approval = approve_quote(
+            repository=quote_approval_repository,
+            approval_id=approval_id,
+            approved_by=request.approved_by,
+        )
+    except QuoteApprovalNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+    except QuoteApprovalTransitionError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    return approval.model_dump()
+
+
+@app.post("/quote-approvals/{approval_id}/reject")
+def reject_quote_approval(
+    approval_id: str,
+    request: QuoteApprovalRejectRequest,
+):
+    try:
+        approval = reject_quote(
+            repository=quote_approval_repository,
+            approval_id=approval_id,
+            rejection_reason=request.rejection_reason,
+        )
+    except QuoteApprovalNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+    except QuoteApprovalTransitionError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    return approval.model_dump()
+
+
+@app.post("/quote-approvals/{approval_id}/invalidate")
+def invalidate_quote_approval_endpoint(approval_id: str):
+    try:
+        approval = invalidate_quote_approval(
+            repository=quote_approval_repository,
+            approval_id=approval_id,
+        )
+    except QuoteApprovalNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+    except QuoteApprovalTransitionError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    return approval.model_dump()
+
+
 @app.post("/quotes/prepare-send")
 def prepare_quote_send(request: PrepareQuoteSendRequest):
+    approval = quote_approval_repository.get(
+        request.approval_id
+    )
+
+    if approval is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Quote approval not found: "
+                f"{request.approval_id}"
+            ),
+        )
+
     try:
         result = prepare_quote_for_sending(
             recipient_email=request.recipient_email,
-            approval=request.approval,
+            approval=approval,
             supplier_quote=request.supplier_quote,
             customer_quote=request.customer_quote,
             quote_draft=request.quote_draft,
@@ -465,9 +603,10 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
 def process_email(request: ProcessEmailRequest):
     shipment = parse_email_with_ai(request.email_text)
     result = process_shipment(
-    shipment=shipment,
-    email_text=request.email_text,
-)
+        shipment=shipment,
+        email_text=request.email_text,
+        approval_repository=quote_approval_repository,
+    )
 
     return serialize_result(result)
 
@@ -516,6 +655,7 @@ def run_test_suite():
         evaluate_quote_approval_repository_workflow_integration()
     )
     test_results.append(evaluate_quote_approval_service())
+    test_results.append(evaluate_quote_approval_api_contract())
     test_results.append(evaluate_quote_send_safety_regression())
     test_results.append(evaluate_quote_send_service())
     test_results.append(evaluate_quote_send_api_contract())
