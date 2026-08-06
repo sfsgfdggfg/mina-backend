@@ -3890,3 +3890,223 @@ def evaluate_quote_send_api_contract() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_quote_approval_repository() -> dict:
+    from datetime import datetime
+
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+    from src.core.quote_approval_repository import (
+        InMemoryQuoteApprovalRepository,
+    )
+
+    failures = []
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    snapshot = QuoteApprovalSnapshot.from_quote(
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    pending = QuoteApproval(
+        quote_snapshot=snapshot,
+    )
+
+    repository = InMemoryQuoteApprovalRepository()
+
+    saved = repository.save(pending)
+
+    if saved.approval_id != pending.approval_id:
+        failures.append(
+            "saved approval should preserve approval_id"
+        )
+
+    loaded = repository.get(pending.approval_id)
+
+    if loaded is None:
+        failures.append(
+            "saved approval should be retrievable"
+        )
+    elif loaded != pending:
+        failures.append(
+            "retrieved approval should match saved approval"
+        )
+
+    approved = QuoteApproval(
+        approval_id=pending.approval_id,
+        approval_status="approved",
+        approved_by="operations.manager@example.invalid",
+        approved_at=datetime(2026, 8, 6, 18, 0, 0),
+        quote_snapshot=snapshot,
+    )
+
+    repository.save(approved)
+
+    updated = repository.get(pending.approval_id)
+
+    if updated is None:
+        failures.append(
+            "updated approval should remain retrievable"
+        )
+    elif updated.approval_status != "approved":
+        failures.append(
+            "saving same approval_id should update existing record"
+        )
+
+    second = QuoteApproval(
+        quote_snapshot=snapshot,
+    )
+
+    saved_many = repository.save_many([second])
+
+    if len(saved_many) != 1:
+        failures.append(
+            "save_many should return saved approvals"
+        )
+
+    approvals = repository.list_all()
+
+    if len(approvals) != 2:
+        failures.append(
+            "repository should contain two unique approval IDs"
+        )
+
+    approvals.clear()
+
+    if len(repository.list_all()) != 2:
+        failures.append(
+            "list_all should not expose mutable internal collection"
+        )
+
+    if repository.get("unknown-approval-id") is not None:
+        failures.append(
+            "unknown approval_id should return None"
+        )
+
+    return {
+        "name": "Quote approval repository",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_quote_approval_repository_workflow_integration() -> dict:
+    from src.core.models import Shipment
+    from src.core.quote_approval_repository import (
+        InMemoryQuoteApprovalRepository,
+    )
+    from src.workflow import pipeline
+
+    failures = []
+
+    repository = InMemoryQuoteApprovalRepository()
+
+    quote_shipment = Shipment(
+        customer_name="Approval Repository Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-08-12",
+        is_adr=False,
+        is_temperature_controlled=False,
+    )
+
+    quote_result = pipeline.process_shipment(
+        shipment=quote_shipment,
+        email_text=(
+            "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+            "komple tenteli araç fiyatı rica ederiz. "
+            "Yük ADR değildir ve 12.08.2026 tarihinde hazırdır."
+        ),
+        approval_repository=repository,
+    )
+
+    quote_approval = quote_result.get("quote_approval")
+
+    if quote_approval is None:
+        failures.append(
+            "successful workflow should generate quote approval"
+        )
+    else:
+        stored = repository.get(
+            quote_approval.approval_id
+        )
+
+        if stored is None:
+            failures.append(
+                "workflow should persist quote approval"
+            )
+        elif stored != quote_approval:
+            failures.append(
+                "stored approval should match workflow approval"
+            )
+
+    if len(repository.list_all()) != 1:
+        failures.append(
+            "successful workflow should store exactly one approval"
+        )
+
+    early_stop_shipment = quote_shipment.model_copy(
+        update={
+            "commodity": "Kimyasal Ürün",
+            "is_adr": True,
+            "adr_class": None,
+            "special_notes": None,
+        }
+    )
+
+    early_stop_result = pipeline.process_shipment(
+        shipment=early_stop_shipment,
+        email_text=(
+            "Adana'dan Hamburg'a ADR kapsamındaki kimyasal "
+            "yük için fiyat rica ederiz. ADR sınıfı belli değil."
+        ),
+        approval_repository=repository,
+    )
+
+    if early_stop_result.get("quote_approval") is not None:
+        failures.append(
+            "early-stop workflow must not generate quote approval"
+        )
+
+    if len(repository.list_all()) != 1:
+        failures.append(
+            "early-stop workflow must not persist approval"
+        )
+
+    return {
+        "name": "Quote approval repository workflow integration",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
