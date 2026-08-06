@@ -3900,3 +3900,89 @@ Endpoint geçerli onay ve güncel snapshot varsa `send_ready`, diğer durumlarda
 - Mevcut endpoint gerçek müşteriye e-posta çıkarmaz.
 - Gerçek email adapter eklenmeden önce güvenlik kontratı tamamlanmıştır.
 - TASK-126 sonunda test suite sonucu `56 passed, 0 failed` olmuştur.
+
+## DEC-084 — Trusted Quote Approval Repository and API Lifecycle
+
+**Status:** Accepted
+**Date:** 2026-08-06
+
+### Decision
+
+Quote approval kayıtlarının istemci tarafından taşınan geçici nesnelere bağlı olmamasına karar verilmiştir.
+
+Merkezi repository sözleşmesi:
+
+    QuoteApprovalRepository
+
+İlk uygulama:
+
+    InMemoryQuoteApprovalRepository
+
+Repository şu işlemleri destekler:
+
+    save
+    save_many
+    get
+    list_all
+
+Aynı `approval_id` ile kaydedilen onay mevcut kaydı günceller.
+
+Başarılı quote workflow’u oluşturduğu pending onayı repository’ye kaydeder. Teklif üretilemeyen early-stop branch’leri onay kaydetmez.
+
+Onay yaşam döngüsü merkezi servis üzerinden yönetilir:
+
+    approve_quote(...)
+    reject_quote(...)
+    invalidate_quote_approval(...)
+
+Geçerli durum geçişleri:
+
+    pending -> approved
+    pending -> rejected
+    pending -> invalidated
+    approved -> invalidated
+
+Terminal durumlar:
+
+    rejected
+    invalidated
+
+Approved kayıt tekrar onaylanamaz veya reddedilemez.
+
+API uygulama ömründe tek bir approval repository kullanır. `/process-email` ile oluşturulan pending kayıtlar aynı API süreci içinde onay endpoint’lerinden erişilebilir.
+
+Onay API’leri:
+
+    GET  /quote-approvals
+    GET  /quote-approvals/{approval_id}
+    POST /quote-approvals/{approval_id}/approve
+    POST /quote-approvals/{approval_id}/reject
+    POST /quote-approvals/{approval_id}/invalidate
+
+HTTP hata kontratı:
+
+    unknown approval_id -> 404
+    invalid lifecycle transition -> 409
+    empty approved_by or rejection_reason -> 422
+
+`POST /quotes/prepare-send` artık istemciden tam `QuoteApproval` nesnesi kabul etmez.
+
+Yeni kontrat:
+
+    approval_id
+    recipient_email
+    supplier_quote
+    customer_quote
+    quote_draft
+
+Gönderim hazırlığı, approval kaydını sunucu tarafındaki repository’den `approval_id` ile yükler.
+
+### Consequences
+
+- İstemci sahte bir approved nesnesi oluşturarak gönderim yetkisi elde edemez.
+- Approval identity ve lifecycle sunucu tarafında kontrol edilir.
+- Onaylama, reddetme ve geçersiz kılma işlemleri merkezi geçiş kurallarına bağlıdır.
+- Onay geçmişi aynı API süreci içinde listelenebilir ve okunabilir.
+- Uygulama yeniden başlatıldığında bellek içi kayıtlar silinir; kalıcı database henüz yoktur.
+- Gerçek authentication ve role-based authorization henüz uygulanmamıştır.
+- Grup 9 sonunda test suite sonucu `60 passed, 0 failed` olmuştur.

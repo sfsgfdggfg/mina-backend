@@ -2232,3 +2232,110 @@ API endpoint’i:
 gerçek email provider veya SMTP adapter çağırmamalıdır.
 
 Gerçek gönderim, ayrı adapter ve idempotency kuralları tamamlanmadan etkinleştirilmemelidir.
+
+## RULE-097 — Quote Approval Records Must Be Loaded From a Server-Side Repository
+
+Quote approval durumu istemciden gönderilen tam bir approval nesnesine güvenilerek kullanılmamalıdır.
+
+Approval işlemleri şu kimlik üzerinden yapılmalıdır:
+
+    approval_id
+
+Sistem approval kaydını sunucu tarafındaki:
+
+    QuoteApprovalRepository
+
+üzerinden yüklemelidir.
+
+Bilinmeyen `approval_id` kontrollü olarak reddedilmelidir:
+
+    HTTP 404
+
+Başarılı quote workflow’u oluşturduğu pending approval kaydını repository’ye yazmalıdır.
+
+Teklif oluşturulmayan early-stop workflow branch’leri approval kaydı oluşturmamalıdır.
+
+Mevcut InMemory repository uygulama yeniden başlatıldığında kayıtları kaybeder. Bu davranış kalıcı storage olarak kabul edilmemelidir.
+
+---
+
+## RULE-098 — Quote Approval Transitions Must Follow a Controlled Lifecycle
+
+Approval durum değişiklikleri merkezi servis üzerinden yapılmalıdır.
+
+İzin verilen geçişler:
+
+    pending -> approved
+    pending -> rejected
+    pending -> invalidated
+    approved -> invalidated
+
+Aşağıdaki durumlar terminal kabul edilmelidir:
+
+    rejected
+    invalidated
+
+Approved kayıt tekrar approved veya rejected durumuna geçirilemez.
+
+Geçersiz lifecycle geçişleri:
+
+    HTTP 409
+
+ile reddedilmelidir.
+
+Approved durumda:
+
+    approved_by
+    approved_at
+
+zorunludur.
+
+Rejected durumda:
+
+    rejection_reason
+
+zorunludur.
+
+Boş `approved_by` veya `rejection_reason`:
+
+    HTTP 422
+
+ile reddedilmelidir.
+
+Invalidated duruma geçerken approval ve rejection metadata temizlenmelidir.
+
+---
+
+## RULE-099 — Prepare-Send Must Trust Approval Identity, Not Client Approval State
+
+`POST /quotes/prepare-send` istemciden tam `QuoteApproval` nesnesi kabul etmemelidir.
+
+Request yalnızca approval kimliğini taşımalıdır:
+
+    approval_id
+
+Gönderim hazırlığı approval kaydını server-side repository’den yüklemelidir.
+
+İstemcinin request içinde oluşturduğu veya değiştirdiği approval status gönderim yetkisi vermemelidir.
+
+Repository’den yüklenen approval için mevcut send safety kuralları uygulanmalıdır:
+
+    approval_status = approved
+    approval snapshot güncel teklif ile eşleşiyor
+
+Unknown approval:
+
+    HTTP 404
+
+Boş recipient email:
+
+    HTTP 422
+
+Başarılı güvenlik kontrolü yalnızca:
+
+    send_ready
+    sent = false
+
+sonucu üretmelidir.
+
+Gerçek email delivery bu endpoint’in sorumluluğu değildir.
