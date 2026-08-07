@@ -4861,3 +4861,227 @@ def evaluate_quote_case_repository() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_quote_case_workflow_persistence() -> dict:
+    from src.core.models import Shipment
+    from src.core.quote_case_repository import (
+        InMemoryQuoteCaseRepository,
+    )
+    from src.workflow import pipeline
+
+    failures = []
+
+    repository = InMemoryQuoteCaseRepository()
+
+    shipment = Shipment(
+        customer_name="Quote Case Workflow Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-08-15",
+        is_adr=False,
+        is_temperature_controlled=False,
+    )
+
+    result = pipeline.process_shipment(
+        shipment=shipment,
+        email_text=(
+            "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+            "komple tenteli araç fiyatı rica ederiz. "
+            "Yük ADR değildir ve 15.08.2026 tarihinde hazırdır."
+        ),
+        quote_case_repository=repository,
+    )
+
+    quote_case = result.get("quote_case")
+
+    if quote_case is None:
+        failures.append(
+            "successful workflow should generate quote case"
+        )
+    else:
+        stored = repository.get(quote_case.case_id)
+
+        if stored is None:
+            failures.append(
+                "workflow should persist quote case"
+            )
+        elif stored != quote_case:
+            failures.append(
+                "stored quote case should match workflow result"
+            )
+
+        if stored is not None:
+            if stored.quote_approval != result.get("quote_approval"):
+                failures.append(
+                    "stored case should preserve quote approval"
+                )
+
+            if stored.quote_send_safety != result.get(
+                "quote_send_safety"
+            ):
+                failures.append(
+                    "stored case should preserve send safety"
+                )
+
+    if len(repository.list_all()) != 1:
+        failures.append(
+            "successful workflow should store exactly one quote case"
+        )
+
+    early_stop_shipment = shipment.model_copy(
+        update={
+            "commodity": "Kimyasal Ürün",
+            "is_adr": True,
+            "adr_class": None,
+            "special_notes": None,
+        }
+    )
+
+    early_stop_result = pipeline.process_shipment(
+        shipment=early_stop_shipment,
+        email_text=(
+            "Adana'dan Hamburg'a ADR kapsamındaki kimyasal "
+            "yük için fiyat rica ederiz. ADR sınıfı belli değil."
+        ),
+        quote_case_repository=repository,
+    )
+
+    if early_stop_result.get("quote_case") is not None:
+        failures.append(
+            "early-stop workflow must not generate quote case"
+        )
+
+    if len(repository.list_all()) != 1:
+        failures.append(
+            "early-stop workflow must not persist quote case"
+        )
+
+    return {
+        "name": "Quote case workflow persistence",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_quote_case_api_contract() -> dict:
+    from fastapi import HTTPException
+
+    import src.api as api
+    from src.core.models import Shipment
+
+    failures = []
+
+    before_ids = {
+        item.case_id
+        for item in api.quote_case_repository.list_all()
+    }
+
+    shipment = Shipment(
+        customer_name="Quote Case API Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-08-15",
+        is_adr=False,
+        is_temperature_controlled=False,
+    )
+
+    original_parser = api.parse_email_with_ai
+
+    try:
+        api.parse_email_with_ai = lambda _: shipment
+
+        response = api.process_email(
+            api.ProcessEmailRequest(
+                email_text="Deterministic quote case API test."
+            )
+        )
+    finally:
+        api.parse_email_with_ai = original_parser
+
+    quote_case = response.get("quote_case")
+
+    if quote_case is None:
+        failures.append(
+            "process-email should return serialized quote case"
+        )
+        return {
+            "name": "Quote case API contract",
+            "passed": len(failures) == 0,
+            "failures": failures,
+        }
+
+    case_id = quote_case.get("case_id")
+
+    if not case_id:
+        failures.append(
+            "serialized quote case should include case_id"
+        )
+
+    if case_id and case_id in before_ids:
+        failures.append(
+            "process-email should create a new quote case"
+        )
+
+    listed = api.list_quote_cases().get("quote_cases") or []
+
+    listed_ids = {
+        item.get("case_id")
+        for item in listed
+    }
+
+    if case_id not in listed_ids:
+        failures.append(
+            "quote case list should include created case"
+        )
+
+    if case_id:
+        loaded = api.get_quote_case(case_id)
+
+        if loaded.get("case_id") != case_id:
+            failures.append(
+                "get quote case should return requested case"
+            )
+
+        if loaded.get("quote_approval") != quote_case.get(
+            "quote_approval"
+        ):
+            failures.append(
+                "loaded case should preserve quote approval"
+            )
+
+        if loaded.get("quote_send_safety") != quote_case.get(
+            "quote_send_safety"
+        ):
+            failures.append(
+                "loaded case should preserve send safety"
+            )
+
+    try:
+        api.get_quote_case("unknown-case-id")
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            failures.append(
+                "unknown case_id should return HTTP 404"
+            )
+    else:
+        failures.append(
+            "unknown quote case request should fail"
+        )
+
+    return {
+        "name": "Quote case API contract",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+

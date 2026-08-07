@@ -30,6 +30,9 @@ from src.core.quote_approval import QuoteApproval
 from src.core.quote_approval_repository import (
     InMemoryQuoteApprovalRepository,
 )
+from src.core.quote_case_repository import (
+    InMemoryQuoteCaseRepository,
+)
 from src.core.quote_approval_service import (
     QuoteApprovalNotFoundError,
     QuoteApprovalTransitionError,
@@ -39,7 +42,7 @@ from src.core.quote_approval_service import (
 )
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
+from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
 
 app = FastAPI(
@@ -49,6 +52,7 @@ app = FastAPI(
 )
 
 quote_approval_repository = InMemoryQuoteApprovalRepository()
+quote_case_repository = InMemoryQuoteCaseRepository()
 
 
 class ProcessEmailRequest(BaseModel):
@@ -463,6 +467,29 @@ def health_check():
     }
 
 
+@app.get("/quote-cases")
+def list_quote_cases():
+    return {
+        "quote_cases": [
+            quote_case.model_dump()
+            for quote_case in quote_case_repository.list_all()
+        ]
+    }
+
+
+@app.get("/quote-cases/{case_id}")
+def get_quote_case(case_id: str):
+    quote_case = quote_case_repository.get(case_id)
+
+    if quote_case is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Quote case not found: {case_id}",
+        )
+
+    return quote_case.model_dump()
+
+
 @app.get("/quote-approvals")
 def list_quote_approvals():
     return {
@@ -606,6 +633,7 @@ def process_email(request: ProcessEmailRequest):
         shipment=shipment,
         email_text=request.email_text,
         approval_repository=quote_approval_repository,
+        quote_case_repository=quote_case_repository,
     )
 
     return serialize_result(result)
@@ -658,6 +686,8 @@ def run_test_suite():
     test_results.append(evaluate_quote_approval_api_contract())
     test_results.append(evaluate_quote_case_model())
     test_results.append(evaluate_quote_case_repository())
+    test_results.append(evaluate_quote_case_workflow_persistence())
+    test_results.append(evaluate_quote_case_api_contract())
     test_results.append(evaluate_quote_send_safety_regression())
     test_results.append(evaluate_quote_send_service())
     test_results.append(evaluate_quote_send_api_contract())
@@ -852,6 +882,7 @@ def serialize_result(result: dict) -> dict:
     quote_draft = result.get("quote_draft")
     quote_approval = result.get("quote_approval")
     quote_send_safety = result.get("quote_send_safety")
+    quote_case = result.get("quote_case")
     clarification_draft = result.get("clarification_draft")
     management_review_draft = result.get("management_review_draft")
     customer_memory = result.get("customer_memory")
@@ -909,6 +940,11 @@ def serialize_result(result: dict) -> dict:
             quote_send_safety.model_dump()
             if hasattr(quote_send_safety, "model_dump")
             else quote_send_safety
+        ),
+        "quote_case": (
+            quote_case.model_dump()
+            if hasattr(quote_case, "model_dump")
+            else quote_case
         ),
         "clarification_draft": clarification_draft.model_dump() if clarification_draft else None,
         "management_review_draft": management_review_draft.model_dump() if management_review_draft else None,

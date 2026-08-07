@@ -2,7 +2,7 @@ import json
 from src.simulation.email_generator import generate_fake_customer_email
 from src.simulation.scenario_generator import get_simulation_scenarios
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract
+from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract
 from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
 from src.ai.quote_generator import generate_quote_draft
@@ -25,6 +25,11 @@ from src.core.quote_approval import (
 from src.core.quote_approval_repository import (
     InMemoryQuoteApprovalRepository,
     QuoteApprovalRepository,
+)
+from src.core.quote_case import QuoteCase
+from src.core.quote_case_repository import (
+    InMemoryQuoteCaseRepository,
+    QuoteCaseRepository,
 )
 from src.core.quote_send_safety import (
     evaluate_quote_send_safety,
@@ -51,12 +56,16 @@ def process_shipment(
     email_text: str | None = None,
     rfq_repository: SupplierRFQRepository | None = None,
     approval_repository: QuoteApprovalRepository | None = None,
+    quote_case_repository: QuoteCaseRepository | None = None,
 ):
     if rfq_repository is None:
         rfq_repository = InMemorySupplierRFQRepository()
 
     if approval_repository is None:
         approval_repository = InMemoryQuoteApprovalRepository()
+
+    if quote_case_repository is None:
+        quote_case_repository = InMemoryQuoteCaseRepository()
     customer_memory = enrich_shipment_with_customer_memory(
         shipment=shipment,
         email_text=email_text,
@@ -121,6 +130,7 @@ def process_shipment(
             "quote_draft": None,
             "quote_approval": None,
             "quote_send_safety": None,
+            "quote_case": None,
             "clarification_draft": None,
             "management_review_draft": None,
             "action_recommendation": action_recommendation,
@@ -161,6 +171,7 @@ def process_shipment(
             "quote_draft": None,
             "quote_approval": None,
             "quote_send_safety": None,
+            "quote_case": None,
             "clarification_draft": None,
             "management_review_draft": management_review_draft,
             "action_recommendation": action_recommendation,
@@ -201,6 +212,7 @@ def process_shipment(
             "quote_draft": None,
             "quote_approval": None,
             "quote_send_safety": None,
+            "quote_case": None,
             "clarification_draft": clarification_draft,
             "management_review_draft": None,
             "action_recommendation": action_recommendation,
@@ -299,6 +311,7 @@ def process_shipment(
             "quote_draft": None,
             "quote_approval": None,
             "quote_send_safety": None,
+            "quote_case": None,
             "clarification_draft": None,
             "management_review_draft": None,
             "result_type": "supplier_response_required",
@@ -357,6 +370,7 @@ def process_shipment(
             "quote_draft": None,
             "quote_approval": None,
             "quote_send_safety": None,
+            "quote_case": None,
             "clarification_draft": None,
             "management_review_draft": None,
             "action_recommendation": action_recommendation,
@@ -388,6 +402,20 @@ def process_shipment(
         customer_quote=customer_quote,
         quote_draft=quote_draft,
     )
+
+    quote_case = QuoteCase(
+        shipment=shipment,
+        supplier_quote_selection_decision=(
+            supplier_quote_selection_decision
+        ),
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+        quote_approval=quote_approval,
+        quote_send_safety=quote_send_safety,
+    )
+    quote_case_repository.save(quote_case)
+
     action_recommendation = generate_action_recommendation(
         shipment=shipment,
         equipment_decision=equipment_decision,
@@ -425,6 +453,7 @@ def process_shipment(
         "quote_draft": quote_draft,
         "quote_approval": quote_approval,
         "quote_send_safety": quote_send_safety,
+        "quote_case": quote_case,
         "clarification_draft": None,
         "management_review_draft": None,
         "action_recommendation": action_recommendation,
@@ -540,6 +569,8 @@ def run_ai_email_test_suite():
     test_results.append(evaluate_quote_approval_api_contract())
     test_results.append(evaluate_quote_case_model())
     test_results.append(evaluate_quote_case_repository())
+    test_results.append(evaluate_quote_case_workflow_persistence())
+    test_results.append(evaluate_quote_case_api_contract())
     test_results.append(evaluate_quote_send_safety_regression())
     test_results.append(evaluate_quote_send_service())
     test_results.append(evaluate_quote_send_api_contract())
