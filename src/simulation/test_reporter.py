@@ -4555,3 +4555,151 @@ def evaluate_quote_approval_api_contract() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_quote_case_model() -> dict:
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        Shipment,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+    from src.core.quote_case import QuoteCase
+    from src.core.quote_send_safety import (
+        evaluate_quote_send_safety,
+    )
+
+    failures = []
+
+    shipment = Shipment(
+        customer_name="Quote Case Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-08-15",
+        is_adr=False,
+        is_temperature_controlled=False,
+    )
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    approval = QuoteApproval(
+        quote_snapshot=QuoteApprovalSnapshot.from_quote(
+            supplier_quote=supplier_quote,
+            customer_quote=customer_quote,
+            quote_draft=quote_draft,
+        )
+    )
+
+    send_safety = evaluate_quote_send_safety(
+        approval=approval,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    case = QuoteCase(
+        shipment=shipment,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+        quote_approval=approval,
+        quote_send_safety=send_safety,
+    )
+
+    if not case.case_id:
+        failures.append(
+            "quote case should generate case_id"
+        )
+
+    if case.shipment != shipment:
+        failures.append(
+            "quote case should preserve shipment"
+        )
+
+    if case.supplier_quote != supplier_quote:
+        failures.append(
+            "quote case should preserve supplier quote"
+        )
+
+    if case.customer_quote != customer_quote:
+        failures.append(
+            "quote case should preserve customer quote"
+        )
+
+    if case.quote_draft != quote_draft:
+        failures.append(
+            "quote case should preserve quote draft"
+        )
+
+    if case.quote_approval != approval:
+        failures.append(
+            "quote case should preserve quote approval"
+        )
+
+    if case.quote_send_safety != send_safety:
+        failures.append(
+            "quote case should preserve send safety decision"
+        )
+
+    if case.created_at is None or case.updated_at is None:
+        failures.append(
+            "quote case should include lifecycle timestamps"
+        )
+
+    if case.source != "quote_case":
+        failures.append(
+            "quote case source should be quote_case"
+        )
+
+    partial_case = QuoteCase(
+        shipment=shipment,
+    )
+
+    if partial_case.supplier_quote is not None:
+        failures.append(
+            "partial quote case should allow missing supplier quote"
+        )
+
+    if partial_case.quote_approval is not None:
+        failures.append(
+            "partial quote case should allow missing approval"
+        )
+
+    if partial_case.quote_send_safety is not None:
+        failures.append(
+            "partial quote case should allow missing send safety"
+        )
+
+    return {
+        "name": "Quote case model",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
