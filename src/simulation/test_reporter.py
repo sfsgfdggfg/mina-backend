@@ -4703,3 +4703,161 @@ def evaluate_quote_case_model() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
+
+
+def evaluate_quote_case_repository() -> dict:
+    from datetime import datetime
+
+    from src.core.models import (
+        CustomerQuote,
+        QuoteDraft,
+        Shipment,
+        SupplierQuote,
+    )
+    from src.core.quote_approval import (
+        QuoteApproval,
+        QuoteApprovalSnapshot,
+    )
+    from src.core.quote_case import QuoteCase
+    from src.core.quote_case_repository import (
+        InMemoryQuoteCaseRepository,
+    )
+    from src.core.quote_send_safety import (
+        evaluate_quote_send_safety,
+    )
+
+    failures = []
+
+    shipment = Shipment(
+        customer_name="Quote Case Repository Test Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        gross_weight_kg=20000,
+        service_type="FTL",
+        cargo_ready_date="2026-08-15",
+        is_adr=False,
+        is_temperature_controlled=False,
+    )
+
+    supplier_quote = SupplierQuote(
+        supplier_name="Reliable Supplier",
+        cost=2000,
+        currency="EUR",
+        transit_time="5-7 days",
+        notes="Selected supplier quote.",
+    )
+
+    customer_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+
+    quote_draft = QuoteDraft(
+        subject="Taşıma Teklifimiz",
+        body="Fiyat: 2300 EUR",
+    )
+
+    approval = QuoteApproval(
+        quote_snapshot=QuoteApprovalSnapshot.from_quote(
+            supplier_quote=supplier_quote,
+            customer_quote=customer_quote,
+            quote_draft=quote_draft,
+        )
+    )
+
+    send_safety = evaluate_quote_send_safety(
+        approval=approval,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+    )
+
+    repository = InMemoryQuoteCaseRepository()
+
+    quote_case = QuoteCase(
+        shipment=shipment,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+        quote_approval=approval,
+        quote_send_safety=send_safety,
+    )
+
+    saved = repository.save(quote_case)
+
+    if saved.case_id != quote_case.case_id:
+        failures.append(
+            "saved quote case should preserve case_id"
+        )
+
+    loaded = repository.get(quote_case.case_id)
+
+    if loaded is None:
+        failures.append(
+            "saved quote case should be retrievable"
+        )
+    elif loaded != quote_case:
+        failures.append(
+            "retrieved quote case should match saved case"
+        )
+
+    updated_case = quote_case.model_copy(
+        update={
+            "updated_at": datetime(2026, 8, 7, 18, 30, 0),
+        }
+    )
+
+    repository.save(updated_case)
+
+    updated = repository.get(quote_case.case_id)
+
+    if updated is None:
+        failures.append(
+            "updated quote case should remain retrievable"
+        )
+    elif updated.updated_at != updated_case.updated_at:
+        failures.append(
+            "saving same case_id should update existing case"
+        )
+
+    second_case = QuoteCase(
+        shipment=shipment,
+    )
+
+    saved_many = repository.save_many([second_case])
+
+    if len(saved_many) != 1:
+        failures.append(
+            "save_many should return saved quote cases"
+        )
+
+    cases = repository.list_all()
+
+    if len(cases) != 2:
+        failures.append(
+            "repository should contain two unique case IDs"
+        )
+
+    cases.clear()
+
+    if len(repository.list_all()) != 2:
+        failures.append(
+            "list_all should not expose mutable internal collection"
+        )
+
+    if repository.get("unknown-case-id") is not None:
+        failures.append(
+            "unknown case_id should return None"
+        )
+
+    return {
+        "name": "Quote case repository",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
