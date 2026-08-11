@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.core.models import Shipment
+
 
 SupplierRFQStatus = Literal[
     "draft",
@@ -28,6 +30,7 @@ class SupplierContact(BaseModel):
 
 class SupplierRFQDraft(BaseModel):
     rfq_id: str = Field(default_factory=lambda: str(uuid4()))
+    workflow_id: str = Field(default_factory=lambda: str(uuid4()))
     supplier_name: str
     priority: int
     recipient_email: Optional[str] = None
@@ -35,6 +38,8 @@ class SupplierRFQDraft(BaseModel):
     body: str
     status: SupplierRFQStatus = "draft"
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
     sent_at: Optional[datetime] = None
     responded_at: Optional[datetime] = None
     source: str = "supplier_rfq_generator"
@@ -42,6 +47,16 @@ class SupplierRFQDraft(BaseModel):
     @property
     def has_recipient(self) -> bool:
         return bool(self.recipient_email)
+
+
+class SupplierRFQWorkflow(BaseModel):
+    workflow_id: str = Field(default_factory=lambda: str(uuid4()))
+    shipment: Shipment
+    email_text: Optional[str] = None
+    rfq_ids: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    source: str = "supplier_rfq_workflow"
 
 
 SupplierRFQResponseStatus = Literal[

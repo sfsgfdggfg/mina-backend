@@ -108,6 +108,28 @@ def generate_action_recommendation(
             source="supplier_rfq_engine",
         )
 
+    if result_type == "supplier_rfq_approval_required":
+        return ActionRecommendation(
+            action_type="supplier_rfq_approval_required",
+            title="Tedarikçi RFQ Gönderim Onayı Gerekli",
+            message=(
+                "Tedarikçi RFQ taslakları hazırlandı. RFQ'lar insan "
+                "onayı olmadan gönderilmez ve gönderilmeden tedarikçi "
+                "cevabı kabul edilmez."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "RFQ alıcısını, kapsamını ve ekipman bilgisini kontrol et.",
+                    "Uygun RFQ'ları açık operatör kimliğiyle onayla.",
+                    "Onaylanan RFQ'ları ayrı gönderim adımıyla ilet.",
+                    "Gönderimden sonra tedarikçi cevabını bekle.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="supplier_rfq_engine",
+        )
+
     if result_type == "blocked":
         return ActionRecommendation(
             action_type="blocked",

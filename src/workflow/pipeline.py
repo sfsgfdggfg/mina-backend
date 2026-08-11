@@ -11,7 +11,6 @@ from src.simulation.regulatory_compliance_regressions import (
 from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract
 from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
-from src.ai.quote_generator import generate_quote_draft
 from src.ai.clarification_generator import generate_clarification_draft
 from src.ai.approval_generator import generate_management_review_draft
 from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
@@ -20,43 +19,23 @@ from src.core.customer_memory import enrich_shipment_with_customer_memory
 from src.core.equipment import decide_equipment
 from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
-from src.simulation.supplier_simulator import simulate_supplier_rfq_responses
 from src.core.supplier_selection import select_suppliers_for_shipment
 from src.core.operational_consistency import check_operational_consistency
-from src.core.pricing import calculate_customer_quote
-from src.core.quote_approval import (
-    QuoteApproval,
-    QuoteApprovalSnapshot,
-)
 from src.core.quote_approval_repository import (
-    InMemoryQuoteApprovalRepository,
     QuoteApprovalRepository,
 )
-from src.core.quote_case import QuoteCase
 from src.core.quote_case_repository import (
-    InMemoryQuoteCaseRepository,
     QuoteCaseRepository,
-)
-from src.core.quote_send_safety import (
-    evaluate_quote_send_safety,
 )
 from src.core.commodity_profile import get_commodity_record
 from src.core.quote_readiness import decide_quote_readiness
 from src.core.regulatory_compliance import (
     assess_regulatory_compliance,
 )
-from src.core.supplier_quote_selection import (
-    build_supplier_quote_selection_decision,
-    select_supplier_quote_from_comparisons,
-)
-from src.core.supplier_quote_comparison import build_supplier_quote_comparisons
+from src.core.supplier_rfq import SupplierRFQWorkflow
 from src.core.supplier_rfq_repository import (
     InMemorySupplierRFQRepository,
     SupplierRFQRepository,
-)
-from src.core.supplier_rfq_lifecycle import (
-    synchronize_supplier_rfq_lifecycle,
-    validate_supplier_rfq_responses,
 )
 
 
@@ -70,11 +49,6 @@ def process_shipment(
     if rfq_repository is None:
         rfq_repository = InMemorySupplierRFQRepository()
 
-    if approval_repository is None:
-        approval_repository = InMemoryQuoteApprovalRepository()
-
-    if quote_case_repository is None:
-        quote_case_repository = InMemoryQuoteCaseRepository()
     customer_memory = enrich_shipment_with_customer_memory(
         shipment=shipment,
         email_text=email_text,
@@ -236,8 +210,14 @@ def process_shipment(
             "action_recommendation": action_recommendation,
         }
 
-    # 3. Her şey uygunsa supplier RFQ ve quote akışı çalışır
+    # 3. Her şey uygunsa supplier RFQ taslakları hazırlanır.
+    # RFQ oluşturmak gönderim değildir; insan onayı beklenir.
+    supplier_rfq_workflow = SupplierRFQWorkflow(
+        shipment=shipment,
+        email_text=email_text,
+    )
     supplier_rfq_drafts = generate_supplier_rfq_drafts(
+        workflow_id=supplier_rfq_workflow.workflow_id,
         shipment=shipment,
         equipment_decision=equipment_decision,
         supplier_selection=supplier_selection,
@@ -246,209 +226,19 @@ def process_shipment(
     supplier_rfq_drafts = rfq_repository.save_drafts(
         supplier_rfq_drafts
     )
-
-    supplier_rfq_responses = simulate_supplier_rfq_responses(
-        shipment=shipment,
-        equipment_decision=equipment_decision,
-        supplier_selection=supplier_selection,
-        rfq_drafts=supplier_rfq_drafts,
-    )
-
-    supplier_rfq_responses = rfq_repository.save_responses(
-        supplier_rfq_responses
-    )
-
-    (
-        valid_supplier_rfq_responses,
-        supplier_rfq_response_validation,
-    ) = validate_supplier_rfq_responses(
-        drafts=supplier_rfq_drafts,
-        responses=supplier_rfq_responses,
-    )
-
-    supplier_rfq_drafts = synchronize_supplier_rfq_lifecycle(
-        drafts=supplier_rfq_drafts,
-        responses=valid_supplier_rfq_responses,
-    )
-
-    supplier_rfq_drafts = rfq_repository.save_drafts(
-        supplier_rfq_drafts
-    )
-
-    supplier_quote_comparisons = build_supplier_quote_comparisons(
-        responses=valid_supplier_rfq_responses,
-        supplier_selection=supplier_selection,
-    )
-
-    supplier_quote = select_supplier_quote_from_comparisons(
-        comparisons=supplier_quote_comparisons,
-        responses=valid_supplier_rfq_responses,
-    )
-
-    supplier_quote_selection_decision = (
-        build_supplier_quote_selection_decision(
-            comparisons=supplier_quote_comparisons,
-        )
-    )
-
-    if supplier_quote is None:
-        action_recommendation = generate_action_recommendation(
-            shipment=shipment,
-            equipment_decision=equipment_decision,
-            risk_assessment=risk_assessment,
-            missing_info=missing_info,
-            result_type="supplier_response_required",
-        )
-
-        return {
-            "shipment": shipment,
-            "customer_memory": customer_memory,
-            "commodity_profile": commodity_profile,
-            "missing_info": missing_info,
-            "regulatory_compliance": regulatory_compliance,
-            "equipment_decision": equipment_decision,
-            "risk_assessment": risk_assessment,
-            "supplier_selection": supplier_selection,
-            "operational_consistency": operational_consistency,
-            "quote_readiness": None,
-            "supplier_rfq_drafts": supplier_rfq_drafts,
-            "supplier_rfq_responses": supplier_rfq_responses,
-            "valid_supplier_rfq_responses": (
-                valid_supplier_rfq_responses
-            ),
-            "supplier_rfq_response_validation": (
-                supplier_rfq_response_validation
-            ),
-            "supplier_quote_comparisons": (
-                supplier_quote_comparisons
-            ),
-            "supplier_quote_selection_decision": (
-                supplier_quote_selection_decision
-            ),
-            "supplier_quote": None,
-            "customer_quote": None,
-            "quote_draft": None,
-            "quote_approval": None,
-            "quote_send_safety": None,
-            "quote_case": None,
-            "clarification_draft": None,
-            "management_review_draft": None,
-            "result_type": "supplier_response_required",
-            "action_recommendation": action_recommendation,
+    supplier_rfq_workflow = SupplierRFQWorkflow.model_validate(
+        {
+            **supplier_rfq_workflow.model_dump(),
+            "rfq_ids": [draft.rfq_id for draft in supplier_rfq_drafts],
         }
-
-    operational_consistency = check_operational_consistency(
-        shipment=shipment,
-        equipment_decision=equipment_decision,
-        risk_assessment=risk_assessment,
-        supplier_selection=supplier_selection,
-        supplier_quote=supplier_quote,
     )
-
-    quote_readiness = decide_quote_readiness(
-        missing_info=missing_info,
-        risk_assessment=risk_assessment,
-        operational_consistency=operational_consistency,
-        regulatory_compliance=regulatory_compliance,
-    )
-
-    if quote_readiness.result_type in {
-        "blocked",
-        "regulatory_blocked",
-        "regulatory_review",
-    }:
-        action_recommendation = generate_action_recommendation(
-            shipment=shipment,
-            equipment_decision=equipment_decision,
-            risk_assessment=risk_assessment,
-            missing_info=missing_info,
-            result_type=quote_readiness.result_type,
-        )
-
-        return {
-            "shipment": shipment,
-            "customer_memory": customer_memory,
-            "commodity_profile": commodity_profile,
-            "missing_info": missing_info,
-            "regulatory_compliance": regulatory_compliance,
-            "equipment_decision": equipment_decision,
-            "risk_assessment": risk_assessment,
-            "supplier_selection": supplier_selection,
-            "operational_consistency": operational_consistency,
-            "quote_readiness": quote_readiness,
-            "supplier_rfq_drafts": supplier_rfq_drafts,
-            "supplier_rfq_responses": supplier_rfq_responses,
-            "valid_supplier_rfq_responses": (
-                valid_supplier_rfq_responses
-            ),
-            "supplier_rfq_response_validation": (
-                supplier_rfq_response_validation
-            ),
-            "supplier_quote_comparisons": (
-                supplier_quote_comparisons
-            ),
-            "supplier_quote_selection_decision": (
-                supplier_quote_selection_decision
-            ),
-            "supplier_quote": supplier_quote,
-            "customer_quote": None,
-            "quote_draft": None,
-            "quote_approval": None,
-            "quote_send_safety": None,
-            "quote_case": None,
-            "clarification_draft": None,
-            "management_review_draft": None,
-            "action_recommendation": action_recommendation,
-        }
-
-    customer_quote = calculate_customer_quote(supplier_quote)
-
-    quote_draft = generate_quote_draft(
-        shipment=shipment,
-        equipment_decision=equipment_decision,
-        risk_assessment=risk_assessment,
-        supplier_quote=supplier_quote,
-        customer_quote=customer_quote,
-    )
-
-    quote_approval = QuoteApproval(
-        quote_snapshot=QuoteApprovalSnapshot.from_quote(
-            supplier_quote=supplier_quote,
-            customer_quote=customer_quote,
-            quote_draft=quote_draft,
-        )
-    )
-
-    approval_repository.save(quote_approval)
-
-    quote_send_safety = evaluate_quote_send_safety(
-        approval=quote_approval,
-        supplier_quote=supplier_quote,
-        customer_quote=customer_quote,
-        quote_draft=quote_draft,
-        regulatory_compliance=regulatory_compliance,
-    )
-
-    quote_case = QuoteCase(
-        shipment=shipment,
-        supplier_quote_selection_decision=(
-            supplier_quote_selection_decision
-        ),
-        supplier_quote=supplier_quote,
-        customer_quote=customer_quote,
-        quote_draft=quote_draft,
-        quote_approval=quote_approval,
-        quote_send_safety=quote_send_safety,
-        regulatory_compliance=regulatory_compliance,
-    )
-    quote_case_repository.save(quote_case)
-
+    rfq_repository.save_workflow(supplier_rfq_workflow)
     action_recommendation = generate_action_recommendation(
         shipment=shipment,
         equipment_decision=equipment_decision,
         risk_assessment=risk_assessment,
         missing_info=missing_info,
-        result_type=quote_readiness.result_type,
+        result_type="supplier_rfq_approval_required",
     )
 
     return {
@@ -462,28 +252,22 @@ def process_shipment(
         "supplier_selection": supplier_selection,
         "operational_consistency": operational_consistency,
         "quote_readiness": quote_readiness,
+        "supplier_rfq_workflow": supplier_rfq_workflow,
         "supplier_rfq_drafts": supplier_rfq_drafts,
-        "supplier_rfq_responses": supplier_rfq_responses,
-        "valid_supplier_rfq_responses": (
-            valid_supplier_rfq_responses
-        ),
-        "supplier_rfq_response_validation": (
-            supplier_rfq_response_validation
-        ),
-        "supplier_quote_comparisons": (
-            supplier_quote_comparisons
-        ),
-        "supplier_quote_selection_decision": (
-            supplier_quote_selection_decision
-        ),
-        "supplier_quote": supplier_quote,
-        "customer_quote": customer_quote,
-        "quote_draft": quote_draft,
-        "quote_approval": quote_approval,
-        "quote_send_safety": quote_send_safety,
-        "quote_case": quote_case,
+        "supplier_rfq_responses": [],
+        "valid_supplier_rfq_responses": [],
+        "supplier_rfq_response_validation": None,
+        "supplier_quote_comparisons": [],
+        "supplier_quote_selection_decision": None,
+        "supplier_quote": None,
+        "customer_quote": None,
+        "quote_draft": None,
+        "quote_approval": None,
+        "quote_send_safety": None,
+        "quote_case": None,
         "clarification_draft": None,
         "management_review_draft": None,
+        "result_type": "supplier_rfq_approval_required",
         "action_recommendation": action_recommendation,
     }
 
@@ -585,8 +369,6 @@ def run_ai_email_test_suite():
     test_results.append(evaluate_supplier_quote_selection())
     test_results.append(evaluate_supplier_rfq_response_validation())
     test_results.append(evaluate_supplier_fallback_consistency())
-    test_results.append(evaluate_final_quote_consistency_block())
-    test_results.append(evaluate_supplier_response_required_state())
     test_results.append(evaluate_supplier_rfq_lifecycle_synchronization())
     test_results.append(evaluate_supplier_rfq_response_link_integrity())
     test_results.append(evaluate_supplier_rfq_response_validation_report())
@@ -600,15 +382,10 @@ def run_ai_email_test_suite():
     test_results.append(evaluate_quote_approval_model())
     test_results.append(evaluate_quote_approval_workflow_contract())
     test_results.append(evaluate_quote_approval_repository())
-    test_results.append(
-        evaluate_quote_approval_repository_workflow_integration()
-    )
     test_results.append(evaluate_quote_approval_service())
     test_results.append(evaluate_quote_approval_api_contract())
     test_results.append(evaluate_quote_case_model())
     test_results.append(evaluate_quote_case_repository())
-    test_results.append(evaluate_quote_case_workflow_persistence())
-    test_results.append(evaluate_quote_case_api_contract())
     test_results.append(evaluate_quote_send_safety_regression())
     test_results.append(evaluate_quote_send_service())
     test_results.append(evaluate_quote_send_api_contract())

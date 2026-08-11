@@ -4269,3 +4269,48 @@ veya review bulunmayan explicit false durumu otomatik teklifi engeller.
 * Natural-language reply ingestion, review persistence ve review API lifecycle bu değişikliğin kapsamı dışındadır.
 * Production commodity requirements için henüz regulatory blocking aktive edilmemiştir.
 * Belge setlerinin ülke/ürün bazlı hukuki uygulanabilirliği ayrı regulatory knowledge katmanı gerektirir.
+
+---
+
+## DEC-090 — Explicit Human-Controlled Supplier RFQ Lifecycle
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+Supplier RFQ generation ile outbound send aynı işlem olarak ele alınmayacaktır.
+Lifecycle geçişleri merkezi supplier RFQ service tarafından uygulanacaktır:
+
+    draft
+    -> approved (approved_by, approved_at)
+    -> awaiting_response (sent_at)
+    -> responded (responded_at)
+
+`/process-email` shipment readiness ve supplier selection sonrasında RFQ draft'ları
+oluşturup `supplier_rfq_approval_required` sonucunda durur. Bu çağrı supplier
+response simulation, supplier comparison, customer pricing veya commercial quote
+approval üretmez.
+
+In-memory Supplier RFQ repository application lifetime boyunca draft, response ve
+shipment workflow context'ini tutar. API ayrı approve, send, attach/simulate
+response, retrieve ve resume-quote operasyonları sunar. Send operasyonu şu an
+gerçek email teslimatı yapmaz; yalnızca gelecekteki Outlook/SMTP adapter'ından
+önceki outbound lifecycle boundary'sini temsil eder.
+
+Supplier response yalnızca `sent` / `awaiting_response` RFQ'ya bağlanabilir.
+Response link doğrulaması sonrası RFQ `responded` olur. Supplier comparison,
+yalnızca `responded` RFQ'ların usable response'larını kullanır. En az bir usable
+supplier price oluştuğunda workflow customer pricing'e devam eder ve bundan sonra
+ayrı, pending commercial `QuoteApproval` oluşturur.
+Oluşan Quote Case, audit traceability için kaynak Supplier RFQ workflow kimliğini
+`supplier_rfq_workflow_id` alanında taşır.
+
+### Consequences
+
+* RFQ generation is not RFQ sending.
+* A supplier response cannot exist for an RFQ that has not been sent.
+* RFQ approval ile customer quote commercial approval birbirinden ayrıdır.
+* Simulated response otomatik email-processing yan etkisi olmaktan çıkarılmıştır.
+* Unknown identity, invalid transition, unsent response ve duplicate operation'lar fail-closed davranır.
+* Gerçek email delivery, inbox parsing, database, authentication ve asynchronous jobs bu kararın kapsamı dışındadır.

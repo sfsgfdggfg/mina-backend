@@ -1504,11 +1504,22 @@ def evaluate_supplier_rfq_response_simulation() -> dict:
         supplier_selection=supplier_selection,
     )
 
-    responses = simulate_supplier_rfq_responses(
+    unsent_responses = simulate_supplier_rfq_responses(
         shipment=Shipment(),
         equipment_decision=EquipmentDecision(),
         supplier_selection=supplier_selection,
         rfq_drafts=rfq_drafts,
+    )
+
+    sent_rfq_drafts = [
+        draft.model_copy(update={"status": "awaiting_response"})
+        for draft in rfq_drafts
+    ]
+    responses = simulate_supplier_rfq_responses(
+        shipment=Shipment(),
+        equipment_decision=EquipmentDecision(),
+        supplier_selection=supplier_selection,
+        rfq_drafts=sent_rfq_drafts,
     )
 
     failures = []
@@ -1516,6 +1527,11 @@ def evaluate_supplier_rfq_response_simulation() -> dict:
     if len(rfq_drafts) != 3:
         failures.append(
             f"expected 3 RFQ drafts, got {len(rfq_drafts)}"
+        )
+
+    if unsent_responses:
+        failures.append(
+            "unsent RFQ drafts must not receive simulated responses"
         )
 
     if len(responses) != 3:
@@ -2613,6 +2629,8 @@ def evaluate_supplier_rfq_api_contract() -> dict:
     serialized_quote = serialize_result(quote_result)
 
     required_fields = {
+        "supplier_rfq_workflow",
+        "supplier_rfq_drafts",
         "supplier_rfq_responses",
         "valid_supplier_rfq_responses",
         "supplier_rfq_response_validation",
@@ -2646,21 +2664,11 @@ def evaluate_supplier_rfq_api_contract() -> dict:
         "supplier_rfq_response_validation"
     )
 
-    if not isinstance(validation_report, dict):
+    if validation_report is not None:
         failures.append(
-            "quote result should include serialized validation report"
+            "initial RFQ approval state should not include a response "
+            "validation report"
         )
-    else:
-        for key in (
-            "valid_count",
-            "rejected_count",
-            "rejected_responses",
-            "source",
-        ):
-            if key not in validation_report:
-                failures.append(
-                    f"validation report missing field: {key}"
-                )
 
     early_stop_shipment = shipment.model_copy(
         update={
@@ -3147,6 +3155,7 @@ def evaluate_supplier_rfq_repository() -> dict:
         SupplierRFQResponse,
     )
     from src.core.supplier_rfq_repository import (
+        DuplicateSupplierRFQResponseError,
         InMemorySupplierRFQRepository,
     )
 
@@ -3218,13 +3227,13 @@ def evaluate_supplier_rfq_repository() -> dict:
         [first_response, second_response]
     )
 
-    duplicate_saved = repository.save_responses(
-        [first_response]
-    )
-
-    if duplicate_saved:
+    try:
+        repository.save_responses([first_response])
+    except DuplicateSupplierRFQResponseError:
+        pass
+    else:
         failures.append(
-            "identical RFQ response should not be saved twice"
+            "identical RFQ response should be explicitly rejected"
         )
 
     if len(repository.list_responses()) != 2:
@@ -3333,9 +3342,9 @@ def evaluate_supplier_rfq_repository_workflow_integration() -> dict:
             "workflow should generate supplier RFQ drafts"
         )
 
-    if not result_responses:
+    if result_responses:
         failures.append(
-            "workflow should generate supplier RFQ responses"
+            "initial workflow must not generate supplier RFQ responses"
         )
 
     if len(stored_drafts) != len(result_drafts):
@@ -3377,13 +3386,19 @@ def evaluate_supplier_rfq_repository_workflow_integration() -> dict:
         )
 
     if stored_drafts and any(
-        draft.status != "responded"
+        draft.status != "draft"
         for draft in stored_drafts
     ):
         failures.append(
-            "stored RFQ drafts should contain synchronized "
-            "responded lifecycle status"
+            "stored RFQ drafts should remain in draft status"
         )
+
+    workflow = result.get("supplier_rfq_workflow")
+    if (
+        workflow is None
+        or repository.get_workflow(workflow.workflow_id) != workflow
+    ):
+        failures.append("supplier RFQ workflow context was not persisted")
 
     for response in stored_responses:
         stored_draft = repository.get_draft(response.rfq_id)
@@ -3566,9 +3581,32 @@ def evaluate_quote_approval_model() -> dict:
 
 def evaluate_quote_approval_workflow_contract() -> dict:
     from src.core.models import Shipment
+    from src.core.quote_approval_repository import (
+        InMemoryQuoteApprovalRepository,
+    )
+    from src.core.quote_case_repository import (
+        InMemoryQuoteCaseRepository,
+    )
+    from src.core.supplier_rfq_lifecycle import (
+        approve_supplier_rfq,
+        attach_supplier_rfq_response,
+        send_supplier_rfq,
+    )
+    from src.core.supplier_rfq_repository import (
+        InMemorySupplierRFQRepository,
+    )
+    from src.simulation.supplier_simulator import (
+        simulate_supplier_rfq_responses,
+    )
     from src.workflow import pipeline
+    from src.workflow.supplier_rfq_progression import (
+        resume_supplier_rfq_workflow,
+    )
 
     failures = []
+    rfq_repository = InMemorySupplierRFQRepository()
+    approval_repository = InMemoryQuoteApprovalRepository()
+    quote_case_repository = InMemoryQuoteCaseRepository()
 
     quote_shipment = Shipment(
         customer_name="Approval Test Customer",
@@ -3591,7 +3629,44 @@ def evaluate_quote_approval_workflow_contract() -> dict:
             "komple tenteli araç fiyatı rica ederiz. "
             "Yük ADR değildir ve 12.08.2026 tarihinde hazırdır."
         ),
+        rfq_repository=rfq_repository,
+        approval_repository=approval_repository,
+        quote_case_repository=quote_case_repository,
     )
+
+    drafts = quote_result.get("supplier_rfq_drafts") or []
+    draft = next(
+        (item for item in drafts if item.recipient_email),
+        None,
+    )
+    workflow = quote_result.get("supplier_rfq_workflow")
+    if draft is None or workflow is None:
+        failures.append("RFQ approval workflow setup is missing")
+    else:
+        approve_supplier_rfq(
+            rfq_repository,
+            draft.rfq_id,
+            approved_by="Quote Approval Regression Operator",
+        )
+        awaiting = send_supplier_rfq(
+            rfq_repository,
+            draft.rfq_id,
+        )
+        responses = simulate_supplier_rfq_responses(
+            shipment=quote_shipment,
+            equipment_decision=quote_result["equipment_decision"],
+            rfq_drafts=[awaiting],
+        )
+        attach_supplier_rfq_response(
+            rfq_repository,
+            responses[0],
+        )
+        quote_result = resume_supplier_rfq_workflow(
+            workflow_id=workflow.workflow_id,
+            rfq_repository=rfq_repository,
+            approval_repository=approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
 
     supplier_quote = quote_result.get("supplier_quote")
     customer_quote = quote_result.get("customer_quote")

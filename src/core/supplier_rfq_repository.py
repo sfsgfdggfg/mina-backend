@@ -6,7 +6,12 @@ from typing import Optional, Protocol
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
     SupplierRFQResponse,
+    SupplierRFQWorkflow,
 )
+
+
+class DuplicateSupplierRFQResponseError(ValueError):
+    pass
 
 
 class SupplierRFQRepository(Protocol):
@@ -29,6 +34,18 @@ class SupplierRFQRepository(Protocol):
         ...
 
     def list_drafts(self) -> list[SupplierRFQDraft]:
+        ...
+
+    def save_workflow(
+        self,
+        workflow: SupplierRFQWorkflow,
+    ) -> SupplierRFQWorkflow:
+        ...
+
+    def get_workflow(
+        self,
+        workflow_id: str,
+    ) -> Optional[SupplierRFQWorkflow]:
         ...
 
     def list_responses(
@@ -60,6 +77,7 @@ def _supplier_rfq_response_key(
 class InMemorySupplierRFQRepository:
     def __init__(self) -> None:
         self._drafts: dict[str, SupplierRFQDraft] = {}
+        self._workflows: dict[str, SupplierRFQWorkflow] = {}
         self._responses: list[SupplierRFQResponse] = []
         self._response_keys: set[tuple] = set()
 
@@ -85,7 +103,9 @@ class InMemorySupplierRFQRepository:
             response_key = _supplier_rfq_response_key(response)
 
             if response_key in self._response_keys:
-                continue
+                raise DuplicateSupplierRFQResponseError(
+                    "Supplier RFQ response already exists."
+                )
 
             self._response_keys.add(response_key)
             self._responses.append(response)
@@ -101,6 +121,19 @@ class InMemorySupplierRFQRepository:
 
     def list_drafts(self) -> list[SupplierRFQDraft]:
         return list(self._drafts.values())
+
+    def save_workflow(
+        self,
+        workflow: SupplierRFQWorkflow,
+    ) -> SupplierRFQWorkflow:
+        self._workflows[workflow.workflow_id] = workflow
+        return workflow
+
+    def get_workflow(
+        self,
+        workflow_id: str,
+    ) -> Optional[SupplierRFQWorkflow]:
+        return self._workflows.get(workflow_id)
 
     def list_responses(
         self,

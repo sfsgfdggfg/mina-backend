@@ -28,6 +28,7 @@ class QuoteCase(BaseModel):
     )
 
     shipment: Shipment
+    supplier_rfq_workflow_id: Optional[str] = None
 
     supplier_quote_selection_decision: Optional[
         SupplierQuoteSelectionDecision

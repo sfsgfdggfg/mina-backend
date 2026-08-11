@@ -2597,3 +2597,32 @@ hangi ürün, rota veya ülke kombinasyonunda hukuken zorunlu olduğu henüz
 doğrulanmamıştır. Bu alanlar mevcut commodity kurallarına göre clarification veya
 risk/human-review davranışını sürdürebilir; ancak doğrulanmış metadata eklenene
 kadar negatif cevapları otomatik regulatory prohibition sayılmamalıdır.
+
+---
+
+## RULE-109 — Supplier RFQ Generation Is Not Supplier RFQ Sending
+
+Supplier RFQ lifecycle aşağıdaki insan kontrollü geçişleri izlemelidir:
+
+    draft
+    -> approved
+    -> awaiting_response
+    -> responded
+
+**RFQ generation is not RFQ sending.** Otomatik workflow yalnızca `draft`
+oluşturur. Operatör kimliği ve approval timestamp'i kaydedilmeden RFQ gönderim
+sınırına geçemez. Approval tek başına gönderim sayılmaz; ayrı send işlemi
+`sent_at` kaydeder ve RFQ'yu `awaiting_response` durumuna getirir.
+
+**A supplier response cannot exist for an RFQ that has not been sent.** Draft
+veya yalnızca approved RFQ için response kabul edilmemeli, response simulation
+da yalnızca `sent` / `awaiting_response` durumundaki RFQ'lar için çalışmalıdır.
+Response kimliği, supplier ve priority bağı doğrulandıktan sonra lifecycle
+`responded` durumuna geçer. Unknown RFQ, geçersiz geçiş, unsent response,
+duplicate send ve duplicate response kontrollü olarak reddedilir.
+
+Supplier RFQ approval, RFQ send, supplier response ve customer quote commercial
+approval ayrı sorumluluklardır. Kullanılabilir ve `responded` bir supplier fiyatı
+bulunmadan customer pricing veya commercial `QuoteApproval` oluşturulmamalıdır.
+Normal email workflow'u RFQ draft üretiminden sonra
+`supplier_rfq_approval_required` durumunda durmalıdır.

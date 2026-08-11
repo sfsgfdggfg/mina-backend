@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, List
+from uuid import uuid4
 
 from src.core.models import EquipmentDecision, Shipment
 from src.core.supplier_rfq import SupplierRFQDraft
@@ -11,8 +12,10 @@ def generate_supplier_rfq_drafts(
     shipment: Shipment,
     equipment_decision: EquipmentDecision,
     supplier_selection: dict[str, Any],
+    workflow_id: str | None = None,
 ) -> List[SupplierRFQDraft]:
     drafts: List[SupplierRFQDraft] = []
+    resolved_workflow_id = workflow_id or str(uuid4())
 
     selected_suppliers = supplier_selection.get("selected_suppliers", [])[:3]
 
@@ -55,6 +58,7 @@ MINAI Freight OS
 
         drafts.append(
             SupplierRFQDraft(
+                workflow_id=resolved_workflow_id,
                 supplier_name=supplier_name,
                 priority=priority,
                 recipient_email=recipient_email,

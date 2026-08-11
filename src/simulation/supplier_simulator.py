@@ -59,32 +59,18 @@ def simulate_supplier_rfq_responses(
     supplier_selection: Optional[dict[str, Any]] = None,
     rfq_drafts: Optional[list[SupplierRFQDraft]] = None,
 ) -> list[SupplierRFQResponse]:
-    selected_suppliers = (
-        supplier_selection.get("selected_suppliers", [])
-        if supplier_selection
-        else []
-    )
-
-    response_sources = (
-        list(rfq_drafts[:3])
-        if rfq_drafts is not None
-        else selected_suppliers[:3]
-    )
+    response_sources = [
+        draft
+        for draft in (rfq_drafts or [])[:3]
+        if draft.status in {"sent", "awaiting_response"}
+    ]
 
     responses: list[SupplierRFQResponse] = []
 
     for index, source_item in enumerate(response_sources, start=1):
-        if isinstance(source_item, SupplierRFQDraft):
-            rfq_id = source_item.rfq_id
-            supplier_name = source_item.supplier_name
-            rfq_priority = source_item.priority
-        else:
-            rfq_id = None
-            supplier_name = source_item.get(
-                "supplier_name",
-                f"Supplier {index}",
-            )
-            rfq_priority = int(source_item.get("priority") or index)
+        rfq_id = source_item.rfq_id
+        supplier_name = source_item.supplier_name
+        rfq_priority = source_item.priority
         base_cost = 2000.0 + ((index - 1) * 120)
 
         if "Reefer" in equipment_decision.selected_equipment:
@@ -101,7 +87,7 @@ def simulate_supplier_rfq_responses(
 
         responses.append(
             SupplierRFQResponse(
-                **({"rfq_id": rfq_id} if rfq_id else {}),
+                rfq_id=rfq_id,
                 supplier_name=supplier_name,
                 rfq_priority=rfq_priority,
                 status="quoted",

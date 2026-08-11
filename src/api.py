@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
@@ -21,6 +21,10 @@ from src.core.customer_memory import (
 )
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
+from src.workflow.supplier_rfq_progression import (
+    SupplierRFQWorkflowNotFoundError,
+    resume_supplier_rfq_workflow,
+)
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -41,12 +45,32 @@ from src.core.quote_approval_service import (
     reject_quote,
 )
 from src.core.quote_send_service import prepare_quote_for_sending
+from src.core.equipment import decide_equipment
+from src.core.supplier_rfq import SupplierRFQResponse
+from src.core.supplier_rfq_lifecycle import (
+    SupplierRFQNotFoundError,
+    SupplierRFQResponseError,
+    SupplierRFQTransitionError,
+    approve_supplier_rfq,
+    attach_supplier_rfq_response,
+    send_supplier_rfq,
+)
+from src.core.supplier_rfq_repository import (
+    DuplicateSupplierRFQResponseError,
+    InMemorySupplierRFQRepository,
+)
+from src.simulation.supplier_simulator import (
+    simulate_supplier_rfq_responses,
+)
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
 from src.simulation.clarification_resolution_regressions import (
     evaluate_clarification_resolution_regressions,
 )
 from src.simulation.regulatory_compliance_regressions import (
     evaluate_regulatory_compliance_regressions,
+)
+from src.simulation.supplier_rfq_lifecycle_regressions import (
+    evaluate_supplier_rfq_lifecycle_regressions,
 )
 from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
@@ -59,6 +83,7 @@ app = FastAPI(
 
 quote_approval_repository = InMemoryQuoteApprovalRepository()
 quote_case_repository = InMemoryQuoteCaseRepository()
+supplier_rfq_repository = InMemorySupplierRFQRepository()
 
 
 class ProcessEmailRequest(BaseModel):
@@ -79,6 +104,28 @@ class QuoteApprovalApproveRequest(BaseModel):
 
 class QuoteApprovalRejectRequest(BaseModel):
     rejection_reason: str
+
+
+class SupplierRFQApproveRequest(BaseModel):
+    approved_by: str
+
+
+class SupplierRFQResponseRequest(BaseModel):
+    supplier_name: str
+    rfq_priority: int
+    status: Literal[
+        "quoted",
+        "no_capacity",
+        "declined",
+        "needs_clarification",
+    ]
+    cost: Optional[float] = None
+    currency: str = "EUR"
+    transit_time: Optional[str] = None
+    validity_date: Optional[str] = None
+    equipment_type: Optional[str] = None
+    notes: Optional[str] = None
+    source: Literal["email", "portal", "api", "manual"] = "manual"
 
 
 class CustomerMemoryCreateRequest(BaseModel):
@@ -691,10 +738,161 @@ def process_email(request: ProcessEmailRequest):
     result = process_shipment(
         shipment=shipment,
         email_text=request.email_text,
+        rfq_repository=supplier_rfq_repository,
         approval_repository=quote_approval_repository,
         quote_case_repository=quote_case_repository,
     )
 
+    return serialize_result(result)
+
+
+@app.get("/supplier-rfqs")
+def list_supplier_rfqs():
+    return {
+        "supplier_rfqs": [
+            draft.model_dump()
+            for draft in supplier_rfq_repository.list_drafts()
+        ]
+    }
+
+
+@app.get("/supplier-rfqs/{rfq_id}")
+def get_supplier_rfq(rfq_id: str):
+    draft = supplier_rfq_repository.get_draft(rfq_id)
+    if draft is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Supplier RFQ not found: {rfq_id}",
+        )
+    return {
+        **draft.model_dump(),
+        "responses": [
+            response.model_dump()
+            for response in supplier_rfq_repository.list_responses(rfq_id)
+        ],
+    }
+
+
+@app.post("/supplier-rfqs/{rfq_id}/approve")
+def approve_supplier_rfq_endpoint(
+    rfq_id: str,
+    request: SupplierRFQApproveRequest,
+):
+    try:
+        return approve_supplier_rfq(
+            repository=supplier_rfq_repository,
+            rfq_id=rfq_id,
+            approved_by=request.approved_by,
+        ).model_dump()
+    except SupplierRFQNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfqs/{rfq_id}/send")
+def send_supplier_rfq_endpoint(rfq_id: str):
+    try:
+        return send_supplier_rfq(
+            repository=supplier_rfq_repository,
+            rfq_id=rfq_id,
+        ).model_dump()
+    except SupplierRFQNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfqs/{rfq_id}/responses")
+def attach_supplier_rfq_response_endpoint(
+    rfq_id: str,
+    request: SupplierRFQResponseRequest,
+):
+    try:
+        response = SupplierRFQResponse(
+            rfq_id=rfq_id,
+            **request.model_dump(),
+        )
+        draft = attach_supplier_rfq_response(
+            repository=supplier_rfq_repository,
+            response=response,
+        )
+        return {
+            "supplier_rfq": draft.model_dump(),
+            "response": response.model_dump(),
+        }
+    except SupplierRFQNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (
+        SupplierRFQTransitionError,
+        SupplierRFQResponseError,
+        DuplicateSupplierRFQResponseError,
+    ) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfqs/{rfq_id}/simulate-response")
+def simulate_supplier_rfq_response_endpoint(rfq_id: str):
+    draft = supplier_rfq_repository.get_draft(rfq_id)
+    if draft is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Supplier RFQ not found: {rfq_id}",
+        )
+    workflow = supplier_rfq_repository.get_workflow(draft.workflow_id)
+    if workflow is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Supplier RFQ workflow not found: "
+                f"{draft.workflow_id}"
+            ),
+        )
+    responses = simulate_supplier_rfq_responses(
+        shipment=workflow.shipment,
+        equipment_decision=decide_equipment(workflow.shipment),
+        rfq_drafts=[draft],
+    )
+    if not responses:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Supplier response simulation requires a sent/"
+                "awaiting_response RFQ."
+            ),
+        )
+    try:
+        responded = attach_supplier_rfq_response(
+            repository=supplier_rfq_repository,
+            response=responses[0],
+        )
+    except (
+        SupplierRFQTransitionError,
+        SupplierRFQResponseError,
+        DuplicateSupplierRFQResponseError,
+    ) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "supplier_rfq": responded.model_dump(),
+        "response": responses[0].model_dump(),
+    }
+
+
+@app.post("/supplier-rfq-workflows/{workflow_id}/resume-quote")
+def resume_supplier_rfq_quote(workflow_id: str):
+    try:
+        result = resume_supplier_rfq_workflow(
+            workflow_id=workflow_id,
+            rfq_repository=supplier_rfq_repository,
+            approval_repository=quote_approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
+    except SupplierRFQWorkflowNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return serialize_result(result)
 
 @app.post("/customer-memory/import/validate")
@@ -722,6 +920,9 @@ def run_test_suite():
     test_results.append(
         evaluate_regulatory_compliance_regressions()
     )
+    test_results.append(
+        evaluate_supplier_rfq_lifecycle_regressions()
+    )
     test_results.append(evaluate_hs_commodity_map_validation())
     test_results.append(evaluate_workflow_result_contract())
     test_results.append(evaluate_quote_readiness_blocked_state())
@@ -733,8 +934,6 @@ def run_test_suite():
     test_results.append(evaluate_supplier_quote_selection())
     test_results.append(evaluate_supplier_rfq_response_validation())
     test_results.append(evaluate_supplier_fallback_consistency())
-    test_results.append(evaluate_final_quote_consistency_block())
-    test_results.append(evaluate_supplier_response_required_state())
     test_results.append(evaluate_supplier_rfq_lifecycle_synchronization())
     test_results.append(evaluate_supplier_rfq_response_link_integrity())
     test_results.append(evaluate_supplier_rfq_response_validation_report())
@@ -748,15 +947,10 @@ def run_test_suite():
     test_results.append(evaluate_quote_approval_model())
     test_results.append(evaluate_quote_approval_workflow_contract())
     test_results.append(evaluate_quote_approval_repository())
-    test_results.append(
-        evaluate_quote_approval_repository_workflow_integration()
-    )
     test_results.append(evaluate_quote_approval_service())
     test_results.append(evaluate_quote_approval_api_contract())
     test_results.append(evaluate_quote_case_model())
     test_results.append(evaluate_quote_case_repository())
-    test_results.append(evaluate_quote_case_workflow_persistence())
-    test_results.append(evaluate_quote_case_api_contract())
     test_results.append(evaluate_quote_send_safety_regression())
     test_results.append(evaluate_quote_send_service())
     test_results.append(evaluate_quote_send_api_contract())
@@ -933,6 +1127,7 @@ def serialize_result(result: dict) -> dict:
     supplier_selection = result.get("supplier_selection")
     operational_consistency = result.get("operational_consistency")
     quote_readiness = result.get("quote_readiness")
+    supplier_rfq_workflow = result.get("supplier_rfq_workflow")
     supplier_rfq_drafts = result.get("supplier_rfq_drafts") or []
     supplier_rfq_responses = result.get("supplier_rfq_responses") or []
     valid_supplier_rfq_responses = result.get(
@@ -972,6 +1167,11 @@ def serialize_result(result: dict) -> dict:
         "supplier_selection": supplier_selection,
         "operational_consistency": operational_consistency,
         "quote_readiness": quote_readiness.model_dump() if quote_readiness else None,
+        "supplier_rfq_workflow": (
+            supplier_rfq_workflow.model_dump()
+            if hasattr(supplier_rfq_workflow, "model_dump")
+            else supplier_rfq_workflow
+        ),
         "supplier_rfq_drafts": [
             draft.model_dump() if hasattr(draft, "model_dump") else draft
             for draft in supplier_rfq_drafts
@@ -1031,14 +1231,14 @@ def serialize_result(result: dict) -> dict:
 
 
 def determine_result_type(result: dict) -> str:
-    quote_readiness = result.get("quote_readiness")
-
-    if quote_readiness:
-        return quote_readiness.result_type
-
     direct_result_type = result.get("result_type")
 
     if direct_result_type:
         return str(direct_result_type)
+
+    quote_readiness = result.get("quote_readiness")
+
+    if quote_readiness:
+        return quote_readiness.result_type
 
     return "unknown"

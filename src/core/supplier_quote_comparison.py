@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
-from src.core.supplier_rfq import SupplierRFQResponse
+from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQResponse
 
 
 class SupplierQuoteComparison(BaseModel):
@@ -46,6 +46,7 @@ def _extract_transit_days(transit_time: Optional[str]) -> Optional[int]:
 def build_supplier_quote_comparisons(
     responses: Iterable[SupplierRFQResponse],
     supplier_selection: dict[str, Any],
+    drafts: Iterable[SupplierRFQDraft] | None = None,
 ) -> list[SupplierQuoteComparison]:
     selected_suppliers = {
         supplier.get("supplier_name"): supplier
@@ -56,11 +57,24 @@ def build_supplier_quote_comparisons(
         if supplier.get("supplier_name")
     }
 
+    responded_rfq_ids = (
+        {
+            draft.rfq_id
+            for draft in drafts
+            if draft.status == "responded"
+        }
+        if drafts is not None
+        else None
+    )
     usable_responses = [
         response
         for response in responses
         if response.is_price_usable
         and response.supplier_name in selected_suppliers
+        and (
+            responded_rfq_ids is None
+            or response.rfq_id in responded_rfq_ids
+        )
     ]
 
     minimum_cost_by_currency: dict[str, float] = {}
