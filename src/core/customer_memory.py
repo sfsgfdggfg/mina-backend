@@ -4,6 +4,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from src.core.models import Shipment
+from src.core.extraction_confirmation import require_operational_shipment
 from datetime import datetime, timezone
 
 
@@ -172,6 +173,7 @@ def enrich_shipment_with_customer_memory(
     Customer profiles are loaded from data/customer_memory.json.
     """
 
+    require_operational_shipment(shipment)
     matched_by = None
 
     profile = find_customer_profile(shipment.customer_name)

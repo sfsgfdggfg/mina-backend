@@ -120,13 +120,38 @@ def evaluate_clarification_resolution_regressions() -> dict:
         commodity="Kimyasal Ürün",
         gross_weight_kg=6000,
         cargo_ready_date="2026-09-01",
+        is_adr=False,
+        is_temperature_controlled=False,
+        is_high_value=False,
         commodity_attributes={
             "msds/sds document": True,
             "adr status": False,
             "chemical packaging type": "UN onaylı varil",
         },
     )
-    extracted_shipment = shipment_from_extraction(extracted)
+    from src.core.extraction_confirmation_repository import (
+        InMemoryExtractionProposalRepository,
+    )
+    from src.core.mail import InboundMailEnvelope
+    from src.workflow.extraction_confirmation import (
+        confirm_extraction_proposal,
+        create_extraction_proposal,
+    )
+
+    extraction_repository = InMemoryExtractionProposalRepository()
+    extraction_proposal = create_extraction_proposal(
+        mail=InboundMailEnvelope(
+            body_text="Controlled clarification extraction fixture.",
+            source="manual",
+        ),
+        proposed_shipment=shipment_from_extraction(extracted),
+        repository=extraction_repository,
+    )
+    extracted_shipment = confirm_extraction_proposal(
+        repository=extraction_repository,
+        proposal_id=extraction_proposal.proposal_id,
+        operator_identity="Clarification regression fixture",
+    ).confirmed_shipment
     extracted_missing = check_missing_information(extracted_shipment)
 
     if not extracted_missing.can_continue_to_quote:

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from src.ai.extraction_models import ShipmentExtraction
-from src.core.models import Package, Shipment
+from src.core.extraction_confirmation import ShipmentProposalSnapshot
+from src.core.models import Package
 
 
 def shipment_from_extraction(
     extracted: ShipmentExtraction,
-) -> Shipment:
-    """Map validated AI extraction data into the domain model."""
+) -> ShipmentProposalSnapshot:
+    """Map validated AI extraction data into a non-authoritative snapshot."""
 
     packages = [
         Package(
@@ -22,7 +23,7 @@ def shipment_from_extraction(
         for package in extracted.packages
     ]
 
-    return Shipment(
+    return ShipmentProposalSnapshot(
         customer_name=extracted.customer_name,
         pickup_country=extracted.pickup_country,
         pickup_city=extracted.pickup_city,
@@ -41,9 +42,7 @@ def shipment_from_extraction(
         required_delivery_date=extracted.required_delivery_date,
         is_adr=extracted.is_adr,
         adr_class=extracted.adr_class,
-        is_temperature_controlled=(
-            extracted.is_temperature_controlled
-        ),
+        is_temperature_controlled=extracted.is_temperature_controlled,
         temperature_requirement=extracted.temperature_requirement,
         is_high_value=extracted.is_high_value,
         special_notes=extracted.special_notes,

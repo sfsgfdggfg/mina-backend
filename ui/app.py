@@ -34,6 +34,8 @@ def get_example_email_options() -> dict:
 
 
 def get_action_text(result_type: str) -> str:
+    if result_type == "extraction_confirmation_required":
+        return "AI çıkarımı operasyonel işleme alınmadan önce insan teyidi bekliyor."
     if result_type == "quote_ready":
         return "Teklif taslağı hazır ve gönderim öncesi son kontrol yapılabilir."
     if result_type == "quote_with_review":
@@ -48,6 +50,8 @@ def get_action_text(result_type: str) -> str:
 
 
 def get_result_label(result_type: str) -> str:
+    if result_type == "extraction_confirmation_required":
+        return "Çıkarım Teyidi Gerekli"
     if result_type == "quote_ready":
         return "Teklif Hazır"
     if result_type == "quote_with_review":
@@ -387,6 +391,16 @@ def render_summary(result: dict):
 
 def render_draft(result: dict):
     result_type = result.get("result_type")
+
+    if result_type == "extraction_confirmation_required":
+        proposal = result.get("extraction_proposal") or {}
+        st.markdown("## AI Çıkarım Önerisi")
+        st.warning(
+            "Bu bilgiler henüz operasyonel yetkiye sahip değildir. "
+            "Teyit/düzeltme backend API yaşam döngüsü üzerinden yapılmalıdır."
+        )
+        st.json(proposal)
+        return
 
     if result_type in {"quote_ready", "quote_with_review"}:
         title = "Teklif Mail Taslağı"

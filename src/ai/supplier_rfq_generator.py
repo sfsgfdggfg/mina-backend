@@ -4,6 +4,7 @@ from typing import Any, List
 from uuid import uuid4
 
 from src.core.models import EquipmentDecision, Shipment
+from src.core.extraction_confirmation import require_operational_shipment
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
     build_supplier_rfq_reference,
@@ -17,6 +18,7 @@ def generate_supplier_rfq_drafts(
     supplier_selection: dict[str, Any],
     workflow_id: str | None = None,
 ) -> List[SupplierRFQDraft]:
+    require_operational_shipment(shipment)
     drafts: List[SupplierRFQDraft] = []
     resolved_workflow_id = workflow_id or str(uuid4())
 

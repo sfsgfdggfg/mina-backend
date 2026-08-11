@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Literal, Optional
+from pydantic import BaseModel, Field
+from typing import Any, List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
@@ -31,6 +31,17 @@ from src.workflow.supplier_response_ingestion import (
 )
 from src.workflow.mail_delivery import send_supplier_rfq_via_mail
 from src.workflow.mail_ingestion import process_customer_inquiry_mail
+from src.workflow.extraction_confirmation import (
+    ExtractionConfirmationTransitionError,
+    ExtractionCorrectionError,
+    ExtractionProposalNotFoundError,
+    UnresolvedSafetyFactsError,
+    confirm_extraction_proposal,
+    resume_confirmed_extraction,
+)
+from src.core.extraction_confirmation_repository import (
+    InMemoryExtractionProposalRepository,
+)
 from src.core.mail import InboundMailEnvelope, OutboundMailSender
 from src.core.models import (
     CustomerQuote,
@@ -84,6 +95,9 @@ from src.simulation.supplier_rfq_lifecycle_regressions import (
 from src.simulation.supplier_response_ingestion_regressions import (
     evaluate_supplier_response_ingestion_regressions,
 )
+from src.simulation.extraction_confirmation_regressions import (
+    evaluate_extraction_confirmation_regressions,
+)
 from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
 
@@ -96,11 +110,17 @@ app = FastAPI(
 quote_approval_repository = InMemoryQuoteApprovalRepository()
 quote_case_repository = InMemoryQuoteCaseRepository()
 supplier_rfq_repository = InMemorySupplierRFQRepository()
+extraction_proposal_repository = InMemoryExtractionProposalRepository()
 outbound_mail_sender: OutboundMailSender | None = None
 
 
 class ProcessEmailRequest(BaseModel):
     email_text: str
+
+
+class ConfirmExtractionRequest(BaseModel):
+    operator_identity: str
+    corrections: dict[str, Any] = Field(default_factory=dict)
 
 
 class PrepareQuoteSendRequest(BaseModel):
@@ -753,11 +773,62 @@ def process_email(request: ProcessEmailRequest):
             source="manual",
         ),
         shipment_parser=parse_email_with_ai,
-        rfq_repository=supplier_rfq_repository,
-        approval_repository=quote_approval_repository,
-        quote_case_repository=quote_case_repository,
+        proposal_repository=extraction_proposal_repository,
     )
 
+    return serialize_result(result)
+
+
+@app.get("/extraction-proposals/{proposal_id}")
+def get_extraction_proposal(proposal_id: str):
+    proposal = extraction_proposal_repository.get(proposal_id)
+    if proposal is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Extraction proposal not found: {proposal_id}",
+        )
+    return proposal.model_dump()
+
+
+@app.post("/extraction-proposals/{proposal_id}/confirm")
+def confirm_extraction_proposal_endpoint(
+    proposal_id: str,
+    request: ConfirmExtractionRequest,
+):
+    try:
+        proposal = confirm_extraction_proposal(
+            repository=extraction_proposal_repository,
+            proposal_id=proposal_id,
+            operator_identity=request.operator_identity,
+            corrections=request.corrections,
+        )
+    except ExtractionProposalNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ExtractionConfirmationTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (
+        ExtractionCorrectionError,
+        UnresolvedSafetyFactsError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return proposal.model_dump()
+
+
+@app.post("/extraction-proposals/{proposal_id}/resume")
+def resume_extraction_proposal_endpoint(proposal_id: str):
+    try:
+        result = resume_confirmed_extraction(
+            repository=extraction_proposal_repository,
+            proposal_id=proposal_id,
+            rfq_repository=supplier_rfq_repository,
+            approval_repository=quote_approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
+    except ExtractionProposalNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ExtractionConfirmationTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return serialize_result(result)
 
 
@@ -950,6 +1021,9 @@ def run_test_suite():
     test_results.append(
         evaluate_supplier_response_ingestion_regressions()
     )
+    test_results.append(
+        evaluate_extraction_confirmation_regressions()
+    )
     test_results.append(evaluate_hs_commodity_map_validation())
     test_results.append(evaluate_workflow_result_contract())
     test_results.append(evaluate_quote_readiness_blocked_state())
@@ -985,11 +1059,30 @@ def run_test_suite():
     test_results.append(evaluate_supplier_rfq_response_validation_report())
 
     for test_case in AI_EMAIL_TEST_CASES:
-        shipment = parse_email_with_ai(test_case["email"])
-        result = process_shipment(
-    shipment=shipment,
-    email_text=test_case["email"],
-)
+        email_text = test_case["email"]
+        proposed_shipment = parse_email_with_ai(email_text)
+        proposal_repository = InMemoryExtractionProposalRepository()
+        proposal = process_customer_inquiry_mail(
+            mail=InboundMailEnvelope(body_text=email_text, source="manual"),
+            shipment_parser=lambda _: proposed_shipment,
+            proposal_repository=proposal_repository,
+        )["extraction_proposal"]
+        confirmed = confirm_extraction_proposal(
+            repository=proposal_repository,
+            proposal_id=proposal.proposal_id,
+            operator_identity="AI regression confirmation fixture",
+            corrections={
+                field_name: False
+                for field_name in proposal.unknown_safety_fields
+            },
+        )
+        result = resume_confirmed_extraction(
+            repository=proposal_repository,
+            proposal_id=confirmed.proposal_id,
+            rfq_repository=InMemorySupplierRFQRepository(),
+            approval_repository=InMemoryQuoteApprovalRepository(),
+            quote_case_repository=InMemoryQuoteCaseRepository(),
+        )
 
         test_results.append(
             evaluate_test_result(
@@ -1146,7 +1239,8 @@ def get_data_health_summary():
     return build_data_health_summary()
 
 def serialize_result(result: dict) -> dict:
-    shipment = result["shipment"]
+    shipment = result.get("shipment")
+    extraction_proposal = result.get("extraction_proposal")
     missing_info = result.get("missing_info")
     regulatory_compliance = result.get("regulatory_compliance")
     equipment_decision = result.get("equipment_decision")
@@ -1182,6 +1276,11 @@ def serialize_result(result: dict) -> dict:
     commodity_profile = result.get("commodity_profile") or (get_commodity_record(shipment.commodity) if shipment else None)
 
     return {
+        "extraction_proposal": (
+            extraction_proposal.model_dump()
+            if hasattr(extraction_proposal, "model_dump")
+            else extraction_proposal
+        ),
         "shipment": shipment.model_dump() if shipment else None,
         "missing_info": missing_info.model_dump() if missing_info else None,
         "regulatory_compliance": (

@@ -4417,3 +4417,72 @@ request builder vardır; bu builder herhangi bir send side effect'i üretmez.
 * RFQ failure retryable kalır; distributed retry queue veya delivery persistence yoktur.
 * Customer quote delivery sonucu henüz persistent quote lifecycle state'i oluşturmaz.
 * Outlook, Graph, SMTP, IMAP, OAuth, polling, webhook, attachment, HTML ve threading kapsam dışıdır.
+
+---
+
+## DEC-093 — Human Extraction Confirmation as Operational Authority Boundary
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+Customer email AI parser çıktısının doğrudan operational `Shipment` olarak
+pipeline'a girmemesi kararlaştırılmıştır.
+
+**AI-extracted shipment facts are proposals until explicitly confirmed by a
+human operator. Only a confirmed shipment snapshot may acquire operational
+authority.**
+
+Yeni domain contract'ları:
+
+    ShipmentProposalSnapshot
+    ShipmentExtractionProposal
+    ExtractionProposalRepository
+
+İlk implementation application-lifetime in-memory repository kullanır. Proposal;
+canonical `InboundMailEnvelope`, ilk normalize AI snapshot'ı, confirmation state,
+operator corrections, changed fields, confirmed snapshot ve confirmation
+metadata'sını birlikte korur.
+
+Lifecycle:
+
+    POST /process-email
+    -> extraction_confirmation_required
+
+    GET /extraction-proposals/{proposal_id}
+    -> inspect original proposal
+
+    POST /extraction-proposals/{proposal_id}/confirm
+    -> confirm unchanged or atomically correct and confirm
+
+    POST /extraction-proposals/{proposal_id}/resume
+    -> existing deterministic workflow using confirmed Shipment only
+
+Unconfirmed proposal customer-memory enrichment, missing-info, regulatory,
+equipment, risk, supplier selection, readiness, RFQ generation veya pricing
+çalıştıramaz. `process_shipment` de proposal snapshot'ını doğrudan kabul etmez.
+
+AI extraction schema'daki safety-sensitive boolean alanları optional yapılmıştır.
+`null` unknown, `false` explicit negative anlamındadır. Confirm operation;
+`is_adr`, `is_temperature_controlled` ve `is_high_value` alanlarının explicit
+çözülmesini zorunlu tutar ve ancak bundan sonra boolean kullanan operational
+Shipment oluşturur.
+
+Duplicate confirmation mevcut confirmed snapshot'ı overwrite etmez. Unknown
+proposal, invalid correction, unresolved safety fact ve duplicate resume
+fail-closed davranır. İlk AI proposal correction sonrasında değişmeden kalır.
+
+DEC-092 içindeki customer mail'in doğrudan mevcut shipment workflow'una devam
+etmesi yaklaşımı bu authority checkpoint bakımından supersede edilmiştir;
+provider-neutral mail contract'ı değişmemiştir.
+
+### Consequences
+
+* Customer memory yalnızca confirmed snapshot sonrasında çalışır.
+* Existing clarification, regulatory, supplier RFQ, response ingestion ve mail
+  delivery safety sınırları korunur.
+* Operator identity bu aşamada claimed metadata'dır; P0.2 authentication değildir.
+* Repository restart-safe değildir; durable pilot evidence P0.3 kapsamındadır.
+* Sender/customer identity trust modeli P0.4 kapsamındadır.
+* Full Streamlit confirmation UI, analytics ve outbound provider kapsam dışıdır.

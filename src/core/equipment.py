@@ -1,6 +1,7 @@
 from src.core.models import Shipment, EquipmentDecision
 from src.core.commodity_profile import get_commodity_operational_profile
 from src.core.cargo_weight import assess_cargo_weight
+from src.core.extraction_confirmation import require_operational_shipment
 
 def _has_meaningful_text(value):
     if value is None:
@@ -33,6 +34,8 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
     Default: Tenteli.
     Override rules apply if special conditions are detected.
     """
+
+    require_operational_shipment(shipment)
 
     # Reefer trigger
     if shipment.is_temperature_controlled or _has_meaningful_text(shipment.temperature_requirement):

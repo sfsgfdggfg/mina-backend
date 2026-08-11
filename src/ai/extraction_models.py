@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 from src.core.clarification_requirements import (
     ClarificationAnswerValue,
@@ -102,13 +102,31 @@ class ShipmentExtraction(BaseModel):
     cargo_ready_date: Optional[str] = None
     required_delivery_date: Optional[str] = None
 
-    is_adr: bool = False
+    is_adr: Optional[StrictBool] = Field(
+        default=None,
+        description=(
+            "Whether the email explicitly states ADR status. Null means the "
+            "email did not establish ADR status."
+        ),
+    )
     adr_class: Optional[str] = None
 
-    is_temperature_controlled: bool = False
+    is_temperature_controlled: Optional[StrictBool] = Field(
+        default=None,
+        description=(
+            "Whether temperature control is explicitly established. Null "
+            "means unknown, not false."
+        ),
+    )
     temperature_requirement: Optional[str] = None
 
-    is_high_value: bool = False
+    is_high_value: Optional[StrictBool] = Field(
+        default=None,
+        description=(
+            "Whether high-value status is explicitly established. Null means "
+            "unknown, not false."
+        ),
+    )
     special_notes: Optional[str] = None
 
     commodity_attributes: Dict[

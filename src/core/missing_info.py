@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List
 from src.core.models import Shipment
+from src.core.extraction_confirmation import require_operational_shipment
 from src.core.commodity_profile import get_commodity_operational_profile
 from src.core.cargo_weight import assess_cargo_weight
 from src.core.clarification_requirements import (
@@ -22,6 +23,7 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
     Bu motor fiyat çalışmasına devam edilip edilmeyeceğini belirler.
     """
 
+    require_operational_shipment(shipment)
     missing_fields = []
 
     # Route checks

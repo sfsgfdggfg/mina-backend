@@ -1,6 +1,7 @@
 from src.core.models import Shipment, RiskAssessment
 from src.core.commodity_profile import get_commodity_operational_profile
 from src.core.cargo_weight import assess_cargo_weight
+from src.core.extraction_confirmation import require_operational_shipment
 
 
 def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
@@ -8,6 +9,7 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
     Operational Risk Engine v1.
     """
 
+    require_operational_shipment(shipment)
     risk_reasons = []
     requires_human_review = False
     requires_management_review = False

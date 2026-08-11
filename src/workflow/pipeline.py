@@ -8,6 +8,9 @@ from src.simulation.clarification_resolution_regressions import (
 from src.simulation.regulatory_compliance_regressions import (
     evaluate_regulatory_compliance_regressions,
 )
+from src.simulation.extraction_confirmation_regressions import (
+    evaluate_extraction_confirmation_regressions,
+)
 from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract
 from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
@@ -37,15 +40,24 @@ from src.core.supplier_rfq_repository import (
     InMemorySupplierRFQRepository,
     SupplierRFQRepository,
 )
+from src.core.extraction_confirmation import ShipmentProposalSnapshot
+from src.core.models import Shipment
 
 
 def process_shipment(
-    shipment,
+    shipment: Shipment,
     email_text: str | None = None,
     rfq_repository: SupplierRFQRepository | None = None,
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
 ):
+    if not isinstance(shipment, Shipment) or isinstance(
+        shipment,
+        ShipmentProposalSnapshot,
+    ):
+        raise TypeError(
+            "Operational workflow requires a human-confirmed Shipment snapshot."
+        )
     if rfq_repository is None:
         rfq_repository = InMemorySupplierRFQRepository()
 
@@ -324,15 +336,29 @@ Teşekkürler.
     print("\n--- RAW EMAIL ---")
     print(email_text.strip())
 
-    shipment = parse_email_with_ai(email_text)
-    result = process_shipment(shipment, email_text=email_text)
-
-    print_result(result)
-
-    return result
+    proposal = parse_email_with_ai(email_text)
+    print("\n--- EXTRACTION PROPOSAL (NO OPERATIONAL AUTHORITY) ---")
+    print(proposal.model_dump_json(indent=2))
+    return {
+        "result_type": "extraction_confirmation_required",
+        "proposed_shipment": proposal,
+    }
 
 
 def run_ai_email_test_suite():
+    from src.core.extraction_confirmation_repository import (
+        InMemoryExtractionProposalRepository,
+    )
+    from src.core.mail import InboundMailEnvelope
+    from src.core.quote_approval_repository import (
+        InMemoryQuoteApprovalRepository,
+    )
+    from src.core.quote_case_repository import InMemoryQuoteCaseRepository
+    from src.workflow.extraction_confirmation import (
+        confirm_extraction_proposal,
+        create_extraction_proposal,
+        resume_confirmed_extraction,
+    )
     from src.simulation.mail_adapter_regressions import (
         evaluate_mail_adapter_regressions,
     )
@@ -357,6 +383,9 @@ def run_ai_email_test_suite():
     )
     test_results.append(
         evaluate_regulatory_compliance_regressions()
+    )
+    test_results.append(
+        evaluate_extraction_confirmation_regressions()
     )
     test_results.append(evaluate_mail_adapter_regressions())
     test_results.append(evaluate_hs_commodity_map_validation())
@@ -405,8 +434,28 @@ def run_ai_email_test_suite():
         print("\n--- RAW EMAIL ---")
         print(email_text.strip())
 
-        shipment = parse_email_with_ai(email_text)
-        result = process_shipment(shipment, email_text=email_text)
+        proposed_shipment = parse_email_with_ai(email_text)
+        proposal_repository = InMemoryExtractionProposalRepository()
+        proposal = create_extraction_proposal(
+            mail=InboundMailEnvelope(body_text=email_text, source="manual"),
+            proposed_shipment=proposed_shipment,
+            repository=proposal_repository,
+        )
+        confirmed = confirm_extraction_proposal(
+            repository=proposal_repository,
+            proposal_id=proposal.proposal_id,
+            operator_identity="AI regression confirmation fixture",
+            corrections={
+                field_name: False
+                for field_name in proposal.unknown_safety_fields
+            },
+        )
+        result = resume_confirmed_extraction(
+            repository=proposal_repository,
+            proposal_id=confirmed.proposal_id,
+            approval_repository=InMemoryQuoteApprovalRepository(),
+            quote_case_repository=InMemoryQuoteCaseRepository(),
+        )
 
         print_result(result)
 

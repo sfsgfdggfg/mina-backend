@@ -8,6 +8,10 @@ from src.core.mail import (
     MailSendResult,
     OutboundMailRequest,
 )
+from src.core.extraction_confirmation import ShipmentProposalSnapshot
+from src.core.extraction_confirmation_repository import (
+    InMemoryExtractionProposalRepository,
+)
 from src.core.missing_info import MissingInfoResult
 from src.core.models import (
     CustomerQuote,
@@ -155,8 +159,8 @@ def _quote_contracts():
     return supplier_quote, customer_quote, quote_draft, snapshot
 
 
-def _complete_shipment() -> Shipment:
-    return Shipment(
+def _complete_shipment() -> ShipmentProposalSnapshot:
+    shipment = Shipment(
         customer_name="Mail Boundary Customer",
         pickup_country="Türkiye",
         pickup_city="Adana",
@@ -168,6 +172,7 @@ def _complete_shipment() -> Shipment:
         cargo_ready_date="2026-09-10",
         is_adr=False,
         is_temperature_controlled=False,
+        is_high_value=False,
         packages=[
             Package(
                 package_type="pallet",
@@ -179,6 +184,7 @@ def _complete_shipment() -> Shipment:
             )
         ],
     )
+    return ShipmentProposalSnapshot.model_validate(shipment.model_dump())
 
 
 def evaluate_mail_adapter_regressions() -> dict:
@@ -400,7 +406,7 @@ def evaluate_mail_adapter_regressions() -> dict:
 
     parsed_bodies: list[str] = []
 
-    def deterministic_parser(body_text: str) -> Shipment:
+    def deterministic_parser(body_text: str) -> ShipmentProposalSnapshot:
         parsed_bodies.append(body_text)
         return _complete_shipment()
 
@@ -413,13 +419,16 @@ def evaluate_mail_adapter_regressions() -> dict:
             source="email",
         ),
         shipment_parser=deterministic_parser,
+        proposal_repository=InMemoryExtractionProposalRepository(),
     )
     if (
         parsed_bodies != ["Original customer inquiry body."]
         or customer_mail_result.get("result_type")
-        != "supplier_rfq_approval_required"
+        != "extraction_confirmation_required"
+        or customer_mail_result.get("extraction_proposal") is None
+        or customer_mail_result.get("supplier_rfq_drafts")
     ):
-        failures.append("customer inbound mail changed inquiry processing")
+        failures.append("customer inbound mail bypassed extraction confirmation")
 
     existing_regressions = [
         evaluate_supplier_rfq_lifecycle_regressions(),

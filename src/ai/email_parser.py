@@ -10,6 +10,7 @@ from src.core.gtip import interpret_gtip_from_email
 from src.core.commodity_profile import apply_commodity_profile_to_shipment
 from src.ai.extraction_models import ShipmentExtraction
 from src.ai.extraction_mapping import shipment_from_extraction
+from src.core.extraction_confirmation import ShipmentProposalSnapshot
 
 GENERIC_CUSTOMER_NAMES = {
     "",
@@ -289,14 +290,8 @@ def _apply_gtip_safety_overrides(shipment, email_text: str):
     return shipment
 
 
-def _apply_email_text_safety_overrides(shipment, email_text: str):
-    """
-    Critical logistics signals should not depend only on AI extraction.
-    Raw email text overrides have final priority for ADR status.
-    """
-
+def _explicit_adr_state(email_text: str) -> tuple[bool | None, str | None]:
     text = (email_text or "").lower()
-
     adr_negated = any(
         re.search(pattern, text)
         for pattern in [
@@ -316,24 +311,38 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
     )
 
     if adr_negated:
+        return False, None
+    if adr_class_match:
+        return True, adr_class_match.group(1)
+    if adr_mentioned:
+        return True, None
+    return None, None
+
+
+def _apply_email_text_safety_overrides(shipment, email_text: str):
+    """
+    Critical logistics signals should not depend only on AI extraction.
+    Explicit raw email ADR signals have final priority. Absence is unknown at
+    the proposal boundary and must not overwrite an extracted positive fact.
+    """
+
+    adr_state, adr_class = _explicit_adr_state(email_text)
+
+    if adr_state is False:
         shipment.is_adr = False
         shipment.adr_class = None
         shipment.commodity_attributes["adr status"] = False
-    elif adr_class_match:
+    elif adr_state is True and adr_class:
         shipment.is_adr = True
-        shipment.adr_class = adr_class_match.group(1)
+        shipment.adr_class = adr_class
         shipment.commodity_attributes["adr status"] = True
 
         if not shipment.commodity:
             shipment.commodity = f"ADR Class {shipment.adr_class}"
-    elif adr_mentioned:
+    elif adr_state is True:
         shipment.is_adr = True
         shipment.adr_class = None
         shipment.commodity_attributes["adr status"] = True
-    else:
-        shipment.is_adr = False
-        shipment.adr_class = None
-        shipment.commodity_attributes.pop("adr status", None)
 
     shipment = _apply_commodity_safety_overrides(shipment, email_text)
     shipment = _apply_gtip_safety_overrides(shipment, email_text)
@@ -345,8 +354,8 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
 def build_shipment_from_extraction(
     extracted: ShipmentExtraction,
     email_text: str,
-) -> Shipment:
-    """Convert structured extraction into the executable Shipment model."""
+) -> ShipmentProposalSnapshot:
+    """Convert structured extraction into a non-authoritative proposal."""
 
     shipment = shipment_from_extraction(extracted)
     shipment.customer_name = clean_customer_name(
@@ -355,12 +364,42 @@ def build_shipment_from_extraction(
     )
 
     shipment = _apply_email_text_safety_overrides(shipment, email_text)
-    return normalize_shipment(shipment)
+    shipment = normalize_shipment(shipment)
+
+    explicit_adr, explicit_adr_class = _explicit_adr_state(email_text)
+    proposed_adr = explicit_adr
+    if proposed_adr is None:
+        proposed_adr = extracted.is_adr
+    if proposed_adr is None and extracted.adr_class:
+        proposed_adr = True
+
+    proposed_temperature = extracted.is_temperature_controlled
+    if proposed_temperature is None and shipment.is_temperature_controlled:
+        proposed_temperature = True
+
+    proposed_high_value = extracted.is_high_value
+    if proposed_high_value is None and shipment.is_high_value:
+        proposed_high_value = True
+
+    proposal_data = shipment.model_dump()
+    proposal_data.update(
+        {
+            "is_adr": proposed_adr,
+            "adr_class": (
+                explicit_adr_class
+                if explicit_adr_class is not None
+                else shipment.adr_class
+            ),
+            "is_temperature_controlled": proposed_temperature,
+            "is_high_value": proposed_high_value,
+        }
+    )
+    return ShipmentProposalSnapshot.model_validate(proposal_data)
 
 
-def parse_email_with_ai(email_text: str) -> Shipment:
+def parse_email_with_ai(email_text: str) -> ShipmentProposalSnapshot:
     """
-    OpenAI structured email parser.
+    OpenAI structured email parser returning a non-authoritative proposal.
 
     Düzensiz müşteri mailinden Shipment objesi üretir.
     """

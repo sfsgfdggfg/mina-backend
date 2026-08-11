@@ -2690,3 +2690,47 @@ human-controlled policy'yi değiştirmez.
 Outbound operation identity idempotency sınırıdır. Aynı RFQ ikinci kez lifecycle
 ilerlemesi veya ikinci provider çağrısı üretmemelidir. Inbound external message
 identity deduplication davranışı provider ve mailbox namespace'i ile korunur.
+
+---
+
+## RULE-112 — AI Shipment Extraction Requires Human Confirmation
+
+**AI-extracted shipment facts are proposals until explicitly confirmed by a
+human operator.** Yeni customer inquiry ilk çağrıda yalnızca normalize edilmiş
+inbound mail zarfını ve `ShipmentProposalSnapshot` içeren bir extraction proposal
+oluşturmalıdır. Bu proposal aşağıdaki motorlara girdi olamaz:
+
+    customer memory
+    missing information / regulatory compliance
+    equipment / risk
+    supplier selection
+    quote readiness
+    RFQ generation
+    customer pricing
+
+`/process-email` bu nedenle `extraction_confirmation_required` durumunda
+durmalıdır. **Only a confirmed shipment snapshot may acquire operational
+authority.** İnsan operatör proposal'ı değişmeden teyit edebilir veya kontrollü
+shipment field corrections sağlayabilir. Düzeltmeler atomik doğrulanmalı;
+bilinmeyen field, invalid value veya unresolved safety fact mevcut proposal'ı
+kısmen değiştirmemelidir.
+
+İlk AI snapshot'ı teyit sırasında mutate edilmemelidir. Proposal en az aşağıdaki
+kanıtları birlikte korumalıdır:
+
+    original normalized inbound mail
+    first AI shipment proposal
+    confirmed shipment snapshot
+    changed fields and normalized corrections
+    claimed operator identity
+    confirmation timestamp
+
+`is_adr`, `is_temperature_controlled` ve `is_high_value` alanlarında `null`
+"emailde belirtilmedi / unknown" anlamına gelir; `false` ile aynı değildir.
+Operational `Shipment` oluşturmadan önce bu alanlar insan tarafından explicit
+`true` veya `false` olarak çözülmelidir. Duplicate confirmation ve unknown
+proposal fail-closed olmalıdır. Confirmed snapshot mevcut clarification,
+regulatory, RFQ ve send-safety kapılarını bypass etmez.
+
+Bu aşamadaki operator identity yalnızca claimed audit metadata'sıdır;
+authentication veya authorization kanıtı değildir.
