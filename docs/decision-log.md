@@ -3986,3 +3986,160 @@ Gönderim hazırlığı, approval kaydını sunucu tarafındaki repository’den
 - Uygulama yeniden başlatıldığında bellek içi kayıtlar silinir; kalıcı database henüz yoktur.
 - Gerçek authentication ve role-based authorization henüz uygulanmamıştır.
 - Grup 9 sonunda test suite sonucu `60 passed, 0 failed` olmuştur.
+
+## DEC-085 — Quote Case as the Persistent Working Record for Quote Lifecycle
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+Teklif workflow sonucunun yalnızca geçici API response olarak kalmamasına karar verilmiştir.
+
+Başarılı teklif çalışması tek bir çalışma kaydı altında temsil edilmelidir:
+
+    QuoteCase
+
+Quote Case ilk sürümde şu bilgileri taşır:
+
+    case_id
+    shipment
+    supplier_quote_selection_decision
+    supplier_quote
+    customer_quote
+    quote_draft
+    quote_approval
+    quote_send_safety
+    created_at
+    updated_at
+    source
+
+Quote Case alanlarının önemli bir bölümü optional tutulmuştur.
+
+Amaç, Quote Case'in yalnızca tamamlanmış teklif snapshot'ı değil, ileride yaşam döngüsü boyunca güncellenebilen bir iş kaydı olabilmesidir.
+
+Quote Case, mevcut MVP kapsamında teklif çalışma dosyasıdır.
+
+Henüz:
+
+    booking kaydı
+    taşıma operasyon dosyası
+    shipment tracking kaydı
+    POD kaydı
+    fatura kaydı
+
+olarak değerlendirilmemelidir.
+
+Ancak uzun vadede daha genel bir operation/shipment case yapısının temelini oluşturabilir.
+
+### Consequences
+
+- Aynı teklif çalışmasına ait shipment, supplier seçimi, fiyat, draft, approval ve send safety verileri tek kimlik altında tutulur.
+- Teklif bileşenleri birbirinden kopuk geçici nesneler olmaktan çıkar.
+- Gelecekte revizyon, booking ve operasyon lifecycle kayıtları aynı case yaklaşımı üzerinden genişletilebilir.
+- `case_id` bir teklif çalışmasının stabil kimliği haline gelir.
+
+---
+
+## DEC-086 — Quote Case Repository and Workflow Persistence Boundary
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+Quote Case kayıtlarının doğrudan pipeline belleğine bağlı kalmaması için repository sınırı oluşturulmasına karar verilmiştir.
+
+Merkezi sözleşme:
+
+    QuoteCaseRepository
+
+İlk uygulama:
+
+    InMemoryQuoteCaseRepository
+
+Repository şu işlemleri destekler:
+
+    save
+    save_many
+    get
+    list_all
+
+Aynı `case_id` ile yapılan kayıt mevcut case'i günceller.
+
+`process_shipment` optional olarak:
+
+    quote_case_repository
+
+bağımlılığı kabul eder.
+
+Repository verilmezse workflow çağrısı için geçici:
+
+    InMemoryQuoteCaseRepository
+
+oluşturulur.
+
+Başarılı quote workflow'u:
+
+    QuoteCase oluşturur
+    repository'ye kaydeder
+    workflow sonucunda quote_case alanını döndürür
+
+Teklif üretmeyen early-stop branch'leri:
+
+    quote_case = None
+
+döndürmeli ve repository'ye case yazmamalıdır.
+
+### Consequences
+
+- Pipeline storage teknolojisine doğrudan bağlanmaz.
+- Quote Case ileride database repository ile değiştirilebilir.
+- Aynı `case_id` üzerinden çalışma kaydı tekrar yüklenebilir.
+- Early-stop akışları yanlışlıkla tamamlanmış teklif dosyası oluşturmaz.
+
+---
+
+## DEC-087 — Quote Case API Retrieval and Application-Lifetime Repository
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+API süreci içinde oluşturulan Quote Case kayıtlarının sonraki API çağrılarından erişilebilir olması için uygulama ömründe ortak Quote Case repository kullanılmasına karar verilmiştir.
+
+API repository:
+
+    quote_case_repository = InMemoryQuoteCaseRepository()
+
+`POST /process-email` başarılı quote workflow'unda aynı repository'yi pipeline'a geçirir.
+
+API response serialization artık:
+
+    quote_case
+
+alanını içerir.
+
+Quote Case erişim endpoint'leri:
+
+    GET /quote-cases
+    GET /quote-cases/{case_id}
+
+Bilinmeyen case:
+
+    HTTP 404
+
+ile reddedilir.
+
+Quote Case API contract testi AI parser davranışına bağlı olmamalıdır.
+
+Regression test sırasında parser deterministik Shipment ile izole edilmelidir.
+
+### Consequences
+
+- `/process-email` ile oluşturulan case aynı API süreci içinde yeniden okunabilir.
+- Quote Case listelenebilir ve `case_id` ile geri çağrılabilir.
+- API contract testi dış AI değişkenliğinden bağımsız hale gelir.
+- InMemory repository uygulama restart olduğunda kayıtları kaybeder; bu gerçek kalıcı storage değildir.
+- Grup 10 sonunda test suite sonucu `64 passed, 0 failed` olmuştur.

@@ -2339,3 +2339,138 @@ Başarılı güvenlik kontrolü yalnızca:
 sonucu üretmelidir.
 
 Gerçek email delivery bu endpoint’in sorumluluğu değildir.
+
+## RULE-100 — Quote Workflow Data Must Be Grouped Under a Quote Case
+
+Başarılı müşteri teklif çalışmasında birbirine ait veriler tek Quote Case altında gruplanmalıdır.
+
+Quote Case en az şu alanları taşımalıdır:
+
+    case_id
+    shipment
+    supplier_quote_selection_decision
+    supplier_quote
+    customer_quote
+    quote_draft
+    quote_approval
+    quote_send_safety
+
+Bu alanlar farklı ve ilişkisiz geçici kayıtlar gibi ele alınmamalıdır.
+
+Aynı teklif çalışmasına ait veriler aynı `case_id` altında tutulmalıdır.
+
+Quote Case mevcut MVP kapsamında teklif çalışma dosyasıdır.
+
+Booking, aktif taşıma takibi veya faturalama kaydı olarak kabul edilmemelidir.
+
+---
+
+## RULE-101 — Quote Case Persistence Must Use a Repository Boundary
+
+Quote Case saklama davranışı pipeline içine doğrudan gömülmemelidir.
+
+Workflow:
+
+    QuoteCaseRepository
+
+sözleşmesi üzerinden case kaydetmeli ve okumalıdır.
+
+İlk implementation:
+
+    InMemoryQuoteCaseRepository
+
+olabilir.
+
+Aynı `case_id` ile kaydedilen case mevcut kaydı güncellemelidir.
+
+Unknown `case_id` repository seviyesinde:
+
+    None
+
+döndürmelidir.
+
+Repository'den dönen liste üzerinde yapılan dış değişiklik repository iç durumunu değiştirmemelidir.
+
+---
+
+## RULE-102 — Only Successful Quote Workflows May Persist Quote Cases
+
+Quote Case yalnızca gerçek bir müşteri quote akışı başarıyla oluştuğunda kaydedilmelidir.
+
+Başarılı workflow en az şu bileşenleri üretebilir:
+
+    supplier_quote
+    customer_quote
+    quote_draft
+    quote_approval
+    quote_send_safety
+
+Early-stop workflow durumlarında:
+
+    quote_case = None
+
+olmalıdır.
+
+Örnek early-stop durumları:
+
+    clarification
+    management_review
+    blocked
+    supplier_response_required
+
+Bu branch'ler tamamlanmış teklif çalışma dosyası olarak persist edilmemelidir.
+
+---
+
+## RULE-103 — Quote Case Must Be Retrievable by Stable Case Identity
+
+Her Quote Case stabil bir:
+
+    case_id
+
+taşımalıdır.
+
+API aynı uygulama süreci içinde oluşturulan Quote Case'i şu endpoint üzerinden geri çağırabilmelidir:
+
+    GET /quote-cases/{case_id}
+
+Bilinmeyen case:
+
+    HTTP 404
+
+üretmelidir.
+
+Liste endpoint'i:
+
+    GET /quote-cases
+
+mevcut repository kayıtlarını döndürmelidir.
+
+Quote Case yeniden yüklenirken en az şu bilgiler korunmalıdır:
+
+    quote_approval
+    quote_send_safety
+    supplier_quote
+    customer_quote
+    quote_draft
+
+---
+
+## RULE-104 — Quote Case API Tests Must Not Depend on Non-Deterministic AI Parsing
+
+Quote Case API regression testleri gerçek AI parser davranışına bağlı olmamalıdır.
+
+Test sırasında parser kontrollü ve deterministik bir Shipment döndürmelidir.
+
+Amaç:
+
+    API persistence contract
+    serialization
+    list/get behavior
+    HTTP error behavior
+
+testlerinin model veya parser varyasyonundan etkilenmesini önlemektir.
+
+AI parser kalitesi ayrı regression testlerinde doğrulanmalıdır.
+
+Quote Case API contract testi yalnızca Quote Case API davranışını test etmelidir.
