@@ -54,6 +54,12 @@ class SupplierRFQRepository(Protocol):
     ) -> list[SupplierRFQResponse]:
         ...
 
+    def has_ingested_message(self, message_key: str) -> bool:
+        ...
+
+    def record_ingested_message(self, message_key: str) -> None:
+        ...
+
 
 def _supplier_rfq_response_key(
     response: SupplierRFQResponse,
@@ -80,6 +86,7 @@ class InMemorySupplierRFQRepository:
         self._workflows: dict[str, SupplierRFQWorkflow] = {}
         self._responses: list[SupplierRFQResponse] = []
         self._response_keys: set[tuple] = set()
+        self._ingested_message_keys: set[str] = set()
 
     def save_drafts(
         self,
@@ -147,3 +154,9 @@ class InMemorySupplierRFQRepository:
             for response in self._responses
             if response.rfq_id == rfq_id
         ]
+
+    def has_ingested_message(self, message_key: str) -> bool:
+        return message_key in self._ingested_message_keys
+
+    def record_ingested_message(self, message_key: str) -> None:
+        self._ingested_message_keys.add(message_key)

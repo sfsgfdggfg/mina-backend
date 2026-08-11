@@ -25,6 +25,10 @@ from src.workflow.supplier_rfq_progression import (
     SupplierRFQWorkflowNotFoundError,
     resume_supplier_rfq_workflow,
 )
+from src.workflow.supplier_response_ingestion import (
+    SupplierReplyIngestionRequest,
+    ingest_supplier_reply,
+)
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -71,6 +75,9 @@ from src.simulation.regulatory_compliance_regressions import (
 )
 from src.simulation.supplier_rfq_lifecycle_regressions import (
     evaluate_supplier_rfq_lifecycle_regressions,
+)
+from src.simulation.supplier_response_ingestion_regressions import (
+    evaluate_supplier_response_ingestion_regressions,
 )
 from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
@@ -120,7 +127,7 @@ class SupplierRFQResponseRequest(BaseModel):
         "needs_clarification",
     ]
     cost: Optional[float] = None
-    currency: str = "EUR"
+    currency: Optional[str] = None
     transit_time: Optional[str] = None
     validity_date: Optional[str] = None
     equipment_type: Optional[str] = None
@@ -895,6 +902,15 @@ def resume_supplier_rfq_quote(workflow_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return serialize_result(result)
 
+
+@app.post("/supplier-responses/ingest")
+def ingest_supplier_response(request: SupplierReplyIngestionRequest):
+    return ingest_supplier_reply(
+        reply=request.reply,
+        extracted_response=request.extracted_response,
+        repository=supplier_rfq_repository,
+    ).model_dump()
+
 @app.post("/customer-memory/import/validate")
 def validate_customer_memory_import(
     request: CustomerMemoryImportValidateRequest,
@@ -922,6 +938,9 @@ def run_test_suite():
     )
     test_results.append(
         evaluate_supplier_rfq_lifecycle_regressions()
+    )
+    test_results.append(
+        evaluate_supplier_response_ingestion_regressions()
     )
     test_results.append(evaluate_hs_commodity_map_validation())
     test_results.append(evaluate_workflow_result_contract())

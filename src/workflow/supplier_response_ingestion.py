@@ -1,0 +1,251 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Optional
+
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from src.ai.supplier_response_parser import SupplierResponseParser
+from src.core.supplier_response_ingestion import (
+    InboundSupplierReply,
+    SupplierReplyIngestionResult,
+    SupplierResponseExtraction,
+    correlate_supplier_reply,
+)
+from src.core.supplier_rfq import SupplierRFQResponse
+from src.core.supplier_rfq_lifecycle import (
+    SupplierRFQNotFoundError,
+    SupplierRFQResponseError,
+    SupplierRFQTransitionError,
+    attach_supplier_rfq_response,
+)
+from src.core.supplier_rfq_repository import (
+    DuplicateSupplierRFQResponseError,
+    SupplierRFQRepository,
+)
+
+
+class SupplierReplyIngestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reply: InboundSupplierReply
+    extracted_response: Optional[dict[str, Any]] = None
+
+
+def _result_from_correlation(
+    correlation,
+    reply: InboundSupplierReply,
+) -> SupplierReplyIngestionResult:
+    return SupplierReplyIngestionResult(
+        status=correlation.status,
+        reason=correlation.reason,
+        rfq_id=correlation.rfq_id,
+        correlation_method=correlation.method,
+        external_message_id=reply.external_message_id,
+    )
+
+
+def _resolve_extraction(
+    *,
+    reply: InboundSupplierReply,
+    extracted_response: SupplierResponseExtraction | dict[str, Any] | None,
+    parser: SupplierResponseParser | None,
+) -> tuple[SupplierResponseExtraction | None, str | None, str | None]:
+    if extracted_response is not None:
+        try:
+            extraction = SupplierResponseExtraction.model_validate(
+                extracted_response
+            )
+        except ValidationError as exc:
+            return None, "invalid_response", str(exc)
+        return extraction, None, None
+
+    if parser is None:
+        return (
+            None,
+            "parsing_required",
+            "No structured response or supplier response parser was provided.",
+        )
+
+    try:
+        parsed = parser.parse(reply)
+        extraction = SupplierResponseExtraction.model_validate(parsed)
+    except Exception:
+        return (
+            None,
+            "parsing_failed",
+            "Supplier response parser failed or returned invalid output.",
+        )
+    return extraction, None, None
+
+
+def _validate_required_extraction(
+    extraction: SupplierResponseExtraction,
+) -> tuple[str | None, str | None]:
+    if extraction.field_state("status") == "uncertain":
+        return "parsing_failed", "Supplier response status is uncertain."
+    if extraction.status is None:
+        return "invalid_response", "Supplier response status is required."
+    if extraction.status == "quoted":
+        uncertain_required = [
+            field_name
+            for field_name in ("cost", "currency")
+            if extraction.field_state(field_name) == "uncertain"
+        ]
+        if uncertain_required:
+            return (
+                "parsing_failed",
+                "Required quote fields are uncertain: "
+                + ", ".join(uncertain_required),
+            )
+        missing_required = [
+            field_name
+            for field_name in ("cost", "currency")
+            if extraction.field_state(field_name) == "not_provided"
+        ]
+        if missing_required:
+            return (
+                "invalid_response",
+                "Quoted supplier response is missing required fields: "
+                + ", ".join(missing_required),
+            )
+    return None, None
+
+
+def ingest_supplier_reply(
+    *,
+    reply: InboundSupplierReply,
+    repository: SupplierRFQRepository,
+    extracted_response: SupplierResponseExtraction | dict[str, Any] | None = None,
+    parser: SupplierResponseParser | None = None,
+) -> SupplierReplyIngestionResult:
+    message_key = reply.message_deduplication_key
+    if message_key and repository.has_ingested_message(message_key):
+        return SupplierReplyIngestionResult(
+            status="duplicate_response",
+            reason="Inbound supplier message has already been ingested.",
+            external_message_id=reply.external_message_id,
+        )
+
+    correlation = correlate_supplier_reply(reply, repository)
+    if correlation.status != "matched":
+        if (
+            correlation.status == "rfq_not_awaiting_response"
+            and correlation.rfq_id
+            and repository.list_responses(correlation.rfq_id)
+        ):
+            return SupplierReplyIngestionResult(
+                status="duplicate_response",
+                reason=(
+                    "Supplier RFQ already has an attached response; "
+                    "the inbound reply was not applied."
+                ),
+                rfq_id=correlation.rfq_id,
+                correlation_method=correlation.method,
+                external_message_id=reply.external_message_id,
+            )
+        return _result_from_correlation(correlation, reply)
+
+    draft = repository.get_draft(correlation.rfq_id)
+    if draft is None:
+        return SupplierReplyIngestionResult(
+            status="unresolved_rfq",
+            reason="Correlated Supplier RFQ no longer exists.",
+            external_message_id=reply.external_message_id,
+        )
+
+    extraction, extraction_status, extraction_reason = _resolve_extraction(
+        reply=reply,
+        extracted_response=extracted_response,
+        parser=parser,
+    )
+    if extraction is None:
+        return SupplierReplyIngestionResult(
+            status=extraction_status,
+            reason=extraction_reason or "Supplier response extraction failed.",
+            rfq_id=draft.rfq_id,
+            correlation_method=correlation.method,
+            external_message_id=reply.external_message_id,
+        )
+
+    validation_status, validation_reason = _validate_required_extraction(
+        extraction
+    )
+    if validation_status:
+        return SupplierReplyIngestionResult(
+            status=validation_status,
+            reason=validation_reason or "Supplier response is invalid.",
+            rfq_id=draft.rfq_id,
+            correlation_method=correlation.method,
+            external_message_id=reply.external_message_id,
+        )
+
+    try:
+        response = SupplierRFQResponse(
+            rfq_id=draft.rfq_id,
+            supplier_name=draft.supplier_name,
+            rfq_priority=draft.priority,
+            status=extraction.status,
+            cost=extraction.cost,
+            currency=extraction.currency,
+            transit_time=extraction.transit_time,
+            validity_date=extraction.validity_date,
+            equipment_type=extraction.equipment_type,
+            notes=extraction.notes,
+            source=reply.source,
+            received_at=reply.received_at or datetime.utcnow(),
+        )
+    except ValidationError as exc:
+        return SupplierReplyIngestionResult(
+            status="invalid_response",
+            reason=str(exc),
+            rfq_id=draft.rfq_id,
+            correlation_method=correlation.method,
+            external_message_id=reply.external_message_id,
+        )
+
+    try:
+        responded = attach_supplier_rfq_response(repository, response)
+    except DuplicateSupplierRFQResponseError as exc:
+        return SupplierReplyIngestionResult(
+            status="duplicate_response",
+            reason=str(exc),
+            rfq_id=draft.rfq_id,
+            correlation_method=correlation.method,
+            external_message_id=reply.external_message_id,
+        )
+    except SupplierRFQTransitionError as exc:
+        return SupplierReplyIngestionResult(
+            status="rfq_not_awaiting_response",
+            reason=str(exc),
+            rfq_id=draft.rfq_id,
+            correlation_method=correlation.method,
+            external_message_id=reply.external_message_id,
+        )
+    except SupplierRFQResponseError as exc:
+        return SupplierReplyIngestionResult(
+            status="invalid_response",
+            reason=str(exc),
+            rfq_id=draft.rfq_id,
+            correlation_method=correlation.method,
+            external_message_id=reply.external_message_id,
+        )
+    except SupplierRFQNotFoundError as exc:
+        return SupplierReplyIngestionResult(
+            status="unresolved_rfq",
+            reason=str(exc),
+            external_message_id=reply.external_message_id,
+        )
+
+    if message_key:
+        repository.record_ingested_message(message_key)
+
+    return SupplierReplyIngestionResult(
+        status="response_attached",
+        reason="Supplier response was validated and attached to the RFQ.",
+        rfq_id=draft.rfq_id,
+        correlation_method=correlation.method,
+        external_message_id=reply.external_message_id,
+        response=response,
+        supplier_rfq=responded,
+    )

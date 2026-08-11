@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.core.models import Shipment
 
@@ -18,6 +18,12 @@ SupplierRFQStatus = Literal[
     "expired",
     "cancelled",
 ]
+
+SUPPLIER_RFQ_REFERENCE_PREFIX = "MINAI-RFQ:"
+
+
+def build_supplier_rfq_reference(rfq_id: str) -> str:
+    return f"{SUPPLIER_RFQ_REFERENCE_PREFIX}{rfq_id}"
 
 
 class SupplierContact(BaseModel):
@@ -48,6 +54,10 @@ class SupplierRFQDraft(BaseModel):
     def has_recipient(self) -> bool:
         return bool(self.recipient_email)
 
+    @property
+    def reference_token(self) -> str:
+        return build_supplier_rfq_reference(self.rfq_id)
+
 
 class SupplierRFQWorkflow(BaseModel):
     workflow_id: str = Field(default_factory=lambda: str(uuid4()))
@@ -74,7 +84,7 @@ class SupplierRFQResponse(BaseModel):
     status: SupplierRFQResponseStatus
 
     cost: Optional[float] = None
-    currency: str = "EUR"
+    currency: Optional[str] = None
     transit_time: Optional[str] = None
     validity_date: Optional[str] = None
     equipment_type: Optional[str] = None
@@ -82,6 +92,30 @@ class SupplierRFQResponse(BaseModel):
 
     source: Literal["simulation", "email", "portal", "api", "manual"] = "manual"
     received_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @field_validator("cost", mode="before")
+    @classmethod
+    def validate_cost_type(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(
+                "Supplier RFQ response cost must be numeric."
+            )
+        return value
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+
+        normalized = value.strip().upper()
+        if len(normalized) != 3 or not normalized.isalpha():
+            raise ValueError(
+                "Supplier RFQ response currency must be a 3-letter code."
+            )
+        return normalized
 
     @model_validator(mode="after")
     def validate_status_data_consistency(self):
@@ -91,10 +125,21 @@ class SupplierRFQResponse(BaseModel):
                     "Quoted RFQ response must have a positive cost."
                 )
 
-        elif self.cost is not None:
-            raise ValueError(
-                "Non-quoted RFQ response must not include a cost."
-            )
+            if self.currency is None:
+                raise ValueError(
+                    "Quoted RFQ response must include currency."
+                )
+
+        else:
+            if self.cost is not None:
+                raise ValueError(
+                    "Non-quoted RFQ response must not include a cost."
+                )
+
+            if self.currency is not None:
+                raise ValueError(
+                    "Non-quoted RFQ response must not include currency."
+                )
 
         return self
 
@@ -104,4 +149,5 @@ class SupplierRFQResponse(BaseModel):
             self.status == "quoted"
             and self.cost is not None
             and self.cost > 0
+            and self.currency is not None
         )

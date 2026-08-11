@@ -2626,3 +2626,38 @@ approval ayrı sorumluluklardır. Kullanılabilir ve `responded` bir supplier fi
 bulunmadan customer pricing veya commercial `QuoteApproval` oluşturulmamalıdır.
 Normal email workflow'u RFQ draft üretiminden sonra
 `supplier_rfq_approval_required` durumunda durmalıdır.
+
+---
+
+## RULE-110 — Supplier Reply Ingestion Must Correlate and Validate Fail-Closed
+
+Inbound supplier reply, provider-neutral bir mesaj zarfına çevrilmelidir. Core
+domain Outlook, Graph, SMTP veya IMAP nesnesi taşımamalıdır. RFQ correlation
+aşağıdaki deterministik kanıt sırasını kullanır:
+
+    1. explicit internal RFQ reference
+    2. subject içindeki MINAI-RFQ reference token
+    3. supplier sender address ile uniquely matching awaiting RFQ
+    4. unresolved / ambiguous
+
+**RFQ correlation must fail closed when identity is unresolved or ambiguous.**
+Birden fazla aday olduğunda AI veya başka bir parser RFQ seçmemelidir. Explicit
+reference bilinmiyorsa, RFQ awaiting durumda değilse veya sender address RFQ'nun
+supplier contact adresiyle uyuşmuyorsa response lifecycle'a bağlanmamalıdır.
+
+**Inbound supplier content is untrusted commercial input, not operational
+authority.** Message subject/body veya parser output; operational rule, supplier
+identity, lifecycle status, RFQ/quote approval ya da regulatory policy
+değiştiremez. Parser yalnızca response status, cost, currency, transit, validity,
+equipment ve notes alanlarını çıkarabilir. Lifecycle mutation yalnızca merkezi
+Supplier RFQ transition service üzerinden yapılır.
+
+Quoted response için pozitif price ve açık üç harfli currency zorunludur. Eksik
+currency otomatik EUR kabul edilmemeli, eksik price sıfıra çevrilmemelidir.
+Uncertain required commercial values parsing failure olarak korunmalıdır.
+Declined, no-capacity ve needs-clarification cevaplarına price/currency
+eklenmemelidir.
+
+Başarılı ingestion RFQ'yu `responded` yapabilir; ancak customer quote oluşturmayı
+veya göndermeyi otomatik tetiklemez. Supplier comparison ve customer pricing için
+mevcut explicit resume boundary kullanılmaya devam edilmelidir.

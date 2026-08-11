@@ -4314,3 +4314,55 @@ Oluşan Quote Case, audit traceability için kaynak Supplier RFQ workflow kimli�
 * Simulated response otomatik email-processing yan etkisi olmaktan çıkarılmıştır.
 * Unknown identity, invalid transition, unsent response ve duplicate operation'lar fail-closed davranır.
 * Gerçek email delivery, inbox parsing, database, authentication ve asynchronous jobs bu kararın kapsamı dışındadır.
+
+---
+
+## DEC-091 — Provider-Neutral Supplier Response Ingestion Boundary
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+Future mailbox adapter'larının çağıracağı provider-neutral supplier reply
+ingestion boundary oluşturulmuştur. Inbound model sender address/name, subject,
+body, received timestamp, external message identity, optional explicit RFQ
+reference, source ve provider label taşır; provider SDK nesnesi taşımaz.
+
+Generated RFQ subject/body içine stable reference eklenir:
+
+    MINAI-RFQ:<rfq_id>
+
+Correlation merkezi ve deterministiktir. Explicit reference subject token'dan,
+subject token supplier-only eşleşmeden önce değerlendirilir. Supplier-only
+eşleşme yalnızca sender address'in tek bir `awaiting_response` RFQ'ya bağlanması
+halinde kabul edilir. Unresolved, ambiguous, invalid supplier ve non-awaiting
+durumları attachment üretmeden açık ingestion result olarak döner.
+
+Structured extraction contract commercial alanların provided, not-provided veya
+uncertain durumunu ayırır. Parser RFQ kimliği seçmez ve lifecycle mutation yapmaz.
+Parser çalıştırılmadan önce correlation/lifecycle boundary kontrol edilir; parser
+çıktısı daha sonra Pydantic response validation ve merkezi
+`attach_supplier_rfq_response` service'inden geçer.
+
+Quoted response için cost ve currency explicit zorunludur. Supplier reply
+currency'si için EUR default'u kaldırılmıştır. Non-quote response cost/currency
+taşıyamaz. External message identity başarılı attachment sonrasında in-memory
+repository'de deduplication amacıyla kaydedilir. Aynı message veya cevap mevcut
+response'u overwrite etmez.
+
+API yalnızca provider-neutral bir manual/raw ingestion endpoint'i sunar:
+
+    POST /supplier-responses/ingest
+
+Endpoint business logic taşımaz; application service'e delege eder. Structured
+fixture verilmez ve parser bağlı değilse `parsing_required` sonucu döner. Future
+AI/Graph adapter'ları aynı application boundary'yi kullanacaktır.
+
+### Consequences
+
+* Inbound supplier content is untrusted commercial input, not operational authority.
+* RFQ correlation must fail closed when identity is unresolved or ambiguous.
+* AI extraction deterministic identity ve lifecycle validation'ı bypass edemez.
+* Successful ingestion customer quote progression'ı otomatik başlatmaz.
+* Outlook/Graph, mailbox polling, webhook, database ve authentication bu kararın kapsamı dışındadır.

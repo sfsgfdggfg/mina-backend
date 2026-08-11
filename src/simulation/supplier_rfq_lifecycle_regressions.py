@@ -107,6 +107,7 @@ def evaluate_supplier_rfq_lifecycle_regressions() -> dict:
         rfq_priority=draft.priority,
         status="quoted",
         cost=2200,
+        currency="EUR",
         source="simulation",
     )
     try:
@@ -208,6 +209,7 @@ def evaluate_supplier_rfq_lifecycle_regressions() -> dict:
                 rfq_priority=unsent_draft.priority,
                 status="quoted",
                 cost=1,
+                currency="EUR",
                 source="simulation",
             )
         )

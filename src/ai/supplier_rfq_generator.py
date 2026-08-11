@@ -4,7 +4,10 @@ from typing import Any, List
 from uuid import uuid4
 
 from src.core.models import EquipmentDecision, Shipment
-from src.core.supplier_rfq import SupplierRFQDraft
+from src.core.supplier_rfq import (
+    SupplierRFQDraft,
+    build_supplier_rfq_reference,
+)
 
 
 def generate_supplier_rfq_drafts(
@@ -23,9 +26,11 @@ def generate_supplier_rfq_drafts(
         supplier_name = supplier.get("supplier_name") or "Tedarikçi"
         recipient_email = supplier.get("recipient_email")
         priority = int(supplier.get("priority") or 0)
+        rfq_id = str(uuid4())
+        rfq_reference = build_supplier_rfq_reference(rfq_id)
 
         subject = (
-            f"Navlun Talebi | "
+            f"[{rfq_reference}] Navlun Talebi | "
             f"{shipment.pickup_city} - {shipment.delivery_city}"
         )
 
@@ -33,6 +38,8 @@ def generate_supplier_rfq_drafts(
 Merhaba,
 
 Aşağıdaki taşıma için fiyat ve araç uygunluğunuzu rica ederiz.
+
+RFQ Referansı: {rfq_reference}
 
 Yükleme: {shipment.pickup_city}, {shipment.pickup_country}
 Teslimat: {shipment.delivery_city}, {shipment.delivery_country}
@@ -58,6 +65,7 @@ MINAI Freight OS
 
         drafts.append(
             SupplierRFQDraft(
+                rfq_id=rfq_id,
                 workflow_id=resolved_workflow_id,
                 supplier_name=supplier_name,
                 priority=priority,
