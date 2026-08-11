@@ -65,6 +65,7 @@ def translate_missing_field(field: str) -> str:
         "msds/sds document": "MSDS/SDS belgesi",
         "adr status": "Yükün ADR kapsamında olup olmadığı",
         "adr class": "Yükün ADR sınıfı ve varsa alt sınıfı",
+        "package count and per-piece weights": "Paket / parça adedi ve her bir parçanın ağırlığı",
         "chemical packaging type": "Kimyasal ürünün ambalaj tipi ve ambalaj uygunluğu",
         "frozen temperature requirement": "Dondurulmuş ürün için gerekli sıcaklık derecesi",
         "reefer confirmation": "Reefer araç gereksiniminin teyidi",

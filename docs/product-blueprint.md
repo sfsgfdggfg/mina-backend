@@ -127,7 +127,7 @@ Sistem zamanla öğrenir:
 “hangi supplier hangi işte daha başarılı”
 9. Pricing Logic (Phase 1)
 Road Freight
-Supplier price + margin
+Supplier price + cost markup (mevcut MVP formülü)
 Sea Freight
 Base freight
 surcharges
@@ -236,4 +236,3 @@ Not:
 Road Freight piyasasında fiyatlar günlük değişebildiği için bu modül MVP v1'de otomatik fiyat üretimi amacıyla kullanılmayacaktır.
 
 İlerleyen sürümlerde yeterli veri birikmesi halinde karar destek sistemi olarak değerlendirilecektir.
-

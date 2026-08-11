@@ -1,5 +1,6 @@
 from src.core.models import Shipment, RiskAssessment
 from src.core.commodity_profile import get_commodity_operational_profile
+from src.core.cargo_weight import assess_cargo_weight
 
 
 def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
@@ -85,11 +86,18 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
         requires_human_review = True
 
     # Heavy / oversize
-    for package in shipment.packages:
-        if package.weight_kg and package.weight_kg >= 26000:
-            risk_reasons.append("Tek parça ağır yük.")
-            requires_human_review = True
+    cargo_weight = assess_cargo_weight(shipment)
 
+    if cargo_weight.is_confirmed_heavy_single_piece:
+        risk_reasons.append("Teyit edilebilir tek parça ağır yük.")
+        requires_human_review = True
+    elif cargo_weight.requires_clarification:
+        risk_reasons.append(
+            "Tek parça ve toplam ağırlık ayrımı net değil."
+        )
+        requires_human_review = True
+
+    for package in shipment.packages:
         if package.height_cm and package.height_cm > 300:
             risk_reasons.append("Gabari dışı yük yüksekliği.")
             requires_human_review = True

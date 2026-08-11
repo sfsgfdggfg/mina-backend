@@ -71,6 +71,13 @@ Tenteli elenir.
 
 Lowbed / Heavy Haul değerlendirilir.
 
+`gross_weight_kg` shipment toplam brüt ağırlığıdır ve tek başına
+tek-parça ağırlığı olarak yorumlanmaz. Package adedi tam olarak 1 ise
+shipment gross weight tek-parça kontrolünde kullanılabilir. Quantity > 1 olan
+package-line `weight_kg` alanı mevcut kontratta parça başı veya satır toplamı
+olabileceğinden, 26 ton eşiğini geçiyorsa ekipman atamadan önce netleştirme
+istenir.
+
 ## RULE-012
 
 Aşağıdaki ifadeler Open Trailer değerlendirmesini tetikler:
@@ -401,6 +408,15 @@ Riskli taşımalarda güvenilirlik ve operasyonel uygunluk, fiyatın önüne ge�
 * Parsiyel taleplerde LTL / parsiyel network sağlayabilen supplier önceliklendirilmelidir.
 
 Supplier Selection Engine en fazla 3 uygun supplier adayı önermelidir.
+
+Eligibility skordan önce uygulanır:
+
+* Origin country desteği tek başına route uygunluğu sağlamaz.
+* Exact `priority_routes` tam route desteğidir.
+* Destination country ile non-domestic `route_regions` birlikteyse bölgesel route desteği kabul edilir.
+* Yalnızca `domestic` route region taşıyan supplier uluslararası hatta kullanılmaz.
+* Açık servis tipi veya zorunlu ekipman uyumsuzluğu supplier'ı düşük skorla tutmaz; eler.
+* Supplier isimlerinden route, reefer veya domestic kabiliyeti türetilmez.
 
 ## RULE-043 — Supplier Capability Data Must Be Externalized
 
@@ -2474,3 +2490,32 @@ testlerinin model veya parser varyasyonundan etkilenmesini önlemektir.
 AI parser kalitesi ayrı regression testlerinde doğrulanmalıdır.
 
 Quote Case API contract testi yalnızca Quote Case API davranışını test etmelidir.
+
+---
+
+## RULE-105 — Customer Price Uses Cost Markup Terminology
+
+Varsayılan customer price formülü:
+
+    supplier cost × 1.15
+
+olduğu için bu oran gross margin değil, cost üzerine yüzde 15 markup'tır.
+Customer Quote alanları `markup_type` ve `markup_value` adlarını kullanmalıdır.
+Eski `margin_type` ve `margin_value` input adları geçiş uyumluluğu için kabul
+edilebilir ancak yeni serialized output'ta kullanılmamalıdır.
+
+Nihai fiyat yukarı yönde en yakın 10 EUR sınırına yuvarlanır. Zaten 10 EUR
+sınırında olan fiyat değişmez; cent değerleri yuvarlama öncesinde kesilmez.
+
+---
+
+## RULE-106 — Quote Case Retrieval Must Use Current Approval State
+
+Quote approval için authoritative current state `QuoteApprovalRepository` kaydıdır.
+Quote Case içinde oluşturma anından kalan approval ve send-safety snapshot'ı,
+sonraki lifecycle geçişlerinin current truth'u olarak sunulmamalıdır.
+
+`GET /quote-cases` ve `GET /quote-cases/{case_id}` response'ları approval'ı
+repository'den yeniden yüklemeli ve send safety kararını bu current approval ile
+yeniden hesaplamalıdır. Bu kural approved, rejected ve invalidated durumlarına
+aynı şekilde uygulanır.

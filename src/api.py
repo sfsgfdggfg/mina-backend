@@ -42,7 +42,7 @@ from src.core.quote_approval_service import (
 )
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
+from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
 
 app = FastAPI(
@@ -467,11 +467,49 @@ def health_check():
     }
 
 
+def _enrich_quote_case_with_current_approval(quote_case):
+    snapshot_approval = quote_case.quote_approval
+
+    if snapshot_approval is None:
+        return quote_case
+
+    current_approval = quote_approval_repository.get(
+        snapshot_approval.approval_id
+    )
+
+    if not all(
+        [
+            quote_case.supplier_quote,
+            quote_case.customer_quote,
+            quote_case.quote_draft,
+        ]
+    ):
+        return quote_case.model_copy(
+            update={"quote_approval": current_approval}
+        )
+
+    current_send_safety = evaluate_quote_send_safety(
+        approval=current_approval,
+        supplier_quote=quote_case.supplier_quote,
+        customer_quote=quote_case.customer_quote,
+        quote_draft=quote_case.quote_draft,
+    )
+
+    return quote_case.model_copy(
+        update={
+            "quote_approval": current_approval,
+            "quote_send_safety": current_send_safety,
+        }
+    )
+
+
 @app.get("/quote-cases")
 def list_quote_cases():
     return {
         "quote_cases": [
-            quote_case.model_dump()
+            _enrich_quote_case_with_current_approval(
+                quote_case
+            ).model_dump()
             for quote_case in quote_case_repository.list_all()
         ]
     }
@@ -487,7 +525,9 @@ def get_quote_case(case_id: str):
             detail=f"Quote case not found: {case_id}",
         )
 
-    return quote_case.model_dump()
+    return _enrich_quote_case_with_current_approval(
+        quote_case
+    ).model_dump()
 
 
 @app.get("/quote-approvals")
@@ -653,6 +693,10 @@ def run_test_suite():
     test_results.append(evaluate_supplier_capability_registry_validation())
     test_results.append(evaluate_supplier_capability_registry_runtime_integrity())
     test_results.append(evaluate_customer_memory_validation())
+    test_results.append(evaluate_strict_supplier_eligibility())
+    test_results.append(evaluate_inactive_customer_memory_matching())
+    test_results.append(evaluate_heavy_cargo_weight_logic())
+    test_results.append(evaluate_customer_pricing_regression())
     test_results.append(evaluate_hs_commodity_map_validation())
     test_results.append(evaluate_workflow_result_contract())
     test_results.append(evaluate_quote_readiness_blocked_state())

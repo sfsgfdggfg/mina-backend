@@ -363,7 +363,7 @@ Supplier Selection çıktısı şu yapıdadır:
     }
   ],
   "rejected_suppliers": [],
-  "selection_strategy": "route + equipment + risk + price + speed weighted scoring",
+  "selection_strategy": "strict route + service + equipment eligibility, then risk + price + speed weighted scoring",
   "source": "supplier_selection_engine"
 }
 ```
@@ -380,6 +380,12 @@ Operasyonel prensip:
 - Lowbed / ağır yük taleplerinde proje yükü kabiliyeti olmayan supplier elenir.
 - Parsiyel taleplerde LTL / parsiyel network sağlayabilen supplier önceliklendirilir.
 ```
+
+Route, servis tipi ve zorunlu ekipman önce eligibility gate olarak uygulanır.
+Origin country desteği tek başına yeterli değildir. Exact priority route, uygun
+destination country + non-domestic region veya capability datasında domestic route
+desteği bulunmayan supplier skorlama aşamasına geçemez. Supplier isimleri
+capability sinyali olarak kullanılmaz.
 
 Supplier Selection Engine en fazla 3 uygun supplier adayı önerir.
 

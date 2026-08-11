@@ -62,7 +62,14 @@ class ExtractedPackage(BaseModel):
     length_cm: Optional[float] = Field(default=None, description="Length in centimeters")
     width_cm: Optional[float] = Field(default=None, description="Width in centimeters")
     height_cm: Optional[float] = Field(default=None, description="Height in centimeters")
-    weight_kg: Optional[float] = Field(default=None, description="Weight per package or total package weight in kg")
+    weight_kg: Optional[float] = Field(
+        default=None,
+        description=(
+            "Weight stated for this package line in kg. For quantity 1 it is "
+            "single-piece weight; for quantity greater than 1 preserve the "
+            "stated value without assuming per-piece versus line-total."
+        ),
+    )
     stackable: Optional[bool] = Field(default=None, description="Whether cargo is stackable")
 
 
@@ -79,7 +86,10 @@ class ShipmentExtraction(BaseModel):
     delivery_postcode: Optional[str] = Field(default=None, description="Delivery postcode if available")
 
     commodity: Optional[str] = Field(default=None, description="Cargo / product type")
-    gross_weight_kg: Optional[float] = Field(default=None, description="Gross weight in kg")
+    gross_weight_kg: Optional[float] = Field(
+        default=None,
+        description="Total gross shipment weight in kg",
+    )
     weight_is_approximate: bool = Field(default=True, description="Whether weight is approximate")
 
     service_type: str = Field(default="FTL", description="FTL or LTL. Default FTL unless partial is explicitly requested")

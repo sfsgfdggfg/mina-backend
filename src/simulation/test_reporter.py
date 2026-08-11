@@ -541,6 +541,287 @@ def evaluate_customer_memory_validation() -> dict:
     }
 
 
+def evaluate_strict_supplier_eligibility() -> dict:
+    from src.core.models import Shipment
+    from src.core.supplier_selection import select_suppliers_for_shipment
+
+    failures = []
+
+    def selected_names(shipment, selected_equipment):
+        result = select_suppliers_for_shipment(
+            shipment=shipment,
+            equipment_decision={
+                "selected_equipment": selected_equipment,
+            },
+        )
+        return {
+            item["supplier_name"]
+            for item in result["selected_suppliers"]
+        }
+
+    international_ltl = Shipment(
+        pickup_country="Türkiye",
+        delivery_country="Almanya",
+        service_type="LTL",
+    )
+    ltl_names = selected_names(
+        international_ltl,
+        "Tenteli / Curtainsider",
+    )
+
+    if "Anatolia Road" in ltl_names:
+        failures.append("FTL-only supplier must be excluded from LTL")
+
+    if not ltl_names:
+        failures.append("compatible LTL suppliers should remain eligible")
+
+    origin_only = Shipment(
+        pickup_country="Türkiye",
+        delivery_country="İspanya",
+        service_type="FTL",
+    )
+    if selected_names(origin_only, "Tenteli / Curtainsider"):
+        failures.append(
+            "origin-country support alone must not establish route eligibility"
+        )
+
+    domestic = Shipment(
+        pickup_country="Türkiye",
+        delivery_country="Türkiye",
+        service_type="FTL",
+    )
+    domestic_names = selected_names(
+        domestic,
+        "Tenteli / Curtainsider",
+    )
+    if domestic_names != {"Anatolia Domestic"}:
+        failures.append(
+            "domestic FTL should use only capability-declared domestic supplier"
+        )
+
+    reefer = Shipment(
+        pickup_country="Türkiye",
+        delivery_country="Almanya",
+        service_type="FTL",
+        is_temperature_controlled=True,
+    )
+    reefer_names = selected_names(reefer, "Reefer")
+    if reefer_names != {"ColdChain Europe"}:
+        failures.append(
+            "reefer requirement should exclude suppliers without Reefer capability"
+        )
+
+    heavy = Shipment(
+        pickup_country="Türkiye",
+        delivery_country="Almanya",
+        service_type="FTL",
+    )
+    if selected_names(heavy, "Lowbed / Heavy Haul"):
+        failures.append(
+            "heavy equipment should have no eligible supplier when capability is absent"
+        )
+
+    return {
+        "name": "Strict supplier eligibility",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_inactive_customer_memory_matching() -> dict:
+    import src.core.customer_memory as customer_memory
+    from src.core.models import Shipment
+
+    failures = []
+    inactive_profile = customer_memory.CustomerMemoryProfile(
+        customer_name="Inactive Customer",
+        active=False,
+        aliases=["Dormant Alias"],
+        default_commodity="Tekstil",
+    )
+    active_profile = customer_memory.CustomerMemoryProfile(
+        customer_name="Active Customer",
+        active=True,
+        aliases=["Current Alias"],
+        default_commodity="Gıda",
+    )
+    original_loader = customer_memory.load_customer_memory
+
+    try:
+        customer_memory.load_customer_memory = lambda: [
+            inactive_profile,
+            active_profile,
+        ]
+
+        if customer_memory.find_customer_profile("Inactive Customer") is not None:
+            failures.append("inactive profile matched by parsed customer name")
+
+        if customer_memory.find_customer_profile("Dormant Alias") is not None:
+            failures.append("inactive profile matched by parsed alias")
+
+        if customer_memory.find_customer_profile_in_text(
+            "Request from Dormant Alias"
+        ) is not None:
+            failures.append("inactive profile matched in raw email text")
+
+        enrichment = customer_memory.enrich_shipment_with_customer_memory(
+            shipment=Shipment(customer_name="Unknown Customer"),
+            email_text="Request from Dormant Alias",
+        )
+        if enrichment.matched:
+            failures.append("inactive profile enriched a shipment")
+
+        if customer_memory.find_customer_profile_in_text(
+            "Request from Current Alias"
+        ) != active_profile:
+            failures.append("active raw-email alias should still match")
+    finally:
+        customer_memory.load_customer_memory = original_loader
+
+    return {
+        "name": "Inactive customer memory matching",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_heavy_cargo_weight_logic() -> dict:
+    from src.core.equipment import decide_equipment
+    from src.core.missing_info import check_missing_information
+    from src.core.models import Package, Shipment
+
+    failures = []
+
+    single_piece_gross = Shipment(
+        gross_weight_kg=26000,
+        packages=[Package(quantity=1)],
+    )
+    if decide_equipment(single_piece_gross).selected_equipment != "Lowbed / Heavy Haul":
+        failures.append(
+            "single-piece shipment gross weight at 26t should trigger heavy haul"
+        )
+
+    package_weight = Shipment(
+        packages=[Package(quantity=1, weight_kg=26000)],
+    )
+    if decide_equipment(package_weight).selected_equipment != "Lowbed / Heavy Haul":
+        failures.append(
+            "confirmed single-package weight at 26t should retain heavy-haul behavior"
+        )
+
+    multi_piece_gross = Shipment(
+        gross_weight_kg=30000,
+        packages=[Package(quantity=2, weight_kg=15000)],
+    )
+    if decide_equipment(multi_piece_gross).selected_equipment == "Lowbed / Heavy Haul":
+        failures.append(
+            "multi-piece shipment gross weight must not be treated as one heavy piece"
+        )
+
+    ambiguous_gross = Shipment(
+        pickup_city="Adana",
+        delivery_city="Hamburg",
+        commodity="Tekstil",
+        cargo_ready_date="2026-08-15",
+        gross_weight_kg=26000,
+    )
+    ambiguous_decision = decide_equipment(ambiguous_gross)
+    ambiguous_missing = check_missing_information(ambiguous_gross)
+
+    if ambiguous_decision.selected_equipment != "Heavy Cargo Equipment Review":
+        failures.append(
+            "gross-heavy shipment without package structure should require review"
+        )
+
+    if (
+        "package count and per-piece weights"
+        not in ambiguous_missing.missing_fields
+        or ambiguous_missing.can_continue_to_quote
+    ):
+        failures.append(
+            "ambiguous gross-heavy shipment should stop for weight clarification"
+        )
+
+    ambiguous_package_line = Shipment(
+        packages=[Package(quantity=2, weight_kg=26000)],
+    )
+    if (
+        decide_equipment(ambiguous_package_line).selected_equipment
+        != "Heavy Cargo Equipment Review"
+    ):
+        failures.append(
+            "ambiguous multi-piece package-line weight should not assign heavy haul"
+        )
+
+    return {
+        "name": "Heavy cargo weight logic",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
+def evaluate_customer_pricing_regression() -> dict:
+    from src.core.models import CustomerQuote, SupplierQuote
+    from src.core.pricing import calculate_customer_quote
+
+    failures = []
+    supplier_quote = SupplierQuote(
+        supplier_name="Pricing Boundary Supplier",
+        cost=0,
+        currency="EUR",
+    )
+    rounding_cases = {
+        2300.00: 2300,
+        2300.01: 2310,
+        2309.99: 2310,
+        2310.00: 2310,
+    }
+
+    for raw_price, expected_price in rounding_cases.items():
+        quote = calculate_customer_quote(
+            supplier_quote,
+            markup_type="manual",
+            markup_value=raw_price,
+        )
+        if quote.final_price != expected_price:
+            failures.append(
+                f"{raw_price} should ceil to {expected_price}, got {quote.final_price}"
+            )
+
+    default_quote = calculate_customer_quote(
+        SupplierQuote(
+            supplier_name="Default Markup Supplier",
+            cost=2000,
+            currency="EUR",
+        )
+    )
+    if default_quote.final_price != 2300:
+        failures.append("default 15% cost markup should preserve 2300 price")
+
+    dumped_quote = default_quote.model_dump()
+    if "markup_type" not in dumped_quote or "margin_type" in dumped_quote:
+        failures.append("serialized quote should use markup terminology")
+
+    legacy_quote = CustomerQuote(
+        supplier_cost=2000,
+        margin_type="percentage",
+        margin_value=15,
+        final_price=2300,
+        currency="EUR",
+    )
+    if (
+        legacy_quote.markup_type != "percentage"
+        or legacy_quote.margin_value != 15
+    ):
+        failures.append("legacy margin constructor aliases should remain compatible")
+
+    return {
+        "name": "Customer pricing terminology and rounding",
+        "passed": len(failures) == 0,
+        "failures": failures,
+    }
+
+
 def evaluate_hs_commodity_map_validation() -> dict:
     validation_result = validate_hs_commodity_map_file()
     failures = []
@@ -5067,6 +5348,121 @@ def evaluate_quote_case_api_contract() -> dict:
                 "loaded case should preserve send safety"
             )
 
+        approval_id = (
+            quote_case.get("quote_approval") or {}
+        ).get("approval_id")
+
+        if not approval_id:
+            failures.append(
+                "created quote case should include approval identity"
+            )
+        else:
+            api.approve_quote_approval(
+                approval_id=approval_id,
+                request=api.QuoteApprovalApproveRequest(
+                    approved_by="quote.case.manager@example.invalid",
+                ),
+            )
+            approved_case = api.get_quote_case(case_id)
+
+            if (
+                approved_case.get("quote_approval") or {}
+            ).get("approval_status") != "approved":
+                failures.append(
+                    "retrieved case should reflect authoritative approved status"
+                )
+
+            approved_send_safety = (
+                approved_case.get("quote_send_safety") or {}
+            )
+            if approved_send_safety.get("can_send") is not True:
+                failures.append(
+                    "retrieved approved case should refresh send safety"
+                )
+
+            listed_after_approval = (
+                api.list_quote_cases().get("quote_cases") or []
+            )
+            listed_approved_case = next(
+                (
+                    item
+                    for item in listed_after_approval
+                    if item.get("case_id") == case_id
+                ),
+                None,
+            )
+            if (
+                not listed_approved_case
+                or (
+                    listed_approved_case.get("quote_approval") or {}
+                ).get("approval_status") != "approved"
+            ):
+                failures.append(
+                    "listed case should reflect authoritative approved status"
+                )
+
+            api.invalidate_quote_approval_endpoint(approval_id)
+            invalidated_case = api.get_quote_case(case_id)
+
+            if (
+                invalidated_case.get("quote_approval") or {}
+            ).get("approval_status") != "invalidated":
+                failures.append(
+                    "retrieved case should reflect authoritative invalidated status"
+                )
+
+            if (
+                invalidated_case.get("quote_send_safety") or {}
+            ).get("block_reason") != "approval_invalidated":
+                failures.append(
+                    "invalidated case should refresh to blocked send safety"
+                )
+
+    original_parser = api.parse_email_with_ai
+
+    try:
+        api.parse_email_with_ai = lambda _: shipment
+        rejected_response = api.process_email(
+            api.ProcessEmailRequest(
+                email_text="Deterministic rejected quote case API test."
+            )
+        )
+    finally:
+        api.parse_email_with_ai = original_parser
+
+    rejected_case = rejected_response.get("quote_case") or {}
+    rejected_case_id = rejected_case.get("case_id")
+    rejected_approval_id = (
+        rejected_case.get("quote_approval") or {}
+    ).get("approval_id")
+
+    if rejected_case_id and rejected_approval_id:
+        api.reject_quote_approval(
+            approval_id=rejected_approval_id,
+            request=api.QuoteApprovalRejectRequest(
+                rejection_reason="Pricing requires revision.",
+            ),
+        )
+        loaded_rejected_case = api.get_quote_case(rejected_case_id)
+
+        if (
+            loaded_rejected_case.get("quote_approval") or {}
+        ).get("approval_status") != "rejected":
+            failures.append(
+                "retrieved case should reflect authoritative rejected status"
+            )
+
+        if (
+            loaded_rejected_case.get("quote_send_safety") or {}
+        ).get("block_reason") != "approval_rejected":
+            failures.append(
+                "rejected case should refresh to blocked send safety"
+            )
+    else:
+        failures.append(
+            "rejection lifecycle setup should create case and approval"
+        )
+
     try:
         api.get_quote_case("unknown-case-id")
     except HTTPException as exc:
@@ -5084,4 +5480,3 @@ def evaluate_quote_case_api_contract() -> dict:
         "passed": len(failures) == 0,
         "failures": failures,
     }
-

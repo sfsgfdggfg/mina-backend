@@ -1,37 +1,57 @@
+from decimal import Decimal, ROUND_CEILING
+
 from src.core.models import SupplierQuote, CustomerQuote
 
 
 def calculate_customer_quote(
     supplier_quote: SupplierQuote,
-    margin_type: str = "percentage",
-    margin_value: float = 15.0,
+    markup_type: str = "percentage",
+    markup_value: float = 15.0,
+    *,
+    margin_type: str | None = None,
+    margin_value: float | None = None,
 ) -> CustomerQuote:
     """
     Customer Quote Calculator v1.
 
     Default:
-    supplier cost + %15 margin
+    supplier cost + %15 markup on cost
+
+    margin_type and margin_value remain accepted as deprecated keyword aliases.
     """
 
-    if margin_type == "percentage":
-        final_price = supplier_quote.cost * (1 + margin_value / 100)
+    if margin_type is not None:
+        markup_type = margin_type
 
-    elif margin_type == "fixed":
-        final_price = supplier_quote.cost + margin_value
+    if margin_value is not None:
+        markup_value = margin_value
 
-    elif margin_type == "manual":
-        final_price = margin_value
+    supplier_cost = Decimal(str(supplier_quote.cost))
+    markup_amount = Decimal(str(markup_value))
+
+    if markup_type == "percentage":
+        final_price = supplier_cost * (
+            Decimal("1") + markup_amount / Decimal("100")
+        )
+
+    elif markup_type == "fixed":
+        final_price = supplier_cost + markup_amount
+
+    elif markup_type == "manual":
+        final_price = markup_amount
 
     else:
-        raise ValueError(f"Unsupported margin type: {margin_type}")
+        raise ValueError(f"Unsupported markup type: {markup_type}")
 
     # Round upward to nearest 10 EUR for commercial readability
-    final_price = ((int(final_price) + 9) // 10) * 10
+    final_price = (
+        final_price / Decimal("10")
+    ).to_integral_value(rounding=ROUND_CEILING) * Decimal("10")
 
     return CustomerQuote(
         supplier_cost=supplier_quote.cost,
-        margin_type=margin_type,
-        margin_value=margin_value,
-        final_price=final_price,
+        markup_type=markup_type,
+        markup_value=markup_value,
+        final_price=float(final_price),
         currency=supplier_quote.currency,
     )

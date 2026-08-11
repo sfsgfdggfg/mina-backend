@@ -144,6 +144,34 @@ def _get_service_types(supplier_capability: Optional[Dict[str, Any]]) -> List[st
     return [_normalize(service_type) for service_type in raw_service_types]
 
 
+def _get_equipment_types(
+    supplier_capability: Optional[Dict[str, Any]]
+) -> List[str]:
+    if not supplier_capability:
+        return []
+
+    raw_equipment_types = supplier_capability.get("equipment_types") or []
+
+    if not isinstance(raw_equipment_types, list):
+        return []
+
+    return [_normalize(equipment) for equipment in raw_equipment_types]
+
+
+def _get_route_regions(
+    supplier_capability: Optional[Dict[str, Any]]
+) -> List[str]:
+    if not supplier_capability:
+        return []
+
+    raw_route_regions = supplier_capability.get("route_regions") or []
+
+    if not isinstance(raw_route_regions, list):
+        return []
+
+    return [_normalize(region) for region in raw_route_regions]
+
+
 def _supplier_supports_service(
     supplier_capability: Optional[Dict[str, Any]],
     service_type: str,
@@ -223,7 +251,12 @@ def check_operational_consistency(
             )
 
     if pickup_country in ["turkiye", "turkey"] and delivery_country in ["turkiye", "turkey"]:
-        if selected_supplier_name and "domestic" not in _normalize(selected_supplier_name):
+        if (
+            selected_supplier_name
+            and "domestic" not in _get_route_regions(
+                selected_supplier_capability
+            )
+        ):
             warnings.append(
                 "Yurtiçi taşıma için domestic supplier seçilmemiş görünüyor."
             )
@@ -269,10 +302,27 @@ def check_operational_consistency(
             )
 
     if "reefer" in selected_equipment:
-        if selected_supplier_name and "coldchain" not in _normalize(selected_supplier_name):
-            warnings.append(
-                "Reefer taşıma için soğuk zincir uzmanı supplier seçilmemiş olabilir."
+        if selected_supplier_name:
+            supplier_equipment = _get_equipment_types(
+                selected_supplier_capability
             )
+            supplier_special_capabilities = _get_special_capabilities(
+                selected_supplier_capability
+            )
+
+            if selected_supplier_capability is None:
+                errors.append(
+                    f"{selected_supplier_name} için capability datası "
+                    "bulunamadı; Reefer yetkinliği doğrulanamadı."
+                )
+            elif (
+                "reefer" not in supplier_equipment
+                and "reefer" not in supplier_special_capabilities
+            ):
+                errors.append(
+                    f"{selected_supplier_name} capability datasında "
+                    "Reefer desteği bulunmuyor."
+                )
 
     if service_type == "ltl":
         if not selected_supplier_name:

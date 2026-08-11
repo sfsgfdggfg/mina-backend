@@ -135,6 +135,9 @@ def find_customer_profile_in_text(text: Optional[str]) -> Optional[CustomerMemor
     customer_memory = load_customer_memory()
 
     for profile in customer_memory:
+        if not profile.active:
+            continue
+
         names_to_check = [
             normalize_lookup_text(profile.customer_name),
             *[

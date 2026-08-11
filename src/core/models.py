@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel, Field, model_validator
+from typing import Any, Optional, List
 
 
 class Package(BaseModel):
@@ -77,10 +77,42 @@ class SupplierQuote(BaseModel):
 
 class CustomerQuote(BaseModel):
     supplier_cost: float
-    margin_type: str
-    margin_value: float
+    markup_type: str
+    markup_value: float
     final_price: float
     currency: str = "EUR"
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_legacy_margin_names(cls, data: Any) -> Any:
+        """Accept old constructor keys while emitting accurate markup names."""
+
+        if not isinstance(data, dict):
+            return data
+
+        normalized_data = dict(data)
+
+        if "markup_type" not in normalized_data and "margin_type" in normalized_data:
+            normalized_data["markup_type"] = normalized_data["margin_type"]
+
+        if "markup_value" not in normalized_data and "margin_value" in normalized_data:
+            normalized_data["markup_value"] = normalized_data["margin_value"]
+
+        normalized_data.pop("margin_type", None)
+        normalized_data.pop("margin_value", None)
+        return normalized_data
+
+    @property
+    def margin_type(self) -> str:
+        """Deprecated compatibility alias for markup_type."""
+
+        return self.markup_type
+
+    @property
+    def margin_value(self) -> float:
+        """Deprecated compatibility alias for markup_value."""
+
+        return self.markup_value
 
 
 class QuoteDraft(BaseModel):

@@ -362,16 +362,16 @@ CustomerQuote
 
 Alanlar:
 
-| Field          |       Type | Description        |
-| -------------- | ---------: | ------------------ |
-| base_cost      |     number | Tedarikçi maliyeti |
-| margin_amount  |     number | Kar                |
-| margin_percent |     number | Kar yüzdesi        |
-| sell_amount    |     number | Satış fiyatı       |
-| currency       |     string | Para birimi        |
-| cost_items     | list[dict] | Cost breakdown     |
-| validity_date  |       date | Teklif geçerliliği |
-| notes          |     string | Teklif notları     |
+| Field         |   Type | Description                                      |
+| ------------- | -----: | ------------------------------------------------ |
+| supplier_cost | number | Tedarikçi maliyeti                               |
+| markup_type   | string | `percentage`, `fixed` veya `manual` fiyat yöntemi |
+| markup_value  | number | Maliyet üzerine uygulanan markup değeri          |
+| final_price   | number | Yukarı yönde 10 EUR'a yuvarlanmış satış fiyatı  |
+| currency      | string | Para birimi                                      |
+
+Legacy `margin_type` ve `margin_value` constructor input'ları geçiş uyumluluğu
+için kabul edilir; serialized model alanları markup terminolojisini kullanır.
 
 ---
 

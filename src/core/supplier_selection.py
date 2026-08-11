@@ -74,6 +74,10 @@ def _load_supplier_profiles(path: Path = SUPPLIER_CAPABILITIES_PATH) -> List[Dic
                 "supported_equipment": raw.get("equipment_types", []),
                 "supported_service_types": raw.get("service_types", []),
                 "special_capabilities": raw.get("special_capabilities", []),
+                "route_regions": [
+                    _normalize(region)
+                    for region in raw.get("route_regions", [])
+                ],
                 "priority_routes": raw.get("priority_routes", []),
                 "reliability_score": raw.get("reliability_score", 0.70),
                 "price_score": raw.get("price_score", 0.70),
@@ -116,33 +120,73 @@ def _score_route(supplier: Dict[str, Any], shipment: Any) -> float:
     delivery_country = _normalize(getattr(shipment, "delivery_country", None))
     pickup_country = _normalize(getattr(shipment, "pickup_country", None))
 
-    supported = supplier["supported_countries"]
+    if not pickup_country or not delivery_country:
+        return 0.0
 
-    if delivery_country in supported:
+    supported_countries = supplier["supported_countries"]
+    route_regions = set(supplier.get("route_regions", []))
+    priority_routes = {
+        tuple(
+            _normalize(route_part)
+            for route_part in str(route).split("-", maxsplit=1)
+        )
+        for route in supplier.get("priority_routes", [])
+        if "-" in str(route)
+    }
+    requested_route = (pickup_country, delivery_country)
+    is_domestic = pickup_country == delivery_country
+    is_domestic_only = route_regions == {"domestic"}
+
+    if requested_route in priority_routes:
         return 1.0
 
-    if pickup_country in supported:
-        return 0.65
+    if is_domestic:
+        if (
+            "domestic" in route_regions
+            and delivery_country in supported_countries
+        ):
+            return 0.95
+        return 0.0
+
+    if is_domestic_only:
+        return 0.0
+
+    if (
+        pickup_country in supported_countries
+        and delivery_country in supported_countries
+    ):
+        return 0.95
+
+    if (
+        delivery_country in supported_countries
+        and any(region != "domestic" for region in route_regions)
+    ):
+        return 0.85
 
     return 0.0
 
 
-def _score_equipment(supplier: Dict[str, Any], equipment_text: str, service_type: str) -> float:
-    supported_equipment = [_normalize(item) for item in supplier["supported_equipment"]]
-    supported_services = [_normalize(item) for item in supplier["supported_service_types"]]
+def _supports_service(supplier: Dict[str, Any], service_type: str) -> bool:
+    supported_services = [
+        _normalize(item)
+        for item in supplier["supported_service_types"]
+    ]
+    return _normalize(service_type) in supported_services
 
-    service_score = 1.0 if _normalize(service_type) in supported_services else 0.55
+
+def _score_equipment(supplier: Dict[str, Any], equipment_text: str) -> float:
+    supported_equipment = [_normalize(item) for item in supplier["supported_equipment"]]
 
     if not equipment_text:
-        equipment_score = 0.65
-    elif any(item in equipment_text or equipment_text in item for item in supported_equipment):
-        equipment_score = 1.0
-    elif "ltl" in _normalize(service_type) and any(item in supported_equipment for item in ["ltl", "partial", "parsiyel"]):
-        equipment_score = 1.0
-    else:
-        equipment_score = 0.0
+        return 0.65
 
-    return equipment_score * service_score
+    if any(
+        item in equipment_text or equipment_text in item
+        for item in supported_equipment
+    ):
+        return 1.0
+
+    return 0.0
 
 
 def _score_risk_fit(supplier: Dict[str, Any], risk_level: str, equipment_text: str) -> float:
@@ -235,15 +279,41 @@ def select_suppliers_for_shipment(
             )
             continue
 
-        route_score = _score_route(supplier, shipment)
-        equipment_score = _score_equipment(supplier, equipment_text, service_type)
-        risk_score = _score_risk_fit(supplier, risk_level, equipment_text)
-
-        if route_score <= 0 or equipment_score <= 0:
+        if not _supports_service(supplier, service_type):
             rejected_suppliers.append(
                 {
                     "supplier_name": supplier["supplier_name"],
-                    "reason": "Güzergah veya ekipman uyumsuzluğu nedeniyle elendi.",
+                    "reason": (
+                        f"{service_type} servis tipi desteklenmediği için elendi."
+                    ),
+                }
+            )
+            continue
+
+        route_score = _score_route(supplier, shipment)
+        equipment_score = _score_equipment(supplier, equipment_text)
+        risk_score = _score_risk_fit(supplier, risk_level, equipment_text)
+
+        if route_score <= 0:
+            rejected_suppliers.append(
+                {
+                    "supplier_name": supplier["supplier_name"],
+                    "reason": (
+                        "Talep edilen origin-destination güzergahı capability "
+                        "datası tarafından desteklenmediği için elendi."
+                    ),
+                }
+            )
+            continue
+
+        if equipment_score <= 0:
+            rejected_suppliers.append(
+                {
+                    "supplier_name": supplier["supplier_name"],
+                    "reason": (
+                        f"Zorunlu ekipman '{equipment_text}' capability "
+                        "datasında desteklenmediği için elendi."
+                    ),
                 }
             )
             continue
@@ -287,7 +357,10 @@ def select_suppliers_for_shipment(
     return {
         "selected_suppliers": selected,
         "rejected_suppliers": rejected_suppliers,
-        "selection_strategy": "route + equipment + risk + price + speed weighted scoring",
+        "selection_strategy": (
+            "strict route + service + equipment eligibility, then risk + "
+            "price + speed weighted scoring"
+        ),
         "source": "supplier_selection_engine",
         "data_source": "data/supplier_capabilities.json",
     }

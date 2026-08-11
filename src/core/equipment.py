@@ -1,5 +1,6 @@
 from src.core.models import Shipment, EquipmentDecision
 from src.core.commodity_profile import get_commodity_operational_profile
+from src.core.cargo_weight import assess_cargo_weight
 
 def _has_meaningful_text(value):
     if value is None:
@@ -138,17 +139,35 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
                 ),
             )
 
-        if package.weight_kg and package.weight_kg >= 26000:
-            return EquipmentDecision(
-                selected_equipment="Lowbed / Heavy Haul",
-                reason="Tek parça yük 26 ton veya üzerindedir.",
-                confidence=0.90,
-                source="rule_engine",
-                explanation=(
-                    f"Tek parça ağırlık {package.weight_kg} kg olarak tespit edildi. "
-                    "Standart tenteli araç için ağır yük riski olduğundan Lowbed / Heavy Haul değerlendirilmelidir."
-                ),
-            )
+    cargo_weight = assess_cargo_weight(shipment)
+
+    if cargo_weight.is_confirmed_heavy_single_piece:
+        return EquipmentDecision(
+            selected_equipment="Lowbed / Heavy Haul",
+            reason="Teyit edilebilir tek parça yük 26 ton veya üzerindedir.",
+            confidence=0.90,
+            source="rule_engine",
+            explanation=(
+                "Tek parça ağırlık "
+                f"{cargo_weight.confirmed_single_piece_weight_kg} kg olarak "
+                "tespit edildi. Standart tenteli araç için ağır yük "
+                "riski olduğundan Lowbed / Heavy Haul değerlendirilmelidir."
+            ),
+        )
+
+    if cargo_weight.requires_clarification:
+        return EquipmentDecision(
+            selected_equipment="Heavy Cargo Equipment Review",
+            reason="Tek parça ve toplam ağırlık ayrımı net değildir.",
+            confidence=0.35,
+            source="rule_engine",
+            explanation=(
+                "Mevcut ağırlık bilgisi tek parça ağırlığı ile "
+                "shipment brüt veya package-line toplam ağırlığını "
+                "güvenle ayırmıyor. Ekipman atanmadan önce paket adedi ve "
+                "parça başı ağırlıklar netleştirilmelidir."
+            ),
+        )
 
     # High value cargo
     if shipment.is_high_value:

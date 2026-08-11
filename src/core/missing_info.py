@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List
 from src.core.models import Shipment
 from src.core.commodity_profile import get_commodity_operational_profile
+from src.core.cargo_weight import assess_cargo_weight
 
 
 class MissingInfoResult(BaseModel):
@@ -37,6 +38,10 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
     # ADR cargo requires an explicit ADR class
     if shipment.is_adr and not shipment.adr_class:
         missing_fields.append("adr class")
+
+    cargo_weight = assess_cargo_weight(shipment)
+    if cargo_weight.requires_clarification:
+        missing_fields.append("package count and per-piece weights")
 
     # Machine cargo requires dimensions
     if shipment.commodity and "makine" in shipment.commodity.lower():
@@ -75,6 +80,7 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
         "cargo ready date",
         "machine dimensions",
         "adr class",
+        "package count and per-piece weights",
     }
 
     profile_critical_fields = commodity_profile.get("critical_missing_info_fields", [])
