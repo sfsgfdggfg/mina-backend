@@ -4143,3 +4143,51 @@ Regression test sırasında parser deterministik Shipment ile izole edilmelidir.
 - API contract testi dış AI değişkenliğinden bağımsız hale gelir.
 - InMemory repository uygulama restart olduğunda kayıtları kaybeder; bu gerçek kalıcı storage değildir.
 - Grup 10 sonunda test suite sonucu `64 passed, 0 failed` olmuştur.
+
+---
+
+## DEC-088 — Resolvable Commodity Clarification Contract
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+Commodity profile tarafından üretilen kritik clarification sorularının cevabını
+saklayacak ve missing-info tarafından tekrar değerlendirecek genel bir domain
+kontratı oluşturulmuştur.
+
+Canonical requirement tanımı:
+
+    operational_profile.clarification_requirements
+
+Her requirement:
+
+    key
+    value_type
+    question
+    critical
+
+alanlarını taşır. Shipment cevapları:
+
+    commodity_attributes
+
+map'i içinde saklar. Key'in bulunmaması bilgi verilmediğini, key ile birlikte
+`false` bulunması ise müşterinin açık olumsuz cevabını ifade eder.
+
+Yeni domain servisi structured cevapları type ve commodity kapsamı açısından
+doğrular, Shipment kopyasına atomik uygular ve missing-info engine'in aynı
+canonical requirement tanımlarıyla quote readiness'i yeniden hesaplamasına izin
+verir.
+
+AI structured extraction modeli de aynı canonical key ve type bilgisini kullanır.
+Clarification draft metni ayrı bir translation tablosundan değil requirement
+`question` alanından üretilir.
+
+### Consequences
+
+* Commodity clarification soruları kalıcı dead-end oluşturmaz.
+* Explicit false ile eksik bilgi birbirinden ayrılır.
+* Unknown veya başka commodity'ye ait key kontrollü olarak reddedilir.
+* Eski `missing_info_fields` ve `critical_missing_info_fields` API görünümü canonical tanımlardan türetilir.
+* Reply ingestion, database persistence ve UI değişikliği bu kararın kapsamı dışındadır.

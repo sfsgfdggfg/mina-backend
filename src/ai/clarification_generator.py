@@ -1,5 +1,8 @@
 from src.core.models import Shipment, QuoteDraft
 from src.core.missing_info import MissingInfoResult
+from src.core.clarification_requirements import (
+    get_clarification_question,
+)
 
 
 def generate_clarification_draft(
@@ -56,32 +59,19 @@ def translate_missing_field(field: str) -> str:
     Internal missing field code -> customer friendly Turkish text
     """
 
+    commodity_question = get_clarification_question(field)
+
+    if commodity_question:
+        return commodity_question
+
     mapping = {
         "pickup location": "Yükleme adresi / yükleme bölgesi",
         "delivery location": "Teslimat adresi / teslimat bölgesi",
         "commodity": "Ürün cinsi",
         "cargo ready date": "Yük hazır tarihi",
         "machine dimensions": "Makine ölçüleri (en / boy / yükseklik)",
-        "msds/sds document": "MSDS/SDS belgesi",
-        "adr status": "Yükün ADR kapsamında olup olmadığı",
         "adr class": "Yükün ADR sınıfı ve varsa alt sınıfı",
         "package count and per-piece weights": "Paket / parça adedi ve her bir parçanın ağırlığı",
-        "chemical packaging type": "Kimyasal ürünün ambalaj tipi ve ambalaj uygunluğu",
-        "frozen temperature requirement": "Dondurulmuş ürün için gerekli sıcaklık derecesi",
-        "reefer confirmation": "Reefer araç gereksiniminin teyidi",
-        "cold chain sensitivity": "Ürünün soğuk zincir hassasiyeti",
-        "pharma temperature requirement": "İlaç / pharma yükü için sıcaklık gereksinimi",
-        "pharma compliance document": "İlaç / pharma uygunluk veya ruhsat belgeleri",
-        "pharma special transport requirements": "İlaç / pharma özel taşıma şartları",
-        "medical product type": "Medikal ürün tipi ve kullanım amacı",
-        "medical compliance document": "Medikal ürün uygunluk / belge gereklilikleri",
-        "medical temperature sensitivity": "Medikal ürünün sıcaklık hassasiyeti olup olmadığı",
-        "fragile packaging type": "Kırılabilir ürün ambalaj tipi",
-        "fragile stackability": "Ürünün istiflenebilir olup olmadığı",
-        "fragile lashing requirement": "Sabitleme / lashing gerekip gerekmediği",
-        "electronic cargo value": "Elektronik ürün yaklaşık değeri",
-        "electronic packaging sensitivity": "Elektronik ürün ambalajı ve darbe hassasiyeti",
-        "secure transport requirement": "Güvenli taşıma / kapalı kasa ihtiyacı",
     }
 
     return mapping.get(field, field)

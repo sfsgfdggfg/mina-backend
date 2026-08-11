@@ -4,6 +4,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.core.clarification_requirements import (
+    CLARIFICATION_VALUE_TYPES,
+)
+
 
 COMMODITY_DICTIONARY_PATH = Path("data/commodity_dictionary.json")
 
@@ -82,6 +86,7 @@ def validate_commodity_dictionary_file(
 
     seen_commodities: set[str] = set()
     keyword_owner: dict[str, str] = {}
+    clarification_key_owner: dict[str, str] = {}
 
     for index, item in enumerate(raw_data):
         if not isinstance(item, dict):
@@ -139,6 +144,68 @@ def validate_commodity_dictionary_file(
         if not isinstance(profile, dict):
             errors.append(f"{commodity}: operational_profile must be an object.")
             continue
+
+        clarification_requirements = profile.get(
+            "clarification_requirements"
+        )
+
+        if clarification_requirements is not None:
+            if not isinstance(clarification_requirements, list):
+                errors.append(
+                    f"{commodity}: operational_profile."
+                    "clarification_requirements must be a list."
+                )
+            else:
+                for requirement_index, requirement in enumerate(
+                    clarification_requirements
+                ):
+                    prefix = (
+                        f"{commodity}: operational_profile."
+                        "clarification_requirements"
+                        f"[{requirement_index}]"
+                    )
+
+                    if not isinstance(requirement, dict):
+                        errors.append(f"{prefix} must be an object.")
+                        continue
+
+                    key = requirement.get("key")
+                    value_type = requirement.get("value_type")
+                    question = requirement.get("question")
+                    critical = requirement.get("critical")
+
+                    if not _is_non_empty_string(key):
+                        errors.append(f"{prefix}.key is required.")
+                    else:
+                        normalized_key = str(key).strip()
+                        previous_owner = clarification_key_owner.get(
+                            normalized_key
+                        )
+
+                        if previous_owner:
+                            errors.append(
+                                "Duplicate clarification requirement key "
+                                f"'{normalized_key}' in {previous_owner} "
+                                f"and {commodity}."
+                            )
+                        else:
+                            clarification_key_owner[
+                                normalized_key
+                            ] = commodity
+
+                    if value_type not in CLARIFICATION_VALUE_TYPES:
+                        errors.append(
+                            f"{prefix}.value_type must be one of "
+                            f"{sorted(CLARIFICATION_VALUE_TYPES)}."
+                        )
+
+                    if not _is_non_empty_string(question):
+                        errors.append(f"{prefix}.question is required.")
+
+                    if not isinstance(critical, bool):
+                        errors.append(
+                            f"{prefix}.critical must be boolean."
+                        )
 
         for list_field in [
             "operational_notes",

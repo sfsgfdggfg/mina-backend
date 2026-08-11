@@ -3,6 +3,10 @@ from typing import List
 from src.core.models import Shipment
 from src.core.commodity_profile import get_commodity_operational_profile
 from src.core.cargo_weight import assess_cargo_weight
+from src.core.clarification_requirements import (
+    get_commodity_clarification_requirements,
+    is_clarification_requirement_answered,
+)
 
 
 class MissingInfoResult(BaseModel):
@@ -55,22 +59,16 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
 
     # Commodity profile driven missing info
     commodity_profile = get_commodity_operational_profile(shipment.commodity)
+    clarification_requirements = (
+        get_commodity_clarification_requirements(shipment.commodity)
+    )
 
-    profile_missing_fields = commodity_profile.get("missing_info_fields", [])
-    if isinstance(profile_missing_fields, list):
-        for field in profile_missing_fields:
-            if not isinstance(field, str):
-                continue
-
-            if (
-                field == "adr status"
-                and shipment.is_adr
-                and shipment.adr_class
-            ):
-                continue
-
-            if field not in missing_fields:
-                missing_fields.append(field)
+    for requirement in clarification_requirements:
+        if not is_clarification_requirement_answered(
+            shipment,
+            requirement,
+        ):
+            missing_fields.append(requirement.key)
 
     # If critical missing info exists, stop quote flow
     critical_fields = {
@@ -83,11 +81,11 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
         "package count and per-piece weights",
     }
 
-    profile_critical_fields = commodity_profile.get("critical_missing_info_fields", [])
-    if isinstance(profile_critical_fields, list):
-        critical_fields.update(
-            field for field in profile_critical_fields if isinstance(field, str)
-        )
+    critical_fields.update(
+        requirement.key
+        for requirement in clarification_requirements
+        if requirement.critical
+    )
 
     critical_missing = [field for field in missing_fields if field in critical_fields]
 

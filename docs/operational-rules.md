@@ -2519,3 +2519,36 @@ sonraki lifecycle geçişlerinin current truth'u olarak sunulmamalıdır.
 repository'den yeniden yüklemeli ve send safety kararını bu current approval ile
 yeniden hesaplamalıdır. Bu kural approved, rejected ve invalidated durumlarına
 aynı şekilde uygulanır.
+
+---
+
+## RULE-107 — Commodity Clarification Questions Must Be Resolvable
+
+Commodity profile kaynaklı her clarification requirement tek bir executable
+tanım taşımalıdır:
+
+    key
+    value_type
+    question
+    critical
+
+Canonical tanım `data/commodity_dictionary.json` içindeki
+`operational_profile.clarification_requirements` alanıdır. Ayrı
+`missing_info_fields` ve `critical_missing_info_fields` listeleri data içinde
+tekrar tutulmamalı; gerekiyorsa mevcut output uyumluluğu için bu tanımlardan
+türetilmelidir.
+
+Müşteri emailinde açıkça bulunan cevaplar AI extraction tarafından Shipment
+`commodity_attributes` alanına canonical key ile yazılır. Bilgi verilmemişse key
+bulunmaz. Açık bir `false` / hayır cevabı key mevcut ve value `false` olacak
+şekilde saklanır; eksik bilgi sayılmaz.
+
+Clarification cevapları mevcut Shipment'a uygulanırken:
+
+* key tanımlı ve shipment commodity'si için geçerli olmalıdır,
+* value canonical `value_type` ile eşleşmelidir,
+* uygulama tüm cevaplar doğrulandıktan sonra atomik olarak yeni Shipment kopyasına yapılmalıdır,
+* bilinmeyen key arbitrary Shipment alanı oluşturmamalı ve kontrollü hata vermelidir,
+* missing-info yeniden çalıştırıldığında yalnızca cevapsız requirement'lar eksik kalmalıdır.
+
+Bu domain kontratı email reply ingestion veya persistence anlamına gelmez.

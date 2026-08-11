@@ -1,5 +1,10 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Any, Optional, List
+
+from src.core.clarification_requirements import (
+    ClarificationAnswerValue,
+    normalize_clarification_answers,
+)
 
 
 class Package(BaseModel):
@@ -49,7 +54,19 @@ class Shipment(BaseModel):
     is_high_value: bool = False
     special_notes: Optional[str] = None
 
+    commodity_attributes: dict[
+        str, ClarificationAnswerValue
+    ] = Field(default_factory=dict)
+
     packages: List[Package] = Field(default_factory=list)
+
+    @field_validator("commodity_attributes")
+    @classmethod
+    def validate_commodity_attributes(
+        cls,
+        value: dict[str, ClarificationAnswerValue],
+    ) -> dict[str, ClarificationAnswerValue]:
+        return normalize_clarification_answers(value)
 
 
 class EquipmentDecision(BaseModel):

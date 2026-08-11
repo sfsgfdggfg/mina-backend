@@ -1,14 +1,15 @@
 import json
 import re
 from pathlib import Path
-from typing import Optional, List
-from pydantic import BaseModel, Field
+from typing import Optional
 from openai import OpenAI
 from src.core.normalization import normalize_shipment
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.core.models import Shipment, Package
 from src.core.gtip import interpret_gtip_from_email
 from src.core.commodity_profile import apply_commodity_profile_to_shipment
+from src.ai.extraction_models import ShipmentExtraction
+from src.ai.extraction_mapping import shipment_from_extraction
 
 GENERIC_CUSTOMER_NAMES = {
     "",
@@ -55,60 +56,6 @@ def clean_customer_name(customer_name: str | None, email_text: str) -> str:
         return "Unknown Customer"
 
     return cleaned
-
-class ExtractedPackage(BaseModel):
-    package_type: str = Field(default="unknown", description="Package type such as pallet, crate, machine, roll, loose")
-    quantity: int = Field(default=1, description="Number of packages or pieces")
-    length_cm: Optional[float] = Field(default=None, description="Length in centimeters")
-    width_cm: Optional[float] = Field(default=None, description="Width in centimeters")
-    height_cm: Optional[float] = Field(default=None, description="Height in centimeters")
-    weight_kg: Optional[float] = Field(
-        default=None,
-        description=(
-            "Weight stated for this package line in kg. For quantity 1 it is "
-            "single-piece weight; for quantity greater than 1 preserve the "
-            "stated value without assuming per-piece versus line-total."
-        ),
-    )
-    stackable: Optional[bool] = Field(default=None, description="Whether cargo is stackable")
-
-
-class ShipmentExtraction(BaseModel):
-    customer_name: str = Field(default="Unknown Customer", description="Customer name if known from the email")
-    pickup_country: Optional[str] = Field(default=None, description="Pickup country")
-    pickup_city: Optional[str] = Field(default=None, description="Pickup city")
-    pickup_area: Optional[str] = Field(default=None, description="Pickup area, industrial zone, district")
-    pickup_postcode: Optional[str] = Field(default=None, description="Pickup postcode if available")
-
-    delivery_country: Optional[str] = Field(default=None, description="Delivery country")
-    delivery_city: Optional[str] = Field(default=None, description="Delivery city")
-    delivery_area: Optional[str] = Field(default=None, description="Delivery area, district")
-    delivery_postcode: Optional[str] = Field(default=None, description="Delivery postcode if available")
-
-    commodity: Optional[str] = Field(default=None, description="Cargo / product type")
-    gross_weight_kg: Optional[float] = Field(
-        default=None,
-        description="Total gross shipment weight in kg",
-    )
-    weight_is_approximate: bool = Field(default=True, description="Whether weight is approximate")
-
-    service_type: str = Field(default="FTL", description="FTL or LTL. Default FTL unless partial is explicitly requested")
-    equipment_type: Optional[str] = Field(default=None, description="Equipment requested by customer if explicitly stated")
-
-    cargo_ready_date: Optional[str] = Field(default=None, description="Cargo ready date in YYYY-MM-DD format if possible")
-    required_delivery_date: Optional[str] = Field(default=None, description="Required delivery date in YYYY-MM-DD format if possible")
-
-    is_adr: bool = Field(default=False, description="Whether cargo is ADR / dangerous goods")
-    adr_class: Optional[str] = Field(default=None, description="ADR class if mentioned")
-
-    is_temperature_controlled: bool = Field(default=False, description="Whether temperature control is required")
-    temperature_requirement: Optional[str] = Field(default=None, description="Temperature requirement such as +4C or -18C")
-
-    is_high_value: bool = Field(default=False, description="Whether cargo appears high value or theft sensitive")
-    special_notes: Optional[str] = Field(default=None, description="Other important operational notes")
-
-    packages: List[ExtractedPackage] = Field(default_factory=list)
-
 
 def parse_email_to_shipment(email_text: str) -> Shipment:
     """
@@ -371,24 +318,44 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
     if adr_negated:
         shipment.is_adr = False
         shipment.adr_class = None
+        shipment.commodity_attributes["adr status"] = False
     elif adr_class_match:
         shipment.is_adr = True
         shipment.adr_class = adr_class_match.group(1)
+        shipment.commodity_attributes["adr status"] = True
 
         if not shipment.commodity:
             shipment.commodity = f"ADR Class {shipment.adr_class}"
     elif adr_mentioned:
         shipment.is_adr = True
         shipment.adr_class = None
+        shipment.commodity_attributes["adr status"] = True
     else:
         shipment.is_adr = False
         shipment.adr_class = None
+        shipment.commodity_attributes.pop("adr status", None)
 
     shipment = _apply_commodity_safety_overrides(shipment, email_text)
     shipment = _apply_gtip_safety_overrides(shipment, email_text)
     shipment = apply_commodity_profile_to_shipment(shipment)
 
     return shipment
+
+
+def build_shipment_from_extraction(
+    extracted: ShipmentExtraction,
+    email_text: str,
+) -> Shipment:
+    """Convert structured extraction into the executable Shipment model."""
+
+    shipment = shipment_from_extraction(extracted)
+    shipment.customer_name = clean_customer_name(
+        customer_name=extracted.customer_name,
+        email_text=email_text,
+    )
+
+    shipment = _apply_email_text_safety_overrides(shipment, email_text)
+    return normalize_shipment(shipment)
 
 
 def parse_email_with_ai(email_text: str) -> Shipment:
@@ -415,6 +382,9 @@ def parse_email_with_ai(email_text: str) -> Shipment:
                     "Müşteri parsiyel istemedikçe service_type değerini FTL kabul et. "
                     "Özel ekipman sadece açıkça belirtilmişse çıkar. "
                     "ADR, reefer, yüksek değerli yük gibi riskli bilgileri asla varsayma. "
+                    "Commodity-specific bilgiler mailde açıkça varsa "
+                    "commodity_attributes alanında yalnızca schema'daki canonical key'leri kullan. "
+                    "Açık false / hayır cevabını false olarak sakla; eksik bilgi için key oluşturma. "
                     "Tarihleri mümkünse YYYY-MM-DD formatına çevir. Emin değilsen null bırak."
                     "Ülke ve ürün adlarını mümkünse Türkçe canonical değerlerle çıkar: Türkiye, Almanya, Makine, Tekstil, Gıda gibi."
                 ),
@@ -428,47 +398,4 @@ def parse_email_with_ai(email_text: str) -> Shipment:
     )
 
     extracted = response.choices[0].message.parsed
-
-    packages = [
-        Package(
-            package_type=p.package_type,
-            quantity=p.quantity,
-            length_cm=p.length_cm,
-            width_cm=p.width_cm,
-            height_cm=p.height_cm,
-            weight_kg=p.weight_kg,
-            stackable=p.stackable,
-        )
-        for p in extracted.packages
-    ]
-    shipment = Shipment(
-        customer_name=clean_customer_name(
-            customer_name=extracted.customer_name,
-            email_text=email_text,
-        ),
-        pickup_country=extracted.pickup_country,
-        pickup_city=extracted.pickup_city,
-        pickup_area=extracted.pickup_area,
-        pickup_postcode=extracted.pickup_postcode,
-        delivery_country=extracted.delivery_country,
-        delivery_city=extracted.delivery_city,
-        delivery_area=extracted.delivery_area,
-        delivery_postcode=extracted.delivery_postcode,
-        commodity=extracted.commodity,
-        gross_weight_kg=extracted.gross_weight_kg,
-        weight_is_approximate=extracted.weight_is_approximate,
-        service_type=extracted.service_type,
-        equipment_type=extracted.equipment_type,
-        cargo_ready_date=extracted.cargo_ready_date,
-        required_delivery_date=extracted.required_delivery_date,
-        is_adr=extracted.is_adr,
-        adr_class=extracted.adr_class,
-        is_temperature_controlled=extracted.is_temperature_controlled,
-        temperature_requirement=extracted.temperature_requirement,
-        is_high_value=extracted.is_high_value,
-        special_notes=extracted.special_notes,
-        packages=packages,
-    )
-
-    shipment = _apply_email_text_safety_overrides(shipment, email_text)
-    return normalize_shipment(shipment)
+    return build_shipment_from_extraction(extracted, email_text)

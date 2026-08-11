@@ -98,10 +98,25 @@
         "Sıcaklık derecesi müşteriyle doğrulanmalıdır.",
         "Soğuk zincir kırılma riski dikkate alınmalıdır."
       ],
-      "missing_info_fields": [
-        "frozen temperature requirement",
-        "reefer confirmation",
-        "cold chain sensitivity"
+      "clarification_requirements": [
+        {
+          "key": "frozen temperature requirement",
+          "value_type": "text",
+          "question": "Dondurulmuş ürün için gerekli taşıma sıcaklığı nedir?",
+          "critical": false
+        },
+        {
+          "key": "reefer confirmation",
+          "value_type": "boolean",
+          "question": "Reefer araç gerektiğini teyit eder misiniz?",
+          "critical": false
+        },
+        {
+          "key": "cold chain sensitivity",
+          "value_type": "boolean",
+          "question": "Ürün soğuk zincir kesintisine hassas mıdır?",
+          "critical": false
+        }
       ],
       "missing_info_reason": "Dondurulmuş gıdalarda sıcaklık derecesi, reefer onayı ve soğuk zincir hassasiyeti kontrol edilmelidir.",
       "action_checklist": [
@@ -152,15 +167,25 @@
         "ADR kapsamı müşteriyle doğrulanmalıdır.",
         "Ambalaj ve etiketleme uygunluğu kontrol edilmelidir."
       ],
-      "missing_info_fields": [
-        "msds/sds document",
-        "adr status",
-        "chemical packaging type"
-      ],
-      "critical_missing_info_fields": [
-        "msds/sds document",
-        "adr status",
-        "chemical packaging type"
+      "clarification_requirements": [
+        {
+          "key": "msds/sds document",
+          "value_type": "boolean",
+          "question": "MSDS/SDS belgesi mevcut veya paylaşılmış mıdır?",
+          "critical": true
+        },
+        {
+          "key": "adr status",
+          "value_type": "boolean",
+          "question": "Yük ADR kapsamında mıdır?",
+          "critical": true
+        },
+        {
+          "key": "chemical packaging type",
+          "value_type": "text",
+          "question": "Kimyasal ürünün ambalaj tipi ve ambalaj uygunluğu nedir?",
+          "critical": true
+        }
       ],
       "missing_info_reason": "Kimyasal ürünlerde MSDS/SDS, ADR durumu ve ambalaj tipi netleşmeden fiyat çalışması tamamlanmamalıdır.",
       "action_checklist": [
@@ -211,15 +236,25 @@
         "Ülke bazlı uygunluk / belge gerekliliği kontrol edilmelidir.",
         "Sıcaklık hassasiyeti olup olmadığı sorulmalıdır."
       ],
-      "missing_info_fields": [
-        "medical product type",
-        "medical compliance document",
-        "medical temperature sensitivity"
-      ],
-      "critical_missing_info_fields": [
-        "medical product type",
-        "medical compliance document",
-        "medical temperature sensitivity"
+      "clarification_requirements": [
+        {
+          "key": "medical product type",
+          "value_type": "text",
+          "question": "Medikal ürünün tipi ve kullanım amacı nedir?",
+          "critical": true
+        },
+        {
+          "key": "medical compliance document",
+          "value_type": "boolean",
+          "question": "Gerekli medikal uygunluk belgeleri mevcut mu?",
+          "critical": true
+        },
+        {
+          "key": "medical temperature sensitivity",
+          "value_type": "boolean",
+          "question": "Medikal ürün sıcaklık kontrollü taşıma gerektiriyor mu?",
+          "critical": true
+        }
       ],
       "missing_info_reason": "Medikal ürünlerde ürün tipi, belge gereklilikleri ve sıcaklık hassasiyeti netleşmeden fiyat çalışması tamamlanmamalıdır.",
       "action_checklist": [
@@ -251,15 +286,25 @@
         "Ruhsat / uygunluk belgeleri kontrol edilmelidir.",
         "Pharma taşıma şartları müşteriyle netleştirilmelidir."
       ],
-      "missing_info_fields": [
-        "pharma temperature requirement",
-        "pharma compliance document",
-        "pharma special transport requirements"
-      ],
-      "critical_missing_info_fields": [
-        "pharma temperature requirement",
-        "pharma compliance document",
-        "pharma special transport requirements"
+      "clarification_requirements": [
+        {
+          "key": "pharma temperature requirement",
+          "value_type": "text",
+          "question": "İlaç / pharma yükü için sıcaklık gereksinimi nedir?",
+          "critical": true
+        },
+        {
+          "key": "pharma compliance document",
+          "value_type": "boolean",
+          "question": "Gerekli pharma uygunluk veya ruhsat belgeleri mevcut mu?",
+          "critical": true
+        },
+        {
+          "key": "pharma special transport requirements",
+          "value_type": "text",
+          "question": "Varsa özel pharma taşıma şartları nelerdir? Yoksa 'yok' olarak belirtiniz.",
+          "critical": true
+        }
       ],
       "missing_info_reason": "İlaç / pharma yüklerinde sıcaklık gereksinimi, uygunluk belgeleri ve özel taşıma şartları netleşmeden fiyat çalışması tamamlanmamalıdır.",
       "action_checklist": [
@@ -296,15 +341,25 @@
         "Ambalaj ve darbe hassasiyeti kontrol edilmeli.",
         "Gerekirse kapalı kasa / güvenli taşıma değerlendirilmelidir."
       ],
-      "missing_info_fields": [
-        "electronic cargo value",
-        "electronic packaging sensitivity",
-        "secure transport requirement"
-      ],
-      "critical_missing_info_fields": [
-        "electronic cargo value",
-        "electronic packaging sensitivity",
-        "secure transport requirement"
+      "clarification_requirements": [
+        {
+          "key": "electronic cargo value",
+          "value_type": "text",
+          "question": "Elektronik ürünlerin yaklaşık toplam değeri ve para birimi nedir?",
+          "critical": true
+        },
+        {
+          "key": "electronic packaging sensitivity",
+          "value_type": "text",
+          "question": "Elektronik ürünlerin ambalajı ve darbe hassasiyeti nasıldır?",
+          "critical": true
+        },
+        {
+          "key": "secure transport requirement",
+          "value_type": "boolean",
+          "question": "Güvenli taşıma veya kapalı kasa gerekiyor mu?",
+          "critical": true
+        }
       ],
       "missing_info_reason": "Elektronik ürünlerde yaklaşık değer, ambalaj/hassasiyet ve güvenli taşıma ihtiyacı netleşmeden fiyat çalışması tamamlanmamalıdır.",
       "action_checklist": [
@@ -337,15 +392,25 @@
         "Sabitleme / lashing ihtiyacı değerlendirilmelidir.",
         "İstiflenebilirlik netleştirilmelidir."
       ],
-      "missing_info_fields": [
-        "fragile packaging type",
-        "fragile stackability",
-        "fragile lashing requirement"
-      ],
-      "critical_missing_info_fields": [
-        "fragile packaging type",
-        "fragile stackability",
-        "fragile lashing requirement"
+      "clarification_requirements": [
+        {
+          "key": "fragile packaging type",
+          "value_type": "text",
+          "question": "Kırılabilir ürünün ambalaj tipi ve koruma seviyesi nedir?",
+          "critical": true
+        },
+        {
+          "key": "fragile stackability",
+          "value_type": "boolean",
+          "question": "Kırılabilir ürün istiflenebilir mi?",
+          "critical": true
+        },
+        {
+          "key": "fragile lashing requirement",
+          "value_type": "boolean",
+          "question": "Sabitleme / lashing gerekiyor mu?",
+          "critical": true
+        }
       ],
       "missing_info_reason": "Cam / kırılabilir ürünlerde ambalaj, istiflenebilirlik ve sabitleme ihtiyacı netleşmeden fiyat çalışması tamamlanmamalıdır.",
       "action_checklist": [

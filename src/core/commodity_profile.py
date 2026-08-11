@@ -46,6 +46,36 @@ def load_commodity_dictionary() -> list[dict]:
     return [item for item in raw_data if isinstance(item, dict)]
 
 
+def _with_derived_clarification_fields(
+    record: Dict[str, Any],
+) -> Dict[str, Any]:
+    result = dict(record)
+    profile = result.get("operational_profile")
+
+    if not isinstance(profile, dict):
+        return result
+
+    derived_profile = dict(profile)
+    requirements = derived_profile.get("clarification_requirements") or []
+
+    if isinstance(requirements, list):
+        derived_profile["missing_info_fields"] = [
+            requirement.get("key")
+            for requirement in requirements
+            if isinstance(requirement, dict) and requirement.get("key")
+        ]
+        derived_profile["critical_missing_info_fields"] = [
+            requirement.get("key")
+            for requirement in requirements
+            if isinstance(requirement, dict)
+            and requirement.get("key")
+            and requirement.get("critical") is True
+        ]
+
+    result["operational_profile"] = derived_profile
+    return result
+
+
 def get_commodity_record(commodity: Optional[str]) -> Optional[Dict[str, Any]]:
     normalized_commodity = _normalize(commodity)
 
@@ -54,7 +84,7 @@ def get_commodity_record(commodity: Optional[str]) -> Optional[Dict[str, Any]]:
 
     for item in load_commodity_dictionary():
         if _normalize(item.get("canonical_commodity")) == normalized_commodity:
-            return item
+            return _with_derived_clarification_fields(item)
 
     return None
 
