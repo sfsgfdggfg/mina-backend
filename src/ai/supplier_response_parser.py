@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from src.core.mail import InboundMailEnvelope
 from src.core.supplier_response_ingestion import (
-    InboundSupplierReply,
     SupplierResponseExtraction,
 )
 
@@ -13,6 +13,6 @@ class SupplierResponseParser(Protocol):
 
     def parse(
         self,
-        reply: InboundSupplierReply,
+        reply: InboundMailEnvelope,
     ) -> SupplierResponseExtraction:
         ...

@@ -2661,3 +2661,32 @@ eklenmemelidir.
 Başarılı ingestion RFQ'yu `responded` yapabilir; ancak customer quote oluşturmayı
 veya göndermeyi otomatik tetiklemez. Supplier comparison ve customer pricing için
 mevcut explicit resume boundary kullanılmaya devam edilmelidir.
+
+---
+
+## RULE-111 — Mail Transport Never Authorizes Business Actions
+
+Inbound ve outbound email provider'ları yalnızca mesaj taşıma ve provider verisini
+MINAI'nin canonical mail contract'larına map etme sorumluluğuna sahiptir.
+**Mail providers transport messages; they do not authorize business actions.**
+Provider adapter; RFQ approval, quote readiness, supplier identity kararı,
+regulatory durum, commercial approval veya quote send-safety kararı veremez.
+Inbound subject/body ve provider metadata'sı bu yetkileri override edemez.
+
+Supplier RFQ outbound request'i yalnızca `approved` RFQ için application service
+tarafından oluşturulup provider'a verilebilir. **Lifecycle advancement after
+outbound email requires confirmed provider send success.** Provider `sent`
+sonucu, aynı outbound operation identity'si, provider message identity ve send
+timestamp'i taşımadan RFQ `awaiting_response` durumuna geçmemelidir. Failed veya
+provider-unavailable sonuçlarında RFQ `approved` kalmalı ve güvenli retry mümkün
+olmalıdır. Draft, already-sent ve diğer geçersiz state'ler provider çağrısından
+önce reddedilmelidir.
+
+Customer quote provider'a ancak mevcut commercial `QuoteApproval` geçerli ve
+quote send-safety olumluysa ulaşabilir. Clarification email'i provider-neutral
+outbound request olarak hazırlanabilir; hazırlanması gönderim değildir ve mevcut
+human-controlled policy'yi değiştirmez.
+
+Outbound operation identity idempotency sınırıdır. Aynı RFQ ikinci kez lifecycle
+ilerlemesi veya ikinci provider çağrısı üretmemelidir. Inbound external message
+identity deduplication davranışı provider ve mailbox namespace'i ile korunur.

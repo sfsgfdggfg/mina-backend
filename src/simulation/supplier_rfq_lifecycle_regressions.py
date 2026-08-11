@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
+
+from src.core.mail import MailSendResult
 from src.core.models import Package, Shipment
 from src.core.quote_approval_repository import (
     InMemoryQuoteApprovalRepository,
@@ -154,11 +157,27 @@ def evaluate_supplier_rfq_lifecycle_regressions() -> dict:
             "failures": failures,
         }
 
-    awaiting = send_supplier_rfq(rfq_repository, draft.rfq_id)
+    confirmed_send = MailSendResult(
+        operation_id=f"supplier-rfq:{draft.rfq_id}",
+        status="sent",
+        reason="Regression provider confirmed delivery.",
+        provider_name="regression-provider",
+        provider_message_id=f"message-{draft.rfq_id}",
+        sent_at=datetime(2026, 8, 11, 10, 0, 0),
+    )
+    awaiting = send_supplier_rfq(
+        rfq_repository,
+        draft.rfq_id,
+        confirmed_send,
+    )
     if awaiting.status != "awaiting_response" or awaiting.sent_at is None:
         failures.append("approved RFQ did not enter awaiting_response")
     try:
-        send_supplier_rfq(rfq_repository, draft.rfq_id)
+        send_supplier_rfq(
+            rfq_repository,
+            draft.rfq_id,
+            confirmed_send,
+        )
     except SupplierRFQTransitionError:
         pass
     else:

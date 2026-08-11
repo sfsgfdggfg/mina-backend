@@ -29,6 +29,9 @@ from src.workflow.supplier_response_ingestion import (
     SupplierReplyIngestionRequest,
     ingest_supplier_reply,
 )
+from src.workflow.mail_delivery import send_supplier_rfq_via_mail
+from src.workflow.mail_ingestion import process_customer_inquiry_mail
+from src.core.mail import InboundMailEnvelope, OutboundMailSender
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -57,7 +60,6 @@ from src.core.supplier_rfq_lifecycle import (
     SupplierRFQTransitionError,
     approve_supplier_rfq,
     attach_supplier_rfq_response,
-    send_supplier_rfq,
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
@@ -72,6 +74,9 @@ from src.simulation.clarification_resolution_regressions import (
 )
 from src.simulation.regulatory_compliance_regressions import (
     evaluate_regulatory_compliance_regressions,
+)
+from src.simulation.mail_adapter_regressions import (
+    evaluate_mail_adapter_regressions,
 )
 from src.simulation.supplier_rfq_lifecycle_regressions import (
     evaluate_supplier_rfq_lifecycle_regressions,
@@ -91,6 +96,7 @@ app = FastAPI(
 quote_approval_repository = InMemoryQuoteApprovalRepository()
 quote_case_repository = InMemoryQuoteCaseRepository()
 supplier_rfq_repository = InMemorySupplierRFQRepository()
+outbound_mail_sender: OutboundMailSender | None = None
 
 
 class ProcessEmailRequest(BaseModel):
@@ -741,10 +747,12 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
 
 @app.post("/process-email")
 def process_email(request: ProcessEmailRequest):
-    shipment = parse_email_with_ai(request.email_text)
-    result = process_shipment(
-        shipment=shipment,
-        email_text=request.email_text,
+    result = process_customer_inquiry_mail(
+        mail=InboundMailEnvelope(
+            body_text=request.email_text,
+            source="manual",
+        ),
+        shipment_parser=parse_email_with_ai,
         rfq_repository=supplier_rfq_repository,
         approval_repository=quote_approval_repository,
         quote_case_repository=quote_case_repository,
@@ -802,14 +810,13 @@ def approve_supplier_rfq_endpoint(
 @app.post("/supplier-rfqs/{rfq_id}/send")
 def send_supplier_rfq_endpoint(rfq_id: str):
     try:
-        return send_supplier_rfq(
+        return send_supplier_rfq_via_mail(
             repository=supplier_rfq_repository,
             rfq_id=rfq_id,
+            sender=outbound_mail_sender,
         ).model_dump()
     except SupplierRFQNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except SupplierRFQTransitionError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/supplier-rfqs/{rfq_id}/responses")
@@ -936,6 +943,7 @@ def run_test_suite():
     test_results.append(
         evaluate_regulatory_compliance_regressions()
     )
+    test_results.append(evaluate_mail_adapter_regressions())
     test_results.append(
         evaluate_supplier_rfq_lifecycle_regressions()
     )

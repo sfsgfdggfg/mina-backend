@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
+
+from src.core.mail import MailSendResult
 from src.core.models import EquipmentDecision, Shipment
 from src.core.supplier_quote_comparison import (
     build_supplier_quote_comparisons,
@@ -58,7 +61,18 @@ def _repository_with_rfq(
             approved_by="Regression Operator",
         )
     if status == "awaiting_response":
-        draft = send_supplier_rfq(repository, draft.rfq_id)
+        draft = send_supplier_rfq(
+            repository,
+            draft.rfq_id,
+            MailSendResult(
+                operation_id=f"supplier-rfq:{draft.rfq_id}",
+                status="sent",
+                reason="Regression provider confirmed delivery.",
+                provider_name="regression-provider",
+                provider_message_id=f"message-{draft.rfq_id}",
+                sent_at=datetime(2026, 8, 11, 10, 0, 0),
+            ),
+        )
     return repository, draft
 
 

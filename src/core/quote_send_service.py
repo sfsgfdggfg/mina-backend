@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from src.core.mail import OutboundMailRequest
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -33,6 +34,7 @@ class QuoteSendServiceResult(BaseModel):
     body: str
 
     safety_decision: QuoteSendSafetyDecision
+    mail_request: OutboundMailRequest | None = None
 
     message: str
     source: str = "quote_send_service"
@@ -69,11 +71,22 @@ def prepare_quote_for_sending(
             subject=quote_draft.subject,
             body=quote_draft.body,
             safety_decision=safety_decision,
+            mail_request=None,
             message=(
                 "Teklif gönderime hazırlanmadı. "
                 f"{safety_decision.reason}"
             ),
         )
+
+    mail_request = OutboundMailRequest(
+        operation_id=f"customer-quote:{approval.approval_id}",
+        recipients=[normalized_recipient],
+        subject=quote_draft.subject,
+        body_text=quote_draft.body,
+        purpose="customer_quote",
+        correlation_reference=approval.approval_id,
+        reference_metadata={"approval_id": approval.approval_id},
+    )
 
     return QuoteSendServiceResult(
         status="send_ready",
@@ -82,6 +95,7 @@ def prepare_quote_for_sending(
         subject=quote_draft.subject,
         body=quote_draft.body,
         safety_decision=safety_decision,
+        mail_request=mail_request,
         message=(
             "Teklif gönderime hazır. Gerçek e-posta gönderimi "
             "henüz çalıştırılmadı."

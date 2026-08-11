@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from src.core.mail import InboundMailEnvelope
 
 from src.core.supplier_rfq import (
     SUPPLIER_RFQ_REFERENCE_PREFIX,
@@ -15,12 +16,9 @@ from src.core.supplier_rfq import (
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 
 
-InboundSupplierReplySource = Literal[
-    "email",
-    "manual",
-    "portal",
-    "api",
-]
+# Compatibility export: supplier reply ingestion now consumes the canonical
+# provider-neutral mail envelope rather than owning a second inbound model.
+InboundSupplierReply = InboundMailEnvelope
 
 CommercialResponseField = Literal[
     "status",
@@ -63,49 +61,6 @@ SupplierReplyIngestionStatus = Literal[
     "parsing_required",
     "parsing_failed",
 ]
-
-
-class InboundSupplierReply(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    sender_address: str
-    sender_name: Optional[str] = None
-    subject: Optional[str] = None
-    body_text: str
-    received_at: Optional[datetime] = None
-    external_message_id: Optional[str] = None
-    explicit_rfq_reference: Optional[str] = None
-    source: InboundSupplierReplySource = "manual"
-    provider_name: Optional[str] = None
-
-    @field_validator("sender_address")
-    @classmethod
-    def normalize_sender_address(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if not normalized or "@" not in normalized:
-            raise ValueError("A valid supplier sender address is required.")
-        return normalized
-
-    @field_validator(
-        "sender_name",
-        "subject",
-        "external_message_id",
-        "explicit_rfq_reference",
-        "provider_name",
-    )
-    @classmethod
-    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
-
-    @property
-    def message_deduplication_key(self) -> Optional[str]:
-        if self.external_message_id is None:
-            return None
-        namespace = (self.provider_name or self.source).strip().lower()
-        return f"{namespace}:{self.external_message_id}"
 
 
 class SupplierResponseExtraction(BaseModel):
@@ -213,17 +168,17 @@ def _subject_rfq_ids(subject: Optional[str]) -> list[str]:
 
 
 def _sender_matches_draft(
-    reply: InboundSupplierReply,
+    reply: InboundMailEnvelope,
     draft: SupplierRFQDraft,
 ) -> bool:
-    if not draft.recipient_email:
+    if not draft.recipient_email or not reply.sender_address:
         return False
     return draft.recipient_email.strip().lower() == reply.sender_address
 
 
 def _correlate_referenced_draft(
     *,
-    reply: InboundSupplierReply,
+    reply: InboundMailEnvelope,
     repository: SupplierRFQRepository,
     rfq_id: str,
     method: SupplierRFQCorrelationMethod,
@@ -264,7 +219,7 @@ def _correlate_referenced_draft(
 
 
 def correlate_supplier_reply(
-    reply: InboundSupplierReply,
+    reply: InboundMailEnvelope,
     repository: SupplierRFQRepository,
 ) -> SupplierRFQCorrelationResult:
     if reply.explicit_rfq_reference:

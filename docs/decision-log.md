@@ -4366,3 +4366,54 @@ AI/Graph adapter'ları aynı application boundary'yi kullanacaktır.
 * AI extraction deterministic identity ve lifecycle validation'ı bypass edemez.
 * Successful ingestion customer quote progression'ı otomatik başlatmaz.
 * Outlook/Graph, mailbox polling, webhook, database ve authentication bu kararın kapsamı dışındadır.
+
+---
+
+## DEC-092 — Provider-Neutral Mail Adapter Boundary
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+Inbound ve outbound email işlemleri için provider-neutral application boundary
+oluşturulmuştur. Canonical inbound envelope yalnızca MINAI'nin bugün kullandığı
+message identity, provider/mailbox identity, sender/recipient, subject, text body,
+received timestamp ve reply/RFQ reference metadata'sını taşır. Supplier reply
+ingestion ayrı bir inbound model tutmak yerine aynı canonical envelope'i tüketir.
+Customer `/process-email` akışı da body text'i değiştirmeden bu envelope üzerinden
+mevcut parser ve shipment workflow'una aktarır.
+
+Outbound contract; stable operation identity, recipients, subject, text body,
+message purpose ve optional correlation metadata taşır. Purpose değerleri customer
+clarification, supplier RFQ ve customer quote ile sınırlıdır. Provider interface
+yalnızca canonical request'i gönderir ve `sent`, `failed`,
+`rejected_before_provider` veya `provider_unavailable` sonucu döndürür. Raw
+provider exception'ları application sonucuna sızdırılmaz.
+
+Supplier RFQ mail application service'i approval ve lifecycle state'ini provider
+çağrısından önce kontrol eder. Yalnızca provider'ın confirmed `sent` sonucu
+sonrasında merkezi RFQ lifecycle transition çağrılır. Failure/unavailable sonucu
+RFQ'yu `approved` ve retryable bırakır. Stable `supplier-rfq:<rfq_id>` operation
+identity future provider idempotency'si için kullanılır; already-sent RFQ provider'a
+yeniden verilmez.
+
+DEC-090 içindeki gerçek teslimat olmadan send boundary'sinin `awaiting_response`
+durumuna geçebileceği yönündeki geçici yaklaşım bu kararla supersede edilmiştir.
+Provider yapılandırılmamış API send çağrısı teslimat varsaymaz; controlled
+`provider_unavailable` sonucu döner ve lifecycle'ı ilerletmez.
+
+Customer quote preparation mevcut QuoteApproval ve send-safety motorunu authority
+olarak kullanmaya devam eder. Olumsuz karar provider çağrısından önce
+`rejected_before_provider` olur. Olumlu karar canonical outbound request üretir ve
+future provider adapter üzerinden gönderilebilir. Clarification draft için ortak
+request builder vardır; bu builder herhangi bir send side effect'i üretmez.
+
+### Consequences
+
+* Mail providers transport messages; they do not authorize business actions.
+* Lifecycle advancement after outbound email requires confirmed provider send success.
+* Provider SDK objects core/domain ve workflow contract'larına girmez.
+* RFQ failure retryable kalır; distributed retry queue veya delivery persistence yoktur.
+* Customer quote delivery sonucu henüz persistent quote lifecycle state'i oluşturmaz.
+* Outlook, Graph, SMTP, IMAP, OAuth, polling, webhook, attachment, HTML ve threading kapsam dışıdır.

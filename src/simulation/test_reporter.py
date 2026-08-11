@@ -3580,6 +3580,9 @@ def evaluate_quote_approval_model() -> dict:
 
 
 def evaluate_quote_approval_workflow_contract() -> dict:
+    from datetime import datetime
+
+    from src.core.mail import MailSendResult
     from src.core.models import Shipment
     from src.core.quote_approval_repository import (
         InMemoryQuoteApprovalRepository,
@@ -3651,6 +3654,14 @@ def evaluate_quote_approval_workflow_contract() -> dict:
         awaiting = send_supplier_rfq(
             rfq_repository,
             draft.rfq_id,
+            MailSendResult(
+                operation_id=f"supplier-rfq:{draft.rfq_id}",
+                status="sent",
+                reason="Regression provider confirmed delivery.",
+                provider_name="regression-provider",
+                provider_message_id=f"message-{draft.rfq_id}",
+                sent_at=datetime(2026, 8, 11, 10, 0, 0),
+            ),
         )
         responses = simulate_supplier_rfq_responses(
             shipment=quote_shipment,

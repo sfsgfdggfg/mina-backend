@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src.core.mail import MailSendResult
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
     SupplierRFQResponse,
@@ -221,7 +222,7 @@ def approve_supplier_rfq(
 def send_supplier_rfq(
     repository: SupplierRFQRepository,
     rfq_id: str,
-    sent_at: datetime | None = None,
+    send_result: MailSendResult,
 ) -> SupplierRFQDraft:
     draft = _get_draft(repository, rfq_id)
     if draft.status != "approved":
@@ -232,11 +233,19 @@ def send_supplier_rfq(
         raise SupplierRFQTransitionError(
             "Cannot send Supplier RFQ without a recipient email."
         )
+    if send_result.operation_id != f"supplier-rfq:{rfq_id}":
+        raise SupplierRFQTransitionError(
+            "Supplier RFQ send confirmation does not match the RFQ."
+        )
+    if send_result.status != "sent" or send_result.sent_at is None:
+        raise SupplierRFQTransitionError(
+            "Supplier RFQ requires confirmed provider send success."
+        )
     awaiting = SupplierRFQDraft.model_validate(
         {
             **draft.model_dump(),
             "status": "awaiting_response",
-            "sent_at": sent_at or datetime.utcnow(),
+            "sent_at": send_result.sent_at,
         }
     )
     repository.save_drafts([awaiting])

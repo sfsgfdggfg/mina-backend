@@ -6,8 +6,8 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from src.ai.supplier_response_parser import SupplierResponseParser
+from src.core.mail import InboundMailEnvelope
 from src.core.supplier_response_ingestion import (
-    InboundSupplierReply,
     SupplierReplyIngestionResult,
     SupplierResponseExtraction,
     correlate_supplier_reply,
@@ -28,13 +28,13 @@ from src.core.supplier_rfq_repository import (
 class SupplierReplyIngestionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    reply: InboundSupplierReply
+    reply: InboundMailEnvelope
     extracted_response: Optional[dict[str, Any]] = None
 
 
 def _result_from_correlation(
     correlation,
-    reply: InboundSupplierReply,
+    reply: InboundMailEnvelope,
 ) -> SupplierReplyIngestionResult:
     return SupplierReplyIngestionResult(
         status=correlation.status,
@@ -47,7 +47,7 @@ def _result_from_correlation(
 
 def _resolve_extraction(
     *,
-    reply: InboundSupplierReply,
+    reply: InboundMailEnvelope,
     extracted_response: SupplierResponseExtraction | dict[str, Any] | None,
     parser: SupplierResponseParser | None,
 ) -> tuple[SupplierResponseExtraction | None, str | None, str | None]:
@@ -114,7 +114,7 @@ def _validate_required_extraction(
 
 def ingest_supplier_reply(
     *,
-    reply: InboundSupplierReply,
+    reply: InboundMailEnvelope,
     repository: SupplierRFQRepository,
     extracted_response: SupplierResponseExtraction | dict[str, Any] | None = None,
     parser: SupplierResponseParser | None = None,

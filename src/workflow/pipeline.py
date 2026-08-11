@@ -333,6 +333,10 @@ Teşekkürler.
 
 
 def run_ai_email_test_suite():
+    from src.simulation.mail_adapter_regressions import (
+        evaluate_mail_adapter_regressions,
+    )
+
     print("\n==============================")
     print("MINAI FREIGHT OS - AI EMAIL TEST SUITE")
     print("==============================")
@@ -354,6 +358,7 @@ def run_ai_email_test_suite():
     test_results.append(
         evaluate_regulatory_compliance_regressions()
     )
+    test_results.append(evaluate_mail_adapter_regressions())
     test_results.append(evaluate_hs_commodity_map_validation())
     test_results.append(evaluate_data_health_summary())
     test_results.append(evaluate_data_health_label_mapping())
