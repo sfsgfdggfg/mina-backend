@@ -5,6 +5,9 @@ from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
 from src.simulation.clarification_resolution_regressions import (
     evaluate_clarification_resolution_regressions,
 )
+from src.simulation.regulatory_compliance_regressions import (
+    evaluate_regulatory_compliance_regressions,
+)
 from src.simulation.test_reporter import evaluate_test_result, print_test_report, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_data_health_summary, evaluate_data_health_label_mapping, evaluate_data_health_registry_integrity, evaluate_data_health_summary_check_metadata, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract
 from src.core.action_recommendation import generate_action_recommendation
 from src.ai.email_parser import parse_email_to_shipment, parse_email_with_ai
@@ -39,6 +42,9 @@ from src.core.quote_send_safety import (
 )
 from src.core.commodity_profile import get_commodity_record
 from src.core.quote_readiness import decide_quote_readiness
+from src.core.regulatory_compliance import (
+    assess_regulatory_compliance,
+)
 from src.core.supplier_quote_selection import (
     build_supplier_quote_selection_decision,
     select_supplier_quote_from_comparisons,
@@ -76,6 +82,7 @@ def process_shipment(
 
     commodity_profile = get_commodity_record(shipment.commodity)
     missing_info = check_missing_information(shipment)
+    regulatory_compliance = assess_regulatory_compliance(shipment)
     equipment_decision = decide_equipment(shipment)
     risk_assessment = assess_risk(
     shipment=shipment,
@@ -101,15 +108,20 @@ def process_shipment(
         missing_info=missing_info,
         risk_assessment=risk_assessment,
         operational_consistency=operational_consistency,
+        regulatory_compliance=regulatory_compliance,
     )
 
-    if quote_readiness.result_type == "blocked":
+    if quote_readiness.result_type in {
+        "blocked",
+        "regulatory_blocked",
+        "regulatory_review",
+    }:
         action_recommendation = generate_action_recommendation(
             shipment=shipment,
             equipment_decision=equipment_decision,
             risk_assessment=risk_assessment,
             missing_info=missing_info,
-            result_type="blocked",
+            result_type=quote_readiness.result_type,
         )
 
         return {
@@ -117,6 +129,7 @@ def process_shipment(
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
+            "regulatory_compliance": regulatory_compliance,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
@@ -158,6 +171,7 @@ def process_shipment(
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
+            "regulatory_compliance": regulatory_compliance,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
@@ -199,6 +213,7 @@ def process_shipment(
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
+            "regulatory_compliance": regulatory_compliance,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
@@ -290,6 +305,7 @@ def process_shipment(
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
+            "regulatory_compliance": regulatory_compliance,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
@@ -333,15 +349,20 @@ def process_shipment(
         missing_info=missing_info,
         risk_assessment=risk_assessment,
         operational_consistency=operational_consistency,
+        regulatory_compliance=regulatory_compliance,
     )
 
-    if quote_readiness.result_type == "blocked":
+    if quote_readiness.result_type in {
+        "blocked",
+        "regulatory_blocked",
+        "regulatory_review",
+    }:
         action_recommendation = generate_action_recommendation(
             shipment=shipment,
             equipment_decision=equipment_decision,
             risk_assessment=risk_assessment,
             missing_info=missing_info,
-            result_type="blocked",
+            result_type=quote_readiness.result_type,
         )
 
         return {
@@ -349,6 +370,7 @@ def process_shipment(
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
+            "regulatory_compliance": regulatory_compliance,
             "equipment_decision": equipment_decision,
             "risk_assessment": risk_assessment,
             "supplier_selection": supplier_selection,
@@ -404,6 +426,7 @@ def process_shipment(
         supplier_quote=supplier_quote,
         customer_quote=customer_quote,
         quote_draft=quote_draft,
+        regulatory_compliance=regulatory_compliance,
     )
 
     quote_case = QuoteCase(
@@ -416,6 +439,7 @@ def process_shipment(
         quote_draft=quote_draft,
         quote_approval=quote_approval,
         quote_send_safety=quote_send_safety,
+        regulatory_compliance=regulatory_compliance,
     )
     quote_case_repository.save(quote_case)
 
@@ -432,6 +456,7 @@ def process_shipment(
         "customer_memory": customer_memory,
         "commodity_profile": commodity_profile,
         "missing_info": missing_info,
+        "regulatory_compliance": regulatory_compliance,
         "equipment_decision": equipment_decision,
         "risk_assessment": risk_assessment,
         "supplier_selection": supplier_selection,
@@ -542,6 +567,9 @@ def run_ai_email_test_suite():
     test_results.append(
         evaluate_clarification_resolution_regressions()
     )
+    test_results.append(
+        evaluate_regulatory_compliance_regressions()
+    )
     test_results.append(evaluate_hs_commodity_map_validation())
     test_results.append(evaluate_data_health_summary())
     test_results.append(evaluate_data_health_label_mapping())
@@ -618,6 +646,7 @@ def print_result(result):
     shipment = result["shipment"]
     customer_memory = result.get("customer_memory")
     missing_info = result.get("missing_info")
+    regulatory_compliance = result.get("regulatory_compliance")
     equipment_decision = result["equipment_decision"]
     risk_assessment = result["risk_assessment"]
     supplier_quote = result.get("supplier_quote")
@@ -649,6 +678,10 @@ def print_result(result):
     if quote_readiness:
         print("\n--- QUOTE READINESS ---")
         print(quote_readiness.model_dump_json(indent=2))
+
+    if regulatory_compliance:
+        print("\n--- REGULATORY COMPLIANCE ---")
+        print(regulatory_compliance.model_dump_json(indent=2))
 
     if customer_memory:
         print("\n--- CUSTOMER MEMORY ---")
@@ -687,6 +720,16 @@ def print_result(result):
                 print(clarification_draft.body)
 
             return
+
+    if regulatory_compliance and not (
+        regulatory_compliance.can_continue_to_quote
+    ):
+        print("\n--- WORKFLOW STOPPED ---")
+        print(
+            "Düzenleyici belge politikası nedeniyle teklif "
+            "oluşturulmadı."
+        )
+        return
 
     print("\n--- SUPPLIER QUOTE ---")
     print(supplier_quote.model_dump_json(indent=2))

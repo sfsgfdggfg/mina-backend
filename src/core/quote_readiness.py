@@ -5,6 +5,9 @@ from typing import List
 
 from src.core.missing_info import MissingInfoResult
 from src.core.models import RiskAssessment
+from src.core.regulatory_compliance import (
+    RegulatoryComplianceAssessment,
+)
 
 
 class QuoteReadinessDecision(BaseModel):
@@ -20,6 +23,7 @@ def decide_quote_readiness(
     missing_info: MissingInfoResult,
     risk_assessment: RiskAssessment,
     operational_consistency: dict,
+    regulatory_compliance: RegulatoryComplianceAssessment | None = None,
 ) -> QuoteReadinessDecision:
     errors = operational_consistency.get("errors", []) or []
 
@@ -38,6 +42,33 @@ def decide_quote_readiness(
             requires_human_review=True,
             reasons=list(missing_info.missing_fields),
         )
+
+    if regulatory_compliance is not None:
+        if regulatory_compliance.status == "blocked":
+            return QuoteReadinessDecision(
+                result_type="regulatory_blocked",
+                can_generate_quote=False,
+                requires_human_review=False,
+                reasons=list(regulatory_compliance.reasons),
+            )
+
+        if regulatory_compliance.status == "human_review_required":
+            return QuoteReadinessDecision(
+                result_type="regulatory_review",
+                can_generate_quote=False,
+                requires_human_review=True,
+                reasons=list(regulatory_compliance.reasons),
+            )
+
+        if regulatory_compliance.status == "clarification_required":
+            return QuoteReadinessDecision(
+                result_type="clarification",
+                can_generate_quote=False,
+                requires_human_review=True,
+                reasons=list(
+                    regulatory_compliance.unknown_requirements
+                ),
+            )
 
     if errors:
         return QuoteReadinessDecision(

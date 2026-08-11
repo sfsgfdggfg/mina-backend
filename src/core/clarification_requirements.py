@@ -29,12 +29,21 @@ class UnknownClarificationKeyError(ClarificationRequirementError):
 
 
 @dataclass(frozen=True)
+class ClarificationCompliancePolicy:
+    policy_type: Literal["regulatory_document"]
+    document_label: str
+    required_before_quote: bool
+    customer_promise_requires_human_review: bool
+
+
+@dataclass(frozen=True)
 class ClarificationRequirement:
     key: str
     value_type: ClarificationValueType
     question: str
     critical: bool
     commodity: str
+    compliance_policy: ClarificationCompliancePolicy | None = None
 
 
 def _load_dictionary() -> list[dict[str, Any]]:
@@ -54,12 +63,26 @@ def _requirement_from_data(
     raw_requirement: Mapping[str, Any],
     commodity: str,
 ) -> ClarificationRequirement:
+    raw_policy = raw_requirement.get("compliance_policy")
+    compliance_policy = None
+
+    if isinstance(raw_policy, Mapping):
+        compliance_policy = ClarificationCompliancePolicy(
+            policy_type=str(raw_policy["policy_type"]).strip(),
+            document_label=str(raw_policy["document_label"]).strip(),
+            required_before_quote=raw_policy["required_before_quote"],
+            customer_promise_requires_human_review=raw_policy[
+                "customer_promise_requires_human_review"
+            ],
+        )
+
     return ClarificationRequirement(
         key=str(raw_requirement["key"]).strip(),
         value_type=str(raw_requirement["value_type"]).strip(),
         question=str(raw_requirement["question"]).strip(),
         critical=raw_requirement["critical"],
         commodity=commodity,
+        compliance_policy=compliance_policy,
     )
 
 
@@ -211,6 +234,10 @@ def apply_clarification_answers(
     updated_shipment = shipment.model_copy(deep=True)
     updated_shipment.commodity_attributes = updated_attributes
 
+    for key, value in normalized_answers.items():
+        if value is True:
+            updated_shipment.regulatory_exception_reviews.pop(key, None)
+
     if "adr status" in normalized_answers:
         updated_shipment.is_adr = bool(
             normalized_answers["adr status"]
@@ -225,4 +252,6 @@ def apply_clarification_answers(
         if not updated_shipment.is_temperature_controlled:
             updated_shipment.temperature_requirement = None
 
-    return updated_shipment
+    return shipment.__class__.model_validate(
+        updated_shipment.model_dump()
+    )

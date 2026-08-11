@@ -4191,3 +4191,81 @@ Clarification draft metni ayrı bir translation tablosundan değil requirement
 * Unknown veya başka commodity'ye ait key kontrollü olarak reddedilir.
 * Eski `missing_info_fields` ve `critical_missing_info_fields` API görünümü canonical tanımlardan türetilir.
 * Reply ingestion, database persistence ve UI değişikliği bu kararın kapsamı dışındadır.
+
+---
+
+## DEC-089 — Regulatory Document Gate and Separate Exception Review
+
+**Status:** Accepted
+**Date:** 2026-08-11
+
+### Decision
+
+Kritik clarification cevapları ile teklif öncesi düzenleyici uygunluk kararının
+ayrı domain sorumlulukları olarak modellenmesine karar verilmiştir.
+
+Regulatory blocking semantics için tek canonical kaynak requirement metadata'sıdır:
+
+    operational_profile.clarification_requirements[].compliance_policy
+
+Metadata şu alanları taşır:
+
+    policy_type = regulatory_document
+    document_label
+    required_before_quote
+    customer_promise_requires_human_review
+
+Bu karar capability ile gerçek hukuki sınıflandırmayı birbirinden ayırır.
+Requirement adında `document`, `compliance`, `ruhsat`, `MSDS` veya benzeri bir
+ifadenin bulunması; alanın kritik clarification olması ya da descriptive metinde
+mevzuat riskiyle ilişkilendirilmesi tek başına regulatory blocking için yeterli
+değildir. Blokaj yalnızca canonical requirement verisinde doğrulanmış
+`compliance_policy` metadata'sı açıkça bulunduğunda etkinleşir.
+
+Şu an aşağıdaki production requirement'lar için precise legal applicability
+doğrulanmış değildir ve bu nedenle regulatory policy aktive edilmemiştir:
+
+    msds/sds document
+    medical compliance document
+    pharma compliance document
+
+Bu requirement'lar mevcut commodity kuralları uyarınca clarification, risk veya
+genel human-review davranışını sürdürebilir. Explicit false cevap, doğrulanmış
+policy metadata'sı olmadan hukuki yasak veya regulatory block sayılmaz.
+
+Yeni focused domain boundary:
+
+    src/core/regulatory_compliance.py
+
+Shipment, müşteri taahhüdüne bağlı istisna incelemesini ayrı bir map içinde taşır:
+
+    regulatory_exception_reviews
+
+Review durumları:
+
+    pending
+    approved
+    rejected
+
+Bu lifecycle commercial quote snapshot'ını onaylayan `QuoteApproval` içine
+yerleştirilmemiştir. Regulatory exception, teklif oluşturulmadan önce çözülmesi
+gereken farklı bir yetki ve sorumluluktur.
+
+Quote readiness'e iki açık sonuç eklenmiştir:
+
+    regulatory_blocked
+    regulatory_review
+
+Pending durum onay sayılmaz. Sadece `decided_by` ve `decided_at` bilgileriyle
+kaydedilmiş explicit approved review normal kontrollere devam izni verir. Rejected
+veya review bulunmayan explicit false durumu otomatik teklifi engeller.
+
+### Consequences
+
+* Missing, known-unavailable ve promised-later durumları birbirine karışmaz.
+* Müşteri taahhüdü MINAI tarafından otonom istisna onayına çevrilmez.
+* Regulatory policy document-name-specific koşullar yerine data metadata'sından okunur.
+* Başarılı quote case, kullanılan regulatory compliance assessment'ı audit amacıyla taşır.
+* Natural-language reply ingestion, review persistence ve review API lifecycle bu değişikliğin kapsamı dışındadır.
+* Production commodity requirements için henüz regulatory blocking aktive edilmemiştir.
+* Belge setlerinin ülke/ürün bazlı hukuki uygulanabilirliği ayrı regulatory knowledge katmanı gerektirir.

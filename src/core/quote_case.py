@@ -14,6 +14,9 @@ from src.core.models import (
 )
 from src.core.quote_approval import QuoteApproval
 from src.core.quote_send_safety import QuoteSendSafetyDecision
+from src.core.regulatory_compliance import (
+    RegulatoryComplianceAssessment,
+)
 from src.core.supplier_quote_selection import (
     SupplierQuoteSelectionDecision,
 )
@@ -36,6 +39,9 @@ class QuoteCase(BaseModel):
 
     quote_approval: Optional[QuoteApproval] = None
     quote_send_safety: Optional[QuoteSendSafetyDecision] = None
+    regulatory_compliance: Optional[
+        RegulatoryComplianceAssessment
+    ] = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

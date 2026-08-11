@@ -42,6 +42,48 @@ def generate_action_recommendation(
 
     commodity_action_checklist = get_commodity_action_checklist(shipment.commodity)
 
+    if result_type == "regulatory_blocked":
+        return ActionRecommendation(
+            action_type="regulatory_blocked",
+            title="Zorunlu Belge Bulunmadığı İçin Akış Durduruldu",
+            message=(
+                "Gerekli düzenleyici belgenin mevcut olmadığı "
+                "doğrulandı. MINAI otomatik müşteri teklifi "
+                "oluşturamaz veya tamamlayamaz."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "Belge durumunu ve ilgili operasyon kuralını doğrula.",
+                    "Belge sağlanmadan otomatik teklif akışını sürdürme.",
+                    "Müşteriye blokaj nedenini açıkça bildir.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="regulatory_compliance_engine",
+        )
+
+    if result_type == "regulatory_review":
+        return ActionRecommendation(
+            action_type="regulatory_review",
+            title="Belge İstisnası İçin İnsan Onayı Gerekli",
+            message=(
+                "Müşteri zorunlu belgeyi daha sonra sağlayacağını "
+                "belirtti. Bu taahhüt MINAI'ye otomatik devam yetkisi "
+                "vermez; açık insan kararı gereklidir."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "Müşterinin belge taahhüdünü incele.",
+                    "Devam veya ret kararını yetkili kişiyle açıkça kaydet.",
+                    "Onay verilmeden teklif veya gönderim oluşturma.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="regulatory_compliance_engine",
+        )
+
     if result_type == "supplier_response_required":
         return ActionRecommendation(
             action_type="supplier_response_required",

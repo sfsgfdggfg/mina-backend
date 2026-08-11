@@ -45,6 +45,9 @@ from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
 from src.simulation.clarification_resolution_regressions import (
     evaluate_clarification_resolution_regressions,
 )
+from src.simulation.regulatory_compliance_regressions import (
+    evaluate_regulatory_compliance_regressions,
+)
 from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
 
 
@@ -496,6 +499,7 @@ def _enrich_quote_case_with_current_approval(quote_case):
         supplier_quote=quote_case.supplier_quote,
         customer_quote=quote_case.customer_quote,
         quote_draft=quote_case.quote_draft,
+        regulatory_compliance=quote_case.regulatory_compliance,
     )
 
     return quote_case.model_copy(
@@ -652,6 +656,17 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
             ),
         )
 
+    regulatory_compliance = next(
+        (
+            quote_case.regulatory_compliance
+            for quote_case in quote_case_repository.list_all()
+            if quote_case.quote_approval is not None
+            and quote_case.quote_approval.approval_id
+            == request.approval_id
+        ),
+        None,
+    )
+
     try:
         result = prepare_quote_for_sending(
             recipient_email=request.recipient_email,
@@ -659,6 +674,7 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
             supplier_quote=request.supplier_quote,
             customer_quote=request.customer_quote,
             quote_draft=request.quote_draft,
+            regulatory_compliance=regulatory_compliance,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -702,6 +718,9 @@ def run_test_suite():
     test_results.append(evaluate_customer_pricing_regression())
     test_results.append(
         evaluate_clarification_resolution_regressions()
+    )
+    test_results.append(
+        evaluate_regulatory_compliance_regressions()
     )
     test_results.append(evaluate_hs_commodity_map_validation())
     test_results.append(evaluate_workflow_result_contract())
@@ -908,6 +927,7 @@ def get_data_health_summary():
 def serialize_result(result: dict) -> dict:
     shipment = result["shipment"]
     missing_info = result.get("missing_info")
+    regulatory_compliance = result.get("regulatory_compliance")
     equipment_decision = result.get("equipment_decision")
     risk_assessment = result.get("risk_assessment")
     supplier_selection = result.get("supplier_selection")
@@ -942,6 +962,11 @@ def serialize_result(result: dict) -> dict:
     return {
         "shipment": shipment.model_dump() if shipment else None,
         "missing_info": missing_info.model_dump() if missing_info else None,
+        "regulatory_compliance": (
+            regulatory_compliance.model_dump()
+            if hasattr(regulatory_compliance, "model_dump")
+            else regulatory_compliance
+        ),
         "equipment_decision": equipment_decision.model_dump() if equipment_decision else None,
         "risk_assessment": risk_assessment.model_dump() if risk_assessment else None,
         "supplier_selection": supplier_selection,

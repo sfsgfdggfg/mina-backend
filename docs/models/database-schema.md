@@ -91,6 +91,7 @@ Shipment
 | adr_class               |        string |          no | ADR sınıfı                    |
 | temperature_requirement |        string |          no | +4, -18 vb.                   |
 | commodity_attributes    |          json |          no | Canonical commodity clarification answers |
+| regulatory_exception_reviews |      json |          no | Pending/approved/rejected pre-quote document exception reviews |
 | notes                   |        string |          no | Ek açıklamalar                |
 | source_email_text       |          text |      future | Ham müşteri maili             |
 | created_at              |      datetime |      future | Kayıt tarihi                  |

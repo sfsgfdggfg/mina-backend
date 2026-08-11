@@ -207,6 +207,65 @@ def validate_commodity_dictionary_file(
                             f"{prefix}.critical must be boolean."
                         )
 
+                    compliance_policy = requirement.get(
+                        "compliance_policy"
+                    )
+                    if compliance_policy is not None:
+                        if not isinstance(compliance_policy, dict):
+                            errors.append(
+                                f"{prefix}.compliance_policy must be "
+                                "an object."
+                            )
+                        else:
+                            policy_prefix = (
+                                f"{prefix}.compliance_policy"
+                            )
+                            if (
+                                compliance_policy.get("policy_type")
+                                != "regulatory_document"
+                            ):
+                                errors.append(
+                                    f"{policy_prefix}.policy_type must "
+                                    "be 'regulatory_document'."
+                                )
+
+                            if not _is_non_empty_string(
+                                compliance_policy.get("document_label")
+                            ):
+                                errors.append(
+                                    f"{policy_prefix}.document_label is "
+                                    "required."
+                                )
+
+                            for policy_boolean in [
+                                "required_before_quote",
+                                "customer_promise_requires_human_review",
+                            ]:
+                                if not isinstance(
+                                    compliance_policy.get(
+                                        policy_boolean
+                                    ),
+                                    bool,
+                                ):
+                                    errors.append(
+                                        f"{policy_prefix}."
+                                        f"{policy_boolean} must be "
+                                        "boolean."
+                                    )
+
+                            if value_type != "boolean":
+                                errors.append(
+                                    f"{policy_prefix} is supported only "
+                                    "for boolean clarification "
+                                    "requirements."
+                                )
+
+                            if critical is not True:
+                                errors.append(
+                                    f"{policy_prefix} requires "
+                                    "critical=true."
+                                )
+
         for list_field in [
             "operational_notes",
             "missing_info_fields",

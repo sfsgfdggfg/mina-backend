@@ -2552,3 +2552,48 @@ Clarification cevapları mevcut Shipment'a uygulanırken:
 * missing-info yeniden çalıştırıldığında yalnızca cevapsız requirement'lar eksik kalmalıdır.
 
 Bu domain kontratı email reply ingestion veya persistence anlamına gelmez.
+
+---
+
+## RULE-108 — Mandatory Document Exceptions Require Explicit Human Approval
+
+Bir clarification cevabının bulunması, yükün otomatik olarak teklif verilebilir
+olduğu anlamına gelmez. Canonical clarification requirement üzerinde
+`compliance_policy.required_before_quote=true` tanımlanmışsa aşağıdaki durumlar
+ayrı tutulmalıdır:
+
+    cevap yok
+    -> clarification
+
+    belge mevcut (true)
+    -> requirement karşılandı; diğer normal kontroller devam eder
+
+    belge mevcut değil (false), istisna talebi yok
+    -> regulatory_blocked
+
+    belge mevcut değil (false), müşteri daha sonra sağlayacağını söylüyor
+    -> regulatory_review
+
+    regulatory review approved
+    -> sonraki normal kontroller devam eder
+
+    regulatory review rejected
+    -> regulatory_blocked
+
+Müşterinin zorunlu belgeyi daha sonra sağlayacağına dair taahhüdü, MINAI'nin
+otonom olarak devam etmesi için yetki değildir. Açık insan onayı bulunmadığında
+akış fail-closed kalmalı; otomatik müşteri teklifi, nihai teklif veya gönderim
+uygunluğu üretmemelidir.
+
+Bu politika document-name-specific kodla değil, commodity dictionary içindeki
+canonical `compliance_policy` metadata'sı ile çalışmalıdır. Bir belgenin adı,
+clarification içinde kritik olması veya descriptive metinde mevzuat/uygunluk
+kontrolüyle ilişkilendirilmesi tek başına regulatory blocking sınıflandırması
+değildir. Blokaj ancak canonical requirement verisinde doğrulanmış ve açık bir
+`compliance_policy` bulunduğunda etkinleşir.
+
+Mevcut MSDS/SDS, medikal uygunluk ve pharma uygunluk/ruhsat requirement'larının
+hangi ürün, rota veya ülke kombinasyonunda hukuken zorunlu olduğu henüz
+doğrulanmamıştır. Bu alanlar mevcut commodity kurallarına göre clarification veya
+risk/human-review davranışını sürdürebilir; ancak doğrulanmış metadata eklenene
+kadar negatif cevapları otomatik regulatory prohibition sayılmamalıdır.

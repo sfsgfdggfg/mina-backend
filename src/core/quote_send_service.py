@@ -14,6 +14,9 @@ from src.core.quote_send_safety import (
     QuoteSendSafetyDecision,
     evaluate_quote_send_safety,
 )
+from src.core.regulatory_compliance import (
+    RegulatoryComplianceAssessment,
+)
 
 
 QuoteSendServiceStatus = Literal[
@@ -41,6 +44,7 @@ def prepare_quote_for_sending(
     supplier_quote: SupplierQuote,
     customer_quote: CustomerQuote,
     quote_draft: QuoteDraft,
+    regulatory_compliance: RegulatoryComplianceAssessment | None = None,
 ) -> QuoteSendServiceResult:
     normalized_recipient = recipient_email.strip()
 
@@ -54,6 +58,7 @@ def prepare_quote_for_sending(
         supplier_quote=supplier_quote,
         customer_quote=customer_quote,
         quote_draft=quote_draft,
+        regulatory_compliance=regulatory_compliance,
     )
 
     if not safety_decision.can_send:

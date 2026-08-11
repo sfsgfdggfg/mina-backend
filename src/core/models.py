@@ -5,6 +5,10 @@ from src.core.clarification_requirements import (
     ClarificationAnswerValue,
     normalize_clarification_answers,
 )
+from src.core.regulatory_compliance import (
+    RegulatoryExceptionReview,
+    validate_regulatory_exception_reviews,
+)
 
 
 class Package(BaseModel):
@@ -57,6 +61,9 @@ class Shipment(BaseModel):
     commodity_attributes: dict[
         str, ClarificationAnswerValue
     ] = Field(default_factory=dict)
+    regulatory_exception_reviews: dict[
+        str, RegulatoryExceptionReview
+    ] = Field(default_factory=dict)
 
     packages: List[Package] = Field(default_factory=list)
 
@@ -67,6 +74,15 @@ class Shipment(BaseModel):
         value: dict[str, ClarificationAnswerValue],
     ) -> dict[str, ClarificationAnswerValue]:
         return normalize_clarification_answers(value)
+
+    @model_validator(mode="after")
+    def validate_regulatory_reviews(self):
+        validate_regulatory_exception_reviews(
+            commodity=self.commodity,
+            commodity_attributes=self.commodity_attributes,
+            reviews=self.regulatory_exception_reviews,
+        )
+        return self
 
 
 class EquipmentDecision(BaseModel):

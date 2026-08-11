@@ -10,6 +10,9 @@ from src.core.models import (
     SupplierQuote,
 )
 from src.core.quote_approval import QuoteApproval
+from src.core.regulatory_compliance import (
+    RegulatoryComplianceAssessment,
+)
 
 
 QuoteSendBlockReason = Literal[
@@ -18,6 +21,8 @@ QuoteSendBlockReason = Literal[
     "approval_rejected",
     "approval_invalidated",
     "quote_snapshot_mismatch",
+    "regulatory_compliance_blocked",
+    "regulatory_review_pending",
 ]
 
 
@@ -35,7 +40,34 @@ def evaluate_quote_send_safety(
     supplier_quote: SupplierQuote,
     customer_quote: CustomerQuote,
     quote_draft: QuoteDraft,
+    regulatory_compliance: RegulatoryComplianceAssessment | None = None,
 ) -> QuoteSendSafetyDecision:
+    if (
+        regulatory_compliance is not None
+        and not regulatory_compliance.can_continue_to_quote
+    ):
+        review_pending = (
+            regulatory_compliance.status
+            == "human_review_required"
+        )
+        return QuoteSendSafetyDecision(
+            can_send=False,
+            block_reason=(
+                "regulatory_review_pending"
+                if review_pending
+                else "regulatory_compliance_blocked"
+            ),
+            reason=(
+                "Teklif gönderilemez. Düzenleyici belge istisnası "
+                "için açık insan onayı bekleniyor."
+                if review_pending
+                else (
+                    "Teklif gönderilemez. Düzenleyici belge "
+                    "uygunluk kapısı geçilmedi."
+                )
+            ),
+        )
+
     if approval is None:
         return QuoteSendSafetyDecision(
             can_send=False,
