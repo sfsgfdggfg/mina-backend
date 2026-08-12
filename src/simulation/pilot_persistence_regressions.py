@@ -49,6 +49,19 @@ def evaluate_pilot_persistence_regressions() -> dict:
         if not resume_result.get("result_type"):
             failures.append("confirmed extraction resume produced no result type")
 
+        resumed_proposal = extraction1.get(proposal.proposal_id)
+        if resumed_proposal is None:
+            failures.append("resumed extraction proposal was not persisted")
+        else:
+            if resumed_proposal.resume_started_at is None:
+                failures.append(
+                    "durable resume-start claim was not retained"
+                )
+            if resumed_proposal.resumed_at is None:
+                failures.append(
+                    "completed extraction resume timestamp was not retained"
+                )
+
         workflow = SupplierRFQWorkflow(shipment=Shipment(customer_name="Synthetic Customer"))
         draft = SupplierRFQDraft(workflow_id=workflow.workflow_id, supplier_name="Synthetic Supplier", priority=1, recipient_email="pricing@supplier.test", subject="Synthetic RFQ", body="Synthetic body")
         workflow.rfq_ids = [draft.rfq_id]

@@ -198,13 +198,23 @@ def resume_confirmed_extraction(
         raise ExtractionConfirmationTransitionError(
             "Only a confirmed extraction proposal may enter the operational workflow."
         )
-    if proposal.resumed_at is not None:
+    if proposal.resume_started_at is not None:
         raise ExtractionConfirmationTransitionError(
-            "Confirmed extraction proposal has already been resumed."
+            "Confirmed extraction operational resume has already started."
         )
 
+    started = ShipmentExtractionProposal.model_validate(
+        {
+            **proposal.model_dump(
+                exclude={"unknown_fields", "unknown_safety_fields"}
+            ),
+            "resume_started_at": utc_now(),
+        }
+    )
+    started = repository.save(started)
+
     result = process_shipment(
-        shipment=proposal.confirmed_shipment.model_copy(deep=True),
+        shipment=started.confirmed_shipment.model_copy(deep=True),
         email_text=proposal.inbound_mail.body_text,
         sender_address=proposal.inbound_mail.sender_address,
         rfq_repository=rfq_repository,
@@ -223,11 +233,11 @@ def resume_confirmed_extraction(
         evidence_recorder.record_event(
             event_type="confirmed_extraction_resumed",
             entity_type="extraction_proposal",
-            entity_id=proposal.proposal_id,
+            entity_id=started.proposal_id,
             payload={
-                "proposal_id": proposal.proposal_id,
-                "confirmed_by": proposal.confirmed_by,
-                "confirmed_at": proposal.confirmed_at,
+                "proposal_id": started.proposal_id,
+                "confirmed_by": started.confirmed_by,
+                "confirmed_at": started.confirmed_at,
                 "result_type": result_type,
                 "result": result,
             },
@@ -235,7 +245,7 @@ def resume_confirmed_extraction(
 
     resumed = ShipmentExtractionProposal.model_validate(
         {
-            **proposal.model_dump(
+            **started.model_dump(
                 exclude={"unknown_fields", "unknown_safety_fields"}
             ),
             "resumed_at": utc_now(),
