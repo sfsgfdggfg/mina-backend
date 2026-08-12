@@ -39,8 +39,12 @@ from src.workflow.extraction_confirmation import (
     confirm_extraction_proposal,
     resume_confirmed_extraction,
 )
-from src.core.extraction_confirmation_repository import (
-    InMemoryExtractionProposalRepository,
+from src.core.pilot_store import SQLitePilotStore
+from src.core.sqlite_repositories import (
+    SQLiteExtractionProposalRepository,
+    SQLiteQuoteApprovalRepository,
+    SQLiteQuoteCaseRepository,
+    SQLiteSupplierRFQRepository,
 )
 from src.core.mail import InboundMailEnvelope, OutboundMailSender
 from src.core.models import (
@@ -49,12 +53,6 @@ from src.core.models import (
     SupplierQuote,
 )
 from src.core.quote_approval import QuoteApproval
-from src.core.quote_approval_repository import (
-    InMemoryQuoteApprovalRepository,
-)
-from src.core.quote_case_repository import (
-    InMemoryQuoteCaseRepository,
-)
 from src.core.quote_approval_service import (
     QuoteApprovalNotFoundError,
     QuoteApprovalTransitionError,
@@ -74,7 +72,6 @@ from src.core.supplier_rfq_lifecycle import (
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
-    InMemorySupplierRFQRepository,
 )
 from src.simulation.supplier_simulator import (
     simulate_supplier_rfq_responses,
@@ -107,10 +104,11 @@ app = FastAPI(
     version="0.1.0",
 )
 
-quote_approval_repository = InMemoryQuoteApprovalRepository()
-quote_case_repository = InMemoryQuoteCaseRepository()
-supplier_rfq_repository = InMemorySupplierRFQRepository()
-extraction_proposal_repository = InMemoryExtractionProposalRepository()
+pilot_store = SQLitePilotStore()
+quote_approval_repository = SQLiteQuoteApprovalRepository(pilot_store)
+quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
+supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
+extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 outbound_mail_sender: OutboundMailSender | None = None
 
 
@@ -840,6 +838,7 @@ def resume_extraction_proposal_endpoint(proposal_id: str):
             rfq_repository=supplier_rfq_repository,
             approval_repository=quote_approval_repository,
             quote_case_repository=quote_case_repository,
+            evidence_recorder=pilot_store,
         )
     except ExtractionProposalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

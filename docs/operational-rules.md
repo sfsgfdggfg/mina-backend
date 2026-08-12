@@ -2756,3 +2756,18 @@ identity mechanism.
 
 Sender/domain trust data is operational configuration, not authentication. Full
 operator authentication and authorization remain a separate P0 control.
+
+
+---
+
+## RULE-114 — Pilot Workflow State Must Survive Process Restart
+
+Controlled shadow-pilot workflow state and evidence must not depend on Python process memory.
+
+Extraction proposals, supplier RFQ drafts/workflows/responses, inbound supplier message deduplication keys, quote approvals, and quote cases must be stored in a durable repository that survives application restart.
+
+Every durable repository save must also create an append-only pilot evidence event containing at least a process `run_id`, event type, entity type, entity ID, validated snapshot payload, and timestamp. Current-state records may be updated; historical pilot events must not be overwritten by normal repository operations.
+
+A restart must not make a previously ingested supplier message or supplier response eligible to be accepted as new merely because in-memory state was lost.
+
+The pilot database is evidence infrastructure, not authorization. Its existence does not permit real company data use before privacy, isolation, retention, and access controls are separately approved.
