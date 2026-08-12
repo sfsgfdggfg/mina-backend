@@ -106,6 +106,19 @@ def evaluate_privacy_boundary_regressions() -> dict:
         failures.append("phone number survived subject minimization")
 
     try:
+        PrivacySafeText(
+            raw_body,
+            raw_body_sha256=fingerprint_text(raw_body),
+            transform_version="p0.1-v1",
+        )
+    except PrivacyBoundaryError:
+        pass
+    else:
+        failures.append(
+            "PrivacySafeText could be forged without privacy transform"
+        )
+
+    try:
         parse_email_with_ai(raw_body)  # type: ignore[arg-type]
     except PrivacyBoundaryError:
         pass

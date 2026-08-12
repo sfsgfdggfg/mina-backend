@@ -39,6 +39,9 @@ class PrivacyBoundaryError(ValueError):
     pass
 
 
+_PRIVACY_CONSTRUCTION_TOKEN = object()
+
+
 class PrivacySafeText(str):
     def __new__(
         cls,
@@ -46,7 +49,14 @@ class PrivacySafeText(str):
         *,
         raw_body_sha256: str,
         transform_version: str,
+        _token: object | None = None,
     ):
+        if _token is not _PRIVACY_CONSTRUCTION_TOKEN:
+            raise PrivacyBoundaryError(
+                "PrivacySafeText may only be created by the approved "
+                "privacy transform."
+            )
+
         obj = super().__new__(cls, value)
         obj.raw_body_sha256 = raw_body_sha256
         obj.transform_version = transform_version
@@ -101,6 +111,7 @@ def prepare_privacy_safe_text(raw_text: str) -> PrivacyTransformResult:
         minimized,
         raw_body_sha256=raw_body_sha256,
         transform_version=PRIVACY_TRANSFORM_VERSION,
+        _token=_PRIVACY_CONSTRUCTION_TOKEN,
     )
     return PrivacyTransformResult(
         safe_text=safe_text,
