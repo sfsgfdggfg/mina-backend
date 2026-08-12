@@ -4522,3 +4522,33 @@ confirmation and resume.
   authentication.
 * Full authenticated operator/customer identity management remains outside this
   decision and is handled separately under the pilot security controls.
+
+
+---
+
+## DEC-095 — SQLite Durable State and Append-Only Pilot Evidence
+
+**Status:** Accepted
+**Date:** 2026-08-12
+
+### Decision
+
+The pre-MVP shadow-pilot runtime will replace API-global in-memory repositories with SQLite-backed adapters that preserve the existing repository contracts.
+
+A shared `SQLitePilotStore` persists current validated snapshots for extraction proposals, supplier RFQ drafts/workflows/responses, supplier inbound-message deduplication keys, quote approvals, and quote cases.
+
+The same store maintains an append-only `pilot_events` audit trail. Each process startup has a `run_id`; every repository write records the validated snapshot, entity identity, event type, run ID, and timestamp.
+
+The default pilot database path is `data/pilot/minai_pilot.sqlite3`, overridable with `MINAI_PILOT_DB_PATH`. The pilot data directory is excluded from Git.
+
+This is intentionally a small single-process pilot persistence layer, not the production database architecture.
+
+### Consequences
+
+* Restart no longer erases the main quote/RFQ/extraction lifecycle state.
+* Supplier response and inbound-message deduplication survive restart.
+* Historical save snapshots can be reconstructed from append-only pilot events.
+* Existing workflow services continue to depend on repository protocols rather than SQLite directly.
+* No public evidence API is added while API authentication remains a P0 item.
+* SQLite persistence does not provide privacy approval, operator authentication, encryption policy, retention policy, multi-tenant isolation, migrations, or production concurrency guarantees.
+* Real customer/company data remains prohibited until the separate privacy and security P0 controls are completed.

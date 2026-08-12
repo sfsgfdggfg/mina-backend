@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -20,6 +20,18 @@ from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.workflow.pipeline import process_shipment
+
+
+class PilotEvidenceRecorder(Protocol):
+    def record_event(
+        self,
+        *,
+        event_type: str,
+        entity_type: str,
+        entity_id: str,
+        payload: Any,
+    ) -> None:
+        ...
 
 
 class ExtractionProposalNotFoundError(LookupError):
@@ -179,19 +191,30 @@ def resume_confirmed_extraction(
     rfq_repository: SupplierRFQRepository | None = None,
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
+    evidence_recorder: PilotEvidenceRecorder | None = None,
 ) -> dict:
     proposal = _load_proposal(repository, proposal_id)
     if proposal.extraction_status != "confirmed" or proposal.confirmed_shipment is None:
         raise ExtractionConfirmationTransitionError(
             "Only a confirmed extraction proposal may enter the operational workflow."
         )
-    if proposal.resumed_at is not None:
+    if proposal.resume_started_at is not None:
         raise ExtractionConfirmationTransitionError(
-            "Confirmed extraction proposal has already been resumed."
+            "Confirmed extraction operational resume has already started."
         )
 
+    started = ShipmentExtractionProposal.model_validate(
+        {
+            **proposal.model_dump(
+                exclude={"unknown_fields", "unknown_safety_fields"}
+            ),
+            "resume_started_at": utc_now(),
+        }
+    )
+    started = repository.save(started)
+
     result = process_shipment(
-        shipment=proposal.confirmed_shipment.model_copy(deep=True),
+        shipment=started.confirmed_shipment.model_copy(deep=True),
         email_text=proposal.inbound_mail.body_text,
         sender_address=proposal.inbound_mail.sender_address,
         rfq_repository=rfq_repository,
@@ -205,9 +228,24 @@ def resume_confirmed_extraction(
         or "unknown"
     )
     result["result_type"] = result_type
+
+    if evidence_recorder is not None:
+        evidence_recorder.record_event(
+            event_type="confirmed_extraction_resumed",
+            entity_type="extraction_proposal",
+            entity_id=started.proposal_id,
+            payload={
+                "proposal_id": started.proposal_id,
+                "confirmed_by": started.confirmed_by,
+                "confirmed_at": started.confirmed_at,
+                "result_type": result_type,
+                "result": result,
+            },
+        )
+
     resumed = ShipmentExtractionProposal.model_validate(
         {
-            **proposal.model_dump(
+            **started.model_dump(
                 exclude={"unknown_fields", "unknown_safety_fields"}
             ),
             "resumed_at": utc_now(),

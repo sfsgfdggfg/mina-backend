@@ -64,6 +64,7 @@ class ShipmentExtractionProposal(BaseModel):
     confirmed_by: Optional[str] = None
     confirmed_at: Optional[datetime] = None
 
+    resume_started_at: Optional[datetime] = None
     resumed_at: Optional[datetime] = None
     downstream_result_type: Optional[str] = None
     source: str = "human_extraction_confirmation"
@@ -103,7 +104,11 @@ class ShipmentExtractionProposal(BaseModel):
                 raise ValueError(
                     "Proposed extraction must not contain operator corrections."
                 )
-            if self.resumed_at is not None or self.downstream_result_type is not None:
+            if (
+                self.resume_started_at is not None
+                or self.resumed_at is not None
+                or self.downstream_result_type is not None
+            ):
                 raise ValueError(
                     "Proposed extraction must not contain downstream metadata."
                 )
@@ -112,8 +117,17 @@ class ShipmentExtractionProposal(BaseModel):
                 raise ValueError(
                     "Confirmed extraction requires shipment, operator, and time."
                 )
-        if self.resumed_at is not None and self.extraction_status != "confirmed":
-            raise ValueError("Only a confirmed extraction may be resumed.")
+        if (
+            self.resume_started_at is not None
+            and self.extraction_status != "confirmed"
+        ):
+            raise ValueError(
+                "Only a confirmed extraction may start operational resume."
+            )
+        if self.resumed_at is not None and self.resume_started_at is None:
+            raise ValueError(
+                "Completed operational resume requires a durable start marker."
+            )
         if (self.resumed_at is None) != (self.downstream_result_type is None):
             raise ValueError(
                 "Resume time and downstream result type must be recorded together."
