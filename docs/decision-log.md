@@ -4486,3 +4486,39 @@ provider-neutral mail contract'ı değişmemiştir.
 * Repository restart-safe değildir; durable pilot evidence P0.3 kapsamındadır.
 * Sender/customer identity trust modeli P0.4 kapsamındadır.
 * Full Streamlit confirmation UI, analytics ve outbound provider kapsam dışıdır.
+
+
+---
+
+## DEC-094 — Trusted Sender Boundary for Customer Memory
+
+**Status:** Accepted
+**Date:** 2026-08-12
+
+### Decision
+
+Customer-memory enrichment will no longer infer customer identity from arbitrary
+message text. The confirmed shipment customer name establishes only a candidate
+profile.
+
+Automatic enrichment requires trusted identity evidence from the canonical
+inbound mail envelope: an exact configured sender address or configured sender
+domain on the customer profile.
+
+Current customer profiles have no trusted sender mapping by default; therefore
+memory enrichment remains safely inactive for them until trusted mappings are
+configured.
+
+`/process-email` now preserves optional sender, subject, and external message
+metadata so that the extraction proposal retains identity evidence for later
+confirmation and resume.
+
+### Consequences
+
+* Forwarded/quoted mentions cannot silently activate another customer's memory.
+* Missing or untrusted sender identity cannot inject customer defaults.
+* Trusted sender configuration remains explicit customer reference data.
+* Human extraction confirmation remains necessary but is not itself sender
+  authentication.
+* Full authenticated operator/customer identity management remains outside this
+  decision and is handled separately under the pilot security controls.

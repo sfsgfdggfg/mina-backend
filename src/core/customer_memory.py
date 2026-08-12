@@ -15,6 +15,8 @@ class CustomerMemoryProfile(BaseModel):
     customer_name: str
     active: bool = True
     aliases: List[str] = Field(default_factory=list)
+    trusted_sender_addresses: List[str] = Field(default_factory=list)
+    trusted_sender_domains: List[str] = Field(default_factory=list)
 
     default_commodity: Optional[str] = None
     default_equipment_type: Optional[str] = None
@@ -40,9 +42,11 @@ class CustomerMemoryProfile(BaseModel):
 class CustomerMemoryResult(BaseModel):
     matched: bool = False
     profile: Optional[CustomerMemoryProfile] = None
+    candidate_profile: Optional[CustomerMemoryProfile] = None
     notes_applied: List[str] = Field(default_factory=list)
     source: str = "customer_memory"
     matched_by: Optional[str] = None
+    identity_status: str = "unmatched"
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -129,72 +133,91 @@ def find_customer_profile(customer_name: Optional[str]) -> Optional[CustomerMemo
 
 
 def find_customer_profile_in_text(text: Optional[str]) -> Optional[CustomerMemoryProfile]:
-    if not text:
-        return None
+    """
+    Deprecated unsafe matcher.
 
-    normalized_text = text.lower()
-    customer_memory = load_customer_memory()
-
-    for profile in customer_memory:
-        if not profile.active:
-            continue
-
-        names_to_check = [
-            normalize_lookup_text(profile.customer_name),
-            *[
-                normalize_lookup_text(alias)
-                for alias in profile.aliases
-            ],
-        ]
-
-        names_to_check = [
-            name for name in names_to_check
-            if name
-        ]
-
-        for name in names_to_check:
-            if name in normalized_text:
-                return profile
-
+    Raw customer email text is not identity evidence. Kept only as a compatibility
+    shim for callers/tests; it deliberately never returns a profile.
+    """
     return None
+
+
+def normalize_sender_address(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
+
+
+def sender_matches_profile(
+    profile: CustomerMemoryProfile,
+    sender_address: Optional[str],
+) -> bool:
+    normalized_sender = normalize_sender_address(sender_address)
+    if not normalized_sender or "@" not in normalized_sender:
+        return False
+
+    trusted_addresses = {
+        address.strip().lower()
+        for address in profile.trusted_sender_addresses
+        if address and address.strip()
+    }
+    if normalized_sender in trusted_addresses:
+        return True
+
+    sender_domain = normalized_sender.rsplit("@", 1)[1]
+    trusted_domains = {
+        domain.strip().lower().lstrip("@")
+        for domain in profile.trusted_sender_domains
+        if domain and domain.strip()
+    }
+    return sender_domain in trusted_domains
 
 
 def enrich_shipment_with_customer_memory(
     shipment: Shipment,
     email_text: Optional[str] = None,
+    sender_address: Optional[str] = None,
 ) -> CustomerMemoryResult:
     """
-    Customer Memory v1.
+    Customer Memory identity-safe matching.
 
-    Matching order:
-    1. shipment.customer_name
-    2. raw email text aliases
+    Raw message text is never identity evidence. The candidate customer is based
+    on the human-confirmed Shipment customer_name. Automatic enrichment requires
+    that the inbound sender matches an explicitly trusted address/domain on the
+    customer profile.
 
-    Customer profiles are loaded from data/customer_memory.json.
+    `email_text` remains accepted only for backward call compatibility and is
+    intentionally ignored for identity matching.
     """
 
     require_operational_shipment(shipment)
-    matched_by = None
 
     profile = find_customer_profile(shipment.customer_name)
-
-    if profile:
-        matched_by = "shipment.customer_name"
-
-    if not profile and email_text:
-        profile = find_customer_profile_in_text(email_text)
-        if profile:
-            matched_by = "email_text"
 
     if not profile:
         return CustomerMemoryResult(
             matched=False,
             profile=None,
+            candidate_profile=None,
             notes_applied=[],
             source="customer_memory",
             matched_by=None,
+            identity_status="unmatched",
         )
 
+    if not sender_matches_profile(profile, sender_address):
+        return CustomerMemoryResult(
+            matched=False,
+            profile=None,
+            candidate_profile=profile,
+            notes_applied=[],
+            source="customer_memory",
+            matched_by=None,
+            identity_status="sender_verification_required",
+        )
+
+    matched_by = "trusted_sender"
     notes_applied = []
 
     shipment.customer_name = profile.customer_name
@@ -246,9 +269,11 @@ def enrich_shipment_with_customer_memory(
     return CustomerMemoryResult(
         matched=True,
         profile=profile,
+        candidate_profile=profile,
         notes_applied=notes_applied,
         source="customer_memory",
         matched_by=matched_by,
+        identity_status="trusted_sender",
     )
 
 RESERVED_CUSTOMER_MEMORY_TERMS = {
