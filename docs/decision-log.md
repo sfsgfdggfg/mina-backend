@@ -4552,3 +4552,50 @@ This is intentionally a small single-process pilot persistence layer, not the pr
 * No public evidence API is added while API authentication remains a P0 item.
 * SQLite persistence does not provide privacy approval, operator authentication, encryption policy, retention policy, multi-tenant isolation, migrations, or production concurrency guarantees.
 * Real customer/company data remains prohibited until the separate privacy and security P0 controls are completed.
+
+---
+
+## DEC-096 — Privacy-Minimized AI and Pilot Persistence Boundary
+
+**Status:** Accepted
+**Date:** 2026-08-12
+
+### Decision
+
+Inbound customer mail must pass through a deterministic privacy transform before
+it can be sent to an AI parser or stored in the pilot evidence database.
+
+The transform creates a SHA-256 fingerprint of the original body, removes common
+signature blocks, and redacts personal email addresses, Turkish-format phone
+numbers, and Turkish IBAN values while preserving operational freight facts.
+
+Only the privacy-transformed body is stored in `ShipmentExtractionProposal`.
+The raw body is not stored in the MINAI pilot SQLite database. The canonical
+sender address may be retained because P0.4 customer identity verification needs
+it; the sender display name is discarded at the pilot persistence boundary.
+
+`parse_email_with_ai` accepts only `PrivacySafeText`. Passing a normal/raw string
+fails closed before any OpenAI API call.
+
+Pilot SQLite evidence has an enforced retention period. The default is 30 days,
+configurable with `MINAI_PILOT_RETENTION_DAYS` between 1 and 365 days. Expired
+current-state records and audit events are purged when the store initializes and
+may also be purged explicitly.
+
+This code-level boundary does not by itself approve use of real company data.
+OpenAI account/data-control eligibility, deployment isolation, operator
+authentication, contractual/legal requirements, and customer consent or notice
+remain separate deployment decisions.
+
+### Consequences
+
+* Raw inbound bodies are no longer duplicated into MINAI durable pilot storage.
+* AI parsing cannot accidentally bypass the privacy transform through the normal
+  parser entry point.
+* Evidence can still be correlated to the source message by irreversible body
+  fingerprint plus provider/message metadata.
+* Privacy transformation is intentionally conservative: freight-relevant
+  company, route, cargo, address, equipment, date, weight, GTIP, and ADR facts
+  remain available to the parser.
+* Regex minimization reduces exposure but is not a guarantee of full
+  anonymization.

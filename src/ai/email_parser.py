@@ -11,6 +11,7 @@ from src.core.commodity_profile import apply_commodity_profile_to_shipment
 from src.ai.extraction_models import ShipmentExtraction
 from src.ai.extraction_mapping import shipment_from_extraction
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
+from src.core.privacy import PrivacyBoundaryError, PrivacySafeText
 
 GENERIC_CUSTOMER_NAMES = {
     "",
@@ -397,12 +398,19 @@ def build_shipment_from_extraction(
     return ShipmentProposalSnapshot.model_validate(proposal_data)
 
 
-def parse_email_with_ai(email_text: str) -> ShipmentProposalSnapshot:
+def parse_email_with_ai(
+    email_text: PrivacySafeText,
+) -> ShipmentProposalSnapshot:
     """
     OpenAI structured email parser returning a non-authoritative proposal.
 
     Düzensiz müşteri mailinden Shipment objesi üretir.
     """
+
+    if not isinstance(email_text, PrivacySafeText):
+        raise PrivacyBoundaryError(
+            "AI email parsing requires privacy-transformed input."
+        )
 
     if not OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY bulunamadı. Lütfen .env dosyasını kontrol edin.")

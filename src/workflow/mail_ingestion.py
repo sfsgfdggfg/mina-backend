@@ -7,20 +7,25 @@ from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
 from src.core.mail import InboundMailEnvelope
+from src.core.privacy import (
+    PrivacySafeText,
+    prepare_inbound_mail_for_processing,
+)
 from src.workflow.extraction_confirmation import create_extraction_proposal
 
 
 def process_customer_inquiry_mail(
     *,
     mail: InboundMailEnvelope,
-    shipment_parser: Callable[[str], ShipmentProposalSnapshot],
+    shipment_parser: Callable[[PrivacySafeText], ShipmentProposalSnapshot],
     proposal_repository: ExtractionProposalRepository,
 ) -> dict:
     """Stop customer mail at a non-authoritative extraction proposal."""
 
-    proposed_shipment = shipment_parser(mail.body_text)
+    safe_mail, safe_text = prepare_inbound_mail_for_processing(mail)
+    proposed_shipment = shipment_parser(safe_text)
     proposal = create_extraction_proposal(
-        mail=mail,
+        mail=safe_mail,
         proposed_shipment=proposed_shipment,
         repository=proposal_repository,
     )
