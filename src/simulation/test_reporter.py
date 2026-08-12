@@ -673,8 +673,8 @@ def evaluate_inactive_customer_memory_matching() -> dict:
 
         if customer_memory.find_customer_profile_in_text(
             "Request from Current Alias"
-        ) != active_profile:
-            failures.append("active raw-email alias should still match")
+        ) is not None:
+            failures.append("raw email alias must not establish customer identity")
     finally:
         customer_memory.load_customer_memory = original_loader
 
