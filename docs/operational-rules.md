@@ -2734,3 +2734,25 @@ regulatory, RFQ ve send-safety kapılarını bypass etmez.
 
 Bu aşamadaki operator identity yalnızca claimed audit metadata'sıdır;
 authentication veya authorization kanıtı değildir.
+
+
+---
+
+## RULE-113 — Customer Memory Requires Trusted Identity Evidence
+
+Customer memory enrichment must not use arbitrary raw email text, quoted history,
+forwarded content, or signatures as customer identity evidence.
+
+The human-confirmed `Shipment.customer_name` may identify a candidate profile, but
+automatic memory enrichment requires the inbound sender to match an explicitly
+trusted sender address or trusted sender domain on that customer profile.
+
+If a candidate profile exists but sender identity is not trusted, the result must
+remain `sender_verification_required` and no customer defaults, addresses,
+equipment preferences, sensitivity settings, or operational notes may be injected.
+
+Absence of sender metadata must fail closed. Raw text substring matching is not an
+identity mechanism.
+
+Sender/domain trust data is operational configuration, not authentication. Full
+operator authentication and authorization remain a separate P0 control.

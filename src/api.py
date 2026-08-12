@@ -116,6 +116,10 @@ outbound_mail_sender: OutboundMailSender | None = None
 
 class ProcessEmailRequest(BaseModel):
     email_text: str
+    sender_address: Optional[str] = None
+    sender_name: Optional[str] = None
+    subject: Optional[str] = None
+    external_message_id: Optional[str] = None
 
 
 class ConfirmExtractionRequest(BaseModel):
@@ -165,6 +169,8 @@ class CustomerMemoryCreateRequest(BaseModel):
     customer_name: str
     active: bool = True
     aliases: List[str] = []
+    trusted_sender_addresses: List[str] = []
+    trusted_sender_domains: List[str] = []
 
     default_commodity: Optional[str] = None
     default_equipment_type: Optional[str] = None
@@ -189,6 +195,8 @@ class CustomerMemoryUpdateRequest(BaseModel):
     customer_name: str
     active: bool = True
     aliases: List[str] = []
+    trusted_sender_addresses: List[str] = []
+    trusted_sender_domains: List[str] = []
 
     default_commodity: Optional[str] = None
     default_equipment_type: Optional[str] = None
@@ -770,6 +778,10 @@ def process_email(request: ProcessEmailRequest):
     result = process_customer_inquiry_mail(
         mail=InboundMailEnvelope(
             body_text=request.email_text,
+            sender_address=request.sender_address,
+            sender_name=request.sender_name,
+            subject=request.subject,
+            external_message_id=request.external_message_id,
             source="manual",
         ),
         shipment_parser=parse_email_with_ai,

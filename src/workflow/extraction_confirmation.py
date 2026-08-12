@@ -193,6 +193,7 @@ def resume_confirmed_extraction(
     result = process_shipment(
         shipment=proposal.confirmed_shipment.model_copy(deep=True),
         email_text=proposal.inbound_mail.body_text,
+        sender_address=proposal.inbound_mail.sender_address,
         rfq_repository=rfq_repository,
         approval_repository=approval_repository,
         quote_case_repository=quote_case_repository,

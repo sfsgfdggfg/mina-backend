@@ -47,6 +47,7 @@ from src.core.models import Shipment
 def process_shipment(
     shipment: Shipment,
     email_text: str | None = None,
+    sender_address: str | None = None,
     rfq_repository: SupplierRFQRepository | None = None,
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
@@ -64,6 +65,7 @@ def process_shipment(
     customer_memory = enrich_shipment_with_customer_memory(
         shipment=shipment,
         email_text=email_text,
+        sender_address=sender_address,
     )
 
     commodity_profile = get_commodity_record(shipment.commodity)
