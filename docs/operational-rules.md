@@ -2771,3 +2771,33 @@ Every durable repository save must also create an append-only pilot evidence eve
 A restart must not make a previously ingested supplier message or supplier response eligible to be accepted as new merely because in-memory state was lost.
 
 The pilot database is evidence infrastructure, not authorization. Its existence does not permit real company data use before privacy, isolation, retention, and access controls are separately approved.
+
+---
+
+## RULE-115 — Raw Inbound Mail Must Not Cross the Pilot Privacy Boundary
+
+Raw customer email bodies must not be passed directly to the AI parser and must
+not be written to MINAI pilot durable state or audit evidence.
+
+Before parsing or persistence, inbound mail must be transformed by the approved
+privacy minimizer. The stored message must carry a privacy-transform marker,
+transform version, and SHA-256 fingerprint of the original body.
+
+The privacy transform must preserve freight-operational facts required for safe
+quotation while removing unnecessary personal contact/signature data where the
+deterministic rules can identify it.
+
+The canonical sender address is an explicit exception because trusted-sender
+customer identity verification depends on it. Sender display names are not
+required for that control and must not be persisted in the transformed envelope.
+
+AI parser entry points must fail closed when given content that has not crossed
+the privacy boundary.
+
+Pilot durable data must be subject to an enforced retention period; default
+retention is 30 days. Expired state and evidence must be deletable without
+requiring application code changes.
+
+Passing this rule does not authorize real-data shadow piloting until the remaining
+deployment privacy, authentication, isolation, provenance, and legal/contractual
+requirements are complete.

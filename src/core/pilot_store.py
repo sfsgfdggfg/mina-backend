@@ -16,18 +16,38 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 class SQLitePilotStore:
-    def __init__(self, db_path: str | Path | None = None, *, run_id: str | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | Path | None = None,
+        *,
+        run_id: str | None = None,
+        retention_days: int | None = None,
+    ) -> None:
         configured_path = db_path or os.getenv("MINAI_PILOT_DB_PATH")
         self.db_path = Path(configured_path or DEFAULT_PILOT_DB_PATH)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.run_id = run_id or str(uuid4())
+
+        configured_retention = (
+            retention_days
+            if retention_days is not None
+            else int(os.getenv("MINAI_PILOT_RETENTION_DAYS", "30"))
+        )
+        if configured_retention < 1 or configured_retention > 365:
+            raise ValueError(
+                "MINAI pilot retention must be between 1 and 365 days."
+            )
+        self.retention_days = configured_retention
+
         self._initialize()
+        self.purge_expired()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA secure_delete = ON")
         return connection
 
     def _initialize(self) -> None:
@@ -142,6 +162,47 @@ class SQLitePilotStore:
                     (self.run_id, event_type, entity_type, record_key, payload_json, timestamp),
                 )
         return inserted
+
+    def purge_expired(
+        self,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, int]:
+        reference_time = now or datetime.now(timezone.utc)
+        cutoff = reference_time.timestamp() - (
+            self.retention_days * 24 * 60 * 60
+        )
+        cutoff_iso = datetime.fromtimestamp(
+            cutoff,
+            tz=timezone.utc,
+        ).isoformat()
+
+        with self._connect() as connection:
+            state_cursor = connection.execute(
+                "DELETE FROM state_records WHERE updated_at < ?",
+                (cutoff_iso,),
+            )
+            event_cursor = connection.execute(
+                "DELETE FROM pilot_events WHERE created_at < ?",
+                (cutoff_iso,),
+            )
+
+        deleted = {
+            "state_records_deleted": state_cursor.rowcount,
+            "pilot_events_deleted": event_cursor.rowcount,
+        }
+
+        if any(deleted.values()):
+            with self._connect() as connection:
+                checkpoint = connection.execute(
+                    "PRAGMA wal_checkpoint(TRUNCATE)"
+                ).fetchone()
+            if checkpoint is not None and checkpoint[0] != 0:
+                raise RuntimeError(
+                    "Pilot retention purge could not truncate SQLite WAL."
+                )
+
+        return deleted
 
     def get(self, *, namespace: str, record_key: str) -> Any | None:
         with self._connect() as connection:

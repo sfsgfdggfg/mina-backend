@@ -48,6 +48,9 @@ class InboundMailEnvelope(BaseModel):
     recipient_addresses: list[str] = Field(default_factory=list)
     subject: Optional[str] = None
     body_text: str
+    raw_body_sha256: Optional[str] = None
+    privacy_transformed: bool = False
+    privacy_transform_version: Optional[str] = None
     received_at: Optional[datetime] = None
     in_reply_to_message_id: Optional[str] = None
     explicit_rfq_reference: Optional[str] = None
@@ -74,6 +77,8 @@ class InboundMailEnvelope(BaseModel):
         "mailbox_id",
         "sender_name",
         "subject",
+        "raw_body_sha256",
+        "privacy_transform_version",
         "in_reply_to_message_id",
         "explicit_rfq_reference",
     )
