@@ -33,6 +33,7 @@ def process_customer_inquiry_mail(
         "result_type": "extraction_confirmation_required",
         "extraction_proposal": proposal,
         "shipment": None,
+        "pilot_scope": None,
         "customer_memory": None,
         "missing_info": None,
         "regulatory_compliance": None,

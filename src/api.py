@@ -1325,6 +1325,7 @@ def get_data_health_summary():
 
 def serialize_result(result: dict) -> dict:
     shipment = result.get("shipment")
+    pilot_scope = result.get("pilot_scope")
     extraction_proposal = result.get("extraction_proposal")
     missing_info = result.get("missing_info")
     regulatory_compliance = result.get("regulatory_compliance")
@@ -1367,6 +1368,11 @@ def serialize_result(result: dict) -> dict:
             else extraction_proposal
         ),
         "shipment": shipment.model_dump() if shipment else None,
+        "pilot_scope": (
+            pilot_scope.model_dump()
+            if hasattr(pilot_scope, "model_dump")
+            else pilot_scope
+        ),
         "missing_info": missing_info.model_dump() if missing_info else None,
         "regulatory_compliance": (
             regulatory_compliance.model_dump()

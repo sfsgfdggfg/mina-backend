@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, StrictBool, field_validator
 
@@ -95,6 +95,15 @@ class ShipmentExtraction(BaseModel):
         default="FTL",
         description=(
             "FTL or LTL. Default FTL unless partial is explicitly requested"
+        ),
+    )
+    transport_mode: Optional[
+        Literal["road", "rail", "sea", "air", "multimodal"]
+    ] = Field(
+        default=None,
+        description=(
+            "Explicit transport mode. Use road, rail, sea, air, or multimodal; "
+            "leave null when the email does not establish the mode."
         ),
     )
     equipment_type: Optional[str] = None

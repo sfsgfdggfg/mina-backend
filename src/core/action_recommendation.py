@@ -42,6 +42,27 @@ def generate_action_recommendation(
 
     commodity_action_checklist = get_commodity_action_checklist(shipment.commodity)
 
+    if result_type == "pilot_scope_excluded":
+        return ActionRecommendation(
+            action_type="pilot_scope_excluded",
+            title="Shadow Pilot Kapsamı Dışında",
+            message=(
+                "Bu taşıma kontrollü shadow pilotun düşük riskli karayolu "
+                "kapsamı dışındadır. MINAI tedarikçi RFQ veya müşteri teklifi "
+                "oluşturmadan akışı durdurdu."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "Kapsam dışı olma nedenlerini incele.",
+                    "Talebi bağımsız gerçek operasyon sürecinde ele al.",
+                    "Bu vakayı pilot RFQ veya teklif akışına dahil etme.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="pilot_scope_engine",
+        )
+
     if result_type == "data_provenance_blocked":
         return ActionRecommendation(
             action_type="data_provenance_blocked",

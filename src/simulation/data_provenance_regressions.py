@@ -110,6 +110,7 @@ def evaluate_data_provenance_regressions() -> dict:
         commodity="Tekstil",
         gross_weight_kg=20000,
         service_type="FTL",
+        transport_mode="road",
         cargo_ready_date="2026-08-13",
         is_adr=False,
         is_temperature_controlled=False,

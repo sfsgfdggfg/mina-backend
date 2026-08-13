@@ -6,6 +6,7 @@ from src.core.commodity_profile import get_commodity_record
 from src.core.customer_memory import enrich_shipment_with_customer_memory
 from src.core.equipment import decide_equipment
 from src.core.missing_info import check_missing_information
+from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.operational_consistency import check_operational_consistency
 from src.core.pricing import calculate_customer_quote
 from src.core.quote_approval import QuoteApproval, QuoteApprovalSnapshot
@@ -60,11 +61,7 @@ def resume_supplier_rfq_workflow(
         shipment=shipment,
         customer_memory=customer_memory,
     )
-    supplier_selection = select_suppliers_for_shipment(
-        shipment=shipment,
-        equipment_decision=equipment_decision,
-        risk_assessment=risk_assessment,
-    )
+    pilot_scope = evaluate_pilot_scope(shipment)
     supplier_rfq_drafts = [
         draft
         for draft in rfq_repository.list_drafts()
@@ -75,6 +72,41 @@ def resume_supplier_rfq_workflow(
         for draft in supplier_rfq_drafts
         for response in rfq_repository.list_responses(draft.rfq_id)
     ]
+    if not pilot_scope.eligible:
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="pilot_scope_excluded",
+        )
+        return _result(
+            workflow=workflow,
+            pilot_scope=pilot_scope,
+            customer_memory=customer_memory,
+            commodity_profile=commodity_profile,
+            missing_info=missing_info,
+            regulatory_compliance=regulatory_compliance,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            supplier_selection=None,
+            operational_consistency=None,
+            quote_readiness=None,
+            drafts=supplier_rfq_drafts,
+            responses=supplier_rfq_responses,
+            valid_responses=[],
+            validation=None,
+            comparisons=[],
+            selection_decision=None,
+            supplier_quote=None,
+            result_type="pilot_scope_excluded",
+            action_recommendation=action_recommendation,
+        )
+    supplier_selection = select_suppliers_for_shipment(
+        shipment=shipment,
+        equipment_decision=equipment_decision,
+        risk_assessment=risk_assessment,
+    )
     (
         valid_supplier_rfq_responses,
         supplier_rfq_response_validation,
@@ -82,6 +114,40 @@ def resume_supplier_rfq_workflow(
         drafts=supplier_rfq_drafts,
         responses=supplier_rfq_responses,
     )
+    pilot_scope = evaluate_pilot_scope(
+        shipment,
+        supplier_responses=valid_supplier_rfq_responses,
+    )
+    if not pilot_scope.eligible:
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="pilot_scope_excluded",
+        )
+        return _result(
+            workflow=workflow,
+            pilot_scope=pilot_scope,
+            customer_memory=customer_memory,
+            commodity_profile=commodity_profile,
+            missing_info=missing_info,
+            regulatory_compliance=regulatory_compliance,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            supplier_selection=supplier_selection,
+            operational_consistency=None,
+            quote_readiness=None,
+            drafts=supplier_rfq_drafts,
+            responses=supplier_rfq_responses,
+            valid_responses=valid_supplier_rfq_responses,
+            validation=supplier_rfq_response_validation,
+            comparisons=[],
+            selection_decision=None,
+            supplier_quote=None,
+            result_type="pilot_scope_excluded",
+            action_recommendation=action_recommendation,
+        )
     supplier_quote_comparisons = build_supplier_quote_comparisons(
         responses=valid_supplier_rfq_responses,
         supplier_selection=supplier_selection,
@@ -114,6 +180,7 @@ def resume_supplier_rfq_workflow(
         )
         return _result(
             workflow=workflow,
+            pilot_scope=pilot_scope,
             customer_memory=customer_memory,
             commodity_profile=commodity_profile,
             missing_info=missing_info,
@@ -150,6 +217,7 @@ def resume_supplier_rfq_workflow(
         )
         return _result(
             workflow=workflow,
+            pilot_scope=pilot_scope,
             customer_memory=customer_memory,
             commodity_profile=commodity_profile,
             missing_info=missing_info,
@@ -216,6 +284,7 @@ def resume_supplier_rfq_workflow(
     )
     result = _result(
         workflow=workflow,
+        pilot_scope=pilot_scope,
         customer_memory=customer_memory,
         commodity_profile=commodity_profile,
         missing_info=missing_info,
@@ -250,6 +319,7 @@ def resume_supplier_rfq_workflow(
 def _result(
     *,
     workflow,
+    pilot_scope,
     customer_memory,
     commodity_profile,
     missing_info,
@@ -271,6 +341,7 @@ def _result(
 ) -> dict:
     return {
         "shipment": workflow.shipment,
+        "pilot_scope": pilot_scope,
         "customer_memory": customer_memory,
         "commodity_profile": commodity_profile,
         "missing_info": missing_info,
