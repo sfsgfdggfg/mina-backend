@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Mapping
@@ -26,6 +27,16 @@ class DataProvenanceError(RuntimeError):
 
 class DataProvenanceBlockedError(DataProvenanceError):
     pass
+
+
+def calculate_dataset_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+
+    return digest.hexdigest()
 
 
 def load_data_provenance_registry(
@@ -127,6 +138,7 @@ def validate_data_provenance_registry(
         if classification == "pilot_verified":
             verified_by = record.get("verified_by")
             verified_at = record.get("verified_at")
+            verified_sha256 = record.get("verified_sha256")
 
             if not isinstance(verified_by, str) or not verified_by.strip():
                 errors.append(
@@ -136,6 +148,22 @@ def validate_data_provenance_registry(
             if not isinstance(verified_at, str) or not verified_at.strip():
                 errors.append(
                     f"{prefix} pilot_verified data requires verified_at."
+                )
+
+            if (
+                operational is True
+                and (
+                    not isinstance(verified_sha256, str)
+                    or len(verified_sha256) != 64
+                    or any(
+                        char not in "0123456789abcdefABCDEF"
+                        for char in verified_sha256
+                    )
+                )
+            ):
+                errors.append(
+                    f"{prefix} operational pilot_verified data "
+                    "requires a valid SHA-256 fingerprint."
                 )
 
         if classification == "internal_reference" and operational is True:
@@ -200,6 +228,34 @@ def require_pilot_operational_dataset(
             f"{dataset_key} "
             f"(classification={record.get('classification')}, "
             f"pilot_usable={record.get('pilot_usable')})"
+        )
+
+    dataset_path = (
+        path.resolve().parent.parent
+        / str(record.get("path"))
+    )
+
+    expected_sha256 = record.get("verified_sha256")
+
+    if (
+        not isinstance(expected_sha256, str)
+        or len(expected_sha256) != 64
+        or any(
+            char not in "0123456789abcdefABCDEF"
+            for char in expected_sha256
+        )
+    ):
+        raise DataProvenanceBlockedError(
+            "Pilot operational dataset has no valid verified fingerprint: "
+            f"{dataset_key}"
+        )
+
+    actual_sha256 = calculate_dataset_sha256(dataset_path)
+
+    if actual_sha256 != expected_sha256:
+        raise DataProvenanceBlockedError(
+            "Pilot operational dataset changed after verification: "
+            f"{dataset_key}"
         )
 
     return record

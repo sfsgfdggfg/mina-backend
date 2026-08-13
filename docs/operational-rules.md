@@ -2829,3 +2829,30 @@ explicitly.
 
 This rule provides a pre-MVP single-tenant access boundary and does not replace
 production SSO, RBAC, tenant isolation, or infrastructure firewall controls.
+
+
+---
+
+## RULE-117 — Pilot Operational Data Must Be Provenance-Verified
+
+Shadow-pilot operational master data must not be consumed merely because it is
+present in the repository or marked active.
+
+A dataset used to select suppliers, enrich customer operational facts, or drive
+another operational pilot decision must be classified appropriately in the data
+provenance registry.
+
+Operational pilot data is usable only when all of the following are true:
+
+1. classification is `pilot_verified`;
+2. `pilot_usable` is true;
+3. the verifying person is recorded;
+4. the verification time is recorded;
+5. the recorded SHA-256 fingerprint matches the current dataset bytes exactly.
+
+If the fingerprint differs, provenance is considered stale and the pilot must
+fail closed for required operational data.
+
+Demo data remains permitted for development and regression testing but must not
+be treated as real pilot master data. Internal reference datasets must not be
+presented as authoritative external regulatory or customs sources.

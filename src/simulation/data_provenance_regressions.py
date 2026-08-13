@@ -168,6 +168,94 @@ def evaluate_data_provenance_regressions() -> dict:
                 "pilot provenance block lacked explicit operator action"
             )
 
+    # A pilot_verified label alone is insufficient. The verified
+    # fingerprint must match the exact operational dataset bytes.
+    import json
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_root = Path(temp_dir)
+        data_dir = temp_root / "data"
+        data_dir.mkdir()
+
+        supplier_file = data_dir / "supplier_capabilities.json"
+        supplier_file.write_text(
+            '[{"supplier_name":"Verified Test"}]',
+            encoding="utf-8",
+        )
+
+        provenance_file = data_dir / "provenance_registry.json"
+        provenance_file.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "datasets": {
+                        "supplier_capabilities": {
+                            "path": "data/supplier_capabilities.json",
+                            "classification": "pilot_verified",
+                            "operational": True,
+                            "pilot_usable": True,
+                            "verified_by": "Pilot Data Owner",
+                            "verified_at": "2026-08-13T18:00:00+03:00",
+                            "verified_sha256": "0" * 64,
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        try:
+            require_pilot_operational_dataset(
+                "supplier_capabilities",
+                environ={"MINAI_PILOT_MODE": "1"},
+                path=provenance_file,
+            )
+        except DataProvenanceBlockedError:
+            pass
+        else:
+            failures.append(
+                "pilot accepted a dataset whose bytes did not match "
+                "the verified fingerprint"
+            )
+
+        from src.core.data_provenance import calculate_dataset_sha256
+
+        matching_registry = {
+            "version": 1,
+            "datasets": {
+                "supplier_capabilities": {
+                    "path": "data/supplier_capabilities.json",
+                    "classification": "pilot_verified",
+                    "operational": True,
+                    "pilot_usable": True,
+                    "verified_by": "Pilot Data Owner",
+                    "verified_at": "2026-08-13T18:00:00+03:00",
+                    "verified_sha256": calculate_dataset_sha256(
+                        supplier_file
+                    ),
+                }
+            },
+        }
+
+        provenance_file.write_text(
+            json.dumps(matching_registry),
+            encoding="utf-8",
+        )
+
+        try:
+            require_pilot_operational_dataset(
+                "supplier_capabilities",
+                environ={"MINAI_PILOT_MODE": "1"},
+                path=provenance_file,
+            )
+        except Exception as exc:
+            failures.append(
+                "pilot rejected correctly fingerprinted verified data: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
     return {
         "name": "Pilot data provenance boundary",
         "passed": len(failures) == 0,
