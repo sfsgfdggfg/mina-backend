@@ -2937,3 +2937,18 @@ the send time, and moves it to `awaiting_response` so a supplier response may be
 accepted. The RFQ update and one append-only manual-send evidence record must
 commit atomically. Unknown, non-approved, repeated, and stale concurrent
 attempts must fail without partial state or duplicate evidence.
+
+
+---
+
+## RULE-122 — Pilot Operators Must Use the Restricted Authenticated Workflow
+
+The controlled operator workflow must use the authenticated pilot client against
+localhost or an explicit private/loopback API address. Bearer tokens must be
+supplied outside source control, never printed or persisted by the client, and
+must not be forwarded through redirects or inherited proxies.
+
+The client may expose only pilot-approved reads and human lifecycle decisions.
+It must not expose supplier RFQ send, customer quote send, delivery adapters, or
+direct SQLite mutation. State-changing calls must not be silently retried;
+recovery requires reading current durable state and using returned identifiers.
