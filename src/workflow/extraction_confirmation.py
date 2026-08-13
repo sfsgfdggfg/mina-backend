@@ -19,7 +19,11 @@ from src.core.models import Shipment
 from src.core.data_provenance import DataProvenanceError
 from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.quote_case_repository import QuoteCaseRepository
-from src.core.supplier_rfq_repository import SupplierRFQRepository
+from src.core.supplier_rfq_repository import (
+    InMemorySupplierRFQRepository,
+    SupplierRFQRepository,
+)
+from src.core.sqlite_repositories import atomic_repository_transaction
 from src.workflow.pipeline import (
     build_data_provenance_blocked_result,
     process_shipment,
@@ -52,6 +56,35 @@ class ExtractionCorrectionError(ValueError):
 
 class UnresolvedSafetyFactsError(ValueError):
     pass
+
+
+def _require_unchanged_resume_state(
+    repository: ExtractionProposalRepository,
+    expected: ShipmentExtractionProposal,
+) -> None:
+    current = _load_proposal(repository, expected.proposal_id)
+    expected_state = (
+        expected.resume_status,
+        expected.resume_attempt_count,
+        expected.resume_started_at,
+        expected.resumed_at,
+        expected.downstream_result_type,
+        expected.last_resume_blocked_at,
+        expected.last_resume_blocked_result_type,
+    )
+    current_state = (
+        current.resume_status,
+        current.resume_attempt_count,
+        current.resume_started_at,
+        current.resumed_at,
+        current.downstream_result_type,
+        current.last_resume_blocked_at,
+        current.last_resume_blocked_result_type,
+    )
+    if current_state != expected_state:
+        raise ExtractionConfirmationTransitionError(
+            "Confirmed extraction resume state changed during processing."
+        )
 
 
 def create_extraction_proposal(
@@ -206,6 +239,8 @@ def resume_confirmed_extraction(
         raise ExtractionConfirmationTransitionError(
             "Confirmed extraction operational resume has already started."
         )
+    if rfq_repository is None:
+        rfq_repository = InMemorySupplierRFQRepository()
 
     started = ShipmentExtractionProposal.model_validate(
         {
@@ -217,8 +252,6 @@ def resume_confirmed_extraction(
             "resume_attempt_count": proposal.resume_attempt_count + 1,
         }
     )
-    started = repository.save(started)
-
     try:
         result = process_shipment(
             shipment=started.confirmed_shipment.model_copy(deep=True),
@@ -227,6 +260,7 @@ def resume_confirmed_extraction(
             rfq_repository=rfq_repository,
             approval_repository=approval_repository,
             quote_case_repository=quote_case_repository,
+            _persist_rfq_transition=False,
         )
     except DataProvenanceError:
         result = build_data_provenance_blocked_result(
@@ -239,6 +273,11 @@ def resume_confirmed_extraction(
         or "unknown"
     )
     result["result_type"] = result_type
+    transactional_evidence_recorder = (
+        evidence_recorder
+        if getattr(repository, "store", None) is not None
+        else None
+    )
 
     if result_type == "data_provenance_blocked":
         blocked = ShipmentExtractionProposal.model_validate(
@@ -251,34 +290,25 @@ def resume_confirmed_extraction(
                 "last_resume_blocked_result_type": result_type,
             }
         )
-        blocked = repository.save(blocked)
-        if evidence_recorder is not None:
-            evidence_recorder.record_event(
-                event_type="confirmed_extraction_resume_blocked",
-                entity_type="extraction_proposal",
-                entity_id=blocked.proposal_id,
-                payload={
-                    "proposal_id": blocked.proposal_id,
-                    "result_type": result_type,
-                    "resume_attempt_count": blocked.resume_attempt_count,
-                },
-            )
+        with atomic_repository_transaction(
+            repository,
+            transactional_evidence_recorder,
+        ):
+            _require_unchanged_resume_state(repository, proposal)
+            blocked = repository.save(blocked)
+            if evidence_recorder is not None:
+                evidence_recorder.record_event(
+                    event_type="confirmed_extraction_resume_blocked",
+                    entity_type="extraction_proposal",
+                    entity_id=blocked.proposal_id,
+                    payload={
+                        "proposal_id": blocked.proposal_id,
+                        "result_type": result_type,
+                        "resume_attempt_count": blocked.resume_attempt_count,
+                    },
+                )
         result["extraction_proposal"] = blocked
         return result
-
-    if evidence_recorder is not None:
-        evidence_recorder.record_event(
-            event_type="confirmed_extraction_resumed",
-            entity_type="extraction_proposal",
-            entity_id=started.proposal_id,
-            payload={
-                "proposal_id": started.proposal_id,
-                "confirmed_by": started.confirmed_by,
-                "confirmed_at": started.confirmed_at,
-                "result_type": result_type,
-                "result": result,
-            },
-        )
 
     resumed = ShipmentExtractionProposal.model_validate(
         {
@@ -290,6 +320,34 @@ def resume_confirmed_extraction(
             "resume_status": "completed",
         }
     )
-    resumed = repository.save(resumed)
+    deferred_workflow = result.get("supplier_rfq_workflow")
+    deferred_drafts = result.get("supplier_rfq_drafts") or []
+    with atomic_repository_transaction(
+        repository,
+        rfq_repository if deferred_workflow is not None else None,
+        transactional_evidence_recorder,
+    ):
+        _require_unchanged_resume_state(repository, proposal)
+        if deferred_workflow is not None:
+            result["supplier_rfq_drafts"] = rfq_repository.save_drafts(
+                deferred_drafts
+            )
+            result["supplier_rfq_workflow"] = rfq_repository.save_workflow(
+                deferred_workflow
+            )
+        if evidence_recorder is not None:
+            evidence_recorder.record_event(
+                event_type="confirmed_extraction_resumed",
+                entity_type="extraction_proposal",
+                entity_id=started.proposal_id,
+                payload={
+                    "proposal_id": started.proposal_id,
+                    "confirmed_by": started.confirmed_by,
+                    "confirmed_at": started.confirmed_at,
+                    "result_type": result_type,
+                    "result": result,
+                },
+            )
+        resumed = repository.save(resumed)
     result["extraction_proposal"] = resumed
     return result

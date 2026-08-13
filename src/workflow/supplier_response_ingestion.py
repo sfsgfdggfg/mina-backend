@@ -23,6 +23,7 @@ from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
     SupplierRFQRepository,
 )
+from src.core.sqlite_repositories import atomic_repository_transaction
 
 
 class SupplierReplyIngestionRequest(BaseModel):
@@ -205,7 +206,10 @@ def ingest_supplier_reply(
         )
 
     try:
-        responded = attach_supplier_rfq_response(repository, response)
+        with atomic_repository_transaction(repository):
+            responded = attach_supplier_rfq_response(repository, response)
+            if message_key:
+                repository.record_ingested_message(message_key)
     except DuplicateSupplierRFQResponseError as exc:
         return SupplierReplyIngestionResult(
             status="duplicate_response",
@@ -236,9 +240,6 @@ def ingest_supplier_reply(
             reason=str(exc),
             external_message_id=reply.external_message_id,
         )
-
-    if message_key:
-        repository.record_ingested_message(message_key)
 
     return SupplierReplyIngestionResult(
         status="response_attached",

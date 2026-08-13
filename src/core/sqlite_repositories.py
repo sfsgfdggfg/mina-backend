@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable
+from contextlib import contextmanager
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
@@ -15,6 +16,37 @@ from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQResponse, Supplie
 from src.core.supplier_rfq_repository import DuplicateSupplierRFQResponseError
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+
+
+@contextmanager
+def atomic_repository_transaction(*repositories):
+    stores = [
+        (
+            repository
+            if isinstance(repository, SQLitePilotStore)
+            else getattr(repository, "store", None)
+        )
+        for repository in repositories
+        if repository is not None
+    ]
+    sqlite_stores = [store for store in stores if store is not None]
+    if not sqlite_stores:
+        yield
+        return
+    if len(sqlite_stores) != len(stores):
+        raise ValueError(
+            "Atomic transition repositories must all use SQLite or all be in-memory."
+        )
+    store = sqlite_stores[0]
+    if any(candidate is not store for candidate in sqlite_stores[1:]):
+        raise ValueError(
+            "Atomic transition repositories must share one SQLitePilotStore."
+        )
+    if store.transaction_active:
+        yield
+        return
+    with store.transaction():
+        yield
 
 def _model_payload(model: BaseModel) -> dict[str, Any]:
     return model.model_dump(mode="json", exclude_computed_fields=True)

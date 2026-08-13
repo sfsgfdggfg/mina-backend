@@ -2876,3 +2876,32 @@ or completed must fail its transition so repeated requests cannot duplicate
 downstream artifacts. Operational API results must use a stable safe reason and
 must not expose registry paths, raw exception details, stack traces, or message
 contents.
+
+
+---
+
+## RULE-119 — Pilot-Critical Multi-Record Writes Must Commit Atomically
+
+When one pilot business transition writes multiple related SQLite records, all
+state records and their evidence events must commit in one transaction or all
+must roll back.
+
+This rule applies to RFQ workflow-and-draft creation, supplier response and RFQ
+lifecycle acceptance, inbound-message deduplication for that acceptance, and
+quote approval/case/progression creation. It also applies when confirmed
+extraction resume creates an RFQ workflow and records completion. A failed
+transition must remain safely retryable and must not leave orphan drafts,
+accepted responses with stale RFQ state, orphan approvals or cases, or a falsely
+completed workflow.
+
+Transactions must contain only final durable writes after business computation
+and validation. AI calls, network requests, and external outbound operations must
+not execute inside the SQLite transaction. Participating SQLite repositories
+must share one `SQLitePilotStore`; repository methods must not commit an outer
+transaction independently.
+
+Expensive side-effect-free computation may occur while durable state remains
+retryable, but the final transaction must re-read and compare that state before
+its first write. A stale attempt must raise a transition conflict and write no
+artifact or evidence. Legacy durable `in_progress` records remain fail-closed and
+must not become automatically retryable.

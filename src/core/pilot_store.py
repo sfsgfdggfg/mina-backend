@@ -3,14 +3,20 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
+from threading import local
 from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel
 
 DEFAULT_PILOT_DB_PATH = Path("data/pilot/minai_pilot.sqlite3")
+
+
+class SQLiteTransactionError(RuntimeError):
+    pass
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -27,6 +33,7 @@ class SQLitePilotStore:
         self.db_path = Path(configured_path or DEFAULT_PILOT_DB_PATH)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.run_id = run_id or str(uuid4())
+        self._transaction_state = local()
 
         configured_retention = (
             retention_days
@@ -50,8 +57,49 @@ class SQLitePilotStore:
         connection.execute("PRAGMA secure_delete = ON")
         return connection
 
+    @property
+    def transaction_active(self) -> bool:
+        return getattr(self._transaction_state, "connection", None) is not None
+
+    @contextmanager
+    def transaction(self):
+        if self.transaction_active:
+            raise SQLiteTransactionError(
+                "Nested SQLite pilot transactions are not supported."
+            )
+        connection = self._connect()
+        self._transaction_state.connection = connection
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            yield
+        except BaseException:
+            connection.rollback()
+            raise
+        else:
+            connection.commit()
+        finally:
+            self._transaction_state.connection = None
+            connection.close()
+
+    @contextmanager
+    def _connection_scope(self):
+        transaction_connection = getattr(
+            self._transaction_state,
+            "connection",
+            None,
+        )
+        if transaction_connection is not None:
+            yield transaction_connection
+            return
+        connection = self._connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS state_records (
                     namespace TEXT NOT NULL,
@@ -108,7 +156,7 @@ class SQLitePilotStore:
     def upsert(self, *, namespace: str, record_key: str, payload: Any, event_type: str, entity_type: str) -> None:
         payload_json = self._encode(payload)
         timestamp = utc_now_iso()
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             connection.execute(
                 """INSERT INTO state_records(namespace, record_key, payload_json, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -132,7 +180,7 @@ class SQLitePilotStore:
     ) -> None:
         payload_json = self._encode(payload)
         timestamp = utc_now_iso()
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             connection.execute(
                 "INSERT INTO pilot_events(run_id, event_type, entity_type, entity_id, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (
@@ -148,7 +196,7 @@ class SQLitePilotStore:
     def insert_once(self, *, namespace: str, record_key: str, payload: Any, event_type: str, entity_type: str) -> bool:
         payload_json = self._encode(payload)
         timestamp = utc_now_iso()
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             cursor = connection.execute(
                 """INSERT OR IGNORE INTO state_records(namespace, record_key, payload_json, updated_at)
                 VALUES (?, ?, ?, ?)""",
@@ -177,7 +225,7 @@ class SQLitePilotStore:
             tz=timezone.utc,
         ).isoformat()
 
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             state_cursor = connection.execute(
                 "DELETE FROM state_records WHERE updated_at < ?",
                 (cutoff_iso,),
@@ -193,7 +241,7 @@ class SQLitePilotStore:
         }
 
         if any(deleted.values()):
-            with self._connect() as connection:
+            with self._connection_scope() as connection:
                 checkpoint = connection.execute(
                     "PRAGMA wal_checkpoint(TRUNCATE)"
                 ).fetchone()
@@ -205,7 +253,7 @@ class SQLitePilotStore:
         return deleted
 
     def get(self, *, namespace: str, record_key: str) -> Any | None:
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             row = connection.execute(
                 "SELECT payload_json FROM state_records WHERE namespace = ? AND record_key = ?",
                 (namespace, record_key),
@@ -213,7 +261,7 @@ class SQLitePilotStore:
         return None if row is None else self._decode(row["payload_json"])
 
     def list_all(self, *, namespace: str) -> list[Any]:
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             rows = connection.execute(
                 "SELECT payload_json FROM state_records WHERE namespace = ? ORDER BY updated_at ASC, record_key ASC",
                 (namespace,),
@@ -221,7 +269,7 @@ class SQLitePilotStore:
         return [self._decode(row["payload_json"]) for row in rows]
 
     def exists(self, *, namespace: str, record_key: str) -> bool:
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             row = connection.execute(
                 "SELECT 1 FROM state_records WHERE namespace = ? AND record_key = ? LIMIT 1",
                 (namespace, record_key),
@@ -238,7 +286,7 @@ class SQLitePilotStore:
             clauses.append("entity_id = ?")
             values.append(entity_id)
         where_sql = "" if not clauses else " WHERE " + " AND ".join(clauses)
-        with self._connect() as connection:
+        with self._connection_scope() as connection:
             rows = connection.execute(
                 """SELECT event_id, run_id, event_type, entity_type, entity_id, payload_json, created_at
                 FROM pilot_events""" + where_sql + " ORDER BY event_id ASC",

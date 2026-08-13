@@ -4719,3 +4719,50 @@ and raw exception text are not part of the operational API result.
 * Completed retries are protected against duplicate downstream artifact creation.
 * Durable attempt state does not provide multi-record transactionality; that
   remains a separate concern.
+
+
+---
+
+## DEC-100 — Atomic Pilot-Critical SQLite Transitions
+
+**Status:** Accepted
+**Date:** 2026-08-13
+
+### Decision
+
+Pilot-critical business transitions that update multiple SQLite records use one
+short transaction on their shared `SQLitePilotStore`. Repository writes join the
+active store transaction and do not independently commit it.
+
+RFQ workflow creation commits its linked workflow and complete draft set
+together. Supplier response acceptance commits the response, RFQ lifecycle
+state, and inbound-message deduplication marker together. Quote progression
+commits the approval, quote case, and completed workflow state together.
+Confirmed extraction resume defers newly generated RFQ persistence so those
+records, resume evidence, and the completed proposal state also commit together.
+Approval decisions continue to update one approval state record; that state and
+its append-only evidence event remain one atomic store write because quote-case
+snapshots are not rewritten by the decision service.
+
+Validation, computation, AI work, network access, and external outbound activity
+remain outside database transactions. Direct nested store transactions are
+rejected; workflow helpers may join an already active transaction on the same
+store without committing it.
+
+During side-effect-free computation, durable resume state remains retryable.
+Before final writes, the short transaction re-reads and compares the durable
+attempt state used for computation. A stale concurrent attempt fails its
+transition before writing artifacts or evidence. This supersedes only the
+pre-computation write mechanics described by DEC-099; its fail-closed legacy
+`in_progress` handling and completed-state protections remain unchanged.
+
+### Consequences
+
+* A crash or persistence error exposes either the complete transition or none of
+  its constituent durable writes.
+* Retrying a rolled-back transition behaves as though its failed attempt never
+  committed.
+* Repositories participating in one atomic transition must share the same
+  SQLite store.
+* This decision does not introduce distributed transactions or make external
+  provider operations transactional.

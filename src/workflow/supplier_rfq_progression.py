@@ -31,6 +31,7 @@ from src.core.supplier_rfq_lifecycle import (
     validate_supplier_rfq_responses,
 )
 from src.core.supplier_rfq_repository import SupplierRFQRepository
+from src.core.sqlite_repositories import atomic_repository_transaction
 from src.core.supplier_selection import select_suppliers_for_shipment
 from src.workflow.pipeline import build_data_provenance_blocked_result
 
@@ -41,6 +42,37 @@ class SupplierRFQWorkflowNotFoundError(LookupError):
 
 class SupplierRFQWorkflowProgressionError(ValueError):
     pass
+
+
+def _require_unchanged_progression_state(
+    rfq_repository: SupplierRFQRepository,
+    expected,
+) -> None:
+    current = rfq_repository.get_workflow(expected.workflow_id)
+    if current is None:
+        raise SupplierRFQWorkflowNotFoundError(
+            f"Supplier RFQ workflow not found: {expected.workflow_id}"
+        )
+    expected_state = (
+        expected.quote_progression_status,
+        expected.quote_progression_attempt_count,
+        expected.quote_progression_started_at,
+        expected.quote_progressed_at,
+        expected.last_provenance_blocked_at,
+        expected.last_provenance_blocked_result_type,
+    )
+    current_state = (
+        current.quote_progression_status,
+        current.quote_progression_attempt_count,
+        current.quote_progression_started_at,
+        current.quote_progressed_at,
+        current.last_provenance_blocked_at,
+        current.last_provenance_blocked_result_type,
+    )
+    if current_state != expected_state:
+        raise SupplierRFQWorkflowProgressionError(
+            "Supplier RFQ quote progression changed during processing."
+        )
 
 
 def resume_supplier_rfq_workflow(
@@ -71,14 +103,10 @@ def resume_supplier_rfq_workflow(
             "updated_at": datetime.utcnow(),
         }
     )
-    started = rfq_repository.save_workflow(started)
-
     try:
         result = _progress_supplier_rfq_workflow(
             workflow=started,
             rfq_repository=rfq_repository,
-            approval_repository=approval_repository,
-            quote_case_repository=quote_case_repository,
         )
     except DataProvenanceError:
         drafts = [
@@ -126,7 +154,30 @@ def resume_supplier_rfq_workflow(
                 "updated_at": datetime.utcnow(),
             }
         )
-    persisted = rfq_repository.save_workflow(persisted)
+    if result.get("quote_case") is not None:
+        with atomic_repository_transaction(
+            rfq_repository,
+            approval_repository,
+            quote_case_repository,
+        ):
+            _require_unchanged_progression_state(
+                rfq_repository,
+                workflow,
+            )
+            result["quote_approval"] = approval_repository.save(
+                result["quote_approval"]
+            )
+            result["quote_case"] = quote_case_repository.save(
+                result["quote_case"]
+            )
+            persisted = rfq_repository.save_workflow(persisted)
+    else:
+        with atomic_repository_transaction(rfq_repository):
+            _require_unchanged_progression_state(
+                rfq_repository,
+                workflow,
+            )
+            persisted = rfq_repository.save_workflow(persisted)
     result["supplier_rfq_workflow"] = persisted
     return result
 
@@ -135,8 +186,6 @@ def _progress_supplier_rfq_workflow(
     *,
     workflow,
     rfq_repository: SupplierRFQRepository,
-    approval_repository: QuoteApprovalRepository,
-    quote_case_repository: QuoteCaseRepository,
 ) -> dict:
 
     shipment = workflow.shipment
@@ -344,7 +393,6 @@ def _progress_supplier_rfq_workflow(
             quote_draft=quote_draft,
         )
     )
-    approval_repository.save(quote_approval)
     quote_send_safety = evaluate_quote_send_safety(
         approval=quote_approval,
         supplier_quote=supplier_quote,
@@ -365,7 +413,6 @@ def _progress_supplier_rfq_workflow(
         quote_send_safety=quote_send_safety,
         regulatory_compliance=regulatory_compliance,
     )
-    quote_case_repository.save(quote_case)
     action_recommendation = generate_action_recommendation(
         shipment=shipment,
         equipment_decision=equipment_decision,
