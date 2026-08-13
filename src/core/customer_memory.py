@@ -5,6 +5,10 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from src.core.models import Shipment
 from src.core.extraction_confirmation import require_operational_shipment
+from src.core.data_provenance import (
+    DataProvenanceBlockedError,
+    require_pilot_operational_dataset,
+)
 from datetime import datetime, timezone
 
 
@@ -192,6 +196,19 @@ def enrich_shipment_with_customer_memory(
     """
 
     require_operational_shipment(shipment)
+
+    try:
+        require_pilot_operational_dataset("customer_memory")
+    except DataProvenanceBlockedError:
+        return CustomerMemoryResult(
+            matched=False,
+            profile=None,
+            candidate_profile=None,
+            notes_applied=[],
+            source="customer_memory_provenance_blocked",
+            matched_by=None,
+            identity_status="provenance_unverified",
+        )
 
     profile = find_customer_profile(shipment.customer_name)
 

@@ -42,6 +42,29 @@ def generate_action_recommendation(
 
     commodity_action_checklist = get_commodity_action_checklist(shipment.commodity)
 
+    if result_type == "data_provenance_blocked":
+        return ActionRecommendation(
+            action_type="data_provenance_blocked",
+            title="Doğrulanmış Operasyon Verisi Gerekli",
+            message=(
+                "Shadow pilot akışı, pilot için doğrulanmamış operasyonel "
+                "master data ile devam edemez. Doğrulanmış tedarikçi verisi "
+                "yüklenip provenance kaydı tamamlanmadan RFQ veya müşteri "
+                "teklifi oluşturulmaz."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "Pilot firmaya ait güncel tedarikçi master datasını doğrula.",
+                    "Veriyi pilot_verified olarak provenance registry'ye kaydet.",
+                    "Doğrulayan kişi ve doğrulama zamanını kaydet.",
+                    "Doğrulanmamış demo veriyi gerçek operasyonda kullanma.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="data_provenance_engine",
+        )
+
     if result_type == "regulatory_blocked":
         return ActionRecommendation(
             action_type="regulatory_blocked",

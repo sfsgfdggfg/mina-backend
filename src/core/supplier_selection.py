@@ -10,6 +10,7 @@ from src.core.supplier_capability_registry import (
     get_required_adr_class_capability,
 )
 from src.core.extraction_confirmation import require_operational_shipment
+from src.core.data_provenance import require_pilot_operational_dataset
 
 
 def _get_primary_contact_email(raw_supplier: Dict[str, Any]) -> Optional[str]:
@@ -240,6 +241,7 @@ def select_suppliers_for_shipment(
     max_suppliers: int = 3,
 ) -> Dict[str, Any]:
     require_operational_shipment(shipment)
+    require_pilot_operational_dataset("supplier_capabilities")
     equipment_text = _get_equipment_text(shipment, equipment_decision)
     risk_level = _get_risk_level(risk_assessment)
     service_type = getattr(shipment, "service_type", "FTL") or "FTL"
