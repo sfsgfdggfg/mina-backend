@@ -4643,3 +4643,44 @@ trust, tenant isolation, and enterprise audit integration remain future work.
 * Network exposure still depends on deployment correctly using the declared bind
   address and allowed private/VPN CIDRs; deployment verification remains part of
   the pilot readiness gate.
+
+
+---
+
+## DEC-098 — Shadow-Pilot Operational Data Provenance
+
+**Status:** Accepted
+**Date:** 2026-08-13
+
+### Decision
+
+MINAI distinguishes operational datasets from internal reference and demo data
+through `data/provenance_registry.json`.
+
+Operational data may influence a shadow-pilot workflow only when its provenance
+classification is `pilot_verified`, `pilot_usable` is true, the verifying person
+and verification time are recorded, and the SHA-256 fingerprint of the current
+dataset exactly matches the fingerprint recorded at verification time.
+
+Changing the dataset after verification invalidates that provenance and the
+pilot workflow must fail closed until the new dataset version is reviewed and
+verified again.
+
+Current supplier capability and customer-memory datasets are explicitly
+classified as demo/unverified. Demo supplier data may remain usable for
+development and regression testing but cannot drive pilot RFQ selection.
+Unverified customer-memory data is ignored in pilot mode and therefore cannot
+silently influence enrichment or risk decisions.
+
+Internal commodity and HS/GTIP reference mappings may remain available as
+non-authoritative internal reference material. Their presence must not be
+represented as external regulatory, customs, or legal verification.
+
+### Consequences
+
+* A provenance label alone cannot authorize operational pilot data.
+* Verification is bound to the exact dataset bytes by SHA-256.
+* Demo supplier records cannot produce real pilot RFQ drafts.
+* Unverified customer memory cannot influence pilot risk decisions.
+* Updating verified operational data requires a new review, timestamp, verifier,
+  and fingerprint.

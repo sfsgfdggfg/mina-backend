@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "datasets": {
+    "supplier_capabilities": {
+      "path": "data/supplier_capabilities.json",
+      "classification": "demo",
+      "operational": true,
+      "pilot_usable": false,
+      "verified_by": null,
+      "verified_at": null,
+      "notes": "Development/demo supplier capability data. Must not drive shadow-pilot operational supplier selection."
+    },
+    "customer_memory": {
+      "path": "data/customer_memory.json",
+      "classification": "demo",
+      "operational": true,
+      "pilot_usable": false,
+      "verified_by": null,
+      "verified_at": null,
+      "notes": "Legacy/demo customer profiles are not pilot-firm-verified operational master data."
+    },
+    "commodity_dictionary": {
+      "path": "data/commodity_dictionary.json",
+      "classification": "internal_reference",
+      "operational": false,
+      "pilot_usable": true,
+      "verified_by": null,
+      "verified_at": null,
+      "notes": "Internal MINAI reference dictionary. Not an external regulatory authority."
+    },
+    "hs_commodity_map": {
+      "path": "data/hs_commodity_map.json",
+      "classification": "internal_reference",
+      "operational": false,
+      "pilot_usable": true,
+      "verified_by": null,
+      "verified_at": null,
+      "notes": "Internal reference mapping only; not authoritative customs classification."
+    },
+    "supplier_capability_registry": {
+      "path": "data/supplier_capability_registry.json",
+      "classification": "internal_reference",
+      "operational": false,
+      "pilot_usable": true,
+      "verified_by": null,
+      "verified_at": null,
+      "notes": "Internal capability vocabulary and mapping registry."
+    }
+  }
+}

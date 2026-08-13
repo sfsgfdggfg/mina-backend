@@ -6,6 +6,7 @@ from typing import Callable, Dict, List
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
+from src.core.data_provenance import validate_data_provenance_registry
 from src.core.supplier_capability_validator import validate_supplier_capabilities_file
 from src.core.supplier_capability_registry_validator import (
     validate_supplier_capability_registry_file,
@@ -23,6 +24,11 @@ class DataHealthCheck:
 
 
 DATA_HEALTH_CHECKS: List[DataHealthCheck] = [
+    DataHealthCheck(
+        key="data_provenance",
+        label="Veri Kaynağı / Provenance Registry",
+        validator=validate_data_provenance_registry,
+    ),
     DataHealthCheck(
         key="commodity_dictionary",
         label="Ürün Sözlüğü",

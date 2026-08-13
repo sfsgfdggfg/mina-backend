@@ -41,6 +41,7 @@ from src.core.supplier_rfq_repository import (
     SupplierRFQRepository,
 )
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
+from src.core.data_provenance import DataProvenanceBlockedError
 from src.core.models import Shipment
 
 
@@ -78,11 +79,59 @@ def process_shipment(
 )
 
     # 1. RED risk varsa önce yönetici onayına gider
-    supplier_selection = select_suppliers_for_shipment(
-        shipment=shipment,
-        equipment_decision=equipment_decision,
-        risk_assessment=risk_assessment,
-    )
+    try:
+        supplier_selection = select_suppliers_for_shipment(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+        )
+    except DataProvenanceBlockedError as exc:
+        supplier_selection = {
+            "selected_suppliers": [],
+            "rejected_suppliers": [],
+            "selection_strategy": None,
+            "source": "data_provenance_engine",
+            "data_source": "data/supplier_capabilities.json",
+            "provenance_status": "blocked",
+            "provenance_reason": str(exc),
+        }
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="data_provenance_blocked",
+        )
+
+        return {
+            "shipment": shipment,
+            "customer_memory": customer_memory,
+            "commodity_profile": commodity_profile,
+            "missing_info": missing_info,
+            "regulatory_compliance": regulatory_compliance,
+            "equipment_decision": equipment_decision,
+            "risk_assessment": risk_assessment,
+            "supplier_selection": supplier_selection,
+            "operational_consistency": None,
+            "quote_readiness": None,
+            "supplier_rfq_workflow": None,
+            "supplier_rfq_drafts": [],
+            "supplier_rfq_responses": [],
+            "valid_supplier_rfq_responses": [],
+            "supplier_rfq_response_validation": None,
+            "supplier_quote_comparisons": [],
+            "supplier_quote_selection_decision": None,
+            "supplier_quote": None,
+            "customer_quote": None,
+            "quote_draft": None,
+            "quote_approval": None,
+            "quote_send_safety": None,
+            "quote_case": None,
+            "clarification_draft": None,
+            "management_review_draft": None,
+            "action_recommendation": action_recommendation,
+            "result_type": "data_provenance_blocked",
+        }
 
     operational_consistency = check_operational_consistency(
         shipment=shipment,
