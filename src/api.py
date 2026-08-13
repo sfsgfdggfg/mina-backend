@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Any, List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
@@ -40,6 +41,10 @@ from src.workflow.extraction_confirmation import (
     resume_confirmed_extraction,
 )
 from src.core.pilot_store import SQLitePilotStore
+from src.core.pilot_access import (
+    authorize_pilot_request,
+    pilot_mode_enabled,
+)
 from src.core.sqlite_repositories import (
     SQLiteExtractionProposalRepository,
     SQLiteQuoteApprovalRepository,
@@ -103,6 +108,53 @@ app = FastAPI(
     description="AI-powered freight operations assistant API",
     version="0.1.0",
 )
+
+
+@app.middleware("http")
+async def enforce_pilot_access(request: Request, call_next):
+    decision = authorize_pilot_request(
+        method=request.method,
+        path=request.url.path,
+        client_host=(
+            request.client.host
+            if request.client is not None
+            else None
+        ),
+        authorization=request.headers.get("Authorization"),
+    )
+    if not decision.allowed:
+        return JSONResponse(
+            status_code=decision.status_code,
+            content={"detail": decision.reason},
+        )
+    request.state.pilot_operator = decision.operator_name
+    return await call_next(request)
+
+
+def _authenticated_operator(
+    request: Request | None,
+    claimed_identity: str | None = None,
+) -> str:
+    authenticated = (
+        getattr(request.state, "pilot_operator", None)
+        if request is not None
+        else None
+    )
+    if authenticated:
+        return authenticated
+    if pilot_mode_enabled():
+        raise HTTPException(
+            status_code=401,
+            detail="pilot_authentication_required",
+        )
+    normalized = (claimed_identity or "").strip()
+    if not normalized:
+        raise HTTPException(
+            status_code=422,
+            detail="Operator identity is required.",
+        )
+    return normalized
+
 
 pilot_store = SQLitePilotStore()
 quote_approval_repository = SQLiteQuoteApprovalRepository(pilot_store)
@@ -654,12 +706,16 @@ def get_quote_approval(approval_id: str):
 def approve_quote_approval(
     approval_id: str,
     request: QuoteApprovalApproveRequest,
+    http_request: Request = None,
 ):
     try:
         approval = approve_quote(
             repository=quote_approval_repository,
             approval_id=approval_id,
-            approved_by=request.approved_by,
+            approved_by=_authenticated_operator(
+                http_request,
+                request.approved_by,
+            ),
         )
     except QuoteApprovalNotFoundError as exc:
         raise HTTPException(
@@ -684,12 +740,14 @@ def approve_quote_approval(
 def reject_quote_approval(
     approval_id: str,
     request: QuoteApprovalRejectRequest,
+    http_request: Request = None,
 ):
     try:
         approval = reject_quote(
             repository=quote_approval_repository,
             approval_id=approval_id,
             rejection_reason=request.rejection_reason,
+            rejected_by=_authenticated_operator(http_request),
         )
     except QuoteApprovalNotFoundError as exc:
         raise HTTPException(
@@ -711,11 +769,15 @@ def reject_quote_approval(
 
 
 @app.post("/quote-approvals/{approval_id}/invalidate")
-def invalidate_quote_approval_endpoint(approval_id: str):
+def invalidate_quote_approval_endpoint(
+    approval_id: str,
+    http_request: Request = None,
+):
     try:
         approval = invalidate_quote_approval(
             repository=quote_approval_repository,
             approval_id=approval_id,
+            invalidated_by=_authenticated_operator(http_request),
         )
     except QuoteApprovalNotFoundError as exc:
         raise HTTPException(
@@ -808,12 +870,16 @@ def get_extraction_proposal(proposal_id: str):
 def confirm_extraction_proposal_endpoint(
     proposal_id: str,
     request: ConfirmExtractionRequest,
+    http_request: Request = None,
 ):
     try:
         proposal = confirm_extraction_proposal(
             repository=extraction_proposal_repository,
             proposal_id=proposal_id,
-            operator_identity=request.operator_identity,
+            operator_identity=_authenticated_operator(
+                http_request,
+                request.operator_identity,
+            ),
             corrections=request.corrections,
         )
     except ExtractionProposalNotFoundError as exc:
@@ -878,12 +944,16 @@ def get_supplier_rfq(rfq_id: str):
 def approve_supplier_rfq_endpoint(
     rfq_id: str,
     request: SupplierRFQApproveRequest,
+    http_request: Request = None,
 ):
     try:
         return approve_supplier_rfq(
             repository=supplier_rfq_repository,
             rfq_id=rfq_id,
-            approved_by=request.approved_by,
+            approved_by=_authenticated_operator(
+                http_request,
+                request.approved_by,
+            ),
         ).model_dump()
     except SupplierRFQNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

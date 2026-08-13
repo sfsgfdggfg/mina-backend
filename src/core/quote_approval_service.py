@@ -66,6 +66,8 @@ def reject_quote(
     repository: QuoteApprovalRepository,
     approval_id: str,
     rejection_reason: str,
+    rejected_by: str,
+    rejected_at: Optional[datetime] = None,
 ) -> QuoteApproval:
     approval = _load_approval(repository, approval_id)
 
@@ -75,18 +77,26 @@ def reject_quote(
         )
 
     normalized_reason = rejection_reason.strip()
+    normalized_rejected_by = rejected_by.strip()
 
     if not normalized_reason:
         raise ValueError(
             "rejection_reason must not be empty."
         )
 
+    if not normalized_rejected_by:
+        raise ValueError("rejected_by must not be empty.")
+
     updated = approval.model_copy(
         update={
             "approval_status": "rejected",
             "approved_by": None,
             "approved_at": None,
+            "rejected_by": normalized_rejected_by,
+            "rejected_at": rejected_at or datetime.utcnow(),
             "rejection_reason": normalized_reason,
+            "invalidated_by": None,
+            "invalidated_at": None,
         }
     )
 
@@ -97,6 +107,8 @@ def reject_quote(
 def invalidate_quote_approval(
     repository: QuoteApprovalRepository,
     approval_id: str,
+    invalidated_by: str,
+    invalidated_at: Optional[datetime] = None,
 ) -> QuoteApproval:
     approval = _load_approval(repository, approval_id)
 
@@ -108,12 +120,21 @@ def invalidate_quote_approval(
             "Only pending or approved approval can be invalidated."
         )
 
+    normalized_invalidated_by = invalidated_by.strip()
+
+    if not normalized_invalidated_by:
+        raise ValueError("invalidated_by must not be empty.")
+
     updated = approval.model_copy(
         update={
             "approval_status": "invalidated",
             "approved_by": None,
             "approved_at": None,
+            "rejected_by": None,
+            "rejected_at": None,
             "rejection_reason": None,
+            "invalidated_by": normalized_invalidated_by,
+            "invalidated_at": invalidated_at or datetime.utcnow(),
         }
     )
 

@@ -3528,6 +3528,8 @@ def evaluate_quote_approval_model() -> dict:
 
     rejected = QuoteApproval(
         approval_status="rejected",
+        rejected_by="manager@example.invalid",
+        rejected_at=datetime(2026, 8, 5, 14, 5, 0),
         rejection_reason="Margin requires revision.",
         quote_snapshot=snapshot,
     )
@@ -3538,6 +3540,13 @@ def evaluate_quote_approval_model() -> dict:
         )
 
     invalid_cases = [
+        {
+            "approval_status": "approved",
+            "approved_by": "manager@example.invalid",
+            "approved_at": datetime(2026, 8, 5, 14, 0, 0),
+            "rejected_by": "other-manager@example.invalid",
+            "rejected_at": datetime(2026, 8, 5, 14, 1, 0),
+        },
         {
             "approval_status": "approved",
             "approved_by": None,
@@ -4412,15 +4421,35 @@ def evaluate_quote_approval_repository() -> dict:
 
 
 def evaluate_quote_approval_repository_workflow_integration() -> dict:
+    from datetime import datetime
+
+    from src.core.mail import MailSendResult
     from src.core.models import Shipment
     from src.core.quote_approval_repository import (
         InMemoryQuoteApprovalRepository,
     )
+    from src.core.quote_case_repository import (
+        InMemoryQuoteCaseRepository,
+    )
+    from src.core.supplier_rfq import SupplierRFQResponse
+    from src.core.supplier_rfq_lifecycle import (
+        approve_supplier_rfq,
+        attach_supplier_rfq_response,
+        send_supplier_rfq,
+    )
+    from src.core.supplier_rfq_repository import (
+        InMemorySupplierRFQRepository,
+    )
     from src.workflow import pipeline
+    from src.workflow.supplier_rfq_progression import (
+        resume_supplier_rfq_workflow,
+    )
 
     failures = []
 
-    repository = InMemoryQuoteApprovalRepository()
+    approval_repository = InMemoryQuoteApprovalRepository()
+    rfq_repository = InMemorySupplierRFQRepository()
+    quote_case_repository = InMemoryQuoteCaseRepository()
 
     quote_shipment = Shipment(
         customer_name="Approval Repository Test Customer",
@@ -4436,39 +4465,117 @@ def evaluate_quote_approval_repository_workflow_integration() -> dict:
         is_temperature_controlled=False,
     )
 
-    quote_result = pipeline.process_shipment(
+    initial_result = pipeline.process_shipment(
         shipment=quote_shipment,
         email_text=(
             "Adana'dan Hamburg'a 20 ton tekstil yükü için "
             "komple tenteli araç fiyatı rica ederiz. "
             "Yük ADR değildir ve 12.08.2026 tarihinde hazırdır."
         ),
-        approval_repository=repository,
+        rfq_repository=rfq_repository,
+        approval_repository=approval_repository,
+        quote_case_repository=quote_case_repository,
     )
 
-    quote_approval = quote_result.get("quote_approval")
-
-    if quote_approval is None:
+    if initial_result.get("quote_approval") is not None:
         failures.append(
-            "successful workflow should generate quote approval"
+            "initial RFQ workflow must not generate quote approval "
+            "before supplier response"
+        )
+
+    workflow = initial_result.get("supplier_rfq_workflow")
+    drafts = initial_result.get("supplier_rfq_drafts") or []
+
+    if workflow is None:
+        failures.append(
+            "quote-ready workflow should create supplier RFQ workflow"
+        )
+    elif not drafts:
+        failures.append(
+            "quote-ready workflow should create supplier RFQ drafts"
         )
     else:
-        stored = repository.get(
-            quote_approval.approval_id
+        draft = next(
+            (
+                candidate
+                for candidate in drafts
+                if candidate.recipient_email
+            ),
+            None,
         )
 
-        if stored is None:
+        if draft is None:
             failures.append(
-                "workflow should persist quote approval"
+                "supplier RFQ integration fixture requires "
+                "at least one recipient-enabled draft"
             )
-        elif stored != quote_approval:
-            failures.append(
-                "stored approval should match workflow approval"
+        else:
+            approved_rfq = approve_supplier_rfq(
+                repository=rfq_repository,
+                rfq_id=draft.rfq_id,
+                approved_by="integration-test-operator",
+                approved_at=datetime(2026, 8, 13, 10, 0, 0),
             )
 
-    if len(repository.list_all()) != 1:
+            send_supplier_rfq(
+                repository=rfq_repository,
+                rfq_id=approved_rfq.rfq_id,
+                send_result=MailSendResult(
+                    operation_id=f"supplier-rfq:{approved_rfq.rfq_id}",
+                    status="sent",
+                    reason="Integration test provider send.",
+                    provider_name="integration-test",
+                    provider_message_id="integration-message-1",
+                    sent_at=datetime(2026, 8, 13, 10, 1, 0),
+                ),
+            )
+
+            attach_supplier_rfq_response(
+                repository=rfq_repository,
+                response=SupplierRFQResponse(
+                    rfq_id=approved_rfq.rfq_id,
+                    supplier_name=approved_rfq.supplier_name,
+                    rfq_priority=approved_rfq.priority,
+                    status="quoted",
+                    cost=2300,
+                    currency="EUR",
+                    transit_time="5-7 gün",
+                    source="manual",
+                    received_at=datetime(2026, 8, 13, 10, 30, 0),
+                ),
+            )
+
+            resumed_result = resume_supplier_rfq_workflow(
+                workflow_id=workflow.workflow_id,
+                rfq_repository=rfq_repository,
+                approval_repository=approval_repository,
+                quote_case_repository=quote_case_repository,
+            )
+
+            quote_approval = resumed_result.get("quote_approval")
+
+            if quote_approval is None:
+                failures.append(
+                    "supplier response workflow should generate quote approval"
+                )
+            else:
+                stored = approval_repository.get(
+                    quote_approval.approval_id
+                )
+
+                if stored is None:
+                    failures.append(
+                        "workflow should persist quote approval"
+                    )
+                elif stored != quote_approval:
+                    failures.append(
+                        "stored approval should match workflow approval"
+                    )
+
+    if len(approval_repository.list_all()) != 1:
         failures.append(
-            "successful workflow should store exactly one approval"
+            "completed supplier response workflow should store "
+            "exactly one approval"
         )
 
     early_stop_shipment = quote_shipment.model_copy(
@@ -4486,7 +4593,9 @@ def evaluate_quote_approval_repository_workflow_integration() -> dict:
             "Adana'dan Hamburg'a ADR kapsamındaki kimyasal "
             "yük için fiyat rica ederiz. ADR sınıfı belli değil."
         ),
-        approval_repository=repository,
+        rfq_repository=rfq_repository,
+        approval_repository=approval_repository,
+        quote_case_repository=quote_case_repository,
     )
 
     if early_stop_result.get("quote_approval") is not None:
@@ -4494,9 +4603,9 @@ def evaluate_quote_approval_repository_workflow_integration() -> dict:
             "early-stop workflow must not generate quote approval"
         )
 
-    if len(repository.list_all()) != 1:
+    if len(approval_repository.list_all()) != 1:
         failures.append(
-            "early-stop workflow must not persist approval"
+            "early-stop workflow must not persist additional approval"
         )
 
     return {
@@ -4601,6 +4710,7 @@ def evaluate_quote_approval_service() -> dict:
     invalidated = invalidate_quote_approval(
         repository=repository,
         approval_id=approved.approval_id,
+        invalidated_by="manager@example.invalid",
     )
 
     if invalidated.approval_status != "invalidated":
@@ -4624,6 +4734,7 @@ def evaluate_quote_approval_service() -> dict:
         repository=repository,
         approval_id=pending_for_rejection.approval_id,
         rejection_reason="  Fiyat revize edilmeli.  ",
+        rejected_by="manager@example.invalid",
     )
 
     if rejected.approval_status != "rejected":
@@ -4640,6 +4751,7 @@ def evaluate_quote_approval_service() -> dict:
         invalidate_quote_approval(
             repository=repository,
             approval_id=rejected.approval_id,
+            invalidated_by="manager@example.invalid",
         )
     except QuoteApprovalTransitionError:
         pass
@@ -4655,6 +4767,7 @@ def evaluate_quote_approval_service() -> dict:
     pending_invalidated = invalidate_quote_approval(
         repository=repository,
         approval_id=pending_for_invalidation.approval_id,
+        invalidated_by="manager@example.invalid",
     )
 
     if pending_invalidated.approval_status != "invalidated":
@@ -4714,6 +4827,7 @@ def evaluate_quote_approval_service() -> dict:
             repository=repository,
             approval_id=pending_for_empty_reason.approval_id,
             rejection_reason="   ",
+            rejected_by="manager@example.invalid",
         )
     except ValueError:
         pass
@@ -4753,6 +4867,14 @@ def evaluate_quote_approval_api_contract() -> dict:
     )
 
     failures = []
+
+    class _AuditState:
+        pilot_operator = "manager@example.invalid"
+
+    class _AuditRequest:
+        state = _AuditState()
+
+    audit_request = _AuditRequest()
 
     supplier_quote = SupplierQuote(
         supplier_name="Reliable Supplier",
@@ -4822,7 +4944,8 @@ def evaluate_quote_approval_api_contract() -> dict:
         )
 
     invalidated = invalidate_quote_approval_endpoint(
-        pending_for_approval.approval_id
+        pending_for_approval.approval_id,
+        http_request=audit_request,
     )
 
     if invalidated.get("approval_status") != "invalidated":
@@ -4839,6 +4962,7 @@ def evaluate_quote_approval_api_contract() -> dict:
         request=QuoteApprovalRejectRequest(
             rejection_reason="Fiyat revize edilmeli.",
         ),
+        http_request=audit_request,
     )
 
     if rejected.get("approval_status") != "rejected":
@@ -4906,6 +5030,7 @@ def evaluate_quote_approval_api_contract() -> dict:
             request=QuoteApprovalRejectRequest(
                 rejection_reason="   ",
             ),
+            http_request=audit_request,
         )
     except HTTPException as exc:
         if exc.status_code != 422:
