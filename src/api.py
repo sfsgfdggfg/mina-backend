@@ -75,6 +75,7 @@ from src.core.supplier_rfq_lifecycle import (
     SupplierRFQTransitionError,
     approve_supplier_rfq,
     attach_supplier_rfq_response,
+    record_supplier_rfq_manually_sent,
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
@@ -196,6 +197,10 @@ class QuoteApprovalRejectRequest(BaseModel):
 
 class SupplierRFQApproveRequest(BaseModel):
     approved_by: str
+
+
+class SupplierRFQManualSentRequest(BaseModel):
+    recorded_by: Optional[str] = None
 
 
 class SupplierRFQResponseRequest(BaseModel):
@@ -974,6 +979,33 @@ def send_supplier_rfq_endpoint(rfq_id: str):
         ).model_dump()
     except SupplierRFQNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfqs/{rfq_id}/record-manually-sent")
+def record_supplier_rfq_manually_sent_endpoint(
+    rfq_id: str,
+    request: SupplierRFQManualSentRequest,
+    http_request: Request = None,
+):
+    try:
+        draft, evidence = record_supplier_rfq_manually_sent(
+            repository=supplier_rfq_repository,
+            rfq_id=rfq_id,
+            recorded_by=_authenticated_operator(
+                http_request,
+                request.recorded_by,
+            ),
+        )
+    except SupplierRFQNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "supplier_rfq": draft.model_dump(),
+        "manual_sent_evidence": evidence.model_dump(),
+    }
 
 
 @app.post("/supplier-rfqs/{rfq_id}/responses")

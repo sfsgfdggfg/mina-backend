@@ -9,9 +9,11 @@ from pydantic import BaseModel, Field
 from src.core.mail import MailSendResult
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
+    SupplierRFQManualSentEvidence,
     SupplierRFQResponse,
 )
 from src.core.supplier_rfq_repository import (
+    DuplicateSupplierRFQManualSentEvidenceError,
     DuplicateSupplierRFQResponseError,
     SupplierRFQRepository,
 )
@@ -251,6 +253,54 @@ def send_supplier_rfq(
     )
     repository.save_drafts([awaiting])
     return awaiting
+
+
+def record_supplier_rfq_manually_sent(
+    repository: SupplierRFQRepository,
+    rfq_id: str,
+    recorded_by: str,
+    recorded_at: datetime | None = None,
+) -> tuple[SupplierRFQDraft, SupplierRFQManualSentEvidence]:
+    initial = _get_draft(repository, rfq_id)
+    operator = recorded_by.strip()
+    if not operator:
+        raise ValueError("Manual RFQ send recorder identity is required.")
+    timestamp = recorded_at or datetime.utcnow()
+    evidence = SupplierRFQManualSentEvidence(
+        rfq_id=rfq_id,
+        recorded_by=operator,
+        recorded_at=timestamp,
+    )
+
+    with atomic_repository_transaction(repository):
+        current = _get_draft(repository, rfq_id)
+        if current != initial:
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ changed during manual send recording."
+            )
+        if current.status != "approved":
+            raise SupplierRFQTransitionError(
+                "Cannot record manual Supplier RFQ send from status: "
+                f"{current.status}"
+            )
+        if not current.has_recipient:
+            raise SupplierRFQTransitionError(
+                "Cannot record manual Supplier RFQ send without a recipient email."
+            )
+        awaiting = SupplierRFQDraft.model_validate(
+            {
+                **current.model_dump(),
+                "status": "awaiting_response",
+                "sent_at": timestamp,
+            }
+        )
+        repository.save_drafts([awaiting])
+        try:
+            repository.save_manual_sent_evidence(evidence)
+        except DuplicateSupplierRFQManualSentEvidenceError as exc:
+            raise SupplierRFQTransitionError(str(exc)) from exc
+
+    return awaiting, evidence
 
 
 def attach_supplier_rfq_response(

@@ -5,12 +5,17 @@ from typing import Optional, Protocol
 
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
+    SupplierRFQManualSentEvidence,
     SupplierRFQResponse,
     SupplierRFQWorkflow,
 )
 
 
 class DuplicateSupplierRFQResponseError(ValueError):
+    pass
+
+
+class DuplicateSupplierRFQManualSentEvidenceError(ValueError):
     pass
 
 
@@ -34,6 +39,18 @@ class SupplierRFQRepository(Protocol):
         ...
 
     def list_drafts(self) -> list[SupplierRFQDraft]:
+        ...
+
+    def save_manual_sent_evidence(
+        self,
+        evidence: SupplierRFQManualSentEvidence,
+    ) -> SupplierRFQManualSentEvidence:
+        ...
+
+    def list_manual_sent_evidence(
+        self,
+        rfq_id: Optional[str] = None,
+    ) -> list[SupplierRFQManualSentEvidence]:
         ...
 
     def save_workflow(
@@ -86,6 +103,9 @@ class InMemorySupplierRFQRepository:
         self._workflows: dict[str, SupplierRFQWorkflow] = {}
         self._responses: list[SupplierRFQResponse] = []
         self._response_keys: set[tuple] = set()
+        self._manual_sent_evidence: dict[
+            str, SupplierRFQManualSentEvidence
+        ] = {}
         self._ingested_message_keys: set[str] = set()
 
     def save_drafts(
@@ -128,6 +148,26 @@ class InMemorySupplierRFQRepository:
 
     def list_drafts(self) -> list[SupplierRFQDraft]:
         return list(self._drafts.values())
+
+    def save_manual_sent_evidence(
+        self,
+        evidence: SupplierRFQManualSentEvidence,
+    ) -> SupplierRFQManualSentEvidence:
+        if evidence.rfq_id in self._manual_sent_evidence:
+            raise DuplicateSupplierRFQManualSentEvidenceError(
+                "Manual Supplier RFQ sent evidence already exists."
+            )
+        self._manual_sent_evidence[evidence.rfq_id] = evidence
+        return evidence
+
+    def list_manual_sent_evidence(
+        self,
+        rfq_id: Optional[str] = None,
+    ) -> list[SupplierRFQManualSentEvidence]:
+        evidence = list(self._manual_sent_evidence.values())
+        if rfq_id is None:
+            return evidence
+        return [item for item in evidence if item.rfq_id == rfq_id]
 
     def save_workflow(
         self,
