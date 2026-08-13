@@ -145,6 +145,23 @@ def evaluate_pilot_access_regressions() -> dict:
             "authenticated operator identity did not override claimed identity"
         )
 
+    for wildcard_host in ("0.0.0.0", "::"):
+        wildcard_bind_env = dict(env)
+        wildcard_bind_env["MINAI_PILOT_BIND_HOST"] = wildcard_host
+
+        wildcard_bind = authorize_pilot_request(
+            method="POST",
+            path="/process-email",
+            client_host="127.0.0.1",
+            authorization=f"Bearer {operator_one_token}",
+            environ=wildcard_bind_env,
+        )
+
+        if wildcard_bind.allowed or wildcard_bind.status_code != 503:
+            failures.append(
+                f"wildcard pilot bind host was accepted: {wildcard_host}"
+            )
+
     duplicate_token_env = dict(env)
     duplicate_token_env["MINAI_PILOT_OPERATORS_JSON"] = json.dumps(
         {

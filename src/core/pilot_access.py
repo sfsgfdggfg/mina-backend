@@ -152,9 +152,13 @@ def validate_pilot_configuration(
         raise PilotAccessConfigurationError(
             "MINAI_PILOT_BIND_HOST must be an explicit IP address."
         ) from exc
-    if not (bind_ip.is_private or bind_ip.is_loopback):
+    if (
+        bind_ip.is_unspecified
+        or bind_ip.is_multicast
+        or not (bind_ip.is_private or bind_ip.is_loopback)
+    ):
         raise PilotAccessConfigurationError(
-            "Pilot bind host must be private or loopback."
+            "Pilot bind host must be a specific private or loopback address."
         )
 
 
