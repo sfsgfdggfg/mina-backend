@@ -427,6 +427,7 @@ def parse_email_with_ai(
                     "Görevin müşteri emailinden shipment bilgilerini çıkarmaktır. "
                     "Bilgi mailde yoksa uydurma. "
                     "Müşteri parsiyel istemedikçe service_type değerini FTL kabul et. "
+                    "Taşıma modu açıkça belirtilmediyse transport_mode alanını null bırak. "
                     "Özel ekipman sadece açıkça belirtilmişse çıkar. "
                     "ADR, reefer, yüksek değerli yük gibi riskli bilgileri asla varsayma. "
                     "Commodity-specific bilgiler mailde açıkça varsa "

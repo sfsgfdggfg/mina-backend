@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 COMMODITY_DICTIONARY_PATH = Path("data/commodity_dictionary.json")
 
 
-def _normalize(value: Optional[str]) -> str:
+def normalize_commodity_value(value: Optional[str]) -> str:
     if value is None:
         return ""
 
@@ -77,13 +77,16 @@ def _with_derived_clarification_fields(
 
 
 def get_commodity_record(commodity: Optional[str]) -> Optional[Dict[str, Any]]:
-    normalized_commodity = _normalize(commodity)
+    normalized_commodity = normalize_commodity_value(commodity)
 
     if not normalized_commodity:
         return None
 
     for item in load_commodity_dictionary():
-        if _normalize(item.get("canonical_commodity")) == normalized_commodity:
+        if (
+            normalize_commodity_value(item.get("canonical_commodity"))
+            == normalized_commodity
+        ):
             return _with_derived_clarification_fields(item)
 
     return None

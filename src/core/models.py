@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Any, Optional, List
+from typing import Any, Literal, Optional, List
 
 from src.core.clarification_requirements import (
     ClarificationAnswerValue,
@@ -44,6 +44,9 @@ class Shipment(BaseModel):
     weight_is_approximate: bool = True
 
     service_type: str = "FTL"
+    transport_mode: Optional[
+        Literal["road", "rail", "sea", "air", "multimodal"]
+    ] = None
     equipment_type: Optional[str] = None
 
     cargo_ready_date: Optional[str] = None

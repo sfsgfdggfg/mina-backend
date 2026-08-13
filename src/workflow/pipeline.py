@@ -42,6 +42,7 @@ from src.core.supplier_rfq_repository import (
 )
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
 from src.core.data_provenance import DataProvenanceBlockedError
+from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.models import Shipment
 
 
@@ -74,9 +75,49 @@ def process_shipment(
     regulatory_compliance = assess_regulatory_compliance(shipment)
     equipment_decision = decide_equipment(shipment)
     risk_assessment = assess_risk(
-    shipment=shipment,
-    customer_memory=customer_memory,
-)
+        shipment=shipment,
+        customer_memory=customer_memory,
+    )
+
+    pilot_scope = evaluate_pilot_scope(shipment)
+    if not pilot_scope.eligible:
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="pilot_scope_excluded",
+        )
+        return {
+            "shipment": shipment,
+            "pilot_scope": pilot_scope,
+            "customer_memory": customer_memory,
+            "commodity_profile": commodity_profile,
+            "missing_info": missing_info,
+            "regulatory_compliance": regulatory_compliance,
+            "equipment_decision": equipment_decision,
+            "risk_assessment": risk_assessment,
+            "supplier_selection": None,
+            "operational_consistency": None,
+            "quote_readiness": None,
+            "supplier_rfq_workflow": None,
+            "supplier_rfq_drafts": [],
+            "supplier_rfq_responses": [],
+            "valid_supplier_rfq_responses": [],
+            "supplier_rfq_response_validation": None,
+            "supplier_quote_comparisons": [],
+            "supplier_quote_selection_decision": None,
+            "supplier_quote": None,
+            "customer_quote": None,
+            "quote_draft": None,
+            "quote_approval": None,
+            "quote_send_safety": None,
+            "quote_case": None,
+            "clarification_draft": None,
+            "management_review_draft": None,
+            "action_recommendation": action_recommendation,
+            "result_type": "pilot_scope_excluded",
+        }
 
     # 1. RED risk varsa önce yönetici onayına gider
     try:
@@ -105,6 +146,7 @@ def process_shipment(
 
         return {
             "shipment": shipment,
+            "pilot_scope": pilot_scope,
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
@@ -163,6 +205,7 @@ def process_shipment(
 
         return {
             "shipment": shipment,
+            "pilot_scope": pilot_scope,
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
@@ -205,6 +248,7 @@ def process_shipment(
 
         return {
             "shipment": shipment,
+            "pilot_scope": pilot_scope,
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
@@ -247,6 +291,7 @@ def process_shipment(
 
         return {
             "shipment": shipment,
+            "pilot_scope": pilot_scope,
             "customer_memory": customer_memory,
             "commodity_profile": commodity_profile,
             "missing_info": missing_info,
@@ -306,6 +351,7 @@ def process_shipment(
 
     return {
         "shipment": shipment,
+        "pilot_scope": pilot_scope,
         "customer_memory": customer_memory,
         "commodity_profile": commodity_profile,
         "missing_info": missing_info,

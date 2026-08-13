@@ -37,6 +37,7 @@ def shipment_from_extraction(
         gross_weight_kg=extracted.gross_weight_kg,
         weight_is_approximate=extracted.weight_is_approximate,
         service_type=extracted.service_type,
+        transport_mode=extracted.transport_mode,
         equipment_type=extracted.equipment_type,
         cargo_ready_date=extracted.cargo_ready_date,
         required_delivery_date=extracted.required_delivery_date,
