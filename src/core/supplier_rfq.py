@@ -18,6 +18,12 @@ SupplierRFQStatus = Literal[
     "expired",
     "cancelled",
 ]
+QuoteProgressionStatus = Literal[
+    "ready",
+    "in_progress",
+    "provenance_blocked",
+    "completed",
+]
 
 SUPPLIER_RFQ_REFERENCE_PREFIX = "MINAI-RFQ:"
 
@@ -66,7 +72,45 @@ class SupplierRFQWorkflow(BaseModel):
     rfq_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    quote_progression_status: QuoteProgressionStatus = "ready"
+    quote_progression_attempt_count: int = Field(default=0, ge=0)
+    quote_progression_started_at: Optional[datetime] = None
+    quote_progressed_at: Optional[datetime] = None
+    last_provenance_blocked_at: Optional[datetime] = None
+    last_provenance_blocked_result_type: Optional[str] = None
     source: str = "supplier_rfq_workflow"
+
+    @model_validator(mode="after")
+    def validate_quote_progression_state(self):
+        if (
+            self.quote_progression_status
+            in {"in_progress", "provenance_blocked", "completed"}
+            and self.quote_progression_started_at is None
+        ):
+            raise ValueError(
+                "A started quote progression requires a start time."
+            )
+        if self.quote_progression_status == "provenance_blocked":
+            if (
+                self.last_provenance_blocked_at is None
+                or self.last_provenance_blocked_result_type
+                != "data_provenance_blocked"
+            ):
+                raise ValueError(
+                    "A provenance-blocked quote progression requires durable evidence."
+                )
+            if self.quote_progressed_at is not None:
+                raise ValueError(
+                    "A provenance-blocked quote progression cannot be completed."
+                )
+        if (
+            self.quote_progression_status == "completed"
+            and self.quote_progressed_at is None
+        ):
+            raise ValueError(
+                "A completed quote progression requires a completion time."
+            )
+        return self
 
 
 SupplierRFQResponseStatus = Literal[

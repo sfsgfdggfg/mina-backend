@@ -2856,3 +2856,23 @@ fail closed for required operational data.
 Demo data remains permitted for development and regression testing but must not
 be treated as real pilot master data. Internal reference datasets must not be
 presented as authoritative external regulatory or customs sources.
+
+
+---
+
+## RULE-118 — Provenance Failures Must Be Durable and Retry-Safe
+
+A provenance failure at an operational resume boundary must return
+`data_provenance_blocked`, persist the blocked attempt, and create no new RFQ,
+supplier-selection, customer-quote, approval, or quote-case artifact.
+
+The blocked attempt must not be recorded as successful completion and must remain
+retryable after the provenance registry or verified dataset is repaired. Every
+retry must perform provenance verification again; a prior blocked record is not
+authorization to bypass the check.
+
+Only provenance-blocked attempts may be restarted. An attempt already in progress
+or completed must fail its transition so repeated requests cannot duplicate
+downstream artifacts. Operational API results must use a stable safe reason and
+must not expose registry paths, raw exception details, stack traces, or message
+contents.

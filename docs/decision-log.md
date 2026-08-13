@@ -4684,3 +4684,38 @@ represented as external regulatory, customs, or legal verification.
 * Unverified customer memory cannot influence pilot risk decisions.
 * Updating verified operational data requires a new review, timestamp, verifier,
   and fingerprint.
+
+
+---
+
+## DEC-099 — Retry-Safe Durable Provenance Failure State
+
+**Status:** Accepted
+**Date:** 2026-08-13
+
+### Decision
+
+Operational resume boundaries record provenance failures as an explicit durable
+`data_provenance_blocked` attempt rather than as successful completion or an
+unclassified exception.
+
+Extraction and supplier-quote resume operations use explicit attempt states.
+An attempt moves to `in_progress` before downstream processing, to
+`provenance_blocked` when required provenance cannot be verified, and to
+`completed` only after normal processing succeeds. A provenance-blocked attempt
+may be retried after the registry or verified dataset is repaired. An in-progress
+or completed attempt cannot be started again.
+
+The provenance check remains ahead of RFQ or quote artifact creation. Blocked
+results expose only a stable operator-safe reason; registry paths, parser details,
+and raw exception text are not part of the operational API result.
+
+### Consequences
+
+* A malformed, missing, stale, or unreadable provenance source cannot strand a
+  confirmed extraction in an unclassified started state.
+* Repairing provenance permits the same durable extraction or RFQ workflow to
+  continue without bypassing verification.
+* Completed retries are protected against duplicate downstream artifact creation.
+* Durable attempt state does not provide multi-record transactionality; that
+  remains a separate concern.
