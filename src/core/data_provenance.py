@@ -252,7 +252,7 @@ def require_pilot_operational_dataset(
 
     actual_sha256 = calculate_dataset_sha256(dataset_path)
 
-    if actual_sha256 != expected_sha256:
+    if actual_sha256 != expected_sha256.lower():
         raise DataProvenanceBlockedError(
             "Pilot operational dataset changed after verification: "
             f"{dataset_key}"
