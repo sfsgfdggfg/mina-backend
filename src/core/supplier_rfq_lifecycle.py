@@ -15,6 +15,7 @@ from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
     SupplierRFQRepository,
 )
+from src.core.sqlite_repositories import atomic_repository_transaction
 
 
 class SupplierRFQNotFoundError(LookupError):
@@ -272,7 +273,6 @@ def attach_supplier_rfq_response(
         raise SupplierRFQResponseError(
             f"Supplier RFQ response rejected: {reason}"
         )
-    repository.save_responses([response])
     responded = SupplierRFQDraft.model_validate(
         {
             **draft.model_dump(),
@@ -280,5 +280,7 @@ def attach_supplier_rfq_response(
             "responded_at": response.received_at,
         }
     )
-    repository.save_drafts([responded])
+    with atomic_repository_transaction(repository):
+        repository.save_responses([response])
+        repository.save_drafts([responded])
     return responded

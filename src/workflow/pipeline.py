@@ -40,6 +40,7 @@ from src.core.supplier_rfq_repository import (
     InMemorySupplierRFQRepository,
     SupplierRFQRepository,
 )
+from src.core.sqlite_repositories import atomic_repository_transaction
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
 from src.core.data_provenance import (
     DataProvenanceError,
@@ -133,6 +134,7 @@ def process_shipment(
     rfq_repository: SupplierRFQRepository | None = None,
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
+    _persist_rfq_transition: bool = True,
 ):
     if not isinstance(shipment, Shipment) or isinstance(
         shipment,
@@ -377,16 +379,20 @@ def process_shipment(
         supplier_selection=supplier_selection,
     )
 
-    supplier_rfq_drafts = rfq_repository.save_drafts(
-        supplier_rfq_drafts
-    )
     supplier_rfq_workflow = SupplierRFQWorkflow.model_validate(
         {
             **supplier_rfq_workflow.model_dump(),
             "rfq_ids": [draft.rfq_id for draft in supplier_rfq_drafts],
         }
     )
-    rfq_repository.save_workflow(supplier_rfq_workflow)
+    if _persist_rfq_transition:
+        with atomic_repository_transaction(rfq_repository):
+            supplier_rfq_drafts = rfq_repository.save_drafts(
+                supplier_rfq_drafts
+            )
+            supplier_rfq_workflow = rfq_repository.save_workflow(
+                supplier_rfq_workflow
+            )
     action_recommendation = generate_action_recommendation(
         shipment=shipment,
         equipment_decision=equipment_decision,
