@@ -23,6 +23,7 @@ from src.core.customer_memory import (
 from src.ai.email_parser import parse_email_with_ai
 from src.workflow.pipeline import process_shipment
 from src.workflow.supplier_rfq_progression import (
+    SupplierRFQWorkflowProgressionError,
     SupplierRFQWorkflowNotFoundError,
     resume_supplier_rfq_workflow,
 )
@@ -1063,6 +1064,8 @@ def resume_supplier_rfq_quote(workflow_id: str):
         )
     except SupplierRFQWorkflowNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQWorkflowProgressionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return serialize_result(result)
 
 

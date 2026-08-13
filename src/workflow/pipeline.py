@@ -41,9 +41,89 @@ from src.core.supplier_rfq_repository import (
     SupplierRFQRepository,
 )
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
-from src.core.data_provenance import DataProvenanceBlockedError
+from src.core.data_provenance import (
+    DataProvenanceError,
+    SAFE_DATA_PROVENANCE_BLOCK_REASON,
+)
 from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.models import Shipment
+
+
+def build_data_provenance_blocked_result(
+    shipment: Shipment,
+    *,
+    customer_memory=None,
+    commodity_profile=None,
+    missing_info=None,
+    regulatory_compliance=None,
+    equipment_decision=None,
+    risk_assessment=None,
+    pilot_scope=None,
+    supplier_rfq_workflow=None,
+    supplier_rfq_drafts=None,
+    supplier_rfq_responses=None,
+) -> dict:
+    commodity_profile = (
+        commodity_profile
+        if commodity_profile is not None
+        else get_commodity_record(shipment.commodity)
+    )
+    missing_info = missing_info or check_missing_information(shipment)
+    regulatory_compliance = (
+        regulatory_compliance or assess_regulatory_compliance(shipment)
+    )
+    equipment_decision = equipment_decision or decide_equipment(shipment)
+    risk_assessment = risk_assessment or assess_risk(
+        shipment=shipment,
+        customer_memory=customer_memory,
+    )
+    pilot_scope = pilot_scope or evaluate_pilot_scope(shipment)
+    supplier_selection = {
+        "selected_suppliers": [],
+        "rejected_suppliers": [],
+        "selection_strategy": None,
+        "source": "data_provenance_engine",
+        "data_source": "operational_master_data",
+        "provenance_status": "blocked",
+        "provenance_reason": SAFE_DATA_PROVENANCE_BLOCK_REASON,
+    }
+    action_recommendation = generate_action_recommendation(
+        shipment=shipment,
+        equipment_decision=equipment_decision,
+        risk_assessment=risk_assessment,
+        missing_info=missing_info,
+        result_type="data_provenance_blocked",
+    )
+    return {
+        "shipment": shipment,
+        "pilot_scope": pilot_scope,
+        "customer_memory": customer_memory,
+        "commodity_profile": commodity_profile,
+        "missing_info": missing_info,
+        "regulatory_compliance": regulatory_compliance,
+        "equipment_decision": equipment_decision,
+        "risk_assessment": risk_assessment,
+        "supplier_selection": supplier_selection,
+        "operational_consistency": None,
+        "quote_readiness": None,
+        "supplier_rfq_workflow": supplier_rfq_workflow,
+        "supplier_rfq_drafts": supplier_rfq_drafts or [],
+        "supplier_rfq_responses": supplier_rfq_responses or [],
+        "valid_supplier_rfq_responses": [],
+        "supplier_rfq_response_validation": None,
+        "supplier_quote_comparisons": [],
+        "supplier_quote_selection_decision": None,
+        "supplier_quote": None,
+        "customer_quote": None,
+        "quote_draft": None,
+        "quote_approval": None,
+        "quote_send_safety": None,
+        "quote_case": None,
+        "clarification_draft": None,
+        "management_review_draft": None,
+        "action_recommendation": action_recommendation,
+        "result_type": "data_provenance_blocked",
+    }
 
 
 def process_shipment(
@@ -64,11 +144,14 @@ def process_shipment(
     if rfq_repository is None:
         rfq_repository = InMemorySupplierRFQRepository()
 
-    customer_memory = enrich_shipment_with_customer_memory(
-        shipment=shipment,
-        email_text=email_text,
-        sender_address=sender_address,
-    )
+    try:
+        customer_memory = enrich_shipment_with_customer_memory(
+            shipment=shipment,
+            email_text=email_text,
+            sender_address=sender_address,
+        )
+    except DataProvenanceError:
+        return build_data_provenance_blocked_result(shipment)
 
     commodity_profile = get_commodity_record(shipment.commodity)
     missing_info = check_missing_information(shipment)
@@ -126,54 +209,17 @@ def process_shipment(
             equipment_decision=equipment_decision,
             risk_assessment=risk_assessment,
         )
-    except DataProvenanceBlockedError as exc:
-        supplier_selection = {
-            "selected_suppliers": [],
-            "rejected_suppliers": [],
-            "selection_strategy": None,
-            "source": "data_provenance_engine",
-            "data_source": "data/supplier_capabilities.json",
-            "provenance_status": "blocked",
-            "provenance_reason": str(exc),
-        }
-        action_recommendation = generate_action_recommendation(
-            shipment=shipment,
+    except DataProvenanceError:
+        return build_data_provenance_blocked_result(
+            shipment,
+            customer_memory=customer_memory,
+            commodity_profile=commodity_profile,
+            missing_info=missing_info,
+            regulatory_compliance=regulatory_compliance,
             equipment_decision=equipment_decision,
             risk_assessment=risk_assessment,
-            missing_info=missing_info,
-            result_type="data_provenance_blocked",
+            pilot_scope=pilot_scope,
         )
-
-        return {
-            "shipment": shipment,
-            "pilot_scope": pilot_scope,
-            "customer_memory": customer_memory,
-            "commodity_profile": commodity_profile,
-            "missing_info": missing_info,
-            "regulatory_compliance": regulatory_compliance,
-            "equipment_decision": equipment_decision,
-            "risk_assessment": risk_assessment,
-            "supplier_selection": supplier_selection,
-            "operational_consistency": None,
-            "quote_readiness": None,
-            "supplier_rfq_workflow": None,
-            "supplier_rfq_drafts": [],
-            "supplier_rfq_responses": [],
-            "valid_supplier_rfq_responses": [],
-            "supplier_rfq_response_validation": None,
-            "supplier_quote_comparisons": [],
-            "supplier_quote_selection_decision": None,
-            "supplier_quote": None,
-            "customer_quote": None,
-            "quote_draft": None,
-            "quote_approval": None,
-            "quote_send_safety": None,
-            "quote_case": None,
-            "clarification_draft": None,
-            "management_review_draft": None,
-            "action_recommendation": action_recommendation,
-            "result_type": "data_provenance_blocked",
-        }
 
     operational_consistency = check_operational_consistency(
         shipment=shipment,

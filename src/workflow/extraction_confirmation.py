@@ -16,10 +16,14 @@ from src.core.extraction_confirmation_repository import (
 )
 from src.core.mail import InboundMailEnvelope
 from src.core.models import Shipment
+from src.core.data_provenance import DataProvenanceError
 from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
-from src.workflow.pipeline import process_shipment
+from src.workflow.pipeline import (
+    build_data_provenance_blocked_result,
+    process_shipment,
+)
 
 
 class PilotEvidenceRecorder(Protocol):
@@ -198,7 +202,7 @@ def resume_confirmed_extraction(
         raise ExtractionConfirmationTransitionError(
             "Only a confirmed extraction proposal may enter the operational workflow."
         )
-    if proposal.resume_started_at is not None:
+    if proposal.resume_status in {"in_progress", "completed"}:
         raise ExtractionConfirmationTransitionError(
             "Confirmed extraction operational resume has already started."
         )
@@ -209,18 +213,25 @@ def resume_confirmed_extraction(
                 exclude={"unknown_fields", "unknown_safety_fields"}
             ),
             "resume_started_at": utc_now(),
+            "resume_status": "in_progress",
+            "resume_attempt_count": proposal.resume_attempt_count + 1,
         }
     )
     started = repository.save(started)
 
-    result = process_shipment(
-        shipment=started.confirmed_shipment.model_copy(deep=True),
-        email_text=proposal.inbound_mail.body_text,
-        sender_address=proposal.inbound_mail.sender_address,
-        rfq_repository=rfq_repository,
-        approval_repository=approval_repository,
-        quote_case_repository=quote_case_repository,
-    )
+    try:
+        result = process_shipment(
+            shipment=started.confirmed_shipment.model_copy(deep=True),
+            email_text=proposal.inbound_mail.body_text,
+            sender_address=proposal.inbound_mail.sender_address,
+            rfq_repository=rfq_repository,
+            approval_repository=approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
+    except DataProvenanceError:
+        result = build_data_provenance_blocked_result(
+            started.confirmed_shipment.model_copy(deep=True)
+        )
     readiness = result.get("quote_readiness")
     result_type = str(
         result.get("result_type")
@@ -228,6 +239,32 @@ def resume_confirmed_extraction(
         or "unknown"
     )
     result["result_type"] = result_type
+
+    if result_type == "data_provenance_blocked":
+        blocked = ShipmentExtractionProposal.model_validate(
+            {
+                **started.model_dump(
+                    exclude={"unknown_fields", "unknown_safety_fields"}
+                ),
+                "resume_status": "provenance_blocked",
+                "last_resume_blocked_at": utc_now(),
+                "last_resume_blocked_result_type": result_type,
+            }
+        )
+        blocked = repository.save(blocked)
+        if evidence_recorder is not None:
+            evidence_recorder.record_event(
+                event_type="confirmed_extraction_resume_blocked",
+                entity_type="extraction_proposal",
+                entity_id=blocked.proposal_id,
+                payload={
+                    "proposal_id": blocked.proposal_id,
+                    "result_type": result_type,
+                    "resume_attempt_count": blocked.resume_attempt_count,
+                },
+            )
+        result["extraction_proposal"] = blocked
+        return result
 
     if evidence_recorder is not None:
         evidence_recorder.record_event(
@@ -250,6 +287,7 @@ def resume_confirmed_extraction(
             ),
             "resumed_at": utc_now(),
             "downstream_result_type": result_type,
+            "resume_status": "completed",
         }
     )
     resumed = repository.save(resumed)

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from src.ai.quote_generator import generate_quote_draft
 from src.core.action_recommendation import generate_action_recommendation
 from src.core.commodity_profile import get_commodity_record
 from src.core.customer_memory import enrich_shipment_with_customer_memory
+from src.core.data_provenance import DataProvenanceError
 from src.core.equipment import decide_equipment
 from src.core.missing_info import check_missing_information
 from src.core.pilot_scope import evaluate_pilot_scope
@@ -29,9 +32,14 @@ from src.core.supplier_rfq_lifecycle import (
 )
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.core.supplier_selection import select_suppliers_for_shipment
+from src.workflow.pipeline import build_data_provenance_blocked_result
 
 
 class SupplierRFQWorkflowNotFoundError(LookupError):
+    pass
+
+
+class SupplierRFQWorkflowProgressionError(ValueError):
     pass
 
 
@@ -47,6 +55,89 @@ def resume_supplier_rfq_workflow(
         raise SupplierRFQWorkflowNotFoundError(
             f"Supplier RFQ workflow not found: {workflow_id}"
         )
+    if workflow.quote_progression_status in {"in_progress", "completed"}:
+        raise SupplierRFQWorkflowProgressionError(
+            "Supplier RFQ quote progression has already started."
+        )
+
+    started = workflow.__class__.model_validate(
+        {
+            **workflow.model_dump(),
+            "quote_progression_status": "in_progress",
+            "quote_progression_attempt_count": (
+                workflow.quote_progression_attempt_count + 1
+            ),
+            "quote_progression_started_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+    )
+    started = rfq_repository.save_workflow(started)
+
+    try:
+        result = _progress_supplier_rfq_workflow(
+            workflow=started,
+            rfq_repository=rfq_repository,
+            approval_repository=approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
+    except DataProvenanceError:
+        drafts = [
+            draft
+            for draft in rfq_repository.list_drafts()
+            if draft.workflow_id == workflow_id
+        ]
+        responses = [
+            response
+            for draft in drafts
+            for response in rfq_repository.list_responses(draft.rfq_id)
+        ]
+        result = build_data_provenance_blocked_result(
+            started.shipment,
+            supplier_rfq_workflow=started,
+            supplier_rfq_drafts=drafts,
+            supplier_rfq_responses=responses,
+        )
+
+    result_type = result.get("result_type")
+    if result_type == "data_provenance_blocked":
+        persisted = started.__class__.model_validate(
+            {
+                **started.model_dump(),
+                "quote_progression_status": "provenance_blocked",
+                "last_provenance_blocked_at": datetime.utcnow(),
+                "last_provenance_blocked_result_type": result_type,
+                "updated_at": datetime.utcnow(),
+            }
+        )
+    elif result.get("quote_case") is not None:
+        persisted = started.__class__.model_validate(
+            {
+                **started.model_dump(),
+                "quote_progression_status": "completed",
+                "quote_progressed_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+        )
+    else:
+        persisted = started.__class__.model_validate(
+            {
+                **started.model_dump(),
+                "quote_progression_status": "ready",
+                "updated_at": datetime.utcnow(),
+            }
+        )
+    persisted = rfq_repository.save_workflow(persisted)
+    result["supplier_rfq_workflow"] = persisted
+    return result
+
+
+def _progress_supplier_rfq_workflow(
+    *,
+    workflow,
+    rfq_repository: SupplierRFQRepository,
+    approval_repository: QuoteApprovalRepository,
+    quote_case_repository: QuoteCaseRepository,
+) -> dict:
 
     shipment = workflow.shipment
     customer_memory = enrich_shipment_with_customer_memory(
@@ -65,7 +156,7 @@ def resume_supplier_rfq_workflow(
     supplier_rfq_drafts = [
         draft
         for draft in rfq_repository.list_drafts()
-        if draft.workflow_id == workflow_id
+        if draft.workflow_id == workflow.workflow_id
     ]
     supplier_rfq_responses = [
         response

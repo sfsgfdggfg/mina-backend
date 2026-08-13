@@ -23,6 +23,12 @@ SafetySensitiveField = Literal[
     "is_high_value",
 ]
 ExtractionStatus = Literal["proposed", "confirmed"]
+ExtractionResumeStatus = Literal[
+    "not_started",
+    "in_progress",
+    "provenance_blocked",
+    "completed",
+]
 
 SAFETY_SENSITIVE_FIELDS: tuple[SafetySensitiveField, ...] = (
     "is_adr",
@@ -67,7 +73,28 @@ class ShipmentExtractionProposal(BaseModel):
     resume_started_at: Optional[datetime] = None
     resumed_at: Optional[datetime] = None
     downstream_result_type: Optional[str] = None
+    resume_status: ExtractionResumeStatus = "not_started"
+    resume_attempt_count: int = Field(default=0, ge=0)
+    last_resume_blocked_at: Optional[datetime] = None
+    last_resume_blocked_result_type: Optional[str] = None
     source: str = "human_extraction_confirmation"
+
+    @model_validator(mode="before")
+    @classmethod
+    def infer_legacy_resume_status(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or "resume_status" in value:
+            return value
+        normalized = dict(value)
+        if normalized.get("resumed_at") is not None:
+            normalized["resume_status"] = "completed"
+        elif normalized.get("resume_started_at") is not None:
+            normalized["resume_status"] = "in_progress"
+        if (
+            normalized.get("resume_started_at") is not None
+            and "resume_attempt_count" not in normalized
+        ):
+            normalized["resume_attempt_count"] = 1
+        return normalized
 
     @computed_field
     @property
@@ -108,6 +135,10 @@ class ShipmentExtractionProposal(BaseModel):
                 self.resume_started_at is not None
                 or self.resumed_at is not None
                 or self.downstream_result_type is not None
+                or self.resume_status != "not_started"
+                or self.resume_attempt_count != 0
+                or self.last_resume_blocked_at is not None
+                or self.last_resume_blocked_result_type is not None
             ):
                 raise ValueError(
                     "Proposed extraction must not contain downstream metadata."
@@ -132,6 +163,29 @@ class ShipmentExtractionProposal(BaseModel):
             raise ValueError(
                 "Resume time and downstream result type must be recorded together."
             )
+        if self.resume_status == "not_started" and self.resume_started_at is not None:
+            raise ValueError("A not-started resume cannot have a start time.")
+        if self.resume_status in {
+            "in_progress",
+            "provenance_blocked",
+            "completed",
+        } and self.resume_started_at is None:
+            raise ValueError("A started resume requires a start time.")
+        if self.resume_status == "provenance_blocked":
+            if (
+                self.last_resume_blocked_at is None
+                or self.last_resume_blocked_result_type
+                != "data_provenance_blocked"
+            ):
+                raise ValueError(
+                    "A provenance-blocked resume requires durable block evidence."
+                )
+            if self.resumed_at is not None:
+                raise ValueError(
+                    "A provenance-blocked resume cannot be marked completed."
+                )
+        if self.resume_status == "completed" and self.resumed_at is None:
+            raise ValueError("A completed resume requires a completion time.")
         return self
 
 

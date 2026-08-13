@@ -20,6 +20,10 @@ ALLOWED_CLASSIFICATIONS = {
     "pilot_verified",
 }
 
+SAFE_DATA_PROVENANCE_BLOCK_REASON = (
+    "Required operational data provenance could not be verified."
+)
+
 
 class DataProvenanceError(RuntimeError):
     pass
@@ -52,6 +56,10 @@ def load_data_provenance_registry(
     except json.JSONDecodeError as exc:
         raise DataProvenanceError(
             f"Invalid data provenance registry JSON: {exc}"
+        ) from exc
+    except (OSError, UnicodeError) as exc:
+        raise DataProvenanceError(
+            "Data provenance registry could not be read."
         ) from exc
 
     if not isinstance(raw, dict):
@@ -250,7 +258,12 @@ def require_pilot_operational_dataset(
             f"{dataset_key}"
         )
 
-    actual_sha256 = calculate_dataset_sha256(dataset_path)
+    try:
+        actual_sha256 = calculate_dataset_sha256(dataset_path)
+    except OSError as exc:
+        raise DataProvenanceError(
+            "Operational dataset fingerprint could not be calculated."
+        ) from exc
 
     if actual_sha256 != expected_sha256.lower():
         raise DataProvenanceBlockedError(
