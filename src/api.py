@@ -740,12 +740,14 @@ def approve_quote_approval(
 def reject_quote_approval(
     approval_id: str,
     request: QuoteApprovalRejectRequest,
+    http_request: Request = None,
 ):
     try:
         approval = reject_quote(
             repository=quote_approval_repository,
             approval_id=approval_id,
             rejection_reason=request.rejection_reason,
+            rejected_by=_authenticated_operator(http_request),
         )
     except QuoteApprovalNotFoundError as exc:
         raise HTTPException(
@@ -767,11 +769,15 @@ def reject_quote_approval(
 
 
 @app.post("/quote-approvals/{approval_id}/invalidate")
-def invalidate_quote_approval_endpoint(approval_id: str):
+def invalidate_quote_approval_endpoint(
+    approval_id: str,
+    http_request: Request = None,
+):
     try:
         approval = invalidate_quote_approval(
             repository=quote_approval_repository,
             approval_id=approval_id,
+            invalidated_by=_authenticated_operator(http_request),
         )
     except QuoteApprovalNotFoundError as exc:
         raise HTTPException(

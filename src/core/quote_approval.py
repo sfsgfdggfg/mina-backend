@@ -69,7 +69,13 @@ class QuoteApproval(BaseModel):
 
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+
+    rejected_by: Optional[str] = None
+    rejected_at: Optional[datetime] = None
     rejection_reason: Optional[str] = None
+
+    invalidated_by: Optional[str] = None
+    invalidated_at: Optional[datetime] = None
 
     quote_snapshot: QuoteApprovalSnapshot
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -102,24 +108,50 @@ class QuoteApproval(BaseModel):
                     "rejection_reason."
                 )
 
+            if not self.rejected_by or self.rejected_at is None:
+                raise ValueError(
+                    "Rejected quote must include rejection operator metadata."
+                )
+
             if (
                 self.approved_by is not None
                 or self.approved_at is not None
+                or self.invalidated_by is not None
+                or self.invalidated_at is not None
             ):
                 raise ValueError(
-                    "Rejected quote must not include "
-                    "approval metadata."
+                    "Rejected quote contains incompatible decision metadata."
+                )
+
+        elif self.approval_status == "invalidated":
+            if not self.invalidated_by or self.invalidated_at is None:
+                raise ValueError(
+                    "Invalidated quote must include invalidation operator metadata."
+                )
+
+            if (
+                self.approved_by is not None
+                or self.approved_at is not None
+                or self.rejected_by is not None
+                or self.rejected_at is not None
+                or self.rejection_reason is not None
+            ):
+                raise ValueError(
+                    "Invalidated quote contains incompatible decision metadata."
                 )
 
         else:
             if (
                 self.approved_by is not None
                 or self.approved_at is not None
+                or self.rejected_by is not None
+                or self.rejected_at is not None
                 or self.rejection_reason is not None
+                or self.invalidated_by is not None
+                or self.invalidated_at is not None
             ):
                 raise ValueError(
-                    "Pending or invalidated approval must not "
-                    "include decision metadata."
+                    "Pending approval must not include decision metadata."
                 )
 
         return self
