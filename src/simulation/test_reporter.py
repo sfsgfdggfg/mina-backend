@@ -3542,6 +3542,13 @@ def evaluate_quote_approval_model() -> dict:
     invalid_cases = [
         {
             "approval_status": "approved",
+            "approved_by": "manager@example.invalid",
+            "approved_at": datetime(2026, 8, 5, 14, 0, 0),
+            "rejected_by": "other-manager@example.invalid",
+            "rejected_at": datetime(2026, 8, 5, 14, 1, 0),
+        },
+        {
+            "approval_status": "approved",
             "approved_by": None,
             "approved_at": datetime(2026, 8, 5, 14, 0, 0),
         },

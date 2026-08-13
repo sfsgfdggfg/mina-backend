@@ -95,10 +95,15 @@ class QuoteApproval(BaseModel):
                     "Approved quote must include approved_at."
                 )
 
-            if self.rejection_reason is not None:
+            if (
+                self.rejected_by is not None
+                or self.rejected_at is not None
+                or self.rejection_reason is not None
+                or self.invalidated_by is not None
+                or self.invalidated_at is not None
+            ):
                 raise ValueError(
-                    "Approved quote must not include "
-                    "rejection_reason."
+                    "Approved quote contains incompatible decision metadata."
                 )
 
         elif self.approval_status == "rejected":
