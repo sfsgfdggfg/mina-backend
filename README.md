@@ -165,9 +165,10 @@ Important:
 
 ---
 
-## Run Backend API
+## Run Backend API (Development Only)
 
-Start FastAPI:
+The following wildcard-bind command is for local development only. It is not a
+controlled-pilot startup command and must not be used for the shadow pilot:
 
 ```bash
 uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
@@ -193,7 +194,40 @@ GET /health
 
 ---
 
-## Run Streamlit UI
+## Shadow Pilot Startup
+
+Configure the controlled pilot with environment variables supplied by the
+deployment environment:
+
+```env
+MINAI_PILOT_MODE=true
+MINAI_PILOT_BIND_HOST=127.0.0.1
+MINAI_PILOT_PORT=8000
+MINAI_PILOT_ALLOWED_NETWORKS=127.0.0.1/32
+MINAI_PILOT_OPERATORS_JSON={"Pilot Operator":"fake-pilot-token-0000000000000000"}
+```
+
+`MINAI_PILOT_BIND_HOST` must be the actual explicit private or loopback IP on
+which Uvicorn will listen. Wildcard and public addresses are rejected. The port
+is optional and defaults to `8000`; the other values are required for a
+non-local pilot network. Replace the obviously fake operator token with a unique
+secret of at least 32 characters supplied outside source control.
+
+Start the shadow pilot with exactly this command:
+
+```bash
+python -m src.pilot_launcher
+```
+
+The launcher always disables reload and forwarded-header/proxy trust, validates
+the complete pilot access configuration before serving, and starts only
+`src.api:app`. Do not add `--reload`. Streamlit is not pilot-approved and must
+not be used for the controlled pilot. The launcher does not enable outbound
+email capability.
+
+---
+
+## Run Streamlit UI (Development Only)
 
 Open a second terminal and run:
 

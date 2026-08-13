@@ -4766,3 +4766,32 @@ pre-computation write mechanics described by DEC-099; its fail-closed legacy
   SQLite store.
 * This decision does not introduce distributed transactions or make external
   provider operations transactional.
+
+
+---
+
+## DEC-101 — One Fail-Closed Shadow Pilot Launcher
+
+**Status:** Accepted
+**Date:** 2026-08-13
+
+### Decision
+
+The controlled shadow pilot starts only through `python -m src.pilot_launcher`.
+Before Uvicorn is invoked, the launcher requires pilot mode, validates the
+existing pilot access configuration, and validates the optional pilot port. It
+passes the validated explicit private or loopback bind address unchanged to the
+single ASGI target `src.api:app`.
+
+The launcher fixes reload off and disables proxy headers and forwarded-address
+trust. It does not configure outbound email. Development Uvicorn and Streamlit
+commands are not pilot-approved startup paths.
+
+### Consequences
+
+* Missing, disabled, malformed, wildcard, public-bind, or invalid-port pilot
+  configuration fails before requests can be served.
+* Deployment must supply the real listen address rather than relying on a
+  wildcard fallback.
+* Any future proxy deployment requires a separate explicit security decision;
+  forwarded headers are not trusted by this launcher.

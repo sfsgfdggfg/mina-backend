@@ -2905,3 +2905,19 @@ retryable, but the final transaction must re-read and compare that state before
 its first write. A stale attempt must raise a transition conflict and write no
 artifact or evidence. Legacy durable `in_progress` records remain fail-closed and
 must not become automatically retryable.
+
+
+---
+
+## RULE-120 — Controlled Pilot Startup Must Use the Safe Launcher
+
+The controlled shadow pilot must start with `python -m src.pilot_launcher` and
+no other server or UI command. The launcher must validate pilot mode, pilot
+access configuration, an explicit private or loopback bind IP, and a valid port
+before serving. The validated bind IP must be the exact host supplied to
+Uvicorn; wildcard or public fallback is prohibited.
+
+The ASGI target must remain `src.api:app`, reload must remain disabled, and
+proxy and forwarded-header trust must remain disabled unless a later explicit
+deployment-security decision replaces this rule. The pilot launcher must not
+enable outbound email, and Streamlit is not pilot-approved.
