@@ -225,6 +225,19 @@ the complete pilot access configuration before serving, and starts only
 not be used for the controlled pilot. The launcher does not enable outbound
 email capability.
 
+Operators use the authenticated pilot CLI, not raw API calls or Streamlit:
+
+```bash
+export MINAI_PILOT_BASE_URL='http://127.0.0.1:8000'
+export MINAI_PILOT_TOKEN='<token-from-approved-secret-store>'
+python -m src.pilot_operator status
+```
+
+The client accepts only localhost or explicit private/loopback IP destinations,
+does not persist or print the token, and exposes no automated send command. See
+[`docs/pilot-runbook.md`](docs/pilot-runbook.md) for the controlled workflow,
+recovery, emergency stop, backup, retention, and GO/NO-GO procedure.
+
 ---
 
 ## Run Streamlit UI (Development Only)

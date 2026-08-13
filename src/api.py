@@ -175,7 +175,7 @@ class ProcessEmailRequest(BaseModel):
 
 
 class ConfirmExtractionRequest(BaseModel):
-    operator_identity: str
+    operator_identity: Optional[str] = None
     corrections: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -188,7 +188,7 @@ class PrepareQuoteSendRequest(BaseModel):
 
 
 class QuoteApprovalApproveRequest(BaseModel):
-    approved_by: str
+    approved_by: Optional[str] = None
 
 
 class QuoteApprovalRejectRequest(BaseModel):
@@ -196,7 +196,7 @@ class QuoteApprovalRejectRequest(BaseModel):
 
 
 class SupplierRFQApproveRequest(BaseModel):
-    approved_by: str
+    approved_by: Optional[str] = None
 
 
 class SupplierRFQManualSentRequest(BaseModel):

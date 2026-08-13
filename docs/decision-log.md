@@ -4822,3 +4822,31 @@ the transition.
 * A body-supplied identity cannot override the authenticated pilot operator.
 * Repeated or stale attempts fail and cannot duplicate manual-send evidence.
 * A persistence failure rolls back both the lifecycle update and its evidence.
+
+
+---
+
+## DEC-103 — Minimal Authenticated Pilot Operator CLI
+
+**Status:** Accepted
+**Date:** 2026-08-13
+
+### Decision
+
+The controlled pilot uses `python -m src.pilot_operator` as its minimal
+operator-facing workflow. The CLI calls only existing pilot-approved API routes,
+uses the bearer token from the process environment, restricts destinations to
+localhost or explicit private/loopback IPs, refuses redirects, and does not
+inherit environment proxy configuration.
+
+The CLI exposes lifecycle reads and approved human transitions but no supplier
+or customer automated-send action. It does not access SQLite directly. Existing
+read/list API routes and identifiers returned by workflow actions provide
+interruption recovery without adding another API surface.
+
+### Consequences
+
+* Operators need not construct raw HTTP requests or inspect the database.
+* Tokens are neither command arguments nor persisted client state.
+* State changes are not silently retried; operators re-read durable state after
+  interruption or conflict.
