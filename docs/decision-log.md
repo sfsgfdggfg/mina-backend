@@ -4599,3 +4599,47 @@ remain separate deployment decisions.
   remain available to the parser.
 * Regex minimization reduces exposure but is not a guarantee of full
   anonymization.
+
+
+---
+
+## DEC-097 — Authenticated and Isolated Shadow-Pilot API Profile
+
+**Status:** Accepted
+**Date:** 2026-08-13
+
+### Decision
+
+MINAI shadow-pilot deployments use an explicit `MINAI_PILOT_MODE` access
+profile. Pilot mode fails closed unless named operators, private/loopback
+network CIDRs, and an explicit private/loopback bind address are configured.
+
+Named pilot operators are configured with unique bearer tokens through
+`MINAI_PILOT_OPERATORS_JSON`. Tokens must contain at least 32 characters.
+Authenticated token identity is authoritative for human extraction confirmation,
+supplier RFQ approval, and quote approval; a request body cannot impersonate a
+different operator in pilot mode.
+
+Pilot mode exposes only a small workflow allowlist. Development, simulation,
+customer-memory mutation/import/restore, supplier mail send, automated supplier
+response ingestion, quote-send preparation, test-suite, and validation/admin
+surfaces remain disabled even for authenticated pilot operators.
+
+The health endpoint is authentication-exempt but remains subject to the pilot
+network boundary. Requests outside configured private/loopback networks fail
+closed. Disabled routes return 404 to avoid advertising non-pilot capabilities.
+
+This is a controlled single-tenant pilot security profile, not a production
+identity platform. Production-grade SSO, RBAC, secrets management, reverse-proxy
+trust, tenant isolation, and enterprise audit integration remain future work.
+
+### Consequences
+
+* Anonymous access cannot enter the pilot operational workflow.
+* Human evidence records use the authenticated operator identity.
+* Risky simulation/admin/mutation/send routes are unavailable in pilot mode.
+* The same development API can remain available when pilot mode is explicitly
+  disabled.
+* Network exposure still depends on deployment correctly using the declared bind
+  address and allowed private/VPN CIDRs; deployment verification remains part of
+  the pilot readiness gate.

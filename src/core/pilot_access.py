@@ -1,0 +1,238 @@
+from __future__ import annotations
+
+import hmac
+import ipaddress
+import json
+import os
+import re
+from dataclasses import dataclass
+from typing import Mapping
+
+
+class PilotAccessConfigurationError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class PilotOperator:
+    name: str
+    token: str
+
+
+@dataclass(frozen=True)
+class PilotAccessDecision:
+    allowed: bool
+    status_code: int
+    reason: str
+    operator_name: str | None = None
+
+
+_ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("GET", re.compile(r"^/health$")),
+    ("POST", re.compile(r"^/process-email$")),
+    ("GET", re.compile(r"^/extraction-proposals/[^/]+$")),
+    ("POST", re.compile(r"^/extraction-proposals/[^/]+/confirm$")),
+    ("POST", re.compile(r"^/extraction-proposals/[^/]+/resume$")),
+    ("GET", re.compile(r"^/supplier-rfqs$")),
+    ("GET", re.compile(r"^/supplier-rfqs/[^/]+$")),
+    ("POST", re.compile(r"^/supplier-rfqs/[^/]+/approve$")),
+    ("POST", re.compile(r"^/supplier-rfqs/[^/]+/responses$")),
+    ("POST", re.compile(r"^/supplier-rfq-workflows/[^/]+/resume-quote$")),
+    ("GET", re.compile(r"^/quote-approvals$")),
+    ("GET", re.compile(r"^/quote-approvals/[^/]+$")),
+    ("POST", re.compile(r"^/quote-approvals/[^/]+/approve$")),
+    ("POST", re.compile(r"^/quote-approvals/[^/]+/reject$")),
+    ("POST", re.compile(r"^/quote-approvals/[^/]+/invalidate$")),
+    ("GET", re.compile(r"^/quote-cases$")),
+    ("GET", re.compile(r"^/quote-cases/[^/]+$")),
+)
+
+_AUTH_EXEMPT_ROUTES = {("GET", "/health")}
+
+
+def _env_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def pilot_mode_enabled(environ: Mapping[str, str] | None = None) -> bool:
+    env = environ if environ is not None else os.environ
+    return _env_truthy(env.get("MINAI_PILOT_MODE"))
+
+
+def _load_operators(env: Mapping[str, str]) -> list[PilotOperator]:
+    raw = (env.get("MINAI_PILOT_OPERATORS_JSON") or "").strip()
+    if not raw:
+        raise PilotAccessConfigurationError(
+            "MINAI_PILOT_OPERATORS_JSON is required in pilot mode."
+        )
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise PilotAccessConfigurationError(
+            "MINAI_PILOT_OPERATORS_JSON must be valid JSON."
+        ) from exc
+    if not isinstance(parsed, dict) or not parsed:
+        raise PilotAccessConfigurationError(
+            "Pilot operators must be a non-empty JSON object."
+        )
+
+    operators: list[PilotOperator] = []
+    seen_tokens: set[str] = set()
+    for raw_name, raw_token in parsed.items():
+        name = str(raw_name).strip()
+        token = str(raw_token).strip()
+        if len(name) < 3:
+            raise PilotAccessConfigurationError(
+                "Pilot operator names must be explicit named identities."
+            )
+        if len(token) < 32:
+            raise PilotAccessConfigurationError(
+                "Pilot operator tokens must contain at least 32 characters."
+            )
+        if token in seen_tokens:
+            raise PilotAccessConfigurationError(
+                "Pilot operator tokens must be unique."
+            )
+        seen_tokens.add(token)
+        operators.append(PilotOperator(name=name, token=token))
+    return operators
+
+
+def _load_allowed_networks(
+    env: Mapping[str, str],
+) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    raw = env.get("MINAI_PILOT_ALLOWED_NETWORKS") or "127.0.0.1/32,::1/128"
+    networks = []
+    for item in raw.split(","):
+        value = item.strip()
+        if not value:
+            continue
+        try:
+            network = ipaddress.ip_network(value, strict=False)
+        except ValueError as exc:
+            raise PilotAccessConfigurationError(
+                f"Invalid pilot network: {value}"
+            ) from exc
+        if (
+            network.prefixlen == 0
+            or not (
+                network.network_address.is_private
+                or network.network_address.is_loopback
+            )
+        ):
+            raise PilotAccessConfigurationError(
+                "Pilot networks must be private or loopback CIDRs."
+            )
+        networks.append(network)
+    if not networks:
+        raise PilotAccessConfigurationError(
+            "At least one pilot network is required."
+        )
+    return networks
+
+
+def validate_pilot_configuration(
+    environ: Mapping[str, str] | None = None,
+) -> None:
+    env = environ if environ is not None else os.environ
+    if not pilot_mode_enabled(env):
+        return
+
+    _load_operators(env)
+    _load_allowed_networks(env)
+
+    bind_host = (env.get("MINAI_PILOT_BIND_HOST") or "").strip()
+    if not bind_host:
+        raise PilotAccessConfigurationError(
+            "MINAI_PILOT_BIND_HOST is required in pilot mode."
+        )
+    try:
+        bind_ip = ipaddress.ip_address(bind_host)
+    except ValueError as exc:
+        raise PilotAccessConfigurationError(
+            "MINAI_PILOT_BIND_HOST must be an explicit IP address."
+        ) from exc
+    if not (bind_ip.is_private or bind_ip.is_loopback):
+        raise PilotAccessConfigurationError(
+            "Pilot bind host must be private or loopback."
+        )
+
+
+def route_allowed(method: str, path: str) -> bool:
+    normalized_method = method.upper()
+    return any(
+        normalized_method == allowed_method
+        and pattern.fullmatch(path) is not None
+        for allowed_method, pattern in _ALLOWED_ROUTES
+    )
+
+
+def _client_network_allowed(client_host: str | None, networks) -> bool:
+    if not client_host:
+        return False
+    try:
+        address = ipaddress.ip_address(client_host)
+    except ValueError:
+        return False
+    return any(
+        address.version == network.version and address in network
+        for network in networks
+    )
+
+
+def _operator_from_authorization(
+    authorization: str | None,
+    operators: list[PilotOperator],
+) -> PilotOperator | None:
+    if not authorization:
+        return None
+    scheme, separator, token = authorization.partition(" ")
+    if separator != " " or scheme.lower() != "bearer" or not token:
+        return None
+    for operator in operators:
+        if hmac.compare_digest(token.strip(), operator.token):
+            return operator
+    return None
+
+
+def authorize_pilot_request(
+    *,
+    method: str,
+    path: str,
+    client_host: str | None,
+    authorization: str | None,
+    environ: Mapping[str, str] | None = None,
+) -> PilotAccessDecision:
+    env = environ if environ is not None else os.environ
+
+    if not pilot_mode_enabled(env):
+        return PilotAccessDecision(True, 200, "pilot_mode_disabled")
+
+    try:
+        validate_pilot_configuration(env)
+        networks = _load_allowed_networks(env)
+        operators = _load_operators(env)
+    except PilotAccessConfigurationError as exc:
+        return PilotAccessDecision(False, 503, str(exc))
+
+    if not _client_network_allowed(client_host, networks):
+        return PilotAccessDecision(False, 403, "pilot_network_denied")
+
+    if not route_allowed(method, path):
+        return PilotAccessDecision(False, 404, "pilot_route_disabled")
+
+    if (method.upper(), path) in _AUTH_EXEMPT_ROUTES:
+        return PilotAccessDecision(True, 200, "pilot_health_allowed")
+
+    operator = _operator_from_authorization(authorization, operators)
+    if operator is None:
+        return PilotAccessDecision(
+            False, 401, "pilot_authentication_required"
+        )
+
+    return PilotAccessDecision(
+        True,
+        200,
+        "pilot_operator_authenticated",
+        operator.name,
+    )

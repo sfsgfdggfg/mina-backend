@@ -2801,3 +2801,31 @@ requiring application code changes.
 Passing this rule does not authorize real-data shadow piloting until the remaining
 deployment privacy, authentication, isolation, provenance, and legal/contractual
 requirements are complete.
+
+
+---
+
+## RULE-116 — Shadow Pilot Requests Require Named Authentication and Route Isolation
+
+When `MINAI_PILOT_MODE` is enabled, operational requests must originate from an
+approved private/loopback network and, except for health checks, authenticate
+with a bearer token uniquely assigned to a named pilot operator.
+
+Pilot mode must fail closed if operator tokens, allowed networks, or the declared
+bind host are missing or invalid.
+
+The authenticated operator identity is authoritative for human confirmation and
+approval evidence. User-supplied body fields must not allow an operator to claim
+another person's identity.
+
+Only explicitly approved shadow-pilot routes may be reachable. Test execution,
+simulation, supplier outbound send, automated supplier-response ingestion,
+customer-memory mutation/import/restore, quote-send preparation, and other
+administrative or non-pilot routes must remain disabled.
+
+Pilot network configuration may contain only private or loopback CIDRs. The
+default network boundary is localhost only. A VPN/private subnet must be added
+explicitly.
+
+This rule provides a pre-MVP single-tenant access boundary and does not replace
+production SSO, RBAC, tenant isolation, or infrastructure firewall controls.
