@@ -4795,3 +4795,30 @@ commands are not pilot-approved startup paths.
   wildcard fallback.
 * Any future proxy deployment requires a separate explicit security decision;
   forwarded headers are not trusted by this launcher.
+
+
+---
+
+## DEC-102 — Authenticated Manual Supplier RFQ Send Evidence
+
+**Status:** Accepted
+**Date:** 2026-08-13
+
+### Decision
+
+MINAI does not transmit supplier RFQs in the controlled pilot. After an RFQ is
+approved and sent outside MINAI through the real logistics operation, the
+bearer-authenticated pilot operator may record that manual send. The record
+moves the RFQ to `awaiting_response`, allowing subsequent supplier response
+ingestion, and stores the operator and timestamp as durable evidence.
+
+For SQLite persistence, the RFQ state and append-only manual-send evidence are
+written in one transaction after the current approved state is re-read. No
+network, provider, portal, SMTP, or other outbound operation participates in
+the transition.
+
+### Consequences
+
+* A body-supplied identity cannot override the authenticated pilot operator.
+* Repeated or stale attempts fail and cannot duplicate manual-send evidence.
+* A persistence failure rolls back both the lifecycle update and its evidence.

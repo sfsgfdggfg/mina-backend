@@ -106,6 +106,7 @@ def evaluate_pilot_access_regressions() -> dict:
         ("POST", "/extraction-proposals/p1/confirm"),
         ("POST", "/extraction-proposals/p1/resume"),
         ("POST", "/supplier-rfqs/r1/approve"),
+        ("POST", "/supplier-rfqs/r1/record-manually-sent"),
         ("POST", "/supplier-rfqs/r1/responses"),
         ("POST", "/supplier-rfq-workflows/w1/resume-quote"),
         ("POST", "/quote-approvals/a1/approve"),

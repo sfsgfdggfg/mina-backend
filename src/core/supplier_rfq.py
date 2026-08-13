@@ -65,6 +65,13 @@ class SupplierRFQDraft(BaseModel):
         return build_supplier_rfq_reference(self.rfq_id)
 
 
+class SupplierRFQManualSentEvidence(BaseModel):
+    rfq_id: str
+    recorded_by: str
+    recorded_at: datetime
+    source: Literal["manual_external_send"] = "manual_external_send"
+
+
 class SupplierRFQWorkflow(BaseModel):
     workflow_id: str = Field(default_factory=lambda: str(uuid4()))
     shipment: Shipment

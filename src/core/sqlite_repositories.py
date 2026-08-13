@@ -12,8 +12,16 @@ from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.pilot_store import SQLitePilotStore
 from src.core.quote_approval import QuoteApproval
 from src.core.quote_case import QuoteCase
-from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQResponse, SupplierRFQWorkflow
-from src.core.supplier_rfq_repository import DuplicateSupplierRFQResponseError
+from src.core.supplier_rfq import (
+    SupplierRFQDraft,
+    SupplierRFQManualSentEvidence,
+    SupplierRFQResponse,
+    SupplierRFQWorkflow,
+)
+from src.core.supplier_rfq_repository import (
+    DuplicateSupplierRFQManualSentEvidenceError,
+    DuplicateSupplierRFQResponseError,
+)
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -74,6 +82,7 @@ class SQLiteExtractionProposalRepository:
 
 class SQLiteSupplierRFQRepository:
     DRAFT_NAMESPACE = "supplier_rfq_drafts"
+    MANUAL_SENT_EVIDENCE_NAMESPACE = "supplier_rfq_manual_sent_evidence"
     WORKFLOW_NAMESPACE = "supplier_rfq_workflows"
     RESPONSE_NAMESPACE = "supplier_rfq_responses"
     INGESTED_MESSAGE_NAMESPACE = "supplier_ingested_messages"
@@ -100,6 +109,35 @@ class SQLiteSupplierRFQRepository:
         return None if payload is None else _model_from_payload(SupplierRFQDraft, payload)
     def list_drafts(self) -> list[SupplierRFQDraft]:
         return [_model_from_payload(SupplierRFQDraft, p) for p in self.store.list_all(namespace=self.DRAFT_NAMESPACE)]
+    def save_manual_sent_evidence(
+        self,
+        evidence: SupplierRFQManualSentEvidence,
+    ) -> SupplierRFQManualSentEvidence:
+        payload = _model_payload(evidence)
+        if not self.store.insert_once(
+            namespace=self.MANUAL_SENT_EVIDENCE_NAMESPACE,
+            record_key=evidence.rfq_id,
+            payload=payload,
+            event_type="supplier_rfq_manually_sent",
+            entity_type="supplier_rfq",
+        ):
+            raise DuplicateSupplierRFQManualSentEvidenceError(
+                "Manual Supplier RFQ sent evidence already exists."
+            )
+        return _model_from_payload(SupplierRFQManualSentEvidence, payload)
+    def list_manual_sent_evidence(
+        self,
+        rfq_id: str | None = None,
+    ) -> list[SupplierRFQManualSentEvidence]:
+        evidence = [
+            _model_from_payload(SupplierRFQManualSentEvidence, payload)
+            for payload in self.store.list_all(
+                namespace=self.MANUAL_SENT_EVIDENCE_NAMESPACE
+            )
+        ]
+        if rfq_id is None:
+            return evidence
+        return [item for item in evidence if item.rfq_id == rfq_id]
     def save_workflow(self, workflow: SupplierRFQWorkflow) -> SupplierRFQWorkflow:
         payload = _model_payload(workflow)
         self.store.upsert(namespace=self.WORKFLOW_NAMESPACE, record_key=workflow.workflow_id, payload=payload, event_type="supplier_rfq_workflow_saved", entity_type="supplier_rfq_workflow")

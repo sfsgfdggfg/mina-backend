@@ -2921,3 +2921,19 @@ The ASGI target must remain `src.api:app`, reload must remain disabled, and
 proxy and forwarded-header trust must remain disabled unless a later explicit
 deployment-security decision replaces this rule. The pilot launcher must not
 enable outbound email, and Streamlit is not pilot-approved.
+
+
+---
+
+## RULE-121 — Manual RFQ Send Recording Requires Authenticated Atomic Evidence
+
+Only an authenticated pilot operator may record that an approved supplier RFQ
+was sent manually outside MINAI. MINAI must perform no outbound action during
+this transition. The authenticated identity, not a body claim, is the recorded
+actor.
+
+The transition requires an approved RFQ with its configured recipient, records
+the send time, and moves it to `awaiting_response` so a supplier response may be
+accepted. The RFQ update and one append-only manual-send evidence record must
+commit atomically. Unknown, non-approved, repeated, and stale concurrent
+attempts must fail without partial state or duplicate evidence.
