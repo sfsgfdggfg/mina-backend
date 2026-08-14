@@ -17,6 +17,7 @@ from src.simulation.operational_data_injection_regressions import evaluate_opera
 from src.simulation.manual_rfq_sent_regressions import evaluate_manual_rfq_sent_regressions
 from src.simulation.pilot_access_regressions import evaluate_pilot_access_regressions
 from src.simulation.pilot_launcher_regressions import evaluate_pilot_launcher_regressions
+from src.simulation.pilot_rehearsal_regressions import evaluate_pilot_rehearsal_regressions
 from src.simulation.pilot_operator_regressions import evaluate_pilot_operator_regressions
 from src.simulation.pilot_persistence_regressions import evaluate_pilot_persistence_regressions
 from src.simulation.pilot_scope_regressions import evaluate_pilot_scope_regressions
@@ -45,6 +46,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Privacy boundary", evaluate_privacy_boundary_regressions),
     Suite("Pilot access", evaluate_pilot_access_regressions),
     Suite("Pilot launcher", evaluate_pilot_launcher_regressions),
+    Suite("Synthetic pilot rehearsal", evaluate_pilot_rehearsal_regressions),
     Suite("Safe API entry point", evaluate_safe_api_entrypoint_regressions),
     Suite("Extraction confirmation", evaluate_extraction_confirmation_regressions),
     Suite("Customer identity trust", evaluate_customer_identity_trust_regressions),

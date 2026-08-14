@@ -54,15 +54,32 @@ performed in the real logistics systems and only recorded in MINAI.
 Before any real email, confirm all required operational datasets are currently
 `pilot_verified`, `pilot_usable`, attributed to a verifier, timestamped, and
 fingerprint-matched. Also confirm explicit organizational/legal approval for
-real-data use with OpenAI. Run the canonical regression gate before the
-sanitized end-to-end replay:
+real-data use with OpenAI.
+
+The three validation layers are distinct:
+
+1. Run the canonical regression gate:
 
 ```bash
 python -m src.simulation.pilot_regression_suite
 ```
 
-Both the regression gate and the sanitized replay must pass. The regression
-gate does not replace replay. Any missing prerequisite is NO-GO.
+2. Run the full deterministic, offline synthetic controlled-pilot rehearsal:
+
+```bash
+python -m src.simulation.pilot_rehearsal
+```
+
+3. Before a future real-data pilot, run the separately authorized sanitized
+historical replay when that capability and its approvals exist.
+
+The temporary synthetic `pilot_verified` data used by the rehearsal authorizes
+only that isolated rehearsal. It does not authorize or relabel repository data;
+the repository demo data remains unverified. A real pilot still requires P0.14
+real verified customer and supplier datasets, plus all required organizational,
+deployment, privacy, legal, and real-data approvals. The canonical gate and
+synthetic rehearsal do not replace the future sanitized historical replay.
+Any missing prerequisite is NO-GO.
 
 Configure the operator terminal without saving the token in source control,
 shell scripts, command arguments, or command history:
