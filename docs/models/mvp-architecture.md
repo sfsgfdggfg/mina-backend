@@ -765,6 +765,18 @@ python -m src.main
 
 ---
 
+### Explicit operational-data sources
+
+Normal application execution uses the repository-owned provenance registry,
+customer memory, and supplier capability files. Controlled internal execution,
+testing, and rehearsal may instead pass one immutable `OperationalDataSources`
+object through the confirmed-shipment workflow. This is source injection only:
+it does not authorize data for pilot use. The injected registry must identify
+the same resolved files that the workflow reads, and pilot classification,
+usability, verifier metadata, and SHA-256 verification remain mandatory.
+Customer-memory administration, backups, imports, and restores continue to use
+the repository-owned paths and do not inherit read-source injection.
+
 ## 26. Human Approval Architecture
 
 MINAI tam otonom çalışmaz.

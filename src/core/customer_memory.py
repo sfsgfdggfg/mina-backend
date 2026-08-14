@@ -9,6 +9,9 @@ from src.core.data_provenance import (
     DataProvenanceBlockedError,
     require_pilot_operational_dataset,
 )
+from src.core.operational_data import (
+    OperationalDataSources,
+)
 from datetime import datetime, timezone
 from src.paths import data_path
 
@@ -57,16 +60,35 @@ class CustomerMemoryResult(BaseModel):
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def load_customer_memory() -> List[CustomerMemoryProfile]:
+def load_customer_memory(
+    operational_data_sources: OperationalDataSources | None = None,
+) -> List[CustomerMemoryProfile]:
     """
     Loads customer memory profiles from data/customer_memory.json.
     """
 
-    if not CUSTOMER_MEMORY_FILE.exists():
+    if operational_data_sources is None:
+        source_path = CUSTOMER_MEMORY_FILE
+    else:
+        source_path = operational_data_sources.customer_memory_path
+
+    if operational_data_sources is None and not source_path.exists():
         return []
 
-    with CUSTOMER_MEMORY_FILE.open("r", encoding="utf-8") as file:
-        raw_profiles = json.load(file)
+    try:
+        content = source_path.read_bytes()
+    except OSError as exc:
+        raise DataProvenanceError(
+            "Operational customer-memory dataset could not be read."
+        ) from exc
+    if operational_data_sources is not None:
+        require_pilot_operational_dataset(
+            "customer_memory",
+            path=operational_data_sources.provenance_registry_path,
+            dataset_path=source_path,
+            dataset_bytes=content,
+        )
+    raw_profiles = json.loads(content.decode("utf-8"))
 
     return [
         CustomerMemoryProfile(**profile)
@@ -107,13 +129,20 @@ def normalize_lookup_text(value: Optional[str]) -> Optional[str]:
     return cleaned
 
 
-def find_customer_profile(customer_name: Optional[str]) -> Optional[CustomerMemoryProfile]:
+def find_customer_profile(
+    customer_name: Optional[str],
+    operational_data_sources: OperationalDataSources | None = None,
+) -> Optional[CustomerMemoryProfile]:
     normalized_name = normalize_lookup_text(customer_name)
 
     if not normalized_name:
         return None
 
-    customer_memory = load_customer_memory()
+    customer_memory = (
+        load_customer_memory()
+        if operational_data_sources is None
+        else load_customer_memory(operational_data_sources)
+    )
 
     for profile in customer_memory:
         if not profile.active:
@@ -184,6 +213,7 @@ def enrich_shipment_with_customer_memory(
     shipment: Shipment,
     email_text: Optional[str] = None,
     sender_address: Optional[str] = None,
+    operational_data_sources: OperationalDataSources | None = None,
 ) -> CustomerMemoryResult:
     """
     Customer Memory identity-safe matching.
@@ -200,7 +230,16 @@ def enrich_shipment_with_customer_memory(
     require_operational_shipment(shipment)
 
     try:
-        require_pilot_operational_dataset("customer_memory")
+        if operational_data_sources is None:
+            require_pilot_operational_dataset("customer_memory")
+        profile = (
+            find_customer_profile(shipment.customer_name)
+            if operational_data_sources is None
+            else find_customer_profile(
+                shipment.customer_name,
+                operational_data_sources,
+            )
+        )
     except DataProvenanceBlockedError:
         return CustomerMemoryResult(
             matched=False,
@@ -211,8 +250,6 @@ def enrich_shipment_with_customer_memory(
             matched_by=None,
             identity_status="provenance_unverified",
         )
-
-    profile = find_customer_profile(shipment.customer_name)
 
     if not profile:
         return CustomerMemoryResult(

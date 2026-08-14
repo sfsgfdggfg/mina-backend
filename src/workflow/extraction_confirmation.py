@@ -17,6 +17,7 @@ from src.core.extraction_confirmation_repository import (
 from src.core.mail import InboundMailEnvelope
 from src.core.models import Shipment
 from src.core.data_provenance import DataProvenanceError
+from src.core.operational_data import OperationalDataSources
 from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_rfq_repository import (
@@ -229,6 +230,7 @@ def resume_confirmed_extraction(
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
     evidence_recorder: PilotEvidenceRecorder | None = None,
+    operational_data_sources: OperationalDataSources | None = None,
 ) -> dict:
     proposal = _load_proposal(repository, proposal_id)
     if proposal.extraction_status != "confirmed" or proposal.confirmed_shipment is None:
@@ -258,6 +260,7 @@ def resume_confirmed_extraction(
             email_text=proposal.inbound_mail.body_text,
             sender_address=proposal.inbound_mail.sender_address,
             rfq_repository=rfq_repository,
+            operational_data_sources=operational_data_sources,
             approval_repository=approval_repository,
             quote_case_repository=quote_case_repository,
             _persist_rfq_transition=False,

@@ -13,6 +13,7 @@ from src.simulation.data_provenance_regressions import evaluate_data_provenance_
 from src.simulation.data_path_regressions import evaluate_data_path_regressions
 from src.simulation.extraction_confirmation_regressions import evaluate_extraction_confirmation_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
+from src.simulation.operational_data_injection_regressions import evaluate_operational_data_injection_regressions
 from src.simulation.manual_rfq_sent_regressions import evaluate_manual_rfq_sent_regressions
 from src.simulation.pilot_access_regressions import evaluate_pilot_access_regressions
 from src.simulation.pilot_launcher_regressions import evaluate_pilot_launcher_regressions
@@ -49,6 +50,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Customer identity trust", evaluate_customer_identity_trust_regressions),
     Suite("Data provenance", evaluate_data_provenance_regressions),
     Suite("Repository data path normalization", evaluate_data_path_regressions),
+    Suite("Operational data injection", evaluate_operational_data_injection_regressions),
     Suite("Pilot scope", evaluate_pilot_scope_regressions),
     Suite("Durable pilot persistence", evaluate_pilot_persistence_regressions),
     Suite("Durable provenance recovery", evaluate_provenance_recovery_regressions),
