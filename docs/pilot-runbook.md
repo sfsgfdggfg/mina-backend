@@ -38,8 +38,15 @@ performed in the real logistics systems and only recorded in MINAI.
 Before any real email, confirm all required operational datasets are currently
 `pilot_verified`, `pilot_usable`, attributed to a verifier, timestamped, and
 fingerprint-matched. Also confirm explicit organizational/legal approval for
-real-data use with OpenAI and complete a sanitized end-to-end replay. Any
-missing prerequisite is NO-GO.
+real-data use with OpenAI. Run the canonical regression gate before the
+sanitized end-to-end replay:
+
+```bash
+python -m src.simulation.pilot_regression_suite
+```
+
+Both the regression gate and the sanitized replay must pass. The regression
+gate does not replace replay. Any missing prerequisite is NO-GO.
 
 Configure the operator terminal without saving the token in source control,
 shell scripts, command arguments, or command history:
@@ -274,4 +281,5 @@ The pilot is NO-GO unless all are true:
 - unique named operator tokens are provisioned outside source control;
 - outbound delivery remains disabled in MINAI;
 - Streamlit remains off;
+- the canonical controlled-pilot regression gate passed;
 - a complete sanitized replay passed before the first real email.
