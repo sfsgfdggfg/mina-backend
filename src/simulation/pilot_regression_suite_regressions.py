@@ -68,6 +68,7 @@ def evaluate_pilot_regression_suite_regressions() -> dict:
         "repository data path normalization",
         "operational data injection",
         "synthetic pilot rehearsal",
+        "sanitized historical replay",
         "pilot scope", "persistence", "recovery", "atomic", "supplier rfq lifecycle",
         "manual rfq sent", "supplier response ingestion", "quote approval",
         "quote case repository", "pilot operator", "runtime reproducibility preflight",
