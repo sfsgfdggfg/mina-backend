@@ -1,8 +1,8 @@
-openai
-pydantic
-python-dotenv
-faker
-fastapi
-uvicorn
-streamlit
-requests
+# Direct dependencies for the controlled-pilot runtime, validated on Python 3.12.1.
+# For reproducible pilot installation, use requirements-lock.txt.
+fastapi==0.141.1
+openai==2.53.0
+pydantic==2.13.4
+python-dotenv==1.2.2
+requests==2.34.2
+uvicorn==0.52.1

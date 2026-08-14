@@ -21,6 +21,7 @@ from src.simulation.pilot_scope_regressions import evaluate_pilot_scope_regressi
 from src.simulation.privacy_boundary_regressions import evaluate_privacy_boundary_regressions
 from src.simulation.provenance_recovery_regressions import evaluate_provenance_recovery_regressions
 from src.simulation.regulatory_compliance_regressions import evaluate_regulatory_compliance_regressions
+from src.simulation.runtime_preflight_regressions import evaluate_runtime_preflight_regressions
 from src.simulation.safe_api_entrypoint_regressions import evaluate_safe_api_entrypoint_regressions
 from src.simulation.supplier_response_ingestion_regressions import evaluate_supplier_response_ingestion_regressions
 from src.simulation.supplier_rfq_lifecycle_regressions import evaluate_supplier_rfq_lifecycle_regressions
@@ -57,6 +58,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Pilot operator client", evaluate_pilot_operator_regressions),
     Suite("Clarification resolution", evaluate_clarification_resolution_regressions),
     Suite("Regulatory compliance", evaluate_regulatory_compliance_regressions),
+    Suite("Runtime reproducibility preflight", evaluate_runtime_preflight_regressions),
     _reporter_suite("evaluate_commodity_dictionary_validation", "Commodity dictionary validation"),
     _reporter_suite("evaluate_supplier_capability_validation", "Supplier capability validation"),
     _reporter_suite("evaluate_supplier_adr_capability_validation", "Supplier ADR capability validation"),
