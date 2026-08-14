@@ -11,7 +11,14 @@ from src.core.supplier_capability_registry import (
 )
 from src.paths import data_path
 from src.core.extraction_confirmation import require_operational_shipment
-from src.core.data_provenance import require_pilot_operational_dataset
+from src.core.data_provenance import (
+    DataProvenanceError,
+    require_pilot_operational_dataset,
+)
+from src.core.operational_data import (
+    OperationalDataSources,
+    resolve_operational_data_sources,
+)
 
 
 def _get_primary_contact_email(raw_supplier: Dict[str, Any]) -> Optional[str]:
@@ -52,11 +59,28 @@ def _normalize(value: Optional[str]) -> str:
 SUPPLIER_CAPABILITIES_PATH = data_path("supplier_capabilities.json")
 
 
-def _load_supplier_profiles(path: Path = SUPPLIER_CAPABILITIES_PATH) -> List[Dict[str, Any]]:
-    if not path.exists():
+def _load_supplier_profiles(
+    path: Path = SUPPLIER_CAPABILITIES_PATH,
+    *,
+    operational_data_sources: OperationalDataSources | None = None,
+) -> List[Dict[str, Any]]:
+    if operational_data_sources is None and not path.exists():
         return []
 
-    raw_suppliers = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        content = path.read_bytes()
+    except OSError as exc:
+        raise DataProvenanceError(
+            "Operational supplier-capabilities dataset could not be read."
+        ) from exc
+    if operational_data_sources is not None:
+        require_pilot_operational_dataset(
+            "supplier_capabilities",
+            path=operational_data_sources.provenance_registry_path,
+            dataset_path=path,
+            dataset_bytes=content,
+        )
+    raw_suppliers = json.loads(content.decode("utf-8"))
 
     profiles: List[Dict[str, Any]] = []
 
@@ -90,9 +114,6 @@ def _load_supplier_profiles(path: Path = SUPPLIER_CAPABILITIES_PATH) -> List[Dic
         )
 
     return profiles
-
-
-SUPPLIER_PROFILES: List[Dict[str, Any]] = _load_supplier_profiles()
 
 
 def _get_equipment_text(shipment: Any, equipment_decision: Optional[Any]) -> str:
@@ -240,9 +261,18 @@ def select_suppliers_for_shipment(
     equipment_decision: Optional[Dict[str, Any]] = None,
     risk_assessment: Optional[Dict[str, Any]] = None,
     max_suppliers: int = 3,
+    operational_data_sources: OperationalDataSources | None = None,
 ) -> Dict[str, Any]:
     require_operational_shipment(shipment)
-    require_pilot_operational_dataset("supplier_capabilities")
+    sources = resolve_operational_data_sources(operational_data_sources)
+    if operational_data_sources is None:
+        require_pilot_operational_dataset("supplier_capabilities")
+    supplier_profiles = _load_supplier_profiles(
+        sources.supplier_capabilities_path,
+        operational_data_sources=(
+            sources if operational_data_sources is not None else None
+        ),
+    )
     equipment_text = _get_equipment_text(shipment, equipment_decision)
     risk_level = _get_risk_level(risk_assessment)
     service_type = getattr(shipment, "service_type", "FTL") or "FTL"
@@ -252,7 +282,7 @@ def select_suppliers_for_shipment(
     scored_suppliers = []
     rejected_suppliers = []
 
-    for supplier in SUPPLIER_PROFILES:
+    for supplier in supplier_profiles:
         supplier_capabilities = [
             _normalize(item)
             for item in supplier.get("special_capabilities", [])

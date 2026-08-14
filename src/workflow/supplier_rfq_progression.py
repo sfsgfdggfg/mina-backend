@@ -11,6 +11,7 @@ from src.core.equipment import decide_equipment
 from src.core.missing_info import check_missing_information
 from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.operational_consistency import check_operational_consistency
+from src.core.operational_data import OperationalDataSources
 from src.core.pricing import calculate_customer_quote
 from src.core.quote_approval import QuoteApproval, QuoteApprovalSnapshot
 from src.core.quote_approval_repository import QuoteApprovalRepository
@@ -81,6 +82,7 @@ def resume_supplier_rfq_workflow(
     rfq_repository: SupplierRFQRepository,
     approval_repository: QuoteApprovalRepository,
     quote_case_repository: QuoteCaseRepository,
+    operational_data_sources: OperationalDataSources | None = None,
 ) -> dict:
     workflow = rfq_repository.get_workflow(workflow_id)
     if workflow is None:
@@ -107,6 +109,7 @@ def resume_supplier_rfq_workflow(
         result = _progress_supplier_rfq_workflow(
             workflow=started,
             rfq_repository=rfq_repository,
+            operational_data_sources=operational_data_sources,
         )
     except DataProvenanceError:
         drafts = [
@@ -186,12 +189,14 @@ def _progress_supplier_rfq_workflow(
     *,
     workflow,
     rfq_repository: SupplierRFQRepository,
+    operational_data_sources: OperationalDataSources | None = None,
 ) -> dict:
 
     shipment = workflow.shipment
     customer_memory = enrich_shipment_with_customer_memory(
         shipment=shipment,
         email_text=workflow.email_text,
+        operational_data_sources=operational_data_sources,
     )
     commodity_profile = get_commodity_record(shipment.commodity)
     missing_info = check_missing_information(shipment)
@@ -246,6 +251,7 @@ def _progress_supplier_rfq_workflow(
         shipment=shipment,
         equipment_decision=equipment_decision,
         risk_assessment=risk_assessment,
+        operational_data_sources=operational_data_sources,
     )
     (
         valid_supplier_rfq_responses,

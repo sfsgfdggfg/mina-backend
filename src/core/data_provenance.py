@@ -40,6 +40,10 @@ def calculate_dataset_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def calculate_bytes_sha256(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
 def load_data_provenance_registry(
     path: Path = PROVENANCE_REGISTRY_PATH,
 ) -> dict[str, Any]:
@@ -215,8 +219,20 @@ def require_pilot_operational_dataset(
     *,
     environ: Mapping[str, str] | None = None,
     path: Path = PROVENANCE_REGISTRY_PATH,
+    dataset_path: Path | None = None,
+    dataset_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     record = get_dataset_provenance(dataset_key, path)
+
+    registered_path = (
+        path.resolve().parent.parent / str(record.get("path"))
+    ).resolve()
+    consumed_path = (dataset_path or registered_path).resolve()
+    if consumed_path != registered_path:
+        raise DataProvenanceBlockedError(
+            "Operational dataset path does not match its provenance record: "
+            f"{dataset_key}"
+        )
 
     if not pilot_mode_enabled(environ):
         return record
@@ -235,11 +251,6 @@ def require_pilot_operational_dataset(
             f"pilot_usable={record.get('pilot_usable')})"
         )
 
-    dataset_path = (
-        path.resolve().parent.parent
-        / str(record.get("path"))
-    )
-
     expected_sha256 = record.get("verified_sha256")
 
     if (
@@ -256,7 +267,11 @@ def require_pilot_operational_dataset(
         )
 
     try:
-        actual_sha256 = calculate_dataset_sha256(dataset_path)
+        actual_sha256 = (
+            calculate_bytes_sha256(dataset_bytes)
+            if dataset_bytes is not None
+            else calculate_dataset_sha256(consumed_path)
+        )
     except OSError as exc:
         raise DataProvenanceError(
             "Operational dataset fingerprint could not be calculated."

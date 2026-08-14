@@ -48,6 +48,7 @@ from src.core.data_provenance import (
 )
 from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.models import Shipment
+from src.core.operational_data import OperationalDataSources
 
 
 def build_data_provenance_blocked_result(
@@ -135,6 +136,7 @@ def process_shipment(
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
     _persist_rfq_transition: bool = True,
+    operational_data_sources: OperationalDataSources | None = None,
 ):
     if not isinstance(shipment, Shipment) or isinstance(
         shipment,
@@ -151,6 +153,7 @@ def process_shipment(
             shipment=shipment,
             email_text=email_text,
             sender_address=sender_address,
+            operational_data_sources=operational_data_sources,
         )
     except DataProvenanceError:
         return build_data_provenance_blocked_result(shipment)
@@ -210,6 +213,7 @@ def process_shipment(
             shipment=shipment,
             equipment_decision=equipment_decision,
             risk_assessment=risk_assessment,
+            operational_data_sources=operational_data_sources,
         )
     except DataProvenanceError:
         return build_data_provenance_blocked_result(
