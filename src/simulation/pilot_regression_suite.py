@@ -10,6 +10,7 @@ from src.simulation.atomic_transition_regressions import evaluate_atomic_transit
 from src.simulation.clarification_resolution_regressions import evaluate_clarification_resolution_regressions
 from src.simulation.customer_identity_trust_regressions import evaluate_customer_identity_trust_regressions
 from src.simulation.data_provenance_regressions import evaluate_data_provenance_regressions
+from src.simulation.data_path_regressions import evaluate_data_path_regressions
 from src.simulation.extraction_confirmation_regressions import evaluate_extraction_confirmation_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
 from src.simulation.manual_rfq_sent_regressions import evaluate_manual_rfq_sent_regressions
@@ -47,6 +48,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Extraction confirmation", evaluate_extraction_confirmation_regressions),
     Suite("Customer identity trust", evaluate_customer_identity_trust_regressions),
     Suite("Data provenance", evaluate_data_provenance_regressions),
+    Suite("Repository data path normalization", evaluate_data_path_regressions),
     Suite("Pilot scope", evaluate_pilot_scope_regressions),
     Suite("Durable pilot persistence", evaluate_pilot_persistence_regressions),
     Suite("Durable provenance recovery", evaluate_provenance_recovery_regressions),

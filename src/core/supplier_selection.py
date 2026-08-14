@@ -9,6 +9,7 @@ from src.core.supplier_capability_registry import (
     ADR_CAPABILITY,
     get_required_adr_class_capability,
 )
+from src.paths import data_path
 from src.core.extraction_confirmation import require_operational_shipment
 from src.core.data_provenance import require_pilot_operational_dataset
 
@@ -48,7 +49,7 @@ def _normalize(value: Optional[str]) -> str:
     return value
 
 
-SUPPLIER_CAPABILITIES_PATH = Path(__file__).resolve().parents[2] / "data" / "supplier_capabilities.json"
+SUPPLIER_CAPABILITIES_PATH = data_path("supplier_capabilities.json")
 
 
 def _load_supplier_profiles(path: Path = SUPPLIER_CAPABILITIES_PATH) -> List[Dict[str, Any]]:

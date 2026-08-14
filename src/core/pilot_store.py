@@ -11,8 +11,9 @@ from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel
+from src.paths import data_path
 
-DEFAULT_PILOT_DB_PATH = Path("data/pilot/minai_pilot.sqlite3")
+DEFAULT_PILOT_DB_PATH = data_path("pilot", "minai_pilot.sqlite3")
 
 
 class SQLiteTransactionError(RuntimeError):

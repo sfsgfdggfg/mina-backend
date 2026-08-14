@@ -7,9 +7,9 @@ from typing import Any, Dict, List
 from src.core.clarification_requirements import (
     CLARIFICATION_VALUE_TYPES,
 )
+from src.paths import data_path
 
-
-COMMODITY_DICTIONARY_PATH = Path("data/commodity_dictionary.json")
+COMMODITY_DICTIONARY_PATH = data_path("commodity_dictionary.json")
 
 
 def _normalize_keyword(value: str) -> str:

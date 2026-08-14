@@ -5,6 +5,7 @@ from typing import Optional
 from openai import OpenAI
 from src.core.normalization import normalize_shipment
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
+from src.paths import data_path
 from src.core.models import Shipment, Package
 from src.core.gtip import interpret_gtip_from_email
 from src.core.commodity_profile import apply_commodity_profile_to_shipment
@@ -93,7 +94,7 @@ def parse_email_to_shipment(email_text: str) -> Shipment:
     return shipment
 
 
-COMMODITY_DICTIONARY_PATH = Path("data/commodity_dictionary.json")
+COMMODITY_DICTIONARY_PATH = data_path("commodity_dictionary.json")
 
 
 def _load_commodity_dictionary() -> list[dict]:

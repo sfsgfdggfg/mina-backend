@@ -65,6 +65,7 @@ def evaluate_pilot_regression_suite_regressions() -> dict:
     required_areas = {
         "privacy", "pilot access", "pilot launcher", "safe api",
         "extraction confirmation", "customer identity", "data provenance",
+        "repository data path normalization",
         "pilot scope", "persistence", "recovery", "atomic", "supplier rfq lifecycle",
         "manual rfq sent", "supplier response ingestion", "quote approval",
         "quote case repository", "pilot operator", "runtime reproducibility preflight",

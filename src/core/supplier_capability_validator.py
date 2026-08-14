@@ -10,9 +10,9 @@ from src.core.supplier_capability_registry import (
     ADR_CLASS_7_CAPABILITY,
     ALLOWED_SPECIAL_CAPABILITIES,
 )
+from src.paths import data_path
 
-
-SUPPLIER_CAPABILITIES_PATH = Path("data/supplier_capabilities.json")
+SUPPLIER_CAPABILITIES_PATH = data_path("supplier_capabilities.json")
 
 ALLOWED_ROLES = {"primary", "backup", "specialist"}
 ALLOWED_SERVICE_TYPES = {"FTL", "LTL"}

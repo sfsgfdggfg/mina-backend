@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Mapping, TYPE_CHECKING
 
+from src.paths import data_path
 if TYPE_CHECKING:
     from src.core.models import Shipment
 
@@ -13,11 +14,7 @@ ClarificationValueType = Literal["text", "boolean", "number"]
 ClarificationAnswerValue = bool | float | str
 
 CLARIFICATION_VALUE_TYPES = {"text", "boolean", "number"}
-COMMODITY_DICTIONARY_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "data"
-    / "commodity_dictionary.json"
-)
+COMMODITY_DICTIONARY_PATH = data_path("commodity_dictionary.json")
 
 
 class ClarificationRequirementError(ValueError):

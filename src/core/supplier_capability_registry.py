@@ -4,12 +4,9 @@ import json
 from pathlib import Path
 from typing import Dict, Set
 
+from src.paths import data_path
 
-REGISTRY_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "data"
-    / "supplier_capability_registry.json"
-)
+REGISTRY_PATH = data_path("supplier_capability_registry.json")
 
 
 class SupplierCapabilityRegistryError(RuntimeError):

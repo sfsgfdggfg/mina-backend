@@ -10,9 +10,11 @@ from src.core.data_provenance import (
     require_pilot_operational_dataset,
 )
 from datetime import datetime, timezone
+from src.paths import data_path
 
 
-CUSTOMER_MEMORY_FILE = Path("data/customer_memory.json")
+CUSTOMER_MEMORY_FILE = data_path("customer_memory.json")
+CUSTOMER_MEMORY_BACKUP_DIR = data_path("backups")
 
 
 class CustomerMemoryProfile(BaseModel):
@@ -557,7 +559,7 @@ def create_customer_memory_backup() -> str:
     Creates a timestamped backup of data/customer_memory.json before import.
     """
 
-    backup_dir = Path("data/backups")
+    backup_dir = CUSTOMER_MEMORY_BACKUP_DIR
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = now_iso().replace(":", "-").replace("+", "_")
@@ -657,7 +659,7 @@ def list_customer_memory_backups() -> list[dict]:
     Lists customer memory backup files.
     """
 
-    backup_dir = Path("data/backups")
+    backup_dir = CUSTOMER_MEMORY_BACKUP_DIR
 
     if not backup_dir.exists():
         return []
@@ -689,7 +691,7 @@ def read_customer_memory_backup(file_name: str) -> dict:
     Reads a backup file from data/backups safely.
     """
 
-    backup_dir = Path("data/backups")
+    backup_dir = CUSTOMER_MEMORY_BACKUP_DIR
     backup_path = backup_dir / file_name
 
     if not backup_path.exists():

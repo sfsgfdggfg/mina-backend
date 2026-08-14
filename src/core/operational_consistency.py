@@ -8,9 +8,9 @@ from src.core.supplier_capability_registry import (
     ADR_CAPABILITY,
     get_required_adr_class_capability,
 )
+from src.paths import data_path
 
-
-SUPPLIER_CAPABILITY_PATH = Path("data/supplier_capabilities.json")
+SUPPLIER_CAPABILITY_PATH = data_path("supplier_capabilities.json")
 
 
 def _normalize(value: Optional[str]) -> str:
