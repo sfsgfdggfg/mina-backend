@@ -66,6 +66,7 @@ from src.core.quote_approval_service import (
     invalidate_quote_approval,
     reject_quote,
 )
+from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.core.equipment import decide_equipment
 from src.core.supplier_rfq import SupplierRFQResponse
