@@ -164,6 +164,14 @@ python -m src.runtime_preflight
 closure. `requirements-dev.txt` additionally installs the optional Streamlit
 development UI; Streamlit is not pilot-approved.
 
+Run the offline synthetic controlled-pilot rehearsal with:
+
+```bash
+python -m src.simulation.pilot_rehearsal
+```
+
+See `docs/pilot-runbook.md` for its scope and real-pilot limitations.
+
 Repository-owned data, the provenance registry, and the default pilot database
 resolve from the repository location rather than the process working directory.
 Continue to start the controlled pilot from the repository root as documented.
