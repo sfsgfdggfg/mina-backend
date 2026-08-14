@@ -4850,21 +4850,25 @@ def evaluate_quote_approval_api_contract() -> dict:
         QuoteApprovalApproveRequest,
         QuoteApprovalRejectRequest,
         approve_quote_approval,
+        get_quote_case,
         get_quote_approval,
         invalidate_quote_approval_endpoint,
         list_quote_approvals,
         quote_approval_repository,
+        quote_case_repository,
         reject_quote_approval,
     )
     from src.core.models import (
         CustomerQuote,
         QuoteDraft,
+        Shipment,
         SupplierQuote,
     )
     from src.core.quote_approval import (
         QuoteApproval,
         QuoteApprovalSnapshot,
     )
+    from src.core.quote_case import QuoteCase
 
     failures = []
 
@@ -4900,6 +4904,70 @@ def evaluate_quote_approval_api_contract() -> dict:
         customer_quote=customer_quote,
         quote_draft=quote_draft,
     )
+
+    pending_for_case_read = quote_approval_repository.save(
+        QuoteApproval(quote_snapshot=snapshot)
+    )
+    quote_case = quote_case_repository.save(
+        QuoteCase(
+            shipment=Shipment(
+                customer_name="Quote Case API Test Customer",
+                pickup_country="Türkiye",
+                pickup_city="Adana",
+                delivery_country="Almanya",
+                delivery_city="Hamburg",
+                commodity="Tekstil",
+                gross_weight_kg=20000,
+                service_type="FTL",
+                cargo_ready_date="2026-08-15",
+                is_adr=False,
+                is_temperature_controlled=False,
+            ),
+            supplier_quote=supplier_quote,
+            customer_quote=customer_quote,
+            quote_draft=quote_draft,
+            quote_approval=pending_for_case_read,
+        )
+    )
+
+    approval_response = approve_quote_approval(
+        approval_id=pending_for_case_read.approval_id,
+        request=QuoteApprovalApproveRequest(
+            approved_by="quote.case.manager@example.invalid",
+        ),
+    )
+    if approval_response.get("approval_status") != "approved":
+        failures.append(
+            "quote case approval route should approve pending approval"
+        )
+
+    refreshed_case = get_quote_case(quote_case.case_id)
+    refreshed_approval = refreshed_case.get("quote_approval") or {}
+    refreshed_send_safety = refreshed_case.get("quote_send_safety") or {}
+
+    if refreshed_approval.get("approval_status") != "approved":
+        failures.append(
+            "post-approval quote case read should return current approval"
+        )
+
+    if refreshed_approval.get("approved_by") != (
+        "quote.case.manager@example.invalid"
+    ):
+        failures.append(
+            "post-approval quote case read should not return pending snapshot"
+        )
+
+    if refreshed_send_safety.get("can_send") is not True:
+        failures.append(
+            "post-approval quote case read should recompute send safety"
+        )
+
+    if refreshed_send_safety.get("approval_id") != (
+        pending_for_case_read.approval_id
+    ):
+        failures.append(
+            "recomputed send safety should use current approval"
+        )
 
     pending_for_approval = quote_approval_repository.save(
         QuoteApproval(quote_snapshot=snapshot)
