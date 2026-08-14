@@ -6,6 +6,22 @@ MINAI does not send supplier RFQs or customer quotes in this workflow.
 
 ## A. Before Startup
 
+Use only the validated runtime: Python 3.12.1 (the supported family is Python
+3.12). From the repository root, install the committed controlled-pilot lock
+and verify it before the regression gate:
+
+```bash
+python --version
+python -m pip install -r requirements-lock.txt
+python -m src.runtime_preflight
+python -m pip check
+```
+
+The preflight is offline and checks only the Python family plus required pilot
+runtime package imports and versions; it does not read or print secrets and
+does not authorize real-data use. `requirements-dev.txt` is only for the
+optional development UI. Streamlit remains off and is not pilot-approved.
+
 The release owner must record the approved pilot commit SHA in the external
 change record and verify it before startup:
 

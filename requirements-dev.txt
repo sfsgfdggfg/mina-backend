@@ -1,0 +1,3 @@
+# Optional development UI dependency. Streamlit is not approved for pilot use.
+-r requirements-lock.txt
+streamlit==1.61.1

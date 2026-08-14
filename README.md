@@ -142,13 +142,29 @@ docs/models/
 
 ## Setup
 
-### 1. Install dependencies
+### 1. Use the validated Python runtime
+
+MINAI's controlled-pilot runtime is validated only on Python 3.12, specifically
+Python 3.12.1 for this dependency baseline. Version managers that honor it can
+read `.python-version`; otherwise verify it directly:
 
 ```bash
-pip install -r requirements.txt
+python --version
 ```
 
-### 2. Create `.env`
+### 2. Install reproducible pilot dependencies
+
+```bash
+python -m pip install -r requirements-lock.txt
+python -m src.runtime_preflight
+```
+
+`requirements.txt` records the human-maintained direct runtime pins.
+`requirements-lock.txt` contains their resolved controlled-pilot dependency
+closure. `requirements-dev.txt` additionally installs the optional Streamlit
+development UI; Streamlit is not pilot-approved.
+
+### 3. Create `.env`
 
 Create a `.env` file in the project root:
 
