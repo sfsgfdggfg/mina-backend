@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from src.paths import data_path
 
-COMMODITY_DICTIONARY_PATH = Path("data/commodity_dictionary.json")
+COMMODITY_DICTIONARY_PATH = data_path("commodity_dictionary.json")
 
 
 def normalize_commodity_value(value: Optional[str]) -> str:

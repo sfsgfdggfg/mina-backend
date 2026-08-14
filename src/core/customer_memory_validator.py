@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.paths import data_path
 
-CUSTOMER_MEMORY_PATH = Path("data/customer_memory.json")
+CUSTOMER_MEMORY_PATH = data_path("customer_memory.json")
 
 ALLOWED_SENSITIVITY_VALUES = {"low", "medium", "high"}
 ALLOWED_EQUIPMENT_TYPES = {

@@ -4,9 +4,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from src.paths import data_path
 
-HS_COMMODITY_MAP_PATH = Path("data/hs_commodity_map.json")
-COMMODITY_DICTIONARY_PATH = Path("data/commodity_dictionary.json")
+HS_COMMODITY_MAP_PATH = data_path("hs_commodity_map.json")
+COMMODITY_DICTIONARY_PATH = data_path("commodity_dictionary.json")
 
 VALID_HS_CODE_LENGTHS = {2, 4, 6}
 

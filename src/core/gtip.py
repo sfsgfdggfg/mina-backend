@@ -5,8 +5,9 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from src.paths import data_path
 
-HS_COMMODITY_MAP_PATH = Path("data/hs_commodity_map.json")
+HS_COMMODITY_MAP_PATH = data_path("hs_commodity_map.json")
 
 
 def normalize_gtip_code(raw_code: Optional[str]) -> Optional[str]:

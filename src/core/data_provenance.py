@@ -6,13 +6,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from src.core.pilot_access import pilot_mode_enabled
+from src.paths import data_path
 
 
-PROVENANCE_REGISTRY_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "data"
-    / "provenance_registry.json"
-)
+PROVENANCE_REGISTRY_PATH = data_path("provenance_registry.json")
 
 ALLOWED_CLASSIFICATIONS = {
     "demo",
