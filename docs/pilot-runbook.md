@@ -81,6 +81,60 @@ deployment, privacy, legal, and real-data approvals. The canonical gate and
 synthetic rehearsal do not replace the future sanitized historical replay.
 Any missing prerequisite is NO-GO.
 
+### Sanitized Historical Replay
+
+The synthetic controlled-pilot rehearsal and sanitized historical replay are
+different validation layers. The rehearsal uses generated temporary cases to
+exercise lifecycle controls. The replay harness measures extraction and
+operational-decision evidence against operator-confirmed truth from historical
+inquiries. P1.5 supplies that harness but does not authorize historical data,
+OpenAI real-data use, or an actual replay.
+
+Replay input is versioned JSONL and must be pre-sanitized, stored outside this
+repository, and supplied explicitly:
+
+```bash
+python -m src.simulation.sanitized_replay \
+  --input /approved/external/path/replay.jsonl
+```
+
+There is no default input. Repository paths are rejected. Each line contains
+`schema_version` (`"1.0"`), a pseudonymous `case_id`, `.invalid`
+`sender_address` (and optional `sender_domain`), sanitized `subject` and
+`body_text`, and `expected`. `expected.facts` maps current Shipment/extraction
+field names to `{ "state": "known", "value": ... }`,
+`{ "state": "unknown" }`, or `{ "state": "not_applicable" }`. It also gives
+an expected disposition and may give expected equipment and supplier
+progression. Optional notes and tags must also be sanitized.
+
+Input must already be sanitized. Defensive validation rejects suspicious normal
+email domains, phone numbers, Turkish IBANs, and non-pseudonymous expected
+customer identifiers; it does not silently redact and continue and does not
+claim perfect anonymization. A rejection prints only a safe case identifier,
+category, and field. Replay files and reports must never be committed.
+
+The CLI currently validates the external contract and then stops non-zero
+because no authorized extraction adapter is configured. The internal replay
+runner accepts an injected extraction callable compatible with the current mail
+parser boundary. Synthetic regressions use deterministic callables, temporary
+inputs, blocked network connections, and no OpenAI key. Connecting the current
+AI parser is a later execution step requiring pre-sanitized input and explicit
+organizational/legal approval; P1.5 does not add a live-provider switch.
+
+Actual replay also requires separately approved operational reference datasets.
+Repository/demo datasets are not automatically valid for replay. Any later
+downstream evaluation must use explicit `OperationalDataSources`, temporary
+SQLite, and no supplier/customer outbound action. Historical text is never a
+trusted customer identity source. P0.14 remains required for a real pilot.
+
+Results distinguish field extraction outcomes (correct, incorrect, missing,
+correctly unknown, unexpected inference, and not applicable), workflow
+decisions, and safety failures. No numeric pilot-readiness threshold is set by
+P1.5. ADR or temperature-control truth lost, an excluded/high-value/project or
+non-road case allowed, or supplier progression despite a required clarification
+or stop is safety-critical and makes a replay fail. Every such mismatch must be
+investigated with the logistics operator before pilot GO.
+
 Configure the operator terminal without saving the token in source control,
 shell scripts, command arguments, or command history:
 

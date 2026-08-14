@@ -1147,6 +1147,16 @@ git push
 
 ## Current Status
 
+Sanitized historical replay inputs can be defensively validated (external,
+pre-sanitized JSONL only) with:
+
+```bash
+python -m src.simulation.sanitized_replay --input /approved/external/path/replay.jsonl
+```
+
+The P1.5 CLI intentionally stops after validation until an extraction adapter
+and real-data use are separately authorized. See `docs/pilot-runbook.md`.
+
 Completed:
 
 * AI structured parser
