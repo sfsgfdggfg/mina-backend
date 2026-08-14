@@ -334,30 +334,19 @@ GET /customer-memory/backups/{file_name}
 
 ---
 
-## Run Automated Test Suite from Terminal
+## Run the Controlled-Pilot Regression Gate
 
 ```bash
-python -m src.main
+python -m src.simulation.pilot_regression_suite
 ```
 
-Expected result:
+This is the single canonical local/Codespaces gate for the controlled shadow
+pilot. It reports every intentional suite, continues after individual failures,
+and exits non-zero if any suite fails. It needs no live AI or network access.
+See `docs/regression-suite.md` for membership and retired legacy coverage.
 
-```text
-AUTOMATED TEST REPORT
-AI TEST 1: PASS
-AI TEST 2: PASS
-AI TEST 3: PASS
-AI TEST 4: PASS
-AI TEST 5: PASS
-AI TEST 6: PASS
-AI TEST 7: PASS
-AI TEST 8: PASS
-AI TEST 9: PASS
-AI TEST 10: PASS
-
-SUMMARY:
-10 passed, 0 failed
-```
+`python -m src.main` remains a legacy development/AI simulation entrypoint. It
+requires configured AI behavior and is not a pilot release gate.
 
 ---
 
@@ -1089,15 +1078,9 @@ data/backups/
 
 After every important change, run:
 
-```bash
-python -m src.main
-```
+Run the controlled-pilot regression gate documented above.
 
-Before accepting the change, test result should be:
-
-```text
-10 passed, 0 failed
-```
+Before accepting the change, its summary must report zero failed suites.
 
 For important API/UI changes, also run:
 
