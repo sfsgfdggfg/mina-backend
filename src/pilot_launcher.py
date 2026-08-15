@@ -10,6 +10,10 @@ from src.core.pilot_access import (
     pilot_mode_enabled,
     validate_pilot_configuration,
 )
+from src.core.operational_data import (
+    OperationalDataSourceConfigurationError,
+    operational_data_sources_from_environment,
+)
 
 
 PILOT_ASGI_APP = "src.api:app"
@@ -41,6 +45,16 @@ def run(environ: Mapping[str, str] | None = None) -> None:
         )
 
     validate_pilot_configuration(env)
+    try:
+        operational_data_sources_from_environment(
+            env,
+            require_external=True,
+        )
+    except OperationalDataSourceConfigurationError as exc:
+        raise PilotAccessConfigurationError(
+            "Controlled pilot operational data configuration is invalid."
+        ) from exc
+
     host = (env.get("MINAI_PILOT_BIND_HOST") or "").strip()
     port = _load_pilot_port(env)
 

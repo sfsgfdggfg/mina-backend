@@ -438,3 +438,50 @@ operated, with no autonomous outbound. ADR, reefer/temperature-controlled,
 medical/pharma, chemical, high-value, oversize/project, multimodal, and
 mixed-currency work remain excluded by the existing pilot policy and regression
 coverage.
+
+## External Pilot Operational Data Pack
+
+Real controlled pilot operational master data must stay outside Git. Prepare one
+approved external pack root with this exact layout:
+
+```text
+/approved/external/minai-pilot/
+└── data/
+    ├── customer_memory.json
+    ├── supplier_capabilities.json
+    └── provenance_registry.json
+```
+
+Point the process at the **pack root**, not the `data/` directory:
+
+```bash
+export MINAI_PILOT_DATA_DIR=/approved/external/minai-pilot
+```
+
+The controlled pilot launcher requires this variable. Development may continue
+to use repository demo/default data when it is unset, but that fallback is not
+accepted by the real pilot launcher.
+
+Before startup, keep the pack outside the repository and do not use symlinks to
+redirect `data/` or a required dataset back into the repository. Do not put raw
+mail, tokens, passwords, API keys, or unapproved master data in the pack.
+
+The pack selection itself is not authorization. `customer_memory` and
+`supplier_capabilities` must still be `pilot_verified`, operational,
+pilot-usable, and exact-fingerprint valid in `provenance_registry.json`.
+
+Run readiness with the same environment that will launch the pilot:
+
+```bash
+python -m src.pilot_readiness   --evidence /approved/external/path/readiness-evidence.json
+```
+
+Only after readiness is GO should the controlled launcher be used:
+
+```bash
+python -m src.pilot_launcher
+```
+
+Readiness and the API resolve the same operational source set. Extraction
+resume and supplier RFQ quote progression cannot accept remote filesystem path
+overrides; operational data source selection is deployment-local only.

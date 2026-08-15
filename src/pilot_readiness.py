@@ -15,7 +15,12 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence, TextIO
 
 from src.core.data_provenance import DataProvenanceError, require_pilot_operational_dataset
-from src.core.operational_data import DEFAULT_OPERATIONAL_DATA_SOURCES, OperationalDataSources
+from src.core.operational_data import (
+    DEFAULT_OPERATIONAL_DATA_SOURCES,
+    OperationalDataSourceConfigurationError,
+    OperationalDataSources,
+    operational_data_sources_from_environment,
+)
 from src.core.pilot_access import route_allowed
 
 
@@ -277,9 +282,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("MINAI Pilot Readiness\n\nEvidence file ........ INVALID\n\nREAL SHADOW PILOT: NO-GO", file=sys.stderr)
         return 2
     supplier_outbound_enabled, customer_outbound_enabled = collect_outbound_policy()
+    try:
+        data_sources = operational_data_sources_from_environment()
+    except OperationalDataSourceConfigurationError:
+        print(
+            "MINAI Pilot Readiness\n\n"
+            "Operational data pack ........ INVALID\n\n"
+            "REAL SHADOW PILOT: NO-GO",
+            file=sys.stderr,
+        )
+        return 2
+
     result = assess_readiness(
         collect_technical_gates(run_gates=not args.no_run_gates),
         evidence=evidence,
+        data_sources=data_sources,
         supplier_outbound_enabled=supplier_outbound_enabled,
         customer_outbound_enabled=customer_outbound_enabled,
     )

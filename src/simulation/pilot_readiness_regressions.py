@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import socket
 import tempfile
 from pathlib import Path
@@ -149,6 +150,23 @@ def evaluate_pilot_readiness_regressions() -> dict:
         require("safe output omits attestation values", "authorized-role-01" not in output.getvalue() and HEAD not in output.getvalue())
         with contextlib.redirect_stdout(io.StringIO()):
             require("CLI --no-run-gates exits one", main(["--no-run-gates"]) == 1)
+
+        external_pack_root = root / "external-pilot-pack"
+        external_data_dir = external_pack_root / "data"
+        external_data_dir.mkdir(parents=True)
+        _write_synthetic_sources(external_data_dir)
+        external_env = {
+            "MINAI_PILOT_DATA_DIR": str(
+                external_pack_root.resolve()
+            )
+        }
+        with patch.dict(os.environ, external_env, clear=False):
+            with contextlib.redirect_stdout(io.StringIO()):
+                external_cli_result = main(["--no-run-gates"])
+        require(
+            "CLI resolves external operational data pack",
+            external_cli_result == 1,
+        )
         with contextlib.redirect_stderr(io.StringIO()):
             require("invalid evidence exits two", main(["--evidence", str(malformed), "--no-run-gates"]) == 2)
 

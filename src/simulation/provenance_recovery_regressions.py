@@ -143,11 +143,20 @@ def _write_registry(
 def _provenance_patches(registry_path: Path) -> ExitStack:
     stack = ExitStack()
 
-    def require(dataset_key: str, *, environ=None):
+    def require(
+        dataset_key: str,
+        *,
+        environ=None,
+        path=None,
+        dataset_path=None,
+        dataset_bytes=None,
+    ):
         return require_pilot_operational_dataset(
             dataset_key,
             environ=environ,
             path=registry_path,
+            dataset_path=dataset_path,
+            dataset_bytes=dataset_bytes,
         )
 
     stack.enter_context(

@@ -4850,3 +4850,69 @@ interruption recovery without adding another API surface.
 * Tokens are neither command arguments nor persisted client state.
 * State changes are not silently retried; operators re-read durable state after
   interruption or conflict.
+
+## DEC-104 — External Coherent Pilot Operational Data Pack
+
+**Status:** Accepted
+**Date:** 2026-08-15
+
+### Decision
+
+Gerçek controlled shadow pilot için `customer_memory`, `supplier_capabilities`
+ve bunların `provenance_registry` kaydı Git repository dışında tek coherent
+operational data pack olarak tutulacaktır.
+
+Pack root yalnız local/deployment environment üzerinden seçilir:
+
+```text
+MINAI_PILOT_DATA_DIR=/approved/external/minai-pilot
+```
+
+Zorunlu layout:
+
+```text
+<MINAI_PILOT_DATA_DIR>/
+└── data/
+    ├── customer_memory.json
+    ├── supplier_capabilities.json
+    └── provenance_registry.json
+```
+
+Controlled pilot launcher external pack root olmadan başlamaz. Repository
+içindeki demo/default operational data development için korunur ancak real
+pilot launcher fallback'i değildir.
+
+Readiness assessment ve production API aynı environment-resolved
+`OperationalDataSources` paketini kullanır. Extraction resume ve supplier RFQ
+quote progression aynı source set'i taşır. Remote HTTP request'leri operational
+filesystem path seçemez veya override edemez.
+
+### Rationale
+
+Gerçek müşteri/tedarikçi master data'yı Git history'ye koymak privacy,
+operational confidentiality ve lifecycle açısından uygun değildir. Aynı
+zamanda readiness'in bir dataset'i doğrulayıp runtime workflow'un başka bir
+dataset kullanması kabul edilemez.
+
+Pack-root + `data/` layout mevcut provenance registry path semantiğini korur ve
+pack'in approved external storage içinde taşınabilmesini sağlar.
+
+### Safety Properties
+
+- Pack root ve zorunlu dataset dosyaları repository dışında olmalıdır.
+- `data/` veya zorunlu dosyaların symlink ile repository içine yönlendirilmesi
+  kabul edilmez.
+- Eksik veya unsafe pack configuration fail-closed configuration error üretir.
+- External pack seçimi provenance authorization yerine geçmez.
+- Production provenance validator registered path, consumed path ve exact
+  final-byte SHA-256 eşleşmesini korur.
+- Demo/unverified operational data gerçek pilot için kullanılabilir hale gelmez.
+- Automated outbound policy bu kararla değişmez.
+
+### Consequences
+
+P0.14 gerçek veri geldiğinde repository demo dosyaları yeniden etiketlenmeyecek.
+Operasyon sahibi 2–3 gerçek müşteri ve 3–5 gerçek road supplier kaydını external
+pack içinde final-byte verification ile hazırlayacaktır. Readiness GO ancak
+provenance, sanitized replay ve diğer bütün mandatory approvals birlikte
+geçtiğinde mümkün olacaktır.

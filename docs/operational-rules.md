@@ -2952,3 +2952,17 @@ The client may expose only pilot-approved reads and human lifecycle decisions.
 It must not expose supplier RFQ send, customer quote send, delivery adapters, or
 direct SQLite mutation. State-changing calls must not be silently retried;
 recovery requires reading current durable state and using returned identifiers.
+
+
+## RULE-123 — External Pilot Operational Data Pack
+
+Real controlled-pilot customer and supplier operational data must use one approved external pack under MINAI_PILOT_DATA_DIR.
+
+Required layout:
+- <pack-root>/data/customer_memory.json
+- <pack-root>/data/supplier_capabilities.json
+- <pack-root>/data/provenance_registry.json
+
+The pilot launcher must fail closed without this pack. Readiness and runtime API must use the same resolved sources. HTTP clients cannot select filesystem paths.
+
+Repository-directed symlinks, incomplete packs, provenance path mismatches, or final-byte SHA-256 mismatches must fail closed. External pack selection never replaces pilot_verified provenance, human verification, sanitized replay, or mandatory approvals.

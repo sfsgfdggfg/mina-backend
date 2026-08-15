@@ -46,6 +46,7 @@ from src.core.pilot_access import (
     authorize_pilot_request,
     pilot_mode_enabled,
 )
+from src.core.operational_data import operational_data_sources_from_environment
 from src.core.sqlite_repositories import (
     SQLiteExtractionProposalRepository,
     SQLiteQuoteApprovalRepository,
@@ -160,6 +161,7 @@ def _authenticated_operator(
 
 
 pilot_store = SQLitePilotStore()
+operational_data_sources = operational_data_sources_from_environment()
 quote_approval_repository = SQLiteQuoteApprovalRepository(pilot_store)
 quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
@@ -912,6 +914,7 @@ def resume_extraction_proposal_endpoint(proposal_id: str):
             approval_repository=quote_approval_repository,
             quote_case_repository=quote_case_repository,
             evidence_recorder=pilot_store,
+            operational_data_sources=operational_data_sources,
         )
     except ExtractionProposalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1094,6 +1097,7 @@ def resume_supplier_rfq_quote(workflow_id: str):
             rfq_repository=supplier_rfq_repository,
             approval_repository=quote_approval_repository,
             quote_case_repository=quote_case_repository,
+            operational_data_sources=operational_data_sources,
         )
     except SupplierRFQWorkflowNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -165,3 +165,44 @@ Her byte değişikliği yeni hash ve yeni verification gerektirir.
 - parola/token/API key saklama
 - gerçek operational master data'yı Git'e commit etme
 - GO almak için provenance kontrolünü zayıflatma
+
+## Teknik external pack layout
+
+`MINAI_PILOT_DATA_DIR` üç JSON dosyasının bulunduğu `data/` klasörünü değil, external pack root'unu gösterir.
+
+Örnek:
+
+```text
+/approved/external/minai-pilot/
+└── data/
+    ├── customer_memory.json
+    ├── supplier_capabilities.json
+    └── provenance_registry.json
+```
+
+Örnek environment:
+
+```bash
+export MINAI_PILOT_DATA_DIR=/approved/external/minai-pilot
+```
+
+Bu layout mevcut provenance registry'nin `data/customer_memory.json` ve
+`data/supplier_capabilities.json` path semantiğini korur.
+
+Controlled pilot launcher external pack root olmadan başlamaz. Pack root,
+`data/` klasörü ve üç zorunlu dosya repository dışında olmalıdır. Resolver
+symlink ile repository içine geri yönlendirilmiş `data/` veya dataset
+dosyalarını kabul etmez.
+
+Development'ta environment değişkeni verilmezse repository'deki demo/default
+dataset'ler kullanılmaya devam eder. Bu fallback controlled pilot launcher için
+geçerli değildir.
+
+Readiness assessment ve operational API aynı resolved `OperationalDataSources`
+paketini kullanır. HTTP request body üzerinden filesystem path veya alternatif
+operational dataset seçilemez.
+
+External pack seçimi tek başına pilot yetkisi değildir. `customer_memory` ve
+`supplier_capabilities` yine production provenance doğrulayıcısından geçmeli;
+registered path, consumed path ve final-byte SHA-256 uyuşmazlığı fail-closed
+blok üretir.

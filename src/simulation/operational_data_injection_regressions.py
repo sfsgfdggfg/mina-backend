@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from src import api
 from src.api import ProcessEmailRequest
 from src.core.customer_memory import load_customer_memory
 from src.core.data_provenance import (
@@ -353,6 +354,54 @@ def evaluate_operational_data_injection_regressions() -> dict:
         "customer_memory_path", "supplier_capabilities_path",
     }):
         failures.append("HTTP request body exposes operational filesystem paths")
+
+    with tempfile.TemporaryDirectory() as api_dir:
+        api_sources = _write_sources(
+            Path(api_dir),
+            supplier_name="API Injected Supplier",
+        )
+        with patch.object(
+            api,
+            "operational_data_sources",
+            api_sources,
+        ):
+            with patch.object(
+                api,
+                "resume_confirmed_extraction",
+                return_value={"result_type": "wiring_probe"},
+            ) as extraction_resume:
+                api.resume_extraction_proposal_endpoint(
+                    "wiring-proposal"
+                )
+            if (
+                extraction_resume.call_args is None
+                or extraction_resume.call_args.kwargs.get(
+                    "operational_data_sources"
+                )
+                is not api_sources
+            ):
+                failures.append(
+                    "extraction resume API did not use resolved operational data"
+                )
+
+            with patch.object(
+                api,
+                "resume_supplier_rfq_workflow",
+                return_value={"result_type": "wiring_probe"},
+            ) as rfq_resume:
+                api.resume_supplier_rfq_quote(
+                    "wiring-workflow"
+                )
+            if (
+                rfq_resume.call_args is None
+                or rfq_resume.call_args.kwargs.get(
+                    "operational_data_sources"
+                )
+                is not api_sources
+            ):
+                failures.append(
+                    "RFQ quote resume API did not use resolved operational data"
+                )
 
     return {
         "name": "Explicit operational data injection",
