@@ -154,7 +154,6 @@ class SupplierRFQResponse(BaseModel):
 
     source: Literal["simulation", "email", "portal", "api", "manual"] = "manual"
     recorded_by: Optional[str] = None
-    recorded_by: Optional[str] = None
     received_at: datetime = Field(default_factory=datetime.utcnow)
 
     @field_validator("cost", mode="before")

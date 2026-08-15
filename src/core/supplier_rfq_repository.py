@@ -104,7 +104,6 @@ def _supplier_rfq_response_key(
         response.notes,
         response.source,
         response.recorded_by,
-        response.recorded_by,
         response.received_at,
     )
 

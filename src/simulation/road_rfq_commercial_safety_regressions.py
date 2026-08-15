@@ -34,6 +34,7 @@ from src.core.supplier_rfq import (
 )
 from src.core.supplier_rfq_lifecycle import (
     attach_supplier_rfq_response,
+    synchronize_supplier_rfq_lifecycle,
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
@@ -336,6 +337,24 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
     ):
         failures.append(
             "manual supplier response actor provenance was not preserved"
+        )
+
+    synchronized = synchronize_supplier_rfq_lifecycle(
+        drafts=[clarification_state],
+        responses=[
+            clarification,
+            final_response,
+        ],
+    )
+
+    if (
+        len(synchronized) != 1
+        or synchronized[0].status != "responded"
+        or synchronized[0].responded_at
+        != final_response.received_at
+    ):
+        failures.append(
+            "durable clarification lifecycle did not synchronize to final response"
         )
 
     try:

@@ -168,7 +168,12 @@ def synchronize_supplier_rfq_lifecycle(
             synchronized_drafts.append(draft)
             continue
 
-        if draft.status not in {"sent", "awaiting_response", "responded"}:
+        if draft.status not in {
+            "sent",
+            "awaiting_response",
+            "clarification_required",
+            "responded",
+        }:
             synchronized_drafts.append(draft)
             continue
 
