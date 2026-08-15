@@ -2989,3 +2989,18 @@ routes or depend on the supplier simulator for operational API behavior.
 Synthetic supplier responses may be used only by explicit engineering,
 regression or rehearsal workflows and must never be treated as real pilot
 supplier evidence.
+
+
+## RULE-126 — Controlled Runtime Must Be Simulation-Free and Build-Gated
+
+Importing the controlled production/pilot FastAPI application must not load
+`src.simulation` modules, whether by direct or transitive dependency.
+
+Development, simulation and regression runners must remain outside the
+operational runtime import graph.
+
+All repository Python source under `src/`, `ui/` and the root controlled
+entry point must pass syntax compilation before a pilot change is accepted.
+
+The canonical pilot regression suite and controlled rehearsal must run in the
+repository CI gate for pull requests and pushes to `main`.

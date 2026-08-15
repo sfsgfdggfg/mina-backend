@@ -27,6 +27,7 @@ from src.simulation.provenance_recovery_regressions import evaluate_provenance_r
 from src.simulation.regulatory_compliance_regressions import evaluate_regulatory_compliance_regressions
 from src.simulation.runtime_preflight_regressions import evaluate_runtime_preflight_regressions
 from src.simulation.safe_api_entrypoint_regressions import evaluate_safe_api_entrypoint_regressions
+from src.simulation.source_compile_regressions import evaluate_source_compile_regressions
 from src.simulation.sanitized_replay_regressions import evaluate_sanitized_replay_regressions
 from src.simulation.supplier_response_ingestion_regressions import evaluate_supplier_response_ingestion_regressions
 from src.simulation.supplier_rfq_lifecycle_regressions import evaluate_supplier_rfq_lifecycle_regressions
@@ -52,6 +53,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Sanitized historical replay harness", evaluate_sanitized_replay_regressions),
     Suite("Pilot readiness assessment", evaluate_pilot_readiness_regressions),
     Suite("Safe API entry point", evaluate_safe_api_entrypoint_regressions),
+    Suite("Python source compilation", evaluate_source_compile_regressions),
     Suite("Extraction confirmation", evaluate_extraction_confirmation_regressions),
     Suite("Customer identity trust", evaluate_customer_identity_trust_regressions),
     Suite("Data provenance", evaluate_data_provenance_regressions),

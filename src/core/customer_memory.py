@@ -7,6 +7,7 @@ from src.core.models import Shipment
 from src.core.extraction_confirmation import require_operational_shipment
 from src.core.data_provenance import (
     DataProvenanceBlockedError,
+    DataProvenanceError,
     require_pilot_operational_dataset,
 )
 from src.core.operational_data import (

@@ -4970,3 +4970,41 @@ The `/supplier-rfqs/{rfq_id}/simulate-response` route is removed from
 `src.api`. Real supplier response ingestion, RFQ lifecycle, manual-send
 evidence, quote progression, authentication, persistence and outbound policy
 are unchanged.
+
+
+## DEC-107 — Controlled Runtime Import and Build Integrity Gate
+
+**Status:** Accepted
+**Date:** 2026-08-15
+
+### Decision
+
+The production and controlled-pilot API import graph must not load
+`src.simulation` modules, directly or transitively.
+
+Legacy developer simulation and AI test runners must remain outside the
+operational workflow import graph.
+
+The canonical pilot gate must also validate that all shipped Python source
+files compile successfully.
+
+GitHub Actions must run the locked-runtime preflight, Python source
+compilation, canonical pilot regression suite and controlled pilot rehearsal
+for pull requests and pushes to `main`.
+
+### Rationale
+
+A green business regression suite does not prove that unused UI or development
+code is syntactically valid, nor does a direct-import check detect transitive
+runtime coupling to regression infrastructure.
+
+The controlled runtime therefore needs an explicit import-boundary test and an
+automated repository build gate.
+
+### Consequences
+
+`src.workflow.pipeline` contains operational workflow behavior only.
+Legacy simulation/test execution is isolated under `src.simulation`.
+A fresh-process regression verifies that importing the controlled API loads no
+simulation modules.
+Repository Python syntax is part of the canonical pilot gate.

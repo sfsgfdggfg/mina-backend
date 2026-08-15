@@ -1,0 +1,43 @@
+name: Controlled Pilot Gate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pilot-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements-lock.txt
+
+      - name: Install locked runtime
+        run: python -m pip install -r requirements-lock.txt
+
+      - name: Verify dependency consistency
+        run: python -m pip check
+
+      - name: Runtime preflight
+        run: python -m src.runtime_preflight
+
+      - name: Compile Python sources
+        run: python -m compileall -q src ui main.py
+
+      - name: Canonical pilot regression gate
+        run: python -m src.simulation.pilot_regression_suite
+
+      - name: Controlled pilot rehearsal
+        run: python -m src.simulation.pilot_rehearsal
