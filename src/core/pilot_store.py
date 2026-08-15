@@ -127,11 +127,22 @@ class SQLitePilotStore:
                     "must not be symlinks."
                 )
 
-            os.chmod(candidate, 0o600)
+            try:
+                os.chmod(candidate, 0o600)
 
-            actual_mode = stat.S_IMODE(
-                candidate.stat().st_mode
-            )
+                actual_mode = stat.S_IMODE(
+                    candidate.stat().st_mode
+                )
+            except FileNotFoundError as exc:
+                if candidate == self.db_path:
+                    raise SQLiteStorageSecurityError(
+                        "Pilot SQLite database disappeared "
+                        "while securing permissions."
+                    ) from exc
+
+                # SQLite WAL/SHM sidecars are transient and may
+                # legitimately disappear between exists() and chmod/stat.
+                continue
 
             if actual_mode != 0o600:
                 raise SQLiteStorageSecurityError(
