@@ -2966,3 +2966,16 @@ Required layout:
 The pilot launcher must fail closed without this pack. Readiness and runtime API must use the same resolved sources. HTTP clients cannot select filesystem paths.
 
 Repository-directed symlinks, incomplete packs, provenance path mismatches, or final-byte SHA-256 mismatches must fail closed. External pack selection never replaces pilot_verified provenance, human verification, sanitized replay, or mandatory approvals.
+
+
+## RULE-124 — Controlled Pilot Runtime Must Not Expose Regression Execution
+
+The controlled pilot HTTP runtime must not expose an HTTP route that executes
+the regression or test harness.
+
+Regression execution must remain CLI-only through
+`python -m src.simulation.pilot_regression_suite`.
+
+Production API imports must not depend on regression evaluator modules solely
+for HTTP test execution. This rule must not weaken the canonical regression
+gate.

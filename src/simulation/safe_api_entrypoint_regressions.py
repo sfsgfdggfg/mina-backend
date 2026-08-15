@@ -30,6 +30,24 @@ def evaluate_safe_api_entrypoint_regressions() -> dict:
             + ", ".join(exposed_legacy_paths)
         )
 
+    if "/run-test-suite" in route_paths:
+        failures.append("HTTP regression execution route is still exposed")
+
+    api_source = (
+        Path(__file__).resolve().parents[1] / "api.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden_runtime_imports = (
+        "src.simulation.ai_email_test_cases",
+        "src.simulation.test_reporter",
+        "_regressions import",
+    )
+
+    if any(item in api_source for item in forbidden_runtime_imports):
+        failures.append(
+            "controlled API still imports regression execution harness"
+        )
+
     root_module = ast.parse(
         ROOT_MAIN_PATH.read_text(encoding="utf-8"),
         filename=str(ROOT_MAIN_PATH),

@@ -4916,3 +4916,30 @@ Operasyon sahibi 2–3 gerçek müşteri ve 3–5 gerçek road supplier kaydın�
 pack içinde final-byte verification ile hazırlayacaktır. Readiness GO ancak
 provenance, sanitized replay ve diğer bütün mandatory approvals birlikte
 geçtiğinde mümkün olacaktır.
+
+
+## DEC-105 — Regression Execution Is CLI-Only
+
+**Status:** Accepted
+**Date:** 2026-08-15
+
+### Decision
+
+Controlled pilot regression execution is CLI-only. The production/pilot
+FastAPI application must not expose `/run-test-suite` or import regression
+evaluators solely for HTTP test execution.
+
+The authoritative regression gate remains
+`python -m src.simulation.pilot_regression_suite`.
+
+### Rationale
+
+Regression execution is engineering functionality, not an operational HTTP
+capability. Removing it from the API reduces runtime coupling and prevents
+test infrastructure from becoming part of the pilot interface.
+
+### Consequences
+
+The HTTP regression route and its regression-only runtime imports are removed.
+Authentication, pilot scope, operational data selection, persistence,
+business workflows and outbound policy remain unchanged.

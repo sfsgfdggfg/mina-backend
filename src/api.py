@@ -85,26 +85,7 @@ from src.core.supplier_rfq_repository import (
 from src.simulation.supplier_simulator import (
     simulate_supplier_rfq_responses,
 )
-from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
-from src.simulation.clarification_resolution_regressions import (
-    evaluate_clarification_resolution_regressions,
-)
-from src.simulation.regulatory_compliance_regressions import (
-    evaluate_regulatory_compliance_regressions,
-)
-from src.simulation.mail_adapter_regressions import (
-    evaluate_mail_adapter_regressions,
-)
-from src.simulation.supplier_rfq_lifecycle_regressions import (
-    evaluate_supplier_rfq_lifecycle_regressions,
-)
-from src.simulation.supplier_response_ingestion_regressions import (
-    evaluate_supplier_response_ingestion_regressions,
-)
-from src.simulation.extraction_confirmation_regressions import (
-    evaluate_extraction_confirmation_regressions,
-)
-from src.simulation.test_reporter import evaluate_test_result, evaluate_commodity_dictionary_validation, evaluate_supplier_capability_validation, evaluate_supplier_adr_capability_validation, evaluate_supplier_capability_registry_validation, evaluate_supplier_capability_registry_runtime_integrity, evaluate_customer_memory_validation, evaluate_strict_supplier_eligibility, evaluate_inactive_customer_memory_matching, evaluate_heavy_cargo_weight_logic, evaluate_customer_pricing_regression, evaluate_hs_commodity_map_validation, evaluate_workflow_result_contract, evaluate_quote_readiness_blocked_state, evaluate_action_recommendation_result_contract, evaluate_supplier_rfq_draft_generation, evaluate_supplier_rfq_workflow_contract, evaluate_supplier_rfq_contact_propagation, evaluate_supplier_rfq_response_simulation, evaluate_supplier_quote_selection, evaluate_supplier_rfq_response_validation, evaluate_supplier_fallback_consistency, evaluate_final_quote_consistency_block, evaluate_supplier_response_required_state, evaluate_supplier_rfq_lifecycle_synchronization, evaluate_supplier_rfq_response_link_integrity, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_status_rules, evaluate_supplier_rfq_api_contract, evaluate_supplier_quote_comparison_model, evaluate_multi_criteria_supplier_quote_selection, evaluate_supplier_quote_selection_traceability, evaluate_supplier_rfq_repository, evaluate_supplier_rfq_repository_workflow_integration, evaluate_quote_approval_model, evaluate_quote_approval_workflow_contract, evaluate_quote_approval_repository, evaluate_quote_approval_repository_workflow_integration, evaluate_quote_approval_service, evaluate_quote_approval_api_contract, evaluate_quote_case_model, evaluate_quote_case_repository, evaluate_quote_case_workflow_persistence, evaluate_quote_case_api_contract, evaluate_quote_send_safety_regression, evaluate_quote_send_service, evaluate_quote_send_api_contract, evaluate_supplier_rfq_response_validation_report, evaluate_supplier_rfq_response_validation_report
+
 
 
 app = FastAPI(
@@ -1119,114 +1100,6 @@ def validate_customer_memory_import(
     request: CustomerMemoryImportValidateRequest,
 ):
     return validate_customer_memory_import_data(request.import_data)
-
-@app.get("/run-test-suite")
-def run_test_suite():
-    test_results = []
-    test_results.append(evaluate_commodity_dictionary_validation())
-    test_results.append(evaluate_supplier_capability_validation())
-    test_results.append(evaluate_supplier_adr_capability_validation())
-    test_results.append(evaluate_supplier_capability_registry_validation())
-    test_results.append(evaluate_supplier_capability_registry_runtime_integrity())
-    test_results.append(evaluate_customer_memory_validation())
-    test_results.append(evaluate_strict_supplier_eligibility())
-    test_results.append(evaluate_inactive_customer_memory_matching())
-    test_results.append(evaluate_heavy_cargo_weight_logic())
-    test_results.append(evaluate_customer_pricing_regression())
-    test_results.append(
-        evaluate_clarification_resolution_regressions()
-    )
-    test_results.append(
-        evaluate_regulatory_compliance_regressions()
-    )
-    test_results.append(evaluate_mail_adapter_regressions())
-    test_results.append(
-        evaluate_supplier_rfq_lifecycle_regressions()
-    )
-    test_results.append(
-        evaluate_supplier_response_ingestion_regressions()
-    )
-    test_results.append(
-        evaluate_extraction_confirmation_regressions()
-    )
-    test_results.append(evaluate_hs_commodity_map_validation())
-    test_results.append(evaluate_workflow_result_contract())
-    test_results.append(evaluate_quote_readiness_blocked_state())
-    test_results.append(evaluate_action_recommendation_result_contract())
-    test_results.append(evaluate_supplier_rfq_draft_generation())
-    test_results.append(evaluate_supplier_rfq_workflow_contract())
-    test_results.append(evaluate_supplier_rfq_contact_propagation())
-    test_results.append(evaluate_supplier_rfq_response_simulation())
-    test_results.append(evaluate_supplier_quote_selection())
-    test_results.append(evaluate_supplier_rfq_response_validation())
-    test_results.append(evaluate_supplier_fallback_consistency())
-    test_results.append(evaluate_supplier_rfq_lifecycle_synchronization())
-    test_results.append(evaluate_supplier_rfq_response_link_integrity())
-    test_results.append(evaluate_supplier_rfq_response_validation_report())
-    test_results.append(evaluate_supplier_rfq_response_status_rules())
-    test_results.append(evaluate_supplier_rfq_api_contract())
-    test_results.append(evaluate_supplier_quote_comparison_model())
-    test_results.append(evaluate_multi_criteria_supplier_quote_selection())
-    test_results.append(evaluate_supplier_quote_selection_traceability())
-    test_results.append(evaluate_supplier_rfq_repository())
-    test_results.append(evaluate_supplier_rfq_repository_workflow_integration())
-    test_results.append(evaluate_quote_approval_model())
-    test_results.append(evaluate_quote_approval_workflow_contract())
-    test_results.append(evaluate_quote_approval_repository())
-    test_results.append(evaluate_quote_approval_service())
-    test_results.append(evaluate_quote_approval_api_contract())
-    test_results.append(evaluate_quote_case_model())
-    test_results.append(evaluate_quote_case_repository())
-    test_results.append(evaluate_quote_send_safety_regression())
-    test_results.append(evaluate_quote_send_service())
-    test_results.append(evaluate_quote_send_api_contract())
-    test_results.append(evaluate_supplier_rfq_response_validation_report())
-    test_results.append(evaluate_supplier_rfq_response_validation_report())
-
-    for test_case in AI_EMAIL_TEST_CASES:
-        email_text = test_case["email"]
-        proposed_shipment = parse_email_with_ai(email_text)
-        proposal_repository = InMemoryExtractionProposalRepository()
-        proposal = process_customer_inquiry_mail(
-            mail=InboundMailEnvelope(body_text=email_text, source="manual"),
-            shipment_parser=lambda _: proposed_shipment,
-            proposal_repository=proposal_repository,
-        )["extraction_proposal"]
-        confirmed = confirm_extraction_proposal(
-            repository=proposal_repository,
-            proposal_id=proposal.proposal_id,
-            operator_identity="AI regression confirmation fixture",
-            corrections={
-                field_name: False
-                for field_name in proposal.unknown_safety_fields
-            },
-        )
-        result = resume_confirmed_extraction(
-            repository=proposal_repository,
-            proposal_id=confirmed.proposal_id,
-            rfq_repository=InMemorySupplierRFQRepository(),
-            approval_repository=InMemoryQuoteApprovalRepository(),
-            quote_case_repository=InMemoryQuoteCaseRepository(),
-        )
-
-        test_results.append(
-            evaluate_test_result(
-                test_case=test_case,
-                result=result,
-            )
-        )
-
-    passed_count = sum(1 for result in test_results if result["passed"])
-    failed_count = len(test_results) - passed_count
-
-    return {
-        "summary": {
-            "passed": passed_count,
-            "failed": failed_count,
-            "total": len(test_results),
-        },
-        "results": test_results,
-    }
 
 @app.get("/customer-memory/export")
 def export_customer_memory():
