@@ -240,6 +240,30 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append((_last_contract(session), ("GET", "/quote-cases", None)))
     client.get_case("case-1")
     contracts.append((_last_contract(session), ("GET", "/quote-cases/case-1", None)))
+    client.revise_case(
+        "case-1",
+        expected_approval_id="approval-4",
+        subject="Ahmet selam",
+        body="Guncellenmis musteri teklif maili.",
+        final_price=2250,
+        operator_note="Customer relationship tone adjusted.",
+    )
+    contracts.append(
+        (
+            _last_contract(session),
+            (
+                "POST",
+                "/quote-cases/case-1/revise",
+                {
+                    "expected_approval_id": "approval-4",
+                    "subject": "Ahmet selam",
+                    "body": "Guncellenmis musteri teklif maili.",
+                    "final_price": 2250,
+                    "operator_note": "Customer relationship tone adjusted.",
+                },
+            ),
+        )
+    )
     for actual, expected in contracts:
         if actual != expected:
             failures.append(f"operator request contract mismatch: {actual}")

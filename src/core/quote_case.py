@@ -13,6 +13,7 @@ from src.core.models import (
     SupplierQuote,
 )
 from src.core.quote_approval import QuoteApproval
+from src.core.quote_revision import QuoteRevision
 from src.core.quote_send_safety import QuoteSendSafetyDecision
 from src.core.regulatory_compliance import (
     RegulatoryComplianceAssessment,
@@ -43,6 +44,10 @@ class QuoteCase(BaseModel):
     regulatory_compliance: Optional[
         RegulatoryComplianceAssessment
     ] = None
+
+    quote_revisions: list[QuoteRevision] = Field(
+        default_factory=list
+    )
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

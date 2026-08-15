@@ -3081,3 +3081,14 @@ POSIX hosts.
 Bearer-authenticated pilot traffic may use plaintext HTTP only on loopback.
 Private-network pilot bindings and operator connections must use HTTPS with TLS
 material stored outside the repository.
+
+
+## RULE-131 — Every Customer Quote Edit Requires a Fresh Exact Approval
+
+Operations personnel may freely edit the complete customer quotation email.
+
+Supplier quote source facts must not be overwritten by customer-facing edits. Every edit must be durably versioned with operator identity and before/after snapshots.
+
+Editing a pending or approved quote must invalidate that approval and create a new pending approval for the exact revised subject, body and structured customer price. Stale revisions based on an older approval ID must fail closed.
+
+Consistency warnings are advisory and must remain visible, but must not silently rewrite the operator's wording. Quote revision must never trigger autonomous outbound delivery.
