@@ -438,6 +438,68 @@ def evaluate_supplier_capability_validation() -> dict:
             "should fail validation"
         )
 
+    malformed_supplier = supplier(
+        "Malformed Contact Carrier"
+    )
+    malformed_supplier["contacts"][0][
+        "email"
+    ] = "pricing@"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        malformed_path = (
+            Path(temp_dir)
+            / "supplier_capabilities.json"
+        )
+        malformed_path.write_text(
+            json.dumps(
+                [malformed_supplier],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        malformed_contact_result = (
+            validate_supplier_capabilities_file(
+                malformed_path
+            )
+        )
+
+    malformed_errors = (
+        malformed_contact_result.get(
+            "errors",
+            [],
+        )
+    )
+
+    if not any(
+        ".email must be a valid email address"
+        in error
+        for error in malformed_errors
+    ):
+        failures.append(
+            "malformed supplier primary contact "
+            "email was not rejected"
+        )
+
+    if (
+        malformed_contact_result.get(
+            "active_contactable_supplier_count"
+        )
+        != 0
+    ):
+        failures.append(
+            "malformed primary contact counted "
+            "as contactable supplier"
+        )
+
+    if malformed_contact_result.get(
+        "valid"
+    ) is not False:
+        failures.append(
+            "malformed supplier contact should "
+            "fail validation"
+        )
+
     return {
         "name": "Supplier capability validation",
         "passed": (

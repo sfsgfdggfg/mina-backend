@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -17,6 +18,16 @@ SUPPLIER_CAPABILITIES_PATH = data_path("supplier_capabilities.json")
 ALLOWED_ROLES = {"primary", "backup", "specialist"}
 ALLOWED_SERVICE_TYPES = {"FTL", "LTL"}
 SCORE_FIELDS = ["reliability_score", "price_score", "speed_score"]
+
+_SUPPLIER_DOMAIN_PATTERN = (
+    r"(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+"
+    r"[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?"
+)
+
+_SUPPLIER_EMAIL_RE = re.compile(
+    rf"^[^@\s]+@{_SUPPLIER_DOMAIN_PATTERN}$",
+    flags=re.IGNORECASE,
+)
 
 REQUIRED_LIST_FIELDS = [
     "route_regions",
@@ -103,7 +114,10 @@ def _validate_supplier_contacts(
 
         if (
             not _is_non_empty_string(email)
-            or "@" not in str(email)
+            or _SUPPLIER_EMAIL_RE.fullmatch(
+                str(email).strip()
+            )
+            is None
         ):
             errors.append(
                 f"{prefix}.email must be a valid email address."
