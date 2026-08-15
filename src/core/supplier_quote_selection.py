@@ -58,6 +58,12 @@ def select_supplier_quote_from_responses(
         cost=float(selected.cost),
         currency=selected.currency,
         transit_time=selected.transit_time,
+        validity_date=selected.validity_date,
+        vehicle_available_date=selected.vehicle_available_date,
+        equipment_type=selected.equipment_type,
+        pricing_basis=selected.pricing_basis,
+        included_costs=selected.included_costs,
+        excluded_costs=selected.excluded_costs,
         notes=selected.notes,
     )
 
@@ -73,7 +79,11 @@ def select_supplier_quote_from_comparisons(
     }
 
     ranked_comparisons = sorted(
-        comparisons,
+        (
+            comparison
+            for comparison in comparisons
+            if comparison.commercial_eligible
+        ),
         key=lambda comparison: (
             -comparison.total_score,
             comparison.priority,
@@ -92,6 +102,12 @@ def select_supplier_quote_from_comparisons(
             cost=float(response.cost),
             currency=response.currency,
             transit_time=response.transit_time,
+            validity_date=response.validity_date,
+            vehicle_available_date=response.vehicle_available_date,
+            equipment_type=response.equipment_type,
+            pricing_basis=response.pricing_basis,
+            included_costs=response.included_costs,
+            excluded_costs=response.excluded_costs,
             notes=response.notes,
         )
 
@@ -102,7 +118,11 @@ def build_supplier_quote_selection_decision(
     comparisons: Iterable[SupplierQuoteComparison],
 ) -> Optional[SupplierQuoteSelectionDecision]:
     ranked = sorted(
-        comparisons,
+        (
+            comparison
+            for comparison in comparisons
+            if comparison.commercial_eligible
+        ),
         key=lambda comparison: (
             -comparison.total_score,
             comparison.priority,

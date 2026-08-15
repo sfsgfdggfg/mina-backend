@@ -16,7 +16,7 @@ from src.core.data_provenance import (
     calculate_bytes_sha256,
     require_pilot_operational_dataset,
 )
-from src.core.models import Shipment
+from src.core.models import Package, Shipment
 from src.core.operational_data import (
     DEFAULT_OPERATIONAL_DATA_SOURCES,
     OperationalDataSources,
@@ -43,12 +43,24 @@ def _shipment(customer_name: str = "Synthetic Customer") -> Shipment:
         pickup_city="Adana",
         delivery_country="Almanya",
         delivery_city="Hamburg",
+        delivery_postcode="20095",
         commodity="Tekstil",
         gross_weight_kg=20_000,
         equipment_type="Tenteli",
         service_type="FTL",
         transport_mode="road",
         cargo_ready_date="2026-08-20",
+        required_delivery_date="2026-08-27",
+        packages=[
+            Package(
+                package_type="pallet",
+                quantity=10,
+                length_cm=120,
+                width_cm=80,
+                height_cm=160,
+                weight_kg=2000,
+            )
+        ],
         is_adr=False,
         is_temperature_controlled=False,
     )
@@ -106,6 +118,13 @@ def _build_responded_workflow(
             status="quoted",
             cost=2_000,
             currency="EUR",
+            transit_time="4-5 days",
+            validity_date="2099-12-31",
+            vehicle_available_date="2026-08-20",
+            equipment_type="Tenteli",
+            pricing_basis="all_in",
+            included_costs=["road freight"],
+            excluded_costs=[],
             source="simulation",
         ),
     )

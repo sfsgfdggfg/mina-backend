@@ -108,6 +108,14 @@ class SupplierQuote(BaseModel):
     cost: float
     currency: str = "EUR"
     transit_time: Optional[str] = None
+    validity_date: Optional[str] = None
+    vehicle_available_date: Optional[str] = None
+    equipment_type: Optional[str] = None
+    pricing_basis: Optional[
+        Literal["all_in", "base_freight_plus_extras"]
+    ] = None
+    included_costs: Optional[List[str]] = None
+    excluded_costs: Optional[List[str]] = None
     notes: Optional[str] = None
 
 

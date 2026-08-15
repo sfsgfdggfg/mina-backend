@@ -7,6 +7,7 @@ from src.core.customer_memory import enrich_shipment_with_customer_memory
 from src.core.equipment import decide_equipment
 from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
+from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.supplier_selection import select_suppliers_for_shipment
 from src.core.operational_consistency import check_operational_consistency
 from src.core.quote_approval_repository import (
@@ -144,7 +145,10 @@ def process_shipment(
         return build_data_provenance_blocked_result(shipment)
 
     commodity_profile = get_commodity_record(shipment.commodity)
-    missing_info = check_missing_information(shipment)
+    missing_info = apply_road_rfq_readiness(
+        shipment,
+        check_missing_information(shipment),
+    )
     regulatory_compliance = assess_regulatory_compliance(shipment)
     equipment_decision = decide_equipment(shipment)
     risk_assessment = assess_risk(
@@ -354,6 +358,49 @@ def process_shipment(
             "clarification_draft": clarification_draft,
             "management_review_draft": None,
             "action_recommendation": action_recommendation,
+        }
+
+    if (
+        quote_readiness.can_generate_quote
+        and not supplier_selection.get("selected_suppliers")
+    ):
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="supplier_selection_required",
+        )
+
+        return {
+            "shipment": shipment,
+            "pilot_scope": pilot_scope,
+            "customer_memory": customer_memory,
+            "commodity_profile": commodity_profile,
+            "missing_info": missing_info,
+            "regulatory_compliance": regulatory_compliance,
+            "equipment_decision": equipment_decision,
+            "risk_assessment": risk_assessment,
+            "supplier_selection": supplier_selection,
+            "operational_consistency": operational_consistency,
+            "quote_readiness": quote_readiness,
+            "supplier_rfq_workflow": None,
+            "supplier_rfq_drafts": [],
+            "supplier_rfq_responses": [],
+            "valid_supplier_rfq_responses": [],
+            "supplier_rfq_response_validation": None,
+            "supplier_quote_comparisons": [],
+            "supplier_quote_selection_decision": None,
+            "supplier_quote": None,
+            "customer_quote": None,
+            "quote_draft": None,
+            "quote_approval": None,
+            "quote_send_safety": None,
+            "quote_case": None,
+            "clarification_draft": None,
+            "management_review_draft": None,
+            "action_recommendation": action_recommendation,
+            "result_type": "supplier_selection_required",
         }
 
     # 3. Her şey uygunsa supplier RFQ taslakları hazırlanır.

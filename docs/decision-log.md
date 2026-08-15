@@ -5038,3 +5038,51 @@ Operational data-source injection now propagates through consistency checks.
 External pilot pack resolution fails closed on structurally invalid customer or
 supplier master data. Pilot readiness separately reports structurally invalid
 verified datasets as blocking.
+
+
+## DEC-109 — Road RFQ and Supplier Commercial Safety
+
+**Status:** Accepted
+**Date:** 2026-08-15
+
+### Decision
+
+Controlled-pilot road RFQ preparation requires sufficient commercial facts:
+route countries and locations, foreign postal codes where applicable, positive
+gross weight, package count and dimensions, cargo-ready date, and required
+delivery date.
+
+Supplier RFQ drafts must carry the operational route, postal code, package and
+dimension summary, gross weight, equipment, ready date, required delivery date,
+and relevant special notes.
+
+Zero eligible suppliers is an explicit fail-closed workflow state and must not
+produce an empty RFQ workflow.
+
+A supplier `needs_clarification` response keeps the same RFQ open. A later
+supplier reply may complete that same RFQ.
+
+A quoted supplier price is durable evidence even when commercially incomplete,
+but it cannot progress to a customer quote unless all controlled-pilot
+commercial safety checks pass. The selected quote must have a parseable transit
+duration, valid and unexpired quote date, explicit vehicle availability,
+matching equipment, explicit all-in pricing, known included and excluded cost
+lists, no excluded charges, and a projected delivery date that satisfies the
+customer's required delivery date.
+
+Transit ranges use the conservative maximum stated duration. Hours, calendar
+days, business days and weeks are interpreted explicitly rather than treating
+all numeric values as days.
+
+### Consequences
+
+Partial, expired, equipment-mismatched, surcharge-dependent or late supplier
+quotes remain visible as evidence but are not selectable for customer pricing.
+
+Supplier commercial terms that affect selection are preserved in the selected
+supplier quote and quote-approval snapshot so later human approval refers to
+the same commercial basis.
+
+Directly recorded supplier responses are manual evidence. Their source cannot
+be selected by the HTTP client, and the authenticated operator identity is
+stored with the response as `recorded_by`.

@@ -26,7 +26,11 @@ CommercialResponseField = Literal[
     "currency",
     "transit_time",
     "validity_date",
+    "vehicle_available_date",
     "equipment_type",
+    "pricing_basis",
+    "included_costs",
+    "excluded_costs",
     "notes",
 ]
 
@@ -73,7 +77,13 @@ class SupplierResponseExtraction(BaseModel):
     currency: Optional[str] = None
     transit_time: Optional[str] = None
     validity_date: Optional[str] = None
+    vehicle_available_date: Optional[str] = None
     equipment_type: Optional[str] = None
+    pricing_basis: Optional[
+        Literal["all_in", "base_freight_plus_extras"]
+    ] = None
+    included_costs: Optional[list[str]] = None
+    excluded_costs: Optional[list[str]] = None
     notes: Optional[str] = None
     uncertain_fields: list[CommercialResponseField] = Field(
         default_factory=list
@@ -83,6 +93,7 @@ class SupplierResponseExtraction(BaseModel):
         "currency",
         "transit_time",
         "validity_date",
+        "vehicle_available_date",
         "equipment_type",
         "notes",
     )
@@ -190,7 +201,10 @@ def _correlate_referenced_draft(
             method=method,
             reason=f"No Supplier RFQ matches reference: {rfq_id}",
         )
-    if draft.status != "awaiting_response":
+    if draft.status not in {
+        "awaiting_response",
+        "clarification_required",
+    }:
         return SupplierRFQCorrelationResult(
             status="rfq_not_awaiting_response",
             rfq_id=draft.rfq_id,
@@ -274,7 +288,10 @@ def correlate_supplier_reply(
     awaiting_drafts = [
         draft
         for draft in sender_drafts
-        if draft.status == "awaiting_response"
+        if draft.status in {
+            "awaiting_response",
+            "clarification_required",
+        }
     ]
     if len(awaiting_drafts) == 1:
         draft = awaiting_drafts[0]

@@ -94,7 +94,15 @@ def simulate_supplier_rfq_responses(
                 cost=base_cost,
                 currency="EUR",
                 transit_time=f"{4 + index}-{6 + index} days",
+                validity_date="2099-12-31",
+                vehicle_available_date=(
+                    shipment.cargo_ready_date
+                    or "2099-01-01"
+                ),
                 equipment_type=equipment_decision.selected_equipment,
+                pricing_basis="all_in",
+                included_costs=["road freight"],
+                excluded_costs=[],
                 notes="Simulated supplier RFQ response.",
                 source="simulation",
             )

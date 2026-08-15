@@ -24,6 +24,11 @@ def generate_quote_draft(
             "Detaylar operasyon ekibimiz tarafından ayrıca kontrol edilecektir."
         )
 
+    validity_text = (
+        supplier_quote.validity_date
+        or "İnsan kontrolü gerekli"
+    )
+
     body = f"""
 Merhaba,
 
@@ -38,7 +43,7 @@ Araç Tipi: {equipment_decision.selected_equipment}
 
 Fiyat: {customer_quote.final_price} {customer_quote.currency}
 Transit Süre: {supplier_quote.transit_time}
-Teklif Geçerliliği: Güncel araç durumuna bağlıdır.
+Teklif Geçerliliği: {validity_text}
 
 Saygılarımızla,
 MINAI Freight OS

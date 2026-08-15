@@ -18,7 +18,7 @@ from fastapi import HTTPException, Request
 
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
 from src.core.mail import InboundMailEnvelope
-from src.core.models import Shipment
+from src.core.models import Package, Shipment
 from src.core.operational_data import OperationalDataSources
 from src.core.pilot_access import authorize_pilot_request, validate_pilot_configuration
 from src.core.pilot_store import DEFAULT_PILOT_DB_PATH, SQLitePilotStore
@@ -138,12 +138,24 @@ def _snapshot(*, adr: bool = False, reefer: bool = False) -> ShipmentProposalSna
         pickup_city="Istanbul",
         delivery_country="Almanya",
         delivery_city="Hamburg",
+        delivery_postcode="20095",
         commodity="Tekstil",
         gross_weight_kg=20_000,
         equipment_type="Tenteli",
         service_type="FTL",
         transport_mode="road",
         cargo_ready_date="2026-08-20",
+        required_delivery_date="2026-08-27",
+        packages=[
+            Package(
+                package_type="pallet",
+                quantity=10,
+                length_cm=120,
+                width_cm=80,
+                height_cm=160,
+                weight_kg=2000,
+            )
+        ],
         is_adr=adr,
         is_temperature_controlled=reefer,
         is_high_value=False,
@@ -316,9 +328,14 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         result.require("response prerequisite", _expect_http(
             409, api.attach_supplier_rfq_response_endpoint, draft.rfq_id,
             api.SupplierRFQResponseRequest(
-                supplier_name=draft.supplier_name, rfq_priority=draft.priority,
-                status="quoted", cost=1800, currency="EUR", source="manual",
+                supplier_name=draft.supplier_name,
+                rfq_priority=draft.priority,
+                status="quoted",
+                cost=1800,
+                currency="EUR",
+                recorded_by=CLAIMED_OPERATOR,
             ),
+            trusted_request,
         ))
         result.require("quote approval prerequisite", _expect_http(
             404, api.approve_quote_approval, "missing-approval",
@@ -337,19 +354,49 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         response_request = api.SupplierRFQResponseRequest(
             supplier_name=draft.supplier_name, rfq_priority=draft.priority,
             status="quoted", cost=1800, currency="EUR", transit_time="4 days",
-            validity_date="2026-08-31", equipment_type="Tenteli", source="manual",
+            validity_date="2099-12-31",
+            vehicle_available_date="2026-08-20",
+            equipment_type="Tenteli",
+            pricing_basis="all_in",
+            included_costs=["road freight"],
+            excluded_costs=[],
+            recorded_by=CLAIMED_OPERATOR,
         )
-        response = api.attach_supplier_rfq_response_endpoint(draft.rfq_id, response_request)
-        result.require("supplier response", response["supplier_rfq"]["status"] == "responded")
+        response = api.attach_supplier_rfq_response_endpoint(
+            draft.rfq_id,
+            response_request,
+            trusted_request,
+        )
+        result.require(
+            "supplier response",
+            response["supplier_rfq"]["status"] == "responded",
+        )
+        result.require(
+            "supplier response authenticated provenance",
+            response["response"]["source"] == "manual"
+            and response["response"]["recorded_by"]
+            == authenticated_operator,
+        )
         result.require("duplicate response blocked", _expect_http(
-            409, api.attach_supplier_rfq_response_endpoint, draft.rfq_id, response_request
+            409,
+            api.attach_supplier_rfq_response_endpoint,
+            draft.rfq_id,
+            response_request,
+            trusted_request,
         ))
         result.require("response linkage blocked", _expect_http(
-            409, api.attach_supplier_rfq_response_endpoint, drafts[1].rfq_id,
+            409,
+            api.attach_supplier_rfq_response_endpoint,
+            drafts[1].rfq_id,
             api.SupplierRFQResponseRequest(
-                supplier_name=draft.supplier_name, rfq_priority=draft.priority,
-                status="quoted", cost=1700, currency="EUR", source="manual",
+                supplier_name=draft.supplier_name,
+                rfq_priority=draft.priority,
+                status="quoted",
+                cost=1700,
+                currency="EUR",
+                recorded_by=CLAIMED_OPERATOR,
             ),
+            trusted_request,
         ))
         progressed = resume_supplier_rfq_workflow(
             workflow_id=workflow.workflow_id,
@@ -422,6 +469,11 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         durable_manual_send_evidence = api.supplier_rfq_repository.list_manual_sent_evidence(
             result.evidence["rfq_id"]
         )
+        durable_supplier_responses = (
+            api.supplier_rfq_repository.list_responses(
+                result.evidence["rfq_id"]
+            )
+        )
         durable_approval = api.quote_approval_repository.get(result.evidence["approval_id"])
         durable_case = api.get_quote_case(result.evidence["case_id"])
         result.require("durable restart", all((durable_proposal, durable_workflow, durable_rfq, durable_approval, durable_case))
@@ -435,6 +487,9 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
                        and durable_rfq.approved_by == authenticated_operator
                        and len(durable_manual_send_evidence) == 1
                        and durable_manual_send_evidence[0].recorded_by == authenticated_operator
+                       and len(durable_supplier_responses) == 1
+                       and durable_supplier_responses[0].source == "manual"
+                       and durable_supplier_responses[0].recorded_by == authenticated_operator
                        and durable_approval.approved_by == authenticated_operator)
 
 

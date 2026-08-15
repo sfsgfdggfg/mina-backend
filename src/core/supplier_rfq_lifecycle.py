@@ -106,6 +106,7 @@ def validate_supplier_rfq_responses(
         if draft.status not in {
             "sent",
             "awaiting_response",
+            "clarification_required",
             "responded",
         }:
             rejected_responses.append(
@@ -171,11 +172,17 @@ def synchronize_supplier_rfq_lifecycle(
             synchronized_drafts.append(draft)
             continue
 
+        next_status = (
+            "clarification_required"
+            if response.status == "needs_clarification"
+            else "responded"
+        )
+
         synchronized_drafts.append(
             SupplierRFQDraft.model_validate(
                 {
                     **draft.model_dump(),
-                    "status": "responded",
+                    "status": next_status,
                     "responded_at": response.received_at,
                 }
             )
@@ -308,11 +315,23 @@ def attach_supplier_rfq_response(
     response: SupplierRFQResponse,
 ) -> SupplierRFQDraft:
     draft = _get_draft(repository, response.rfq_id)
-    if repository.list_responses(response.rfq_id):
+    existing_responses = repository.list_responses(
+        response.rfq_id
+    )
+
+    if (
+        existing_responses
+        and draft.status != "clarification_required"
+    ):
         raise DuplicateSupplierRFQResponseError(
             f"Supplier RFQ already has a response: {response.rfq_id}"
         )
-    if draft.status not in {"sent", "awaiting_response"}:
+
+    if draft.status not in {
+        "sent",
+        "awaiting_response",
+        "clarification_required",
+    }:
         raise SupplierRFQTransitionError(
             "Supplier RFQ response requires a sent/awaiting_response RFQ; "
             f"current status is {draft.status}."
@@ -323,14 +342,22 @@ def attach_supplier_rfq_response(
         raise SupplierRFQResponseError(
             f"Supplier RFQ response rejected: {reason}"
         )
-    responded = SupplierRFQDraft.model_validate(
+    next_status = (
+        "clarification_required"
+        if response.status == "needs_clarification"
+        else "responded"
+    )
+
+    updated = SupplierRFQDraft.model_validate(
         {
             **draft.model_dump(),
-            "status": "responded",
+            "status": next_status,
             "responded_at": response.received_at,
         }
     )
+
     with atomic_repository_transaction(repository):
         repository.save_responses([response])
-        repository.save_drafts([responded])
-    return responded
+        repository.save_drafts([updated])
+
+    return updated

@@ -14,6 +14,7 @@ SupplierRFQStatus = Literal[
     "approved",
     "sent",
     "awaiting_response",
+    "clarification_required",
     "responded",
     "expired",
     "cancelled",
@@ -120,6 +121,12 @@ class SupplierRFQWorkflow(BaseModel):
         return self
 
 
+SupplierPricingBasis = Literal[
+    "all_in",
+    "base_freight_plus_extras",
+]
+
+
 SupplierRFQResponseStatus = Literal[
     "quoted",
     "no_capacity",
@@ -138,10 +145,16 @@ class SupplierRFQResponse(BaseModel):
     currency: Optional[str] = None
     transit_time: Optional[str] = None
     validity_date: Optional[str] = None
+    vehicle_available_date: Optional[str] = None
     equipment_type: Optional[str] = None
+    pricing_basis: Optional[SupplierPricingBasis] = None
+    included_costs: Optional[list[str]] = None
+    excluded_costs: Optional[list[str]] = None
     notes: Optional[str] = None
 
     source: Literal["simulation", "email", "portal", "api", "manual"] = "manual"
+    recorded_by: Optional[str] = None
+    recorded_by: Optional[str] = None
     received_at: datetime = Field(default_factory=datetime.utcnow)
 
     @field_validator("cost", mode="before")

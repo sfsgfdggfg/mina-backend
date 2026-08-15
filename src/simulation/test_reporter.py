@@ -1221,6 +1221,16 @@ def evaluate_supplier_rfq_draft_generation() -> dict:
         gross_weight_kg = 20000
         service_type = "FTL"
         cargo_ready_date = "2026-07-20"
+        pickup_area = None
+        pickup_postcode = None
+        delivery_area = None
+        delivery_postcode = None
+        required_delivery_date = None
+        special_notes = None
+        transport_mode = None
+        packages = []
+        is_adr = False
+        adr_class = None
 
     class EquipmentDecision:
         selected_equipment = "Tenteli / Curtainsider"
@@ -1329,6 +1339,16 @@ def evaluate_supplier_rfq_workflow_contract() -> dict:
         gross_weight_kg = 20000
         service_type = "FTL"
         cargo_ready_date = "2026-07-20"
+        pickup_area = None
+        pickup_postcode = None
+        delivery_area = None
+        delivery_postcode = None
+        required_delivery_date = None
+        special_notes = None
+        transport_mode = None
+        packages = []
+        is_adr = False
+        adr_class = None
 
     class EquipmentDecision:
         selected_equipment = "Tenteli / Curtainsider"
@@ -1387,6 +1407,14 @@ def evaluate_supplier_rfq_contact_propagation() -> dict:
         gross_weight_kg = 20000
         service_type = "FTL"
         cargo_ready_date = "2026-07-20"
+        pickup_area = None
+        pickup_postcode = None
+        delivery_area = None
+        delivery_postcode = None
+        required_delivery_date = None
+        special_notes = None
+        transport_mode = None
+        packages = []
         equipment_type = None
         is_adr = False
         adr_class = None
@@ -1469,6 +1497,16 @@ def evaluate_supplier_rfq_response_simulation() -> dict:
         gross_weight_kg = 20000
         service_type = "FTL"
         cargo_ready_date = "2026-07-20"
+        pickup_area = None
+        pickup_postcode = None
+        delivery_area = None
+        delivery_postcode = None
+        required_delivery_date = None
+        special_notes = None
+        transport_mode = None
+        packages = []
+        is_adr = False
+        adr_class = None
 
     class EquipmentDecision:
         selected_equipment = "Tenteli / Curtainsider"
@@ -2893,13 +2931,13 @@ def evaluate_supplier_quote_comparison_model() -> dict:
                 f"{supplier_b.actual_price_score}"
             )
 
-        if supplier_b.transit_score != 0.833:
+        if supplier_b.transit_score != 0.875:
             failures.append(
                 "Supplier B transit_score mismatch: "
                 f"{supplier_b.transit_score}"
             )
 
-        if supplier_b.total_score != 0.871:
+        if supplier_b.total_score != 0.876:
             failures.append(
                 "Supplier B total_score mismatch: "
                 f"{supplier_b.total_score}"

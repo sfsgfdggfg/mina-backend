@@ -90,9 +90,21 @@ def _supplier_rfq_response_key(
         response.currency,
         response.transit_time,
         response.validity_date,
+        response.vehicle_available_date,
         response.equipment_type,
+        response.pricing_basis,
+        tuple(response.included_costs or []),
+        (
+            response.included_costs is None
+        ),
+        tuple(response.excluded_costs or []),
+        (
+            response.excluded_costs is None
+        ),
         response.notes,
         response.source,
+        response.recorded_by,
+        response.recorded_by,
         response.received_at,
     )
 

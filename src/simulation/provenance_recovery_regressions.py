@@ -54,11 +54,13 @@ def _shipment() -> Shipment:
         pickup_city="Adana",
         delivery_country="Almanya",
         delivery_city="Hamburg",
+        delivery_postcode="20095",
         commodity="Tekstil",
         gross_weight_kg=12000,
         service_type="FTL",
         transport_mode="road",
         cargo_ready_date="2026-09-15",
+        required_delivery_date="2026-09-22",
         is_adr=False,
         is_temperature_controlled=False,
         is_high_value=False,
@@ -408,6 +410,13 @@ def _rfq_progression_recovery(failures: list[str], temp_root: Path) -> None:
                 status="quoted",
                 cost=1000,
                 currency="EUR",
+                transit_time="4-5 days",
+                validity_date="2099-12-31",
+                vehicle_available_date="2026-09-15",
+                equipment_type="Tenteli",
+                pricing_basis="all_in",
+                included_costs=["road freight"],
+                excluded_costs=[],
             )
         ]
     )

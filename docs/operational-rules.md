@@ -3017,3 +3017,29 @@ master data must also pass their structural validators.
 
 Structurally invalid operational master data must fail closed before controlled
 pilot use and must block pilot readiness.
+
+
+## RULE-128 — Road RFQ and Supplier Quote Must Fail Closed
+
+For controlled-pilot road freight, MINAI must not create supplier RFQ drafts
+without sufficient route, package, weight, ready-date and required-delivery
+facts.
+
+No eligible supplier means operator intervention; an empty supplier workflow is
+not a valid operational state.
+
+A supplier clarification response does not consume the RFQ. The same RFQ may
+accept a later final supplier response.
+
+A supplier price must not become a customer quote merely because cost and
+currency are present. The quote must also have a valid transit duration,
+unexpired validity date, explicit vehicle availability, matching equipment,
+explicit all-in cost scope, known included/excluded charges with no exclusions,
+and a delivery projection that meets the customer's required delivery date.
+
+Commercially unsafe supplier responses must remain unselectable while
+preserving their evidence and rejection reasons.
+
+A supplier response entered directly by an operator must be recorded as
+`manual`; the client must not choose another source label. The authenticated
+operator identity must be retained as `recorded_by`.

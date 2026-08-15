@@ -27,6 +27,12 @@ class QuoteApprovalSnapshot(BaseModel):
     final_price: float
     currency: str
     transit_time: Optional[str] = None
+    supplier_validity_date: Optional[str] = None
+    supplier_vehicle_available_date: Optional[str] = None
+    supplier_equipment_type: Optional[str] = None
+    supplier_pricing_basis: Optional[str] = None
+    supplier_included_costs: Optional[list[str]] = None
+    supplier_excluded_costs: Optional[list[str]] = None
     quote_subject: str
     quote_body: str
 
@@ -43,6 +49,14 @@ class QuoteApprovalSnapshot(BaseModel):
             final_price=customer_quote.final_price,
             currency=customer_quote.currency,
             transit_time=supplier_quote.transit_time,
+            supplier_validity_date=supplier_quote.validity_date,
+            supplier_vehicle_available_date=(
+                supplier_quote.vehicle_available_date
+            ),
+            supplier_equipment_type=supplier_quote.equipment_type,
+            supplier_pricing_basis=supplier_quote.pricing_basis,
+            supplier_included_costs=supplier_quote.included_costs,
+            supplier_excluded_costs=supplier_quote.excluded_costs,
             quote_subject=quote_draft.subject,
             quote_body=quote_draft.body,
         )

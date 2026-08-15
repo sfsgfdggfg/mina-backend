@@ -9,6 +9,7 @@ from src.core.customer_memory import enrich_shipment_with_customer_memory
 from src.core.data_provenance import DataProvenanceError
 from src.core.equipment import decide_equipment
 from src.core.missing_info import check_missing_information
+from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.operational_consistency import check_operational_consistency
 from src.core.operational_data import OperationalDataSources
@@ -199,7 +200,10 @@ def _progress_supplier_rfq_workflow(
         operational_data_sources=operational_data_sources,
     )
     commodity_profile = get_commodity_record(shipment.commodity)
-    missing_info = check_missing_information(shipment)
+    missing_info = apply_road_rfq_readiness(
+        shipment,
+        check_missing_information(shipment),
+    )
     regulatory_compliance = assess_regulatory_compliance(shipment)
     equipment_decision = decide_equipment(shipment)
     risk_assessment = assess_risk(
@@ -253,6 +257,38 @@ def _progress_supplier_rfq_workflow(
         risk_assessment=risk_assessment,
         operational_data_sources=operational_data_sources,
     )
+    if not supplier_selection.get("selected_suppliers"):
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="supplier_selection_required",
+        )
+
+        return _result(
+            workflow=workflow,
+            pilot_scope=pilot_scope,
+            customer_memory=customer_memory,
+            commodity_profile=commodity_profile,
+            missing_info=missing_info,
+            regulatory_compliance=regulatory_compliance,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            supplier_selection=supplier_selection,
+            operational_consistency=None,
+            quote_readiness=None,
+            drafts=supplier_rfq_drafts,
+            responses=supplier_rfq_responses,
+            valid_responses=[],
+            validation=None,
+            comparisons=[],
+            selection_decision=None,
+            supplier_quote=None,
+            result_type="supplier_selection_required",
+            action_recommendation=action_recommendation,
+        )
+
     (
         valid_supplier_rfq_responses,
         supplier_rfq_response_validation,
@@ -298,6 +334,13 @@ def _progress_supplier_rfq_workflow(
         responses=valid_supplier_rfq_responses,
         supplier_selection=supplier_selection,
         drafts=supplier_rfq_drafts,
+        shipment=shipment,
+        expected_equipment=(
+            equipment_decision.selected_equipment
+        ),
+        require_commercial_safety=(
+            shipment.transport_mode == "road"
+        ),
     )
     supplier_quote = select_supplier_quote_from_comparisons(
         comparisons=supplier_quote_comparisons,

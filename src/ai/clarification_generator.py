@@ -72,6 +72,13 @@ def translate_missing_field(field: str) -> str:
         "machine dimensions": "Makine ölçüleri (en / boy / yükseklik)",
         "adr class": "Yükün ADR sınıfı ve varsa alt sınıfı",
         "package count and per-piece weights": "Paket / parça adedi ve her bir parçanın ağırlığı",
+        "pickup country": "Yükleme ülkesi",
+        "delivery country": "Teslimat ülkesi",
+        "gross weight": "Yaklaşık toplam brüt ağırlık",
+        "package count and dimensions": "Paket / palet / parça adedi ve her tip için en × boy × yükseklik ölçüleri",
+        "required delivery date": "Beklenen / gerekli teslim tarihi",
+        "pickup postcode": "Yükleme posta kodu",
+        "delivery postcode": "Teslimat posta kodu",
     }
 
     return mapping.get(field, field)

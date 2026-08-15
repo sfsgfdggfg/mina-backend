@@ -26,6 +26,9 @@ from src.simulation.privacy_boundary_regressions import evaluate_privacy_boundar
 from src.simulation.provenance_recovery_regressions import evaluate_provenance_recovery_regressions
 from src.simulation.regulatory_compliance_regressions import evaluate_regulatory_compliance_regressions
 from src.simulation.runtime_preflight_regressions import evaluate_runtime_preflight_regressions
+from src.simulation.road_rfq_commercial_safety_regressions import (
+    evaluate_road_rfq_commercial_safety_regressions,
+)
 from src.simulation.safe_api_entrypoint_regressions import evaluate_safe_api_entrypoint_regressions
 from src.simulation.source_compile_regressions import evaluate_source_compile_regressions
 from src.simulation.sanitized_replay_regressions import evaluate_sanitized_replay_regressions
@@ -64,6 +67,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Durable provenance recovery", evaluate_provenance_recovery_regressions),
     Suite("Atomic workflow transitions", evaluate_atomic_transition_regressions),
     Suite("Supplier RFQ lifecycle", evaluate_supplier_rfq_lifecycle_regressions),
+    Suite(
+        "Road RFQ commercial safety",
+        evaluate_road_rfq_commercial_safety_regressions,
+    ),
     Suite("Mail adapter boundary", evaluate_mail_adapter_regressions),
     Suite("Manual RFQ sent evidence", evaluate_manual_rfq_sent_regressions),
     Suite("Supplier response ingestion", evaluate_supplier_response_ingestion_regressions),

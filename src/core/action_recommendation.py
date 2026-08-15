@@ -128,24 +128,49 @@ def generate_action_recommendation(
             source="regulatory_compliance_engine",
         )
 
+    if result_type == "supplier_selection_required":
+        return ActionRecommendation(
+            action_type="supplier_selection_required",
+            title="Uygun Tedarikçi Bulunamadı",
+            message=(
+                "Mevcut doğrulanmış supplier datasında bu taşıma için "
+                "uygun tedarikçi bulunamadı. Boş RFQ workflow "
+                "oluşturulmadan insan müdahalesi gerekir."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "Güzergah, servis ve ekipman kriterlerini kontrol et.",
+                    "Supplier master datanın güncel olduğunu doğrula.",
+                    "Gerekirse yetkili alternatif supplier ekle.",
+                    "Uygun supplier bulunmadan RFQ veya müşteri teklifi oluşturma.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="supplier_selection_engine",
+        )
+
     if result_type == "supplier_response_required":
         return ActionRecommendation(
             action_type="supplier_response_required",
             title="Kullanılabilir Tedarikçi Teklifi Bekleniyor",
             message=(
-                "Seçilen tedarikçilerden fiyatlandırmada kullanılabilir "
-                "bir cevap alınamadı. Müşteri teklifi oluşturulmadan önce "
-                "yeni cevap beklenmeli veya alternatif tedarikçilere RFQ "
-                "gönderilmelidir."
+                "Seçilen tedarikçilerden ticari olarak kullanılabilir "
+                "bir cevap alınamadı. Fiyat, all-in kapsam, ekipman, araç "
+                "uygunluk tarihi, transit, geçerlilik ve teslim termini "
+                "güvenli biçimde doğrulanmadan müşteri teklifi oluşturulmaz."
             ),
             priority="high",
             checklist=_extend_checklist(
                 [
                     "Tedarikçi cevap durumlarını kontrol et.",
                     "No capacity veya declined cevaplarını incele.",
-                    "Needs clarification cevabı varsa gerekli bilgiyi paylaş.",
+                    "Needs clarification cevabı varsa aynı RFQ üzerinden gerekli bilgiyi paylaş.",
+                    "Teklifin all-in kapsamını ve hariç masraflarını doğrula.",
+                    "Ekipman, araç uygunluk tarihi, transit ve teklif geçerliliğini kontrol et.",
+                    "Gerekli teslim tarihinin karşılanabildiğini doğrula.",
                     "Gerekirse alternatif tedarikçilere RFQ gönder.",
-                    "Geçerli fiyat alınmadan müşteriye teklif oluşturma.",
+                    "Ticari olarak tam teklif alınmadan müşteriye teklif oluşturma.",
                 ],
                 commodity_action_checklist,
             ),

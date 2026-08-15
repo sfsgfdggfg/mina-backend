@@ -196,9 +196,15 @@ class SupplierRFQResponseRequest(BaseModel):
     currency: Optional[str] = None
     transit_time: Optional[str] = None
     validity_date: Optional[str] = None
+    vehicle_available_date: Optional[str] = None
     equipment_type: Optional[str] = None
+    pricing_basis: Optional[
+        Literal["all_in", "base_freight_plus_extras"]
+    ] = None
+    included_costs: Optional[List[str]] = None
+    excluded_costs: Optional[List[str]] = None
     notes: Optional[str] = None
-    source: Literal["email", "portal", "api", "manual"] = "manual"
+    recorded_by: Optional[str] = None
 
 
 class CustomerMemoryCreateRequest(BaseModel):
@@ -993,11 +999,20 @@ def record_supplier_rfq_manually_sent_endpoint(
 def attach_supplier_rfq_response_endpoint(
     rfq_id: str,
     request: SupplierRFQResponseRequest,
+    http_request: Request = None,
 ):
     try:
+        response_payload = request.model_dump(
+            exclude={"recorded_by"}
+        )
         response = SupplierRFQResponse(
             rfq_id=rfq_id,
-            **request.model_dump(),
+            **response_payload,
+            source="manual",
+            recorded_by=_authenticated_operator(
+                http_request,
+                request.recorded_by,
+            ),
         )
         draft = attach_supplier_rfq_response(
             repository=supplier_rfq_repository,
