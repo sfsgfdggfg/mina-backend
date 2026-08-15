@@ -370,3 +370,71 @@ The pilot is NO-GO unless all are true:
 - Streamlit remains off;
 - the canonical controlled-pilot regression gate passed;
 - a complete sanitized replay passed before the first real email.
+
+## Pilot Readiness Assessment
+
+Run the offline, fail-closed release assessment from the repository root:
+
+```bash
+python -m src.pilot_readiness
+```
+
+The command runs runtime preflight, the canonical regression gate, and the
+synthetic full rehearsal. It also verifies the current Git commit, requires a
+clean worktree, and uses the production provenance validator for
+`customer_memory` and `supplier_capabilities`. `--no-run-gates` is diagnostic
+only: skipped gates are `NOT RUN` and can never produce GO.
+
+Technical evidence proves that this repository can verify its implemented
+controls. It does not prove organizational, privacy, legal, OpenAI data-use,
+deployment/storage, retention, operator, or reviewer approval. Those items
+remain `NOT VERIFIED` without an explicit external human-attestation file. The
+replay harness capability is also separate from an actual authorized sanitized
+historical replay; without an attested execution, replay is `NOT RUN`.
+
+The current repository is expected to report NO-GO until P0.14 has produced
+fingerprint-valid `pilot_verified` operational data and all approvals and replay
+evidence are current. This expected exit code is `1`. Invalid invocation or an
+unsafe/malformed evidence file exits `2`; GO exits `0`. There is no numeric
+readiness score: every mandatory prerequisite must pass.
+
+Evidence is optional and must be stored outside the repository:
+
+```bash
+python -m src.pilot_readiness \
+  --evidence /approved/external/path/readiness-evidence.json
+```
+
+Schema version 1 contains only compact attestation metadata:
+
+```json
+{
+  "schema_version": 1,
+  "pilot_commit_sha": "<exact-current-40-character-git-sha>",
+  "organization_approval": {"confirmed": true, "confirmed_by": "authorized-role-01", "confirmed_at": "2026-08-15T00:00:00+00:00"},
+  "privacy_legal_approval": {"confirmed": true, "confirmed_by": "authorized-role-02", "confirmed_at": "2026-08-15T00:00:00+00:00"},
+  "openai_data_control_approval": {"confirmed": true, "confirmed_by": "authorized-role-03", "confirmed_at": "2026-08-15T00:00:00+00:00"},
+  "deployment_storage_approval": {"confirmed": true, "confirmed_by": "authorized-role-04", "confirmed_at": "2026-08-15T00:00:00+00:00"},
+  "retention_deletion_approval": {"confirmed": true, "confirmed_by": "authorized-role-05", "confirmed_at": "2026-08-15T00:00:00+00:00"},
+  "named_operators_confirmed": {"confirmed": true, "confirmed_by": "authorized-role-06", "confirmed_at": "2026-08-15T00:00:00+00:00"},
+  "senior_road_reviewer_confirmed": {"confirmed": true, "confirmed_by": "authorized-role-07", "confirmed_at": "2026-08-15T00:00:00+00:00"},
+  "sanitized_replay": {"completed": true, "result": "pass", "completed_at": "2026-08-15T00:00:00+00:00", "case_count": 12, "safety_critical_mismatches": 0}
+}
+```
+
+This file is a human attestation, not software verification of legal truth. It
+must match the exact current Git SHA. A stale SHA, dirty worktree, failed live
+gate, failed provenance check, incomplete/failed replay, or any critical replay
+mismatch blocks GO. Attestations cannot override technical or provenance
+failures. Never include raw mail, customer/supplier records or names, replay
+cases, legal documents, passwords, API keys, or tokens. Forbidden sensitive keys
+such as `body_text`, `email_body`, `token`, `password`, `api_key`, and
+`raw_email` cause rejection, and evidence values are not echoed.
+
+`EXPECTED DISABLED` for automated supplier RFQ and customer quote outbound is
+the correct controlled-pilot state and is non-blocking. Enabling either is a
+block. The allowed scope remains road-only, one pilot logistics firm, and human
+operated, with no autonomous outbound. ADR, reefer/temperature-controlled,
+medical/pharma, chemical, high-value, oversize/project, multimodal, and
+mixed-currency work remain excluded by the existing pilot policy and regression
+coverage.
