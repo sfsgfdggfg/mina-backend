@@ -2979,3 +2979,13 @@ Regression execution must remain CLI-only through
 Production API imports must not depend on regression evaluator modules solely
 for HTTP test execution. This rule must not weaken the canonical regression
 gate.
+
+
+## RULE-125 — Controlled Pilot Runtime Must Not Expose Supplier Simulation
+
+The controlled pilot HTTP runtime must not expose supplier-response simulation
+routes or depend on the supplier simulator for operational API behavior.
+
+Synthetic supplier responses may be used only by explicit engineering,
+regression or rehearsal workflows and must never be treated as real pilot
+supplier evidence.

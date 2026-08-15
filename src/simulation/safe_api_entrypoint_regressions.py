@@ -33,6 +33,9 @@ def evaluate_safe_api_entrypoint_regressions() -> dict:
     if "/run-test-suite" in route_paths:
         failures.append("HTTP regression execution route is still exposed")
 
+    if "/supplier-rfqs/{rfq_id}/simulate-response" in route_paths:
+        failures.append("supplier response simulation route is still exposed")
+
     api_source = (
         Path(__file__).resolve().parents[1] / "api.py"
     ).read_text(encoding="utf-8")
@@ -40,6 +43,7 @@ def evaluate_safe_api_entrypoint_regressions() -> dict:
     forbidden_runtime_imports = (
         "src.simulation.ai_email_test_cases",
         "src.simulation.test_reporter",
+        "src.simulation.supplier_simulator",
         "_regressions import",
     )
 

@@ -4943,3 +4943,30 @@ test infrastructure from becoming part of the pilot interface.
 The HTTP regression route and its regression-only runtime imports are removed.
 Authentication, pilot scope, operational data selection, persistence,
 business workflows and outbound policy remain unchanged.
+
+
+## DEC-106 — Supplier Response Simulation Is Outside the Runtime API
+
+**Status:** Accepted
+**Date:** 2026-08-15
+
+### Decision
+
+The production/pilot FastAPI application must not expose supplier response
+simulation or import the supplier simulator solely to provide an HTTP
+simulation endpoint.
+
+Simulation code remains available to engineering regression and rehearsal
+workflows outside the operational HTTP surface.
+
+### Rationale
+
+Synthetic supplier responses are development and test functionality. They must
+not be confused with operator-entered or ingested real supplier responses.
+
+### Consequences
+
+The `/supplier-rfqs/{rfq_id}/simulate-response` route is removed from
+`src.api`. Real supplier response ingestion, RFQ lifecycle, manual-send
+evidence, quote progression, authentication, persistence and outbound policy
+are unchanged.

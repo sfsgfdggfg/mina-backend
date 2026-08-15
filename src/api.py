@@ -69,7 +69,6 @@ from src.core.quote_approval_service import (
 )
 from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.quote_send_service import prepare_quote_for_sending
-from src.core.equipment import decide_equipment
 from src.core.supplier_rfq import SupplierRFQResponse
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQNotFoundError,
@@ -81,9 +80,6 @@ from src.core.supplier_rfq_lifecycle import (
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
-)
-from src.simulation.supplier_simulator import (
-    simulate_supplier_rfq_responses,
 )
 
 
@@ -1021,54 +1017,6 @@ def attach_supplier_rfq_response_endpoint(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
-@app.post("/supplier-rfqs/{rfq_id}/simulate-response")
-def simulate_supplier_rfq_response_endpoint(rfq_id: str):
-    draft = supplier_rfq_repository.get_draft(rfq_id)
-    if draft is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Supplier RFQ not found: {rfq_id}",
-        )
-    workflow = supplier_rfq_repository.get_workflow(draft.workflow_id)
-    if workflow is None:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Supplier RFQ workflow not found: "
-                f"{draft.workflow_id}"
-            ),
-        )
-    responses = simulate_supplier_rfq_responses(
-        shipment=workflow.shipment,
-        equipment_decision=decide_equipment(workflow.shipment),
-        rfq_drafts=[draft],
-    )
-    if not responses:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Supplier response simulation requires a sent/"
-                "awaiting_response RFQ."
-            ),
-        )
-    try:
-        responded = attach_supplier_rfq_response(
-            repository=supplier_rfq_repository,
-            response=responses[0],
-        )
-    except (
-        SupplierRFQTransitionError,
-        SupplierRFQResponseError,
-        DuplicateSupplierRFQResponseError,
-    ) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {
-        "supplier_rfq": responded.model_dump(),
-        "response": responses[0].model_dump(),
-    }
-
 
 @app.post("/supplier-rfq-workflows/{workflow_id}/resume-quote")
 def resume_supplier_rfq_quote(workflow_id: str):
