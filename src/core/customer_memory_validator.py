@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -16,6 +17,21 @@ ALLOWED_EQUIPMENT_TYPES = {
     "Reefer",
     "Special ADR Equipment",
 }
+
+
+_DOMAIN_PATTERN = (
+    r"(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+"
+    r"[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?"
+)
+
+_TRUSTED_EMAIL_RE = re.compile(
+    rf"^[^@\s]+@(?P<domain>{_DOMAIN_PATTERN})$",
+    flags=re.IGNORECASE,
+)
+_TRUSTED_DOMAIN_RE = re.compile(
+    rf"^{_DOMAIN_PATTERN}$",
+    flags=re.IGNORECASE,
+)
 
 
 def _normalize(value: str) -> str:
@@ -109,7 +125,12 @@ def validate_customer_memory_file(
 
     seen_customer_names: dict[str, str] = {}
     seen_aliases: dict[str, str] = {}
+    seen_trusted_addresses: dict[str, str] = {}
+    seen_trusted_domains: dict[str, str] = {}
+    seen_address_domains: dict[str, set[str]] = {}
+
     active_profile_count = 0
+    active_trusted_profile_count = 0
 
     for index, item in enumerate(raw_data):
         if not isinstance(item, dict):
@@ -173,6 +194,159 @@ def validate_customer_memory_file(
                     f"{customer}: alias '{alias}' conflicts with customer_name {existing_customer}."
                 )
 
+        trusted_addresses = _validate_string_list(
+            value=item.get("trusted_sender_addresses"),
+            field_name="trusted_sender_addresses",
+            customer=customer,
+            errors=errors,
+            required=False,
+        )
+        trusted_domains = _validate_string_list(
+            value=item.get("trusted_sender_domains"),
+            field_name="trusted_sender_domains",
+            customer=customer,
+            errors=errors,
+            required=False,
+        )
+
+        valid_trusted_addresses: list[str] = []
+        valid_trusted_domains: list[str] = []
+        profile_address_domains: set[str] = set()
+
+        normalized_addresses = [
+            address.strip().lower()
+            for address in trusted_addresses
+        ]
+
+        if len(normalized_addresses) != len(
+            set(normalized_addresses)
+        ):
+            errors.append(
+                f"{customer}: duplicate trusted sender address "
+                "inside same profile."
+            )
+
+        for address in normalized_addresses:
+            match = _TRUSTED_EMAIL_RE.fullmatch(address)
+
+            if match is None:
+                errors.append(
+                    f"{customer}: trusted sender address "
+                    f"'{address}' is not a valid email address."
+                )
+                continue
+
+            domain = match.group("domain").lower()
+            valid_trusted_addresses.append(address)
+            profile_address_domains.add(domain)
+
+            previous_owner = seen_trusted_addresses.get(
+                address
+            )
+            if (
+                previous_owner
+                and previous_owner != customer
+            ):
+                errors.append(
+                    f"{customer}: trusted sender address "
+                    f"'{address}' is already trusted by "
+                    f"{previous_owner}."
+                )
+            else:
+                seen_trusted_addresses[address] = customer
+
+            domain_owner = seen_trusted_domains.get(domain)
+            if (
+                domain_owner
+                and domain_owner != customer
+            ):
+                errors.append(
+                    f"{customer}: sender address '{address}' "
+                    "conflicts with trusted sender domain "
+                    f"'{domain}' owned by {domain_owner}."
+                )
+
+            seen_address_domains.setdefault(
+                domain,
+                set(),
+            ).add(customer)
+
+        normalized_domains = [
+            domain.strip().lower()
+            for domain in trusted_domains
+        ]
+
+        if len(normalized_domains) != len(
+            set(normalized_domains)
+        ):
+            errors.append(
+                f"{customer}: duplicate trusted sender domain "
+                "inside same profile."
+            )
+
+        for domain in normalized_domains:
+            if (
+                domain.startswith("@")
+                or _TRUSTED_DOMAIN_RE.fullmatch(domain)
+                is None
+            ):
+                errors.append(
+                    f"{customer}: trusted sender domain "
+                    f"'{domain}' must be a bare valid domain."
+                )
+                continue
+
+            valid_trusted_domains.append(domain)
+
+            previous_owner = seen_trusted_domains.get(
+                domain
+            )
+            if (
+                previous_owner
+                and previous_owner != customer
+            ):
+                errors.append(
+                    f"{customer}: trusted sender domain "
+                    f"'{domain}' is already trusted by "
+                    f"{previous_owner}."
+                )
+            else:
+                seen_trusted_domains[domain] = customer
+
+            conflicting_address_owners = (
+                seen_address_domains.get(
+                    domain,
+                    set(),
+                )
+                - {customer}
+            )
+            if conflicting_address_owners:
+                errors.append(
+                    f"{customer}: trusted sender domain "
+                    f"'{domain}' conflicts with sender addresses "
+                    "trusted by another customer."
+                )
+
+            if domain in profile_address_domains:
+                warnings.append(
+                    f"{customer}: trusted domain '{domain}' "
+                    "duplicates an address-level trust rule."
+                )
+
+        if (
+            active is True
+            and (
+                valid_trusted_addresses
+                or valid_trusted_domains
+            )
+        ):
+            active_trusted_profile_count += 1
+        elif active is True:
+            warnings.append(
+                f"{customer}: active profile has no valid "
+                "trusted sender address or domain."
+            )
+
         default_equipment_type = item.get("default_equipment_type")
         if default_equipment_type:
             if not isinstance(default_equipment_type, str):
@@ -228,6 +402,9 @@ def validate_customer_memory_file(
         "warnings": warnings,
         "profile_count": len(raw_data),
         "active_profile_count": active_profile_count,
+        "active_trusted_profile_count": (
+            active_trusted_profile_count
+        ),
         "alias_count": len(seen_aliases),
         "source": str(path),
     }

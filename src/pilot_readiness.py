@@ -38,6 +38,11 @@ APPROVAL_KEYS = (
     "named_operators_confirmed", "senior_road_reviewer_confirmed",
 )
 
+MIN_ACTIVE_PILOT_CUSTOMERS = 2
+MAX_ACTIVE_PILOT_CUSTOMERS = 3
+MIN_ACTIVE_PILOT_SUPPLIERS = 3
+MAX_ACTIVE_PILOT_SUPPLIERS = 5
+
 
 class Status(str, Enum):
     PASS = "PASS"
@@ -216,10 +221,23 @@ def assess_readiness(
     clean_reason = "worktree_clean" if gates.clean_worktree is True else "worktree_dirty" if gates.clean_worktree is False else "worktree_state_unavailable"
     checks.append(_check("clean_worktree", "Release worktree", clean_state, clean_reason, clean_reason))
 
+    dataset_validations: dict[
+        str,
+        Mapping[str, Any] | None,
+    ] = {}
+
     for dataset_key, dataset_path in (
-        ("customer_memory", data_sources.customer_memory_path),
-        ("supplier_capabilities", data_sources.supplier_capabilities_path),
+        (
+            "customer_memory",
+            data_sources.customer_memory_path,
+        ),
+        (
+            "supplier_capabilities",
+            data_sources.supplier_capabilities_path,
+        ),
     ):
+        validation = None
+
         try:
             require_pilot_operational_dataset(
                 dataset_key,
@@ -227,33 +245,68 @@ def assess_readiness(
                 path=data_sources.provenance_registry_path,
                 dataset_path=dataset_path,
             )
-        except (DataProvenanceError, OSError, ValueError):
+        except (
+            DataProvenanceError,
+            OSError,
+            ValueError,
+        ):
             state = Status.BLOCKED
-            reason = f"{dataset_key}_not_pilot_verified"
+            reason = (
+                f"{dataset_key}_not_pilot_verified"
+            )
         else:
             try:
                 validation = (
-                    validate_customer_memory_file(dataset_path)
-                    if dataset_key == "customer_memory"
-                    else validate_supplier_capabilities_file(dataset_path)
+                    validate_customer_memory_file(
+                        dataset_path
+                    )
+                    if dataset_key
+                    == "customer_memory"
+                    else validate_supplier_capabilities_file(
+                        dataset_path
+                    )
                 )
-                structurally_valid = validation.get("valid") is True
-            except (OSError, UnicodeError, ValueError):
+                structurally_valid = (
+                    validation.get("valid") is True
+                )
+            except (
+                OSError,
+                UnicodeError,
+                ValueError,
+            ):
                 structurally_valid = False
+                validation = None
 
             if structurally_valid:
                 state = Status.PASS
-                reason = f"{dataset_key}_pilot_verified_and_valid"
+                reason = (
+                    f"{dataset_key}"
+                    "_pilot_verified_and_valid"
+                )
             else:
                 state = Status.BLOCKED
-                reason = f"{dataset_key}_schema_invalid"
+                reason = (
+                    f"{dataset_key}_schema_invalid"
+                )
+
+        dataset_validations[
+            dataset_key
+        ] = (
+            validation
+            if (
+                validation is not None
+                and validation.get("valid") is True
+            )
+            else None
+        )
 
         checks.append(
             _check(
                 dataset_key,
                 (
                     "Real customer dataset"
-                    if dataset_key == "customer_memory"
+                    if dataset_key
+                    == "customer_memory"
                     else "Real supplier dataset"
                 ),
                 state,
@@ -261,6 +314,121 @@ def assess_readiness(
                 reason,
             )
         )
+
+    customer_validation = (
+        dataset_validations.get(
+            "customer_memory"
+        )
+    )
+
+    customer_active_count = (
+        int(
+            customer_validation.get(
+                "active_profile_count",
+                0,
+            )
+        )
+        if customer_validation
+        else 0
+    )
+    customer_trusted_count = (
+        int(
+            customer_validation.get(
+                "active_trusted_profile_count",
+                0,
+            )
+        )
+        if customer_validation
+        else 0
+    )
+
+    customer_cardinality_ok = bool(
+        customer_validation
+        and MIN_ACTIVE_PILOT_CUSTOMERS
+        <= customer_active_count
+        <= MAX_ACTIVE_PILOT_CUSTOMERS
+        and customer_trusted_count
+        == customer_active_count
+    )
+
+    checks.append(
+        _check(
+            "customer_pilot_cardinality",
+            "Pilot customer coverage",
+            (
+                Status.PASS
+                if customer_cardinality_ok
+                else Status.BLOCKED
+            ),
+            (
+                "pilot_customer_cardinality_valid"
+                if customer_cardinality_ok
+                else "pilot_customer_cardinality_invalid"
+            ),
+            (
+                "requires_2_to_3_active_customers_"
+                "with_sender_trust"
+            ),
+        )
+    )
+
+    supplier_validation = (
+        dataset_validations.get(
+            "supplier_capabilities"
+        )
+    )
+
+    supplier_active_count = (
+        int(
+            supplier_validation.get(
+                "active_supplier_count",
+                0,
+            )
+        )
+        if supplier_validation
+        else 0
+    )
+    supplier_contactable_count = (
+        int(
+            supplier_validation.get(
+                "active_contactable_supplier_count",
+                0,
+            )
+        )
+        if supplier_validation
+        else 0
+    )
+
+    supplier_cardinality_ok = bool(
+        supplier_validation
+        and MIN_ACTIVE_PILOT_SUPPLIERS
+        <= supplier_active_count
+        <= MAX_ACTIVE_PILOT_SUPPLIERS
+        and supplier_contactable_count
+        == supplier_active_count
+    )
+
+    checks.append(
+        _check(
+            "supplier_pilot_cardinality",
+            "Pilot supplier coverage",
+            (
+                Status.PASS
+                if supplier_cardinality_ok
+                else Status.BLOCKED
+            ),
+            (
+                "pilot_supplier_cardinality_valid"
+                if supplier_cardinality_ok
+                else "pilot_supplier_cardinality_invalid"
+            ),
+            (
+                "requires_3_to_5_active_suppliers_"
+                "with_primary_contacts"
+            ),
+        )
+    )
+
 
 
     commit_matches = bool(evidence and gates.git_commit_sha and evidence.get("pilot_commit_sha") == gates.git_commit_sha)

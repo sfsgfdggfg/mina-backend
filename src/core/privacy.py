@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from src.core.mail import InboundMailEnvelope
 
 
-PRIVACY_TRANSFORM_VERSION = "p0.1-v1"
+PRIVACY_TRANSFORM_VERSION = "p1.12-v2"
 
 _EMAIL_RE = re.compile(
     r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"
@@ -17,8 +17,15 @@ _TURKEY_PHONE_RE = re.compile(
     r"(?:\(?[2-5]\d{2}\)?[\s.-]*)"
     r"\d{3}[\s.-]*\d{2}[\s.-]*\d{2}(?!\d)"
 )
+_INTERNATIONAL_PHONE_RE = re.compile(
+    r"(?<![\w\d])"
+    r"(?:\+|00)\d{1,3}"
+    r"(?:[\s()./-]*\d){7,14}"
+    r"(?!\d)"
+)
 _IBAN_RE = re.compile(
-    r"(?i)\bTR\d{2}(?:\s?\d{4}){5}\s?\d{2}\b"
+    r"(?i)\b[A-Z]{2}\d{2}"
+    r"(?:[\s-]?[A-Z0-9]){11,30}\b"
 )
 
 _SIGNATURE_MARKERS = {
@@ -74,6 +81,86 @@ def fingerprint_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _strip_quoted_reply(text: str) -> str:
+    lines = text.splitlines()
+
+    for index, line in enumerate(lines):
+        normalized = line.strip().lower()
+
+        if index == 0:
+            continue
+
+        if normalized in {
+            "-----original message-----",
+            "-----orijinal ileti-----",
+            "-----forwarded message-----",
+            "-----iletilen ileti-----",
+        }:
+            return "\n".join(
+                lines[:index]
+            ).rstrip()
+
+        if (
+            normalized.startswith("on ")
+            and normalized.endswith(" wrote:")
+        ):
+            return "\n".join(
+                lines[:index]
+            ).rstrip()
+
+        remaining = [
+            item.strip().lower()
+            for item in lines[
+                index : index + 5
+            ]
+        ]
+
+        if normalized.startswith("from:"):
+            if (
+                any(
+                    item.startswith("sent:")
+                    for item in remaining
+                )
+                and any(
+                    item.startswith("to:")
+                    for item in remaining
+                )
+                and any(
+                    item.startswith("subject:")
+                    for item in remaining
+                )
+            ):
+                return "\n".join(
+                    lines[:index]
+                ).rstrip()
+
+        if normalized.startswith("kimden:"):
+            if (
+                any(
+                    item.startswith(
+                        "gönderilme tarihi:"
+                    )
+                    or item.startswith(
+                        "gonderilme tarihi:"
+                    )
+                    for item in remaining
+                )
+                and any(
+                    item.startswith("kime:")
+                    for item in remaining
+                )
+                and any(
+                    item.startswith("konu:")
+                    for item in remaining
+                )
+            ):
+                return "\n".join(
+                    lines[:index]
+                ).rstrip()
+
+    return text
+
+
 def _strip_signature(text: str) -> str:
     lines = text.splitlines()
     if len(lines) < 3:
@@ -90,10 +177,24 @@ def _strip_signature(text: str) -> str:
 
 
 def minimize_text(text: str) -> str:
-    minimized = _strip_signature(text)
-    minimized = _EMAIL_RE.sub("<EMAIL_REDACTED>", minimized)
-    minimized = _TURKEY_PHONE_RE.sub("<PHONE_REDACTED>", minimized)
-    minimized = _IBAN_RE.sub("<IBAN_REDACTED>", minimized)
+    minimized = _strip_quoted_reply(text)
+    minimized = _strip_signature(minimized)
+    minimized = _EMAIL_RE.sub(
+        "<EMAIL_REDACTED>",
+        minimized,
+    )
+    minimized = _TURKEY_PHONE_RE.sub(
+        "<PHONE_REDACTED>",
+        minimized,
+    )
+    minimized = _INTERNATIONAL_PHONE_RE.sub(
+        "<PHONE_REDACTED>",
+        minimized,
+    )
+    minimized = _IBAN_RE.sub(
+        "<IBAN_REDACTED>",
+        minimized,
+    )
     lines = [line.rstrip() for line in minimized.splitlines()]
     return "\n".join(lines).strip()
 

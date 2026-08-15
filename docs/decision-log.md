@@ -5086,3 +5086,38 @@ the same commercial basis.
 Directly recorded supplier responses are manual evidence. Their source cannot
 be selected by the HTTP client, and the authenticated operator identity is
 stored with the response as `recorded_by`.
+
+
+## DEC-110 — Pilot Trust, Cardinality and Privacy Hardening
+
+**Status:** Accepted
+**Date:** 2026-08-15
+
+### Decision
+
+Controlled shadow-pilot customer profiles use explicit sender trust as identity
+evidence. Trusted sender addresses and domains must be syntactically valid and
+must not create cross-customer identity ambiguity.
+
+Supplier RFQ contact email addresses must not be shared across different
+supplier identities. An inbound supplier response remains bound to the exact
+recipient contact stored on its RFQ, including clarification follow-up replies.
+
+Real shadow-pilot readiness requires 2–3 active customer profiles and 3–5 active
+supplier profiles. Every active pilot customer must have sender-trust evidence,
+and every active pilot supplier must have exactly one usable active primary RFQ
+contact.
+
+Inbound privacy minimization covers international-format phone numbers and
+IBANs in addition to Turkish formats. Quoted historical mail threads are removed
+before AI processing when a deterministic reply delimiter is present.
+
+### Consequences
+
+Operational master data may remain structurally valid outside pilot readiness,
+but insufficient pilot coverage, missing sender trust, or missing primary
+supplier contacts block REAL SHADOW PILOT GO.
+
+Sender identity is not inferred from message body text, supplier names, or AI
+parser output. Privacy transformation continues to occur before any AI parser
+call.

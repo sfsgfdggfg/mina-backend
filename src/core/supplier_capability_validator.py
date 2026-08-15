@@ -70,55 +70,104 @@ def _validate_supplier_contacts(
     supplier: str,
     errors: List[str],
     warnings: List[str],
-) -> None:
+    seen_contact_owners: dict[str, str],
+) -> int:
     if value is None:
         warnings.append(
             f"{supplier}: contacts not defined; RFQ draft cannot be sent."
         )
-        return
+        return 0
 
     if not isinstance(value, list):
-        errors.append(f"{supplier}: contacts must be a list.")
-        return
+        errors.append(
+            f"{supplier}: contacts must be a list."
+        )
+        return 0
 
     seen_emails: set[str] = set()
     active_primary_count = 0
+    active_primary_valid_count = 0
 
     for index, contact in enumerate(value):
         prefix = f"{supplier}: contacts[{index}]"
 
         if not isinstance(contact, dict):
-            errors.append(f"{prefix} must be an object.")
+            errors.append(
+                f"{prefix} must be an object."
+            )
             continue
 
         email = contact.get("email")
-        if not _is_non_empty_string(email) or "@" not in str(email):
-            errors.append(f"{prefix}.email must be a valid email address.")
+        valid_email = False
+        normalized_email = None
+
+        if (
+            not _is_non_empty_string(email)
+            or "@" not in str(email)
+        ):
+            errors.append(
+                f"{prefix}.email must be a valid email address."
+            )
         else:
-            normalized_email = str(email).strip().lower()
+            normalized_email = (
+                str(email).strip().lower()
+            )
+            valid_email = True
 
             if normalized_email in seen_emails:
                 errors.append(
-                    f"{supplier}: duplicate contact email '{normalized_email}'."
+                    f"{supplier}: duplicate contact email "
+                    f"'{normalized_email}'."
                 )
 
             seen_emails.add(normalized_email)
 
+            previous_owner = seen_contact_owners.get(
+                normalized_email
+            )
+            if (
+                previous_owner
+                and previous_owner != supplier
+            ):
+                errors.append(
+                    f"{supplier}: contact email "
+                    f"'{normalized_email}' is already owned "
+                    f"by supplier {previous_owner}."
+                )
+            else:
+                seen_contact_owners[
+                    normalized_email
+                ] = supplier
+
         active = contact.get("active", True)
-        is_primary = contact.get("is_primary", False)
+        is_primary = contact.get(
+            "is_primary",
+            False,
+        )
 
         if not isinstance(active, bool):
-            errors.append(f"{prefix}.active must be boolean.")
+            errors.append(
+                f"{prefix}.active must be boolean."
+            )
 
         if not isinstance(is_primary, bool):
-            errors.append(f"{prefix}.is_primary must be boolean.")
+            errors.append(
+                f"{prefix}.is_primary must be boolean."
+            )
 
-        if active is True and is_primary is True:
+        if (
+            active is True
+            and is_primary is True
+        ):
             active_primary_count += 1
+
+            if valid_email:
+                active_primary_valid_count += 1
 
     if active_primary_count > 1:
         errors.append(
-            f"{supplier}: only one active primary contact is allowed."
+            f"{supplier}: only one active primary contact "
+            "is allowed."
         )
 
     if value and active_primary_count == 0:
@@ -126,6 +175,7 @@ def _validate_supplier_contacts(
             f"{supplier}: no active primary RFQ contact defined."
         )
 
+    return active_primary_valid_count
 
 def _validate_score(
     *,
@@ -178,7 +228,10 @@ def validate_supplier_capabilities_file(
         }
 
     seen_suppliers: set[str] = set()
+    seen_contact_owners: dict[str, str] = {}
+
     active_supplier_count = 0
+    active_contactable_supplier_count = 0
     active_ftl_count = 0
     active_ltl_count = 0
     active_reefer_count = 0
@@ -314,12 +367,23 @@ def validate_supplier_capabilities_file(
                     "'adr' capability."
                 )
 
-        _validate_supplier_contacts(
-            value=item.get("contacts"),
-            supplier=supplier,
-            errors=errors,
-            warnings=warnings,
+        active_primary_valid_count = (
+            _validate_supplier_contacts(
+                value=item.get("contacts"),
+                supplier=supplier,
+                errors=errors,
+                warnings=warnings,
+                seen_contact_owners=(
+                    seen_contact_owners
+                ),
+            )
         )
+
+        if (
+            active
+            and active_primary_valid_count == 1
+        ):
+            active_contactable_supplier_count += 1
 
         for score_field in SCORE_FIELDS:
             if score_field not in item:
@@ -373,6 +437,9 @@ def validate_supplier_capabilities_file(
         "warnings": warnings,
         "supplier_count": len(raw_data),
         "active_supplier_count": active_supplier_count,
+        "active_contactable_supplier_count": (
+            active_contactable_supplier_count
+        ),
         "active_ftl_count": active_ftl_count,
         "active_ltl_count": active_ltl_count,
         "active_reefer_count": active_reefer_count,

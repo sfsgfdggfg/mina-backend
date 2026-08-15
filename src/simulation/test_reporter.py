@@ -352,9 +352,98 @@ def evaluate_supplier_capability_validation() -> dict:
     for error in validation_result.get("errors", []):
         failures.append(error)
 
+    def supplier(name: str) -> dict:
+        return {
+            "supplier_name": name,
+            "active": True,
+            "role": "primary",
+            "route_regions": [
+                "western_europe",
+            ],
+            "countries": [
+                "Türkiye",
+                "Almanya",
+            ],
+            "service_types": [
+                "FTL",
+            ],
+            "equipment_types": [
+                "Tenteli / Curtainsider",
+            ],
+            "special_capabilities": [],
+            "priority_routes": [
+                "Türkiye-Almanya",
+            ],
+            "reliability_score": 0.9,
+            "price_score": 0.8,
+            "speed_score": 0.8,
+            "notes": "Regression supplier.",
+            "contacts": [
+                {
+                    "email": (
+                        "shared-pricing@carrier.invalid"
+                    ),
+                    "active": True,
+                    "is_primary": True,
+                },
+            ],
+        }
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        path = (
+            Path(temp_dir)
+            / "supplier_capabilities.json"
+        )
+        path.write_text(
+            json.dumps(
+                [
+                    supplier("Carrier A"),
+                    supplier("Carrier B"),
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        duplicate_contact_result = (
+            validate_supplier_capabilities_file(
+                path
+            )
+        )
+
+    duplicate_errors = (
+        duplicate_contact_result.get(
+            "errors",
+            [],
+        )
+    )
+
+    if not any(
+        "contact email "
+        "'shared-pricing@carrier.invalid' "
+        "is already owned by supplier Carrier A"
+        in error
+        for error in duplicate_errors
+    ):
+        failures.append(
+            "cross-supplier contact email collision "
+            "was not rejected"
+        )
+
+    if duplicate_contact_result.get(
+        "valid"
+    ) is not False:
+        failures.append(
+            "shared supplier sender identity "
+            "should fail validation"
+        )
+
     return {
         "name": "Supplier capability validation",
-        "passed": validation_result.get("valid") is True,
+        "passed": (
+            validation_result.get("valid") is True
+            and not failures
+        ),
         "failures": failures,
     }
 
@@ -534,9 +623,79 @@ def evaluate_customer_memory_validation() -> dict:
     for error in validation_result.get("errors", []):
         failures.append(error)
 
+    invalid_profiles = [
+        {
+            "customer_name": "Trust Customer A",
+            "active": True,
+            "aliases": [],
+            "trusted_sender_addresses": [
+                "ops@shared.invalid",
+            ],
+            "trusted_sender_domains": [
+                "shared.invalid",
+            ],
+        },
+        {
+            "customer_name": "Trust Customer B",
+            "active": True,
+            "aliases": [],
+            "trusted_sender_addresses": [
+                "ops@shared.invalid",
+            ],
+            "trusted_sender_domains": [
+                "@invalid-domain",
+            ],
+        },
+    ]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        path = Path(temp_dir) / "customer_memory.json"
+        path.write_text(
+            json.dumps(
+                invalid_profiles,
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        invalid_result = (
+            validate_customer_memory_file(path)
+        )
+
+    invalid_errors = invalid_result.get(
+        "errors",
+        [],
+    )
+
+    expected_fragments = (
+        "trusted sender address 'ops@shared.invalid' "
+        "is already trusted by Trust Customer A",
+        "trusted sender domain '@invalid-domain' "
+        "must be a bare valid domain",
+    )
+
+    for fragment in expected_fragments:
+        if not any(
+            fragment in error
+            for error in invalid_errors
+        ):
+            failures.append(
+                "customer trusted-sender validation "
+                f"missing error containing: {fragment}"
+            )
+
+    if invalid_result.get("valid") is not False:
+        failures.append(
+            "ambiguous customer sender trust "
+            "should fail validation"
+        )
+
     return {
         "name": "Customer memory validation",
-        "passed": validation_result.get("valid") is True,
+        "passed": (
+            validation_result.get("valid") is True
+            and not failures
+        ),
         "failures": failures,
     }
 

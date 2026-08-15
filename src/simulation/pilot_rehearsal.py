@@ -70,18 +70,43 @@ def _write_synthetic_sources(root: Path) -> OperationalDataSources:
     supplier_path = root / "supplier_capabilities.json"
     registry_path = root / "provenance_registry.json"
     customer_bytes = json.dumps(
-        [{
-            "customer_name": "Synthetic Textile Customer",
-            "active": True,
-            "trusted_sender_addresses": ["logistics@customer.invalid"],
-            "trusted_sender_domains": ["customer.invalid"],
-            "default_commodity": "Tekstil",
-            "default_equipment_type": "Tenteli",
-        }],
+        [
+            {
+                "customer_name": "Synthetic Textile Customer",
+                "active": True,
+                "trusted_sender_addresses": [
+                    "logistics@customer.invalid"
+                ],
+                "trusted_sender_domains": [
+                    "customer.invalid"
+                ],
+                "default_commodity": "Tekstil",
+                "default_equipment_type": "Tenteli",
+            },
+            {
+                "customer_name": "Synthetic Backup Customer",
+                "active": True,
+                "trusted_sender_addresses": [
+                    "ops@backup-customer.invalid"
+                ],
+                "trusted_sender_domains": [
+                    "backup-customer.invalid"
+                ],
+                "default_commodity": "Tekstil",
+                "default_equipment_type": "Tenteli",
+            },
+        ],
         sort_keys=True,
     ).encode("utf-8")
     suppliers = []
-    for priority, name in enumerate(("Synthetic Carrier A", "Synthetic Carrier B"), 1):
+    for priority, name in enumerate(
+        (
+            "Synthetic Carrier A",
+            "Synthetic Carrier B",
+            "Synthetic Carrier C",
+        ),
+        1,
+    ):
         suppliers.append({
             "supplier_name": name,
             "active": True,
@@ -318,8 +343,20 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         drafts = resumed.get("supplier_rfq_drafts") or []
         workflow = resumed.get("supplier_rfq_workflow")
         selected_names = [item["supplier_name"] for item in resumed["supplier_selection"]["selected_suppliers"]]
-        result.require("confirmed resume injected data", selected_names == ["Synthetic Carrier A", "Synthetic Carrier B"])
-        result.require("RFQ workflow", workflow is not None and len(drafts) == 2)
+        result.require(
+            "confirmed resume injected data",
+            selected_names
+            == [
+                "Synthetic Carrier A",
+                "Synthetic Carrier B",
+                "Synthetic Carrier C",
+            ],
+        )
+        result.require(
+            "RFQ workflow",
+            workflow is not None
+            and len(drafts) == 3,
+        )
         draft = drafts[0]
         result.require("manual send requires approval", _expect_http(
             409, api.record_supplier_rfq_manually_sent_endpoint, draft.rfq_id,

@@ -219,6 +219,90 @@ def evaluate_supplier_response_ingestion_regressions() -> dict:
     if mismatch.status != "invalid_supplier":
         failures.append("supplier identity mismatch was not rejected")
 
+    continuity_repository, continuity_draft = (
+        _repository_with_rfq(
+            rfq_id="rfq-sender-continuity",
+            status="awaiting_response",
+        )
+    )
+
+    clarification = ingest_supplier_reply(
+        reply=_reply(
+            continuity_draft.rfq_id,
+            message_id="continuity-clarification",
+        ),
+        repository=continuity_repository,
+        extracted_response={
+            "status": "needs_clarification",
+            "notes": "Please confirm loading window.",
+        },
+    )
+
+    if (
+        clarification.status != "response_attached"
+        or clarification.supplier_rfq is None
+        or clarification.supplier_rfq.status
+        != "clarification_required"
+    ):
+        failures.append(
+            "trusted supplier clarification did not keep RFQ open"
+        )
+
+    outsider_follow_up = ingest_supplier_reply(
+        reply=_reply(
+            continuity_draft.rfq_id,
+            sender_address="outsider@example.invalid",
+            message_id="continuity-outsider",
+        ),
+        repository=continuity_repository,
+        extracted_response=_quoted_extraction(),
+    )
+
+    if (
+        outsider_follow_up.status
+        != "invalid_supplier"
+        or len(
+            continuity_repository.list_responses(
+                continuity_draft.rfq_id
+            )
+        )
+        != 1
+        or continuity_repository.get_draft(
+            continuity_draft.rfq_id
+        ).status
+        != "clarification_required"
+    ):
+        failures.append(
+            "supplier sender continuity was not enforced after clarification"
+        )
+
+    trusted_follow_up = ingest_supplier_reply(
+        reply=_reply(
+            continuity_draft.rfq_id,
+            message_id="continuity-final",
+        ),
+        repository=continuity_repository,
+        extracted_response=_quoted_extraction(),
+    )
+
+    if (
+        trusted_follow_up.status
+        != "response_attached"
+        or trusted_follow_up.supplier_rfq
+        is None
+        or trusted_follow_up.supplier_rfq.status
+        != "responded"
+        or len(
+            continuity_repository.list_responses(
+                continuity_draft.rfq_id
+            )
+        )
+        != 2
+    ):
+        failures.append(
+            "trusted final supplier response did not complete clarification flow"
+        )
+
     missing_price_repository, missing_price_draft = _repository_with_rfq(
         rfq_id="rfq-missing-price",
         status="awaiting_response",

@@ -3043,3 +3043,20 @@ preserving their evidence and rejection reasons.
 A supplier response entered directly by an operator must be recorded as
 `manual`; the client must not choose another source label. The authenticated
 operator identity must be retained as `recorded_by`.
+
+
+## RULE-129 — Pilot Sender Trust and Privacy Must Fail Closed
+
+Active pilot customers must have explicit trusted sender addresses or domains.
+Trust rules that are malformed or ambiguous across customer identities must not
+be accepted.
+
+Supplier contact email addresses used as RFQ response identity evidence must
+not belong to multiple supplier records. Clarification and final responses on
+the same RFQ must continue to come from the RFQ's trusted supplier contact.
+
+Pilot readiness requires 2–3 active trusted customer profiles and 3–5 active
+suppliers with usable active primary RFQ contacts.
+
+International phone numbers, IBANs, signatures and deterministic quoted-message
+history must be minimized before customer mail reaches AI parsing.

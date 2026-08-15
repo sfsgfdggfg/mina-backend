@@ -56,6 +56,40 @@ def evaluate_pilot_readiness_regressions() -> dict:
         if not condition:
             failures.append(name)
 
+    def rewrite_verified_dataset(
+        sources,
+        dataset_key: str,
+        value,
+    ) -> None:
+        dataset_path = (
+            sources.customer_memory_path
+            if dataset_key == "customer_memory"
+            else sources.supplier_capabilities_path
+        )
+        dataset_bytes = json.dumps(
+            value,
+            sort_keys=True,
+        ).encode("utf-8")
+        dataset_path.write_bytes(dataset_bytes)
+
+        registry = json.loads(
+            sources.provenance_registry_path.read_text(
+                encoding="utf-8"
+            )
+        )
+        registry["datasets"][dataset_key][
+            "verified_sha256"
+        ] = calculate_bytes_sha256(
+            dataset_bytes
+        )
+        sources.provenance_registry_path.write_text(
+            json.dumps(
+                registry,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
     data_root = Path("data")
     before_data = {p.relative_to(data_root): p.read_bytes() for p in data_root.rglob("*") if p.is_file()}
     before_artifacts = _artifacts()
@@ -74,6 +108,159 @@ def evaluate_pilot_readiness_regressions() -> dict:
         require("controlled technical gates represented PASS", all(_status(controlled, key) == Status.PASS for key in ("runtime_preflight", "canonical_regression", "synthetic_rehearsal")))
         require("all required synthetic evidence can GO", controlled.real_shadow_pilot_go)
         require("GO exact commit match", _status(controlled, "organization_approval") == Status.PASS)
+        require(
+            "controlled customer cardinality passes",
+            _status(
+                controlled,
+                "customer_pilot_cardinality",
+            ) == Status.PASS,
+        )
+        require(
+            "controlled supplier cardinality passes",
+            _status(
+                controlled,
+                "supplier_pilot_cardinality",
+            ) == Status.PASS,
+        )
+
+        undersized_customer_root = (
+            root / "undersized-customer"
+        )
+        undersized_customer_root.mkdir()
+        undersized_customer_sources = (
+            _write_synthetic_sources(
+                undersized_customer_root
+            )
+        )
+        customer_rows = json.loads(
+            undersized_customer_sources
+            .customer_memory_path
+            .read_text(encoding="utf-8")
+        )
+        rewrite_verified_dataset(
+            undersized_customer_sources,
+            "customer_memory",
+            customer_rows[:1],
+        )
+        undersized_customer = assess_readiness(
+            _gates(),
+            evidence=_evidence(),
+            data_sources=undersized_customer_sources,
+        )
+        require(
+            "fewer than two active pilot customers block GO",
+            not undersized_customer.real_shadow_pilot_go
+            and _status(
+                undersized_customer,
+                "customer_pilot_cardinality",
+            ) == Status.BLOCKED,
+        )
+
+        trustless_customer_root = (
+            root / "trustless-customer"
+        )
+        trustless_customer_root.mkdir()
+        trustless_customer_sources = (
+            _write_synthetic_sources(
+                trustless_customer_root
+            )
+        )
+        trustless_rows = json.loads(
+            trustless_customer_sources
+            .customer_memory_path
+            .read_text(encoding="utf-8")
+        )
+        trustless_rows[0][
+            "trusted_sender_addresses"
+        ] = []
+        trustless_rows[0][
+            "trusted_sender_domains"
+        ] = []
+        rewrite_verified_dataset(
+            trustless_customer_sources,
+            "customer_memory",
+            trustless_rows,
+        )
+        trustless_customer = assess_readiness(
+            _gates(),
+            evidence=_evidence(),
+            data_sources=trustless_customer_sources,
+        )
+        require(
+            "active customer without sender trust blocks GO",
+            not trustless_customer.real_shadow_pilot_go
+            and _status(
+                trustless_customer,
+                "customer_pilot_cardinality",
+            ) == Status.BLOCKED,
+        )
+
+        undersized_supplier_root = (
+            root / "undersized-supplier"
+        )
+        undersized_supplier_root.mkdir()
+        undersized_supplier_sources = (
+            _write_synthetic_sources(
+                undersized_supplier_root
+            )
+        )
+        supplier_rows = json.loads(
+            undersized_supplier_sources
+            .supplier_capabilities_path
+            .read_text(encoding="utf-8")
+        )
+        rewrite_verified_dataset(
+            undersized_supplier_sources,
+            "supplier_capabilities",
+            supplier_rows[:2],
+        )
+        undersized_supplier = assess_readiness(
+            _gates(),
+            evidence=_evidence(),
+            data_sources=undersized_supplier_sources,
+        )
+        require(
+            "fewer than three active pilot suppliers block GO",
+            not undersized_supplier.real_shadow_pilot_go
+            and _status(
+                undersized_supplier,
+                "supplier_pilot_cardinality",
+            ) == Status.BLOCKED,
+        )
+
+        uncontactable_supplier_root = (
+            root / "uncontactable-supplier"
+        )
+        uncontactable_supplier_root.mkdir()
+        uncontactable_supplier_sources = (
+            _write_synthetic_sources(
+                uncontactable_supplier_root
+            )
+        )
+        uncontactable_rows = json.loads(
+            uncontactable_supplier_sources
+            .supplier_capabilities_path
+            .read_text(encoding="utf-8")
+        )
+        uncontactable_rows[0]["contacts"] = []
+        rewrite_verified_dataset(
+            uncontactable_supplier_sources,
+            "supplier_capabilities",
+            uncontactable_rows,
+        )
+        uncontactable_supplier = assess_readiness(
+            _gates(),
+            evidence=_evidence(),
+            data_sources=uncontactable_supplier_sources,
+        )
+        require(
+            "active supplier without primary contact blocks GO",
+            not uncontactable_supplier.real_shadow_pilot_go
+            and _status(
+                uncontactable_supplier,
+                "supplier_pilot_cardinality",
+            ) == Status.BLOCKED,
+        )
 
         invalid_schema_root = root / "schema-invalid-data"
         invalid_schema_root.mkdir()
