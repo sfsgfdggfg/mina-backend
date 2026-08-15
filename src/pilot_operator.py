@@ -256,6 +256,37 @@ class PilotOperatorClient:
     def get_case(self, case_id: str) -> Any:
         return self._request("GET", f"/quote-cases/{self._id(case_id)}")
 
+    def revise_case(
+        self,
+        case_id: str,
+        *,
+        expected_approval_id: str,
+        subject: str,
+        body: str,
+        final_price: float | None = None,
+        operator_note: str | None = None,
+    ) -> Any:
+        payload = {
+            "expected_approval_id": expected_approval_id,
+            "subject": subject,
+            "body": body,
+        }
+
+        if final_price is not None:
+            payload["final_price"] = final_price
+
+        if operator_note is not None:
+            payload["operator_note"] = operator_note
+
+        return self._request(
+            "POST",
+            (
+                f"/quote-cases/"
+                f"{self._id(case_id)}/revise"
+            ),
+            payload,
+        )
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -326,6 +357,32 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     case.add_parser("list")
     case.add_parser("get").add_argument("case_id")
+
+    revise = case.add_parser("revise")
+    revise.add_argument("case_id")
+    revise.add_argument(
+        "--approval-id",
+        required=True,
+    )
+    revise.add_argument(
+        "--subject",
+        required=True,
+    )
+
+    revise_body = (
+        revise.add_mutually_exclusive_group(
+            required=True
+        )
+    )
+    revise_body.add_argument("--body")
+    revise_body.add_argument("--body-file")
+
+    revise.add_argument(
+        "--final-price",
+        type=float,
+    )
+    revise.add_argument("--note")
+
     return parser
 
 
@@ -411,7 +468,20 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
         return client.invalidate_quote(args.approval_id)
     if args.action == "list":
         return client.list_cases()
-    return client.get_case(args.case_id)
+
+    if args.action == "get":
+        return client.get_case(args.case_id)
+
+    return client.revise_case(
+        args.case_id,
+        expected_approval_id=(
+            args.approval_id
+        ),
+        subject=args.subject,
+        body=_read_email_body(args),
+        final_price=args.final_price,
+        operator_note=args.note,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

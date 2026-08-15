@@ -77,6 +77,11 @@ from src.core.quote_approval_service import (
     invalidate_quote_approval,
     reject_quote,
 )
+from src.core.quote_revision_service import (
+    QuoteRevisionNotFoundError,
+    QuoteRevisionTransitionError,
+    revise_quote_case as revise_quote_case_service,
+)
 from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.core.supplier_rfq import SupplierRFQResponse
@@ -181,6 +186,17 @@ class PrepareQuoteSendRequest(BaseModel):
     supplier_quote: SupplierQuote
     customer_quote: CustomerQuote
     quote_draft: QuoteDraft
+
+
+class QuoteCaseRevisionRequest(BaseModel):
+    expected_approval_id: str
+    subject: str
+    body: str
+    final_price: Optional[float] = Field(
+        default=None,
+        gt=0,
+    )
+    operator_note: Optional[str] = None
 
 
 class QuoteApprovalApproveRequest(BaseModel):
@@ -685,6 +701,51 @@ def get_quote_case(case_id: str):
     return _enrich_quote_case_with_current_approval(
         quote_case
     ).model_dump()
+
+
+@app.post("/quote-cases/{case_id}/revise")
+def revise_quote_case_endpoint(
+    case_id: str,
+    request: QuoteCaseRevisionRequest,
+    http_request: Request = None,
+):
+    try:
+        result = revise_quote_case_service(
+            quote_case_repository=(
+                quote_case_repository
+            ),
+            approval_repository=(
+                quote_approval_repository
+            ),
+            case_id=case_id,
+            expected_approval_id=(
+                request.expected_approval_id
+            ),
+            subject=request.subject,
+            body=request.body,
+            final_price=request.final_price,
+            operator_note=request.operator_note,
+            edited_by=_authenticated_operator(
+                http_request
+            ),
+        )
+    except QuoteRevisionNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+    except QuoteRevisionTransitionError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    return result.model_dump()
 
 
 @app.get("/quote-approvals")

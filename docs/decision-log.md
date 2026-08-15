@@ -5160,3 +5160,23 @@ facts. Duplicate provider delivery cannot create repeated successful AI
 extractions in the single-process controlled pilot runtime.
 
 Private-LAN pilot operation now requires TLS provisioning before startup.
+
+
+## DEC-112 — Customer Quote Emails Are Fully Operator-Editable
+
+**Status:** Accepted
+**Date:** 2026-08-16
+
+### Decision
+
+AI-generated customer quotation emails are starting drafts, not authoritative final messages.
+
+Authenticated operations personnel may freely revise the complete customer-facing email, including subject, greeting, tone, formality, wording, paragraph structure, explanations and closing. The operator may also explicitly replace the structured customer sales price. Supplier source facts remain unchanged.
+
+Every edit creates a durable revision with before/after email and customer-quote snapshots, operator identity, changed fields and consistency warnings. A revision supersedes a pending or approved approval and creates a fresh pending approval for the exact revised email. Rejected or invalidated quotes may enter a new revision cycle without rewriting historical decisions.
+
+Consistency warnings are advisory: they surface commercial differences but do not silently rewrite or prevent the operator's customer-facing wording. Revision never triggers autonomous outbound email delivery.
+
+### Consequences
+
+The final customer communication is operator-owned while MINAI remains the drafting and consistency assistant. Customer-specific communication-style learning may be added later from revision history.
