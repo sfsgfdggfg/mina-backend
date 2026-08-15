@@ -376,6 +376,16 @@ See `docs/regression-suite.md` for membership and retired legacy coverage.
 `python -m src.main` remains a legacy development/AI simulation entrypoint. It
 requires configured AI behavior and is not a pilot release gate.
 
+Assess readiness for a real controlled shadow pilot with:
+
+```bash
+python -m src.pilot_readiness
+```
+
+The command is offline and fail-closed. The current demo/unverified datasets and
+missing external attestations correctly produce NO-GO (exit `1`). See
+`docs/pilot-runbook.md` for the optional external evidence schema and GO rules.
+
 ---
 
 ## Run Test Suite from UI
