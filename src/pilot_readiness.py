@@ -21,6 +21,12 @@ from src.core.operational_data import (
     OperationalDataSources,
     operational_data_sources_from_environment,
 )
+from src.core.customer_memory_validator import (
+    validate_customer_memory_file,
+)
+from src.core.supplier_capability_validator import (
+    validate_supplier_capabilities_file,
+)
 from src.core.pilot_access import route_allowed
 
 
@@ -215,12 +221,47 @@ def assess_readiness(
         ("supplier_capabilities", data_sources.supplier_capabilities_path),
     ):
         try:
-            require_pilot_operational_dataset(dataset_key, environ={"MINAI_PILOT_MODE": "true"}, path=data_sources.provenance_registry_path, dataset_path=dataset_path)
+            require_pilot_operational_dataset(
+                dataset_key,
+                environ={"MINAI_PILOT_MODE": "true"},
+                path=data_sources.provenance_registry_path,
+                dataset_path=dataset_path,
+            )
         except (DataProvenanceError, OSError, ValueError):
-            state, reason = Status.BLOCKED, f"{dataset_key}_not_pilot_verified"
+            state = Status.BLOCKED
+            reason = f"{dataset_key}_not_pilot_verified"
         else:
-            state, reason = Status.PASS, f"{dataset_key}_pilot_verified"
-        checks.append(_check(dataset_key, "Real customer dataset" if dataset_key == "customer_memory" else "Real supplier dataset", state, reason, reason))
+            try:
+                validation = (
+                    validate_customer_memory_file(dataset_path)
+                    if dataset_key == "customer_memory"
+                    else validate_supplier_capabilities_file(dataset_path)
+                )
+                structurally_valid = validation.get("valid") is True
+            except (OSError, UnicodeError, ValueError):
+                structurally_valid = False
+
+            if structurally_valid:
+                state = Status.PASS
+                reason = f"{dataset_key}_pilot_verified_and_valid"
+            else:
+                state = Status.BLOCKED
+                reason = f"{dataset_key}_schema_invalid"
+
+        checks.append(
+            _check(
+                dataset_key,
+                (
+                    "Real customer dataset"
+                    if dataset_key == "customer_memory"
+                    else "Real supplier dataset"
+                ),
+                state,
+                reason,
+                reason,
+            )
+        )
+
 
     commit_matches = bool(evidence and gates.git_commit_sha and evidence.get("pilot_commit_sha") == gates.git_commit_sha)
     if evidence is None:

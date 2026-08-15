@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from src.core.data_provenance import calculate_bytes_sha256
 from src.pilot_readiness import (
     EvidenceValidationError, Status, TechnicalGateResults, assess_readiness,
     collect_outbound_policy, collect_technical_gates,
@@ -73,6 +74,48 @@ def evaluate_pilot_readiness_regressions() -> dict:
         require("controlled technical gates represented PASS", all(_status(controlled, key) == Status.PASS for key in ("runtime_preflight", "canonical_regression", "synthetic_rehearsal")))
         require("all required synthetic evidence can GO", controlled.real_shadow_pilot_go)
         require("GO exact commit match", _status(controlled, "organization_approval") == Status.PASS)
+
+        invalid_schema_root = root / "schema-invalid-data"
+        invalid_schema_root.mkdir()
+        invalid_sources = _write_synthetic_sources(
+            invalid_schema_root
+        )
+        invalid_supplier_bytes = json.dumps(
+            [{
+                "supplier_name": "Schema Broken Supplier",
+                "active": True,
+            }],
+            sort_keys=True,
+        ).encode("utf-8")
+        invalid_sources.supplier_capabilities_path.write_bytes(
+            invalid_supplier_bytes
+        )
+        invalid_registry = json.loads(
+            invalid_sources.provenance_registry_path.read_text(
+                encoding="utf-8"
+            )
+        )
+        invalid_registry["datasets"]["supplier_capabilities"][
+            "verified_sha256"
+        ] = calculate_bytes_sha256(invalid_supplier_bytes)
+        invalid_sources.provenance_registry_path.write_text(
+            json.dumps(invalid_registry, sort_keys=True),
+            encoding="utf-8",
+        )
+
+        schema_blocked = assess_readiness(
+            _gates(),
+            evidence=_evidence(),
+            data_sources=invalid_sources,
+        )
+        require(
+            "hash-valid structurally invalid supplier data blocks GO",
+            not schema_blocked.real_shadow_pilot_go
+            and _status(
+                schema_blocked,
+                "supplier_capabilities",
+            ) == Status.BLOCKED,
+        )
 
         stale = assess_readiness(_gates(), evidence=_evidence("b" * 40), data_sources=sources)
         require("stale commit blocks", not stale.real_shadow_pilot_go and _status(stale, "sanitized_replay") == Status.NOT_VERIFIED)
@@ -166,6 +209,38 @@ def evaluate_pilot_readiness_regressions() -> dict:
         require(
             "CLI resolves external operational data pack",
             external_cli_result == 1,
+        )
+
+        invalid_external_root = root / "invalid-external-pack"
+        invalid_external_data = invalid_external_root / "data"
+        invalid_external_data.mkdir(parents=True)
+        invalid_external_sources = _write_synthetic_sources(
+            invalid_external_data
+        )
+        invalid_external_sources.supplier_capabilities_path.write_text(
+            json.dumps([{
+                "supplier_name": "Invalid Startup Supplier",
+                "active": True,
+            }]),
+            encoding="utf-8",
+        )
+        invalid_external_env = {
+            "MINAI_PILOT_DATA_DIR": str(
+                invalid_external_root.resolve()
+            )
+        }
+        with patch.dict(
+            os.environ,
+            invalid_external_env,
+            clear=False,
+        ):
+            with contextlib.redirect_stderr(io.StringIO()):
+                invalid_external_result = main(
+                    ["--no-run-gates"]
+                )
+        require(
+            "structurally invalid external pack fails closed at startup",
+            invalid_external_result == 2,
         )
         with contextlib.redirect_stderr(io.StringIO()):
             require("invalid evidence exits two", main(["--evidence", str(malformed), "--no-run-gates"]) == 2)

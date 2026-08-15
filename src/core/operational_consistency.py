@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.core.supplier_capability_registry import (
     ADR_CAPABILITY,
     get_required_adr_class_capability,
 )
-from src.paths import data_path
-
-SUPPLIER_CAPABILITY_PATH = data_path("supplier_capabilities.json")
+from src.core.data_provenance import (
+    DataProvenanceError,
+    require_pilot_operational_dataset,
+)
+from src.core.operational_data import (
+    OperationalDataSources,
+    resolve_operational_data_sources,
+)
 
 
 def _normalize(value: Optional[str]) -> str:
@@ -71,25 +75,48 @@ def _get_first_selected_supplier_name(
     return selected_suppliers[0].get("supplier_name")
 
 
-def _load_supplier_capabilities() -> List[Dict[str, Any]]:
-    if not SUPPLIER_CAPABILITY_PATH.exists():
-        return []
+def _load_supplier_capabilities(
+    sources: OperationalDataSources,
+    *,
+    injected: bool,
+) -> List[Dict[str, Any]]:
+    path = sources.supplier_capabilities_path
+
+    if not injected:
+        require_pilot_operational_dataset("supplier_capabilities")
 
     try:
-        raw_data = json.loads(SUPPLIER_CAPABILITY_PATH.read_text())
-    except json.JSONDecodeError:
-        return []
+        content = path.read_bytes()
+    except OSError as exc:
+        raise DataProvenanceError(
+            "Operational supplier-capabilities dataset could not be read."
+        ) from exc
 
-    if isinstance(raw_data, list):
-        return [item for item in raw_data if isinstance(item, dict)]
+    if injected:
+        require_pilot_operational_dataset(
+            "supplier_capabilities",
+            path=sources.provenance_registry_path,
+            dataset_path=path,
+            dataset_bytes=content,
+        )
 
-    if isinstance(raw_data, dict):
-        for key in ["suppliers", "supplier_capabilities", "data"]:
-            value = raw_data.get(key)
-            if isinstance(value, list):
-                return [item for item in value if isinstance(item, dict)]
+    try:
+        raw_data = json.loads(content.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise DataProvenanceError(
+            "Operational supplier-capabilities dataset is invalid."
+        ) from exc
 
-    return []
+    if not isinstance(raw_data, list):
+        raise DataProvenanceError(
+            "Operational supplier-capabilities dataset has an invalid schema."
+        )
+
+    return [
+        item
+        for item in raw_data
+        if isinstance(item, dict)
+    ]
 
 
 def _find_supplier_capability(
@@ -188,9 +215,13 @@ def check_operational_consistency(
     risk_assessment: Any,
     supplier_selection: Optional[Dict[str, Any]],
     supplier_quote: Any = None,
+    operational_data_sources: OperationalDataSources | None = None,
 ) -> Dict[str, Any]:
     warnings: List[str] = []
     errors: List[str] = []
+    sources = resolve_operational_data_sources(
+        operational_data_sources
+    )
 
     selected_suppliers = _get_selected_suppliers(supplier_selection)
     selected_supplier_name = _get_first_selected_supplier_name(supplier_selection)
@@ -201,7 +232,10 @@ def check_operational_consistency(
     }
     quote_supplier_name = _get_attr(supplier_quote, "supplier_name")
 
-    supplier_capabilities = _load_supplier_capabilities()
+    supplier_capabilities = _load_supplier_capabilities(
+        sources,
+        injected=operational_data_sources is not None,
+    )
     selected_supplier_capability = _find_supplier_capability(
         selected_supplier_name,
         supplier_capabilities,
@@ -344,5 +378,5 @@ def check_operational_consistency(
         "warnings": warnings,
         "errors": errors,
         "source": "operational_consistency_engine",
-        "capability_data_source": str(SUPPLIER_CAPABILITY_PATH),
+        "capability_data_source": str(sources.supplier_capabilities_path),
     }

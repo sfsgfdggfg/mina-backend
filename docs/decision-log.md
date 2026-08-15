@@ -5008,3 +5008,33 @@ Legacy simulation/test execution is isolated under `src.simulation`.
 A fresh-process regression verifies that importing the controlled API loads no
 simulation modules.
 Repository Python syntax is part of the canonical pilot gate.
+
+
+## DEC-108 — Operational Master Data Must Be Coherent Across One Workflow
+
+**Status:** Accepted
+**Date:** 2026-08-15
+
+### Decision
+
+Supplier selection and operational consistency checks within one workflow must
+use the same resolved supplier-capabilities dataset.
+
+An external controlled-pilot data pack must contain structurally valid customer
+and supplier master data before it is accepted as a runtime data source.
+
+Pilot readiness must require both verified provenance/fingerprint evidence and
+valid operational dataset structure.
+
+### Rationale
+
+A supplier selected from one dataset must not later be validated against a
+different repository-owned dataset. A correct fingerprint proves exact bytes,
+but does not prove that those bytes satisfy the operational schema.
+
+### Consequences
+
+Operational data-source injection now propagates through consistency checks.
+External pilot pack resolution fails closed on structurally invalid customer or
+supplier master data. Pilot readiness separately reports structurally invalid
+verified datasets as blocking.

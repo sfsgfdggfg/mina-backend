@@ -85,10 +85,13 @@ def _write_synthetic_sources(root: Path) -> OperationalDataSources:
         suppliers.append({
             "supplier_name": name,
             "active": True,
+            "role": "primary" if priority == 1 else "backup",
             "countries": ["Türkiye", "Almanya"],
             "equipment_types": ["Tenteli"],
             "service_types": ["FTL"],
             "route_regions": ["international"],
+            "special_capabilities": [],
+            "priority_routes": [],
             "reliability_score": 0.95 - priority / 100,
             "price_score": 0.85,
             "speed_score": 0.8,

@@ -28,12 +28,53 @@ def _valid_env(
 def _write_pilot_data_pack(root: Path) -> Path:
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
-    for name in (
-        "customer_memory.json",
-        "supplier_capabilities.json",
-        "provenance_registry.json",
-    ):
-        (data_dir / name).write_text("{}", encoding="utf-8")
+
+    customer = [{
+        "customer_name": "Launcher Synthetic Customer",
+        "active": True,
+        "aliases": [],
+        "trusted_sender_addresses": [],
+        "trusted_sender_domains": ["launcher.invalid"],
+        "operational_notes": [],
+    }]
+
+    suppliers = [{
+        "supplier_name": "Launcher Synthetic Supplier",
+        "active": True,
+        "role": "primary",
+        "route_regions": ["international"],
+        "countries": ["Türkiye", "Almanya"],
+        "service_types": ["FTL"],
+        "equipment_types": ["Tenteli"],
+        "special_capabilities": [],
+        "priority_routes": [],
+        "contacts": [{
+            "email": "quotes@launcher.invalid",
+            "active": True,
+            "is_primary": True,
+        }],
+        "reliability_score": 0.9,
+        "price_score": 0.8,
+        "speed_score": 0.8,
+        "notes": "Synthetic launcher fixture.",
+    }]
+
+    (data_dir / "customer_memory.json").write_text(
+        json.dumps(customer),
+        encoding="utf-8",
+    )
+    (data_dir / "supplier_capabilities.json").write_text(
+        json.dumps(suppliers),
+        encoding="utf-8",
+    )
+
+    # Launcher validates safe pack structure. Semantic provenance
+    # authorization remains a separate operational/readiness boundary.
+    (data_dir / "provenance_registry.json").write_text(
+        "{}",
+        encoding="utf-8",
+    )
+
     return root
 
 

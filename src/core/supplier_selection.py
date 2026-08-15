@@ -397,5 +397,5 @@ def select_suppliers_for_shipment(
             "price + speed weighted scoring"
         ),
         "source": "supplier_selection_engine",
-        "data_source": "data/supplier_capabilities.json",
+        "data_source": str(sources.supplier_capabilities_path),
     }

@@ -58,10 +58,13 @@ def _supplier(name: str) -> list[dict]:
     return [{
         "supplier_name": name,
         "active": True,
+        "role": "primary",
         "countries": ["Türkiye", "Almanya"],
         "equipment_types": ["Tenteli"],
         "service_types": ["FTL"],
         "route_regions": ["international"],
+        "special_capabilities": [],
+        "priority_routes": [],
         "reliability_score": 0.9,
         "price_score": 0.8,
         "speed_score": 0.8,
@@ -123,7 +126,11 @@ def _write_sources(
     supplier_path = data_dir / "supplier_capabilities.json"
     customer_content = json.dumps([{
         "customer_name": customer_name,
+        "active": True,
+        "aliases": [],
+        "trusted_sender_addresses": [],
         "trusted_sender_domains": ["synthetic.invalid"],
+        "operational_notes": [],
     }]).encode()
     supplier_content = json.dumps(_supplier(supplier_name)).encode()
     customer_path.write_bytes(customer_content)
@@ -204,6 +211,21 @@ def evaluate_operational_data_injection_regressions() -> dict:
             )
             if workflow.get("result_type") == "data_provenance_blocked":
                 failures.append("verified injected workflow was blocked")
+
+            injected_consistency = (
+                workflow.get("operational_consistency") or {}
+            )
+            if (
+                injected_consistency.get("capability_data_source")
+                != str(first.supplier_capabilities_path)
+            ):
+                failures.append(
+                    "operational consistency did not use injected supplier data"
+                )
+            if injected_consistency.get("passed") is not True:
+                failures.append(
+                    "injected supplier selection and consistency disagreed"
+                )
 
             progression_initial, progression_repository = (
                 _build_responded_workflow(first)

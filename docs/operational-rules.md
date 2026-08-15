@@ -3004,3 +3004,16 @@ entry point must pass syntax compilation before a pilot change is accepted.
 
 The canonical pilot regression suite and controlled rehearsal must run in the
 repository CI gate for pull requests and pushes to `main`.
+
+
+## RULE-127 — One Workflow Must Use One Coherent Operational Data Source
+
+Supplier selection and downstream operational consistency validation must use
+the same resolved supplier-capabilities source for the entire workflow stage.
+
+A controlled-pilot operational data pack is not acceptable merely because its
+files exist or their fingerprints match. Customer and supplier operational
+master data must also pass their structural validators.
+
+Structurally invalid operational master data must fail closed before controlled
+pilot use and must block pilot readiness.

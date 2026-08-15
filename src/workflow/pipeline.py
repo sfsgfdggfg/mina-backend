@@ -218,6 +218,7 @@ def process_shipment(
         risk_assessment=risk_assessment,
         supplier_selection=supplier_selection,
         supplier_quote=None,
+        operational_data_sources=operational_data_sources,
     )
 
     quote_readiness = decide_quote_readiness(

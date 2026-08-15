@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.paths import REPO_ROOT, data_path
+from src.core.customer_memory_validator import validate_customer_memory_file
+from src.core.supplier_capability_validator import (
+    validate_supplier_capabilities_file,
+)
 
 
 PILOT_DATA_DIR_ENV = "MINAI_PILOT_DATA_DIR"
@@ -119,4 +123,27 @@ def operational_data_sources_from_environment(
             )
         paths[key] = resolved
 
-    return OperationalDataSources(**paths)
+    sources = OperationalDataSources(**paths)
+
+    try:
+        customer_validation = validate_customer_memory_file(
+            sources.customer_memory_path
+        )
+        supplier_validation = validate_supplier_capabilities_file(
+            sources.supplier_capabilities_path
+        )
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise OperationalDataSourceConfigurationError(
+            "Pilot operational data pack contains unreadable operational datasets."
+        ) from exc
+
+    if (
+        customer_validation.get("valid") is not True
+        or supplier_validation.get("valid") is not True
+    ):
+        raise OperationalDataSourceConfigurationError(
+            "Pilot operational data pack contains structurally invalid "
+            "operational datasets."
+        )
+
+    return sources

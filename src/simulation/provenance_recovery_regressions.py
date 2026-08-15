@@ -171,6 +171,12 @@ def _provenance_patches(registry_path: Path) -> ExitStack:
             side_effect=require,
         )
     )
+    stack.enter_context(
+        patch(
+            "src.core.operational_consistency.require_pilot_operational_dataset",
+            side_effect=require,
+        )
+    )
     return stack
 
 

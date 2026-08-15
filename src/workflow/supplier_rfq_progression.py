@@ -314,6 +314,7 @@ def _progress_supplier_rfq_workflow(
         risk_assessment=risk_assessment,
         supplier_selection=supplier_selection,
         supplier_quote=supplier_quote,
+        operational_data_sources=operational_data_sources,
     )
 
     if supplier_quote is None:
