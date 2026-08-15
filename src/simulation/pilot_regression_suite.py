@@ -26,6 +26,9 @@ from src.simulation.privacy_boundary_regressions import evaluate_privacy_boundar
 from src.simulation.provenance_recovery_regressions import evaluate_provenance_recovery_regressions
 from src.simulation.regulatory_compliance_regressions import evaluate_regulatory_compliance_regressions
 from src.simulation.runtime_preflight_regressions import evaluate_runtime_preflight_regressions
+from src.simulation.reliability_hardening_regressions import (
+    evaluate_reliability_hardening_regressions,
+)
 from src.simulation.road_rfq_commercial_safety_regressions import (
     evaluate_road_rfq_commercial_safety_regressions,
 )
@@ -78,6 +81,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Clarification resolution", evaluate_clarification_resolution_regressions),
     Suite("Regulatory compliance", evaluate_regulatory_compliance_regressions),
     Suite("Runtime reproducibility preflight", evaluate_runtime_preflight_regressions),
+    Suite(
+        "Runtime reliability hardening",
+        evaluate_reliability_hardening_regressions,
+    ),
     _reporter_suite("evaluate_commodity_dictionary_validation", "Commodity dictionary validation"),
     _reporter_suite("evaluate_supplier_capability_validation", "Supplier capability validation"),
     _reporter_suite("evaluate_supplier_adr_capability_validation", "Supplier ADR capability validation"),

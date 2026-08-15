@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import stat
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -19,6 +20,11 @@ DEFAULT_PILOT_DB_PATH = data_path("pilot", "minai_pilot.sqlite3")
 class SQLiteTransactionError(RuntimeError):
     pass
 
+
+class SQLiteStorageSecurityError(RuntimeError):
+    pass
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -31,10 +37,22 @@ class SQLitePilotStore:
         retention_days: int | None = None,
     ) -> None:
         configured_path = db_path or os.getenv("MINAI_PILOT_DB_PATH")
-        self.db_path = Path(configured_path or DEFAULT_PILOT_DB_PATH)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = Path(
+            configured_path or DEFAULT_PILOT_DB_PATH
+        )
+
+        parent_existed = self.db_path.parent.exists()
+        self.db_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
         self.run_id = run_id or str(uuid4())
         self._transaction_state = local()
+
+        self._prepare_storage_permissions(
+            parent_was_created=not parent_existed
+        )
 
         configured_retention = (
             retention_days
@@ -49,6 +67,77 @@ class SQLitePilotStore:
 
         self._initialize()
         self.purge_expired()
+        self._harden_storage_permissions()
+
+    def _prepare_storage_permissions(
+        self,
+        *,
+        parent_was_created: bool,
+    ) -> None:
+        if os.name != "posix":
+            return
+
+        if parent_was_created:
+            os.chmod(
+                self.db_path.parent,
+                0o700,
+            )
+
+        if self.db_path.is_symlink():
+            raise SQLiteStorageSecurityError(
+                "Pilot SQLite path must not be a symlink."
+            )
+
+        if not self.db_path.exists():
+            flags = (
+                os.O_CREAT
+                | os.O_EXCL
+                | os.O_WRONLY
+            )
+            try:
+                descriptor = os.open(
+                    self.db_path,
+                    flags,
+                    0o600,
+                )
+            except FileExistsError:
+                pass
+            else:
+                os.close(descriptor)
+
+        self._harden_storage_permissions()
+
+    def _harden_storage_permissions(self) -> None:
+        if os.name != "posix":
+            return
+
+        candidates = (
+            self.db_path,
+            Path(str(self.db_path) + "-wal"),
+            Path(str(self.db_path) + "-shm"),
+        )
+
+        for candidate in candidates:
+            if not candidate.exists():
+                continue
+
+            if candidate.is_symlink():
+                raise SQLiteStorageSecurityError(
+                    "Pilot SQLite storage files "
+                    "must not be symlinks."
+                )
+
+            os.chmod(candidate, 0o600)
+
+            actual_mode = stat.S_IMODE(
+                candidate.stat().st_mode
+            )
+
+            if actual_mode != 0o600:
+                raise SQLiteStorageSecurityError(
+                    "Pilot SQLite storage permissions "
+                    "could not be restricted."
+                )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
@@ -56,6 +145,7 @@ class SQLitePilotStore:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA secure_delete = ON")
+        self._harden_storage_permissions()
         return connection
 
     @property
@@ -81,6 +171,7 @@ class SQLitePilotStore:
         finally:
             self._transaction_state.connection = None
             connection.close()
+            self._harden_storage_permissions()
 
     @contextmanager
     def _connection_scope(self):
@@ -98,6 +189,7 @@ class SQLitePilotStore:
                 yield connection
         finally:
             connection.close()
+            self._harden_storage_permissions()
 
     def _initialize(self) -> None:
         with self._connection_scope() as connection:

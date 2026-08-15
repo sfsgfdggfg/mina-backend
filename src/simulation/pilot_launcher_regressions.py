@@ -91,6 +91,17 @@ def evaluate_pilot_launcher_regressions() -> dict:
 
         base_env = _valid_env(data_dir)
 
+        tls_cert = external_root / "pilot-cert.pem"
+        tls_key = external_root / "pilot-key.pem"
+        tls_cert.write_text(
+            "synthetic-cert",
+            encoding="utf-8",
+        )
+        tls_key.write_text(
+            "synthetic-key",
+            encoding="utf-8",
+        )
+
         missing_data_dir = dict(base_env)
         missing_data_dir.pop("MINAI_PILOT_DATA_DIR")
 
@@ -125,6 +136,13 @@ def evaluate_pilot_launcher_regressions() -> dict:
                         for k, v in base_env.items()
                         if k != "MINAI_PILOT_BIND_HOST"
                     },
+                ),
+                (
+                    "private IP without TLS",
+                    _valid_env(
+                        data_dir,
+                        "10.42.1.9",
+                    ),
                 ),
                 (
                     "missing pilot data directory",
@@ -213,31 +231,67 @@ def evaluate_pilot_launcher_regressions() -> dict:
                     _valid_env(data_dir),
                     "127.0.0.1",
                     8000,
+                    None,
+                    None,
                 ),
                 (
                     "private IP",
                     {
-                        **_valid_env(data_dir, "10.42.1.9"),
+                        **_valid_env(
+                            data_dir,
+                            "10.42.1.9",
+                        ),
                         "MINAI_PILOT_PORT": "8123",
+                        "MINAI_PILOT_TLS_CERTFILE": (
+                            str(tls_cert)
+                        ),
+                        "MINAI_PILOT_TLS_KEYFILE": (
+                            str(tls_key)
+                        ),
                     },
                     "10.42.1.9",
                     8123,
+                    str(tls_cert.resolve()),
+                    str(tls_key.resolve()),
                 ),
             )
 
-            for name, env, host, port in valid_configs:
+            for (
+                name,
+                env,
+                host,
+                port,
+                certfile,
+                keyfile,
+            ) in valid_configs:
                 with patch(
                     "src.pilot_launcher.uvicorn.run"
                 ) as uvicorn_run:
                     run(env)
+
+                expected_call = {
+                    "app": "src.api:app",
+                    "host": host,
+                    "port": port,
+                    "reload": False,
+                    "proxy_headers": False,
+                    "forwarded_allow_ips": "",
+                }
+
+                if (
+                    certfile is not None
+                    and keyfile is not None
+                ):
+                    expected_call.update(
+                        {
+                            "ssl_certfile": certfile,
+                            "ssl_keyfile": keyfile,
+                        }
+                    )
+
                 try:
                     uvicorn_run.assert_called_once_with(
-                        app="src.api:app",
-                        host=host,
-                        port=port,
-                        reload=False,
-                        proxy_headers=False,
-                        forwarded_allow_ips="",
+                        **expected_call
                     )
                 except AssertionError as exc:
                     failures.append(

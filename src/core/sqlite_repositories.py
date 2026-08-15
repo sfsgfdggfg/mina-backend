@@ -79,6 +79,17 @@ class SQLiteExtractionProposalRepository:
         return None if payload is None else _model_from_payload(ShipmentExtractionProposal, payload)
     def list_all(self) -> list[ShipmentExtractionProposal]:
         return [_model_from_payload(ShipmentExtractionProposal, p) for p in self.store.list_all(namespace=self.NAMESPACE)]
+    def find_by_message_key(
+        self,
+        message_key: str,
+    ) -> ShipmentExtractionProposal | None:
+        for proposal in self.list_all():
+            if (
+                proposal.inbound_mail.message_deduplication_key
+                == message_key
+            ):
+                return proposal
+        return None
 
 class SQLiteSupplierRFQRepository:
     DRAFT_NAMESPACE = "supplier_rfq_drafts"

@@ -18,6 +18,12 @@ class ExtractionProposalRepository(Protocol):
     def list_all(self) -> list[ShipmentExtractionProposal]:
         ...
 
+    def find_by_message_key(
+        self,
+        message_key: str,
+    ) -> Optional[ShipmentExtractionProposal]:
+        ...
+
 
 class InMemoryExtractionProposalRepository:
     def __init__(self) -> None:
@@ -40,3 +46,16 @@ class InMemoryExtractionProposalRepository:
             proposal.model_copy(deep=True)
             for proposal in self._proposals.values()
         ]
+
+    def find_by_message_key(
+        self,
+        message_key: str,
+    ) -> Optional[ShipmentExtractionProposal]:
+        for proposal in self._proposals.values():
+            if (
+                proposal.inbound_mail.message_deduplication_key
+                == message_key
+            ):
+                return proposal.model_copy(deep=True)
+
+        return None

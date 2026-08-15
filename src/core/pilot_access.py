@@ -162,6 +162,22 @@ def validate_pilot_configuration(
             "Pilot bind host must be a specific private or loopback address."
         )
 
+    if not bind_ip.is_loopback:
+        tls_cert = (
+            env.get("MINAI_PILOT_TLS_CERTFILE")
+            or ""
+        ).strip()
+        tls_key = (
+            env.get("MINAI_PILOT_TLS_KEYFILE")
+            or ""
+        ).strip()
+
+        if not tls_cert or not tls_key:
+            raise PilotAccessConfigurationError(
+                "Private-network pilot binding requires "
+                "TLS certificate and key configuration."
+            )
+
 
 def route_allowed(method: str, path: str) -> bool:
     normalized_method = method.upper()
@@ -206,6 +222,7 @@ def authorize_pilot_request(
     path: str,
     client_host: str | None,
     authorization: str | None,
+    request_scheme: str | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> PilotAccessDecision:
     env = environ if environ is not None else os.environ
@@ -222,6 +239,21 @@ def authorize_pilot_request(
 
     if not _client_network_allowed(client_host, networks):
         return PilotAccessDecision(False, 403, "pilot_network_denied")
+
+    client_address = ipaddress.ip_address(
+        client_host
+    )
+
+    if (
+        not client_address.is_loopback
+        and (request_scheme or "").lower()
+        != "https"
+    ):
+        return PilotAccessDecision(
+            False,
+            426,
+            "pilot_https_required",
+        )
 
     if not route_allowed(method, path):
         return PilotAccessDecision(False, 404, "pilot_route_disabled")

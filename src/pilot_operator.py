@@ -29,6 +29,7 @@ _STATUS_MESSAGES = {
     401: "Authentication failed. Check MINAI_PILOT_TOKEN.",
     403: "Access denied by the pilot network boundary.",
     404: "Resource was not found or this route is disabled in pilot mode.",
+    426: "Secure HTTPS transport is required for this pilot connection.",
     409: "Lifecycle conflict or stale attempt. Refresh state before acting.",
     422: "Input or correction was rejected. Review the supplied values.",
     503: "Pilot configuration, provenance, or system safety block.",
@@ -79,6 +80,16 @@ def validate_base_url(value: str) -> str:
         raise OperatorConfigurationError(
             "Pilot API host must be a specific private or loopback address."
         )
+
+    if (
+        not address.is_loopback
+        and parsed.scheme != "https"
+    ):
+        raise OperatorConfigurationError(
+            "Private-network pilot API URLs "
+            "must use https."
+        )
+
     return normalized
 
 

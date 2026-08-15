@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
@@ -20,7 +20,10 @@ from src.core.customer_memory import (
     restore_customer_memory_from_backup,
     build_customer_memory_backup_cleanup_preview,
 )
-from src.ai.email_parser import parse_email_with_ai
+from src.ai.email_parser import (
+    EmailParserUnavailableError,
+    parse_email_with_ai,
+)
 from src.workflow.pipeline import process_shipment
 from src.workflow.supplier_rfq_progression import (
     SupplierRFQWorkflowProgressionError,
@@ -32,7 +35,10 @@ from src.workflow.supplier_response_ingestion import (
     ingest_supplier_reply,
 )
 from src.workflow.mail_delivery import send_supplier_rfq_via_mail
-from src.workflow.mail_ingestion import process_customer_inquiry_mail
+from src.workflow.mail_ingestion import (
+    InboundMailIdempotencyConflictError,
+    process_customer_inquiry_mail,
+)
 from src.workflow.extraction_confirmation import (
     ExtractionConfirmationTransitionError,
     ExtractionCorrectionError,
@@ -53,7 +59,11 @@ from src.core.sqlite_repositories import (
     SQLiteQuoteCaseRepository,
     SQLiteSupplierRFQRepository,
 )
-from src.core.mail import InboundMailEnvelope, OutboundMailSender
+from src.core.mail import (
+    InboundMailEnvelope,
+    OutboundMailSender,
+    validate_inbound_mail_body,
+)
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -102,6 +112,7 @@ async def enforce_pilot_access(request: Request, call_next):
             else None
         ),
         authorization=request.headers.get("Authorization"),
+        request_scheme=request.url.scheme,
     )
     if not decision.allowed:
         return JSONResponse(
@@ -152,6 +163,11 @@ class ProcessEmailRequest(BaseModel):
     sender_name: Optional[str] = None
     subject: Optional[str] = None
     external_message_id: Optional[str] = None
+
+    @field_validator("email_text")
+    @classmethod
+    def validate_email_text(cls, value: str) -> str:
+        return validate_inbound_mail_body(value)
 
 
 class ConfirmExtractionRequest(BaseModel):
@@ -831,18 +847,33 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
 
 @app.post("/process-email")
 def process_email(request: ProcessEmailRequest):
-    result = process_customer_inquiry_mail(
-        mail=InboundMailEnvelope(
-            body_text=request.email_text,
-            sender_address=request.sender_address,
-            sender_name=request.sender_name,
-            subject=request.subject,
-            external_message_id=request.external_message_id,
-            source="manual",
-        ),
-        shipment_parser=parse_email_with_ai,
-        proposal_repository=extraction_proposal_repository,
-    )
+    try:
+        result = process_customer_inquiry_mail(
+            mail=InboundMailEnvelope(
+                body_text=request.email_text,
+                sender_address=request.sender_address,
+                sender_name=request.sender_name,
+                subject=request.subject,
+                external_message_id=(
+                    request.external_message_id
+                ),
+                source="manual",
+            ),
+            shipment_parser=parse_email_with_ai,
+            proposal_repository=(
+                extraction_proposal_repository
+            ),
+        )
+    except InboundMailIdempotencyConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="inbound_message_id_conflict",
+        ) from exc
+    except EmailParserUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="email_parser_unavailable",
+        ) from exc
 
     return serialize_result(result)
 
@@ -1238,6 +1269,9 @@ def serialize_result(result: dict) -> dict:
     commodity_profile = result.get("commodity_profile") or (get_commodity_record(shipment.commodity) if shipment else None)
 
     return {
+        "ingestion_status": result.get(
+            "ingestion_status"
+        ),
         "extraction_proposal": (
             extraction_proposal.model_dump()
             if hasattr(extraction_proposal, "model_dump")

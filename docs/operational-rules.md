@@ -3060,3 +3060,24 @@ suppliers with usable active primary RFQ contacts.
 
 International phone numbers, IBANs, signatures and deterministic quoted-message
 history must be minimized before customer mail reaches AI parsing.
+
+
+## RULE-130 — Inbound Processing and Pilot Transport Must Fail Closed
+
+Inbound mail exceeding the controlled body-size limit must not reach AI
+processing.
+
+A repeated external inbound message identity must be resolved to its existing
+extraction proposal before another AI call. If the same identity appears with a
+different sender or body fingerprint, processing must stop as an idempotency
+conflict.
+
+AI extraction must use bounded request duration and retry count. Provider
+failures must be surfaced through sanitized controlled errors.
+
+Pilot SQLite evidence files must remain private to the operating account on
+POSIX hosts.
+
+Bearer-authenticated pilot traffic may use plaintext HTTP only on loopback.
+Private-network pilot bindings and operator connections must use HTTPS with TLS
+material stored outside the repository.

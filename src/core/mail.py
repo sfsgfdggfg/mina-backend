@@ -27,6 +27,25 @@ MailSendStatus = Literal[
     "provider_unavailable",
 ]
 
+MAX_INBOUND_MAIL_BODY_BYTES = 256 * 1024
+
+
+def validate_inbound_mail_body(value: str) -> str:
+    if not value.strip():
+        raise ValueError(
+            "Inbound mail body must not be empty."
+        )
+
+    body_size = len(value.encode("utf-8"))
+
+    if body_size > MAX_INBOUND_MAIL_BODY_BYTES:
+        raise ValueError(
+            "Inbound mail body exceeds the controlled "
+            f"{MAX_INBOUND_MAIL_BODY_BYTES}-byte limit."
+        )
+
+    return value
+
 
 def _normalize_address(value: str) -> str:
     normalized = value.strip().lower()
@@ -55,6 +74,11 @@ class InboundMailEnvelope(BaseModel):
     in_reply_to_message_id: Optional[str] = None
     explicit_rfq_reference: Optional[str] = None
     source: InboundMailChannel = "manual"
+
+    @field_validator("body_text")
+    @classmethod
+    def validate_body_text(cls, value: str) -> str:
+        return validate_inbound_mail_body(value)
 
     @field_validator("sender_address")
     @classmethod

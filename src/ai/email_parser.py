@@ -2,7 +2,7 @@ import json
 import re
 from pathlib import Path
 from typing import Optional
-from openai import OpenAI
+from openai import APIError, OpenAI
 from src.core.normalization import normalize_shipment
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.paths import data_path
@@ -13,6 +13,23 @@ from src.ai.extraction_models import ShipmentExtraction
 from src.ai.extraction_mapping import shipment_from_extraction
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
 from src.core.privacy import PrivacyBoundaryError, PrivacySafeText
+
+
+OPENAI_REQUEST_TIMEOUT_SECONDS = 30.0
+OPENAI_MAX_RETRIES = 1
+
+
+class EmailParserUnavailableError(RuntimeError):
+    pass
+
+
+def _build_openai_client() -> OpenAI:
+    return OpenAI(
+        api_key=OPENAI_API_KEY,
+        timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
+        max_retries=OPENAI_MAX_RETRIES,
+    )
+
 
 GENERIC_CUSTOMER_NAMES = {
     "",
@@ -416,11 +433,12 @@ def parse_email_with_ai(
     if not OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY bulunamadı. Lütfen .env dosyasını kontrol edin.")
 
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    client = _build_openai_client()
 
-    response = client.beta.chat.completions.parse(
-        model=OPENAI_MODEL,
-        messages=[
+    try:
+        response = client.beta.chat.completions.parse(
+            model=OPENAI_MODEL,
+            messages=[
             {
                 "role": "system",
                 "content": (
@@ -442,9 +460,22 @@ def parse_email_with_ai(
                 "role": "user",
                 "content": email_text,
             },
-        ],
-        response_format=ShipmentExtraction,
-    )
+            ],
+            response_format=ShipmentExtraction,
+        )
+    except APIError as exc:
+        raise EmailParserUnavailableError(
+            "AI email parser is temporarily unavailable."
+        ) from exc
 
     extracted = response.choices[0].message.parsed
-    return build_shipment_from_extraction(extracted, email_text)
+
+    if extracted is None:
+        raise EmailParserUnavailableError(
+            "AI email parser returned no structured result."
+        )
+
+    return build_shipment_from_extraction(
+        extracted,
+        email_text,
+    )

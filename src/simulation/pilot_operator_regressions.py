@@ -70,6 +70,8 @@ def evaluate_pilot_operator_regressions() -> dict:
         "https://8.8.8.8:8000",
         "https://example.com",
         "ftp://127.0.0.1",
+        "http://10.42.1.9:8000",
+        "http://[fd00::10]:8000",
     ):
         try:
             validate_base_url(public_url)
@@ -266,6 +268,7 @@ def evaluate_pilot_operator_regressions() -> dict:
         403: "Access denied",
         404: "not found",
         409: "Lifecycle conflict",
+        426: "HTTPS",
         422: "Input or correction",
         503: "safety block",
     }

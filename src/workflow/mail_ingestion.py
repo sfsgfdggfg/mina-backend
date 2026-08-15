@@ -1,36 +1,101 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import contextmanager
+from threading import Lock
 
-from src.core.extraction_confirmation import ShipmentProposalSnapshot
+from src.core.extraction_confirmation import (
+    ShipmentExtractionProposal,
+    ShipmentProposalSnapshot,
+)
 from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
 from src.core.mail import InboundMailEnvelope
 from src.core.privacy import (
     PrivacySafeText,
+    fingerprint_text,
     prepare_inbound_mail_for_processing,
 )
-from src.workflow.extraction_confirmation import create_extraction_proposal
+from src.workflow.extraction_confirmation import (
+    create_extraction_proposal,
+)
 
 
-def process_customer_inquiry_mail(
+class InboundMailIdempotencyConflictError(ValueError):
+    pass
+
+
+_MESSAGE_LOCKS_GUARD = Lock()
+_MESSAGE_LOCKS: dict[str, Lock] = {}
+
+
+@contextmanager
+def _message_ingestion_lock(
+    message_key: str | None,
+):
+    if message_key is None:
+        yield
+        return
+
+    with _MESSAGE_LOCKS_GUARD:
+        lock = _MESSAGE_LOCKS.setdefault(
+            message_key,
+            Lock(),
+        )
+
+    with lock:
+        yield
+
+
+def _existing_proposal_for_mail(
     *,
     mail: InboundMailEnvelope,
-    shipment_parser: Callable[[PrivacySafeText], ShipmentProposalSnapshot],
-    proposal_repository: ExtractionProposalRepository,
-) -> dict:
-    """Stop customer mail at a non-authoritative extraction proposal."""
+    repository: ExtractionProposalRepository,
+) -> ShipmentExtractionProposal | None:
+    message_key = mail.message_deduplication_key
 
-    safe_mail, safe_text = prepare_inbound_mail_for_processing(mail)
-    proposed_shipment = shipment_parser(safe_text)
-    proposal = create_extraction_proposal(
-        mail=safe_mail,
-        proposed_shipment=proposed_shipment,
-        repository=proposal_repository,
+    if message_key is None:
+        return None
+
+    existing = repository.find_by_message_key(
+        message_key
     )
+
+    if existing is None:
+        return None
+
+    existing_hash = (
+        existing.inbound_mail.raw_body_sha256
+    )
+    incoming_hash = fingerprint_text(
+        mail.body_text
+    )
+
+    if (
+        existing_hash is None
+        or existing_hash != incoming_hash
+        or existing.inbound_mail.sender_address
+        != mail.sender_address
+    ):
+        raise InboundMailIdempotencyConflictError(
+            "Inbound message ID was reused with "
+            "different content or sender."
+        )
+
+    return existing
+
+
+def _extraction_required_result(
+    *,
+    proposal: ShipmentExtractionProposal,
+    ingestion_status: str,
+) -> dict:
     return {
-        "result_type": "extraction_confirmation_required",
+        "result_type": (
+            "extraction_confirmation_required"
+        ),
+        "ingestion_status": ingestion_status,
         "extraction_proposal": proposal,
         "shipment": None,
         "pilot_scope": None,
@@ -59,3 +124,50 @@ def process_customer_inquiry_mail(
         "management_review_draft": None,
         "action_recommendation": None,
     }
+
+
+def process_customer_inquiry_mail(
+    *,
+    mail: InboundMailEnvelope,
+    shipment_parser: Callable[
+        [PrivacySafeText],
+        ShipmentProposalSnapshot,
+    ],
+    proposal_repository: ExtractionProposalRepository,
+) -> dict:
+    """Stop customer mail at a non-authoritative extraction proposal."""
+
+    message_key = mail.message_deduplication_key
+
+    with _message_ingestion_lock(message_key):
+        existing = _existing_proposal_for_mail(
+            mail=mail,
+            repository=proposal_repository,
+        )
+
+        if existing is not None:
+            return _extraction_required_result(
+                proposal=existing,
+                ingestion_status=(
+                    "duplicate_existing_proposal"
+                ),
+            )
+
+        safe_mail, safe_text = (
+            prepare_inbound_mail_for_processing(
+                mail
+            )
+        )
+        proposed_shipment = shipment_parser(
+            safe_text
+        )
+        proposal = create_extraction_proposal(
+            mail=safe_mail,
+            proposed_shipment=proposed_shipment,
+            repository=proposal_repository,
+        )
+
+        return _extraction_required_result(
+            proposal=proposal,
+            ingestion_status="created",
+        )

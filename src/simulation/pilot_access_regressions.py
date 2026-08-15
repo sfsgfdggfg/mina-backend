@@ -44,12 +44,41 @@ def evaluate_pilot_access_regressions() -> dict:
     if no_auth.allowed or no_auth.status_code != 401:
         failures.append("pilot workflow accepted unauthenticated request")
 
+    private_env = {
+        **env,
+        "MINAI_PILOT_BIND_HOST": "10.42.1.9",
+        "MINAI_PILOT_TLS_CERTFILE": (
+            "/external/pilot-cert.pem"
+        ),
+        "MINAI_PILOT_TLS_KEYFILE": (
+            "/external/pilot-key.pem"
+        ),
+    }
+
+    insecure_private = authorize_pilot_request(
+        method="POST",
+        path="/process-email",
+        client_host="10.42.1.25",
+        authorization=f"Bearer {operator_one_token}",
+        request_scheme="http",
+        environ=private_env,
+    )
+    if (
+        insecure_private.allowed
+        or insecure_private.status_code != 426
+    ):
+        failures.append(
+            "private-network bearer request "
+            "was accepted without HTTPS"
+        )
+
     authenticated = authorize_pilot_request(
         method="POST",
         path="/process-email",
         client_host="10.42.1.25",
         authorization=f"Bearer {operator_one_token}",
-        environ=env,
+        request_scheme="https",
+        environ=private_env,
     )
     if not authenticated.allowed:
         failures.append("named pilot operator was rejected")

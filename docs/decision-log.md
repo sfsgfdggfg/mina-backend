@@ -5121,3 +5121,42 @@ supplier contacts block REAL SHADOW PILOT GO.
 Sender identity is not inferred from message body text, supplier names, or AI
 parser output. Privacy transformation continues to occur before any AI parser
 call.
+
+
+## DEC-111 — Runtime Reliability and Private Transport Hardening
+
+**Status:** Accepted
+**Date:** 2026-08-16
+
+### Decision
+
+Customer email AI extraction uses an explicit 30-second request timeout and one
+SDK retry. Provider/API failures do not expose raw provider error details through
+the controlled HTTP endpoint.
+
+When a normalized inbound message has an external message ID, MINAI checks
+durable extraction proposals before invoking AI. Re-delivery of the same message
+reuses the existing extraction proposal. Reuse of the same message identity with
+different body content or sender identity fails closed. Messages without an
+external message ID remain processable but cannot receive this provider-level
+deduplication guarantee.
+
+Inbound provider-neutral mail bodies are limited to 256 KiB of UTF-8 text before
+AI processing.
+
+On POSIX pilot hosts, SQLite pilot evidence files are created and maintained
+with owner-only file permissions and symlinked database/storage files are not
+accepted.
+
+Loopback pilot operation may use HTTP. Any private-network/non-loopback pilot
+binding requires externally stored TLS certificate/key files, and authenticated
+private-network requests must use HTTPS. The operator client refuses to send
+bearer credentials to a private-network plaintext HTTP URL.
+
+### Consequences
+
+Transient AI/provider failures remain retryable without fabricating shipment
+facts. Duplicate provider delivery cannot create repeated successful AI
+extractions in the single-process controlled pilot runtime.
+
+Private-LAN pilot operation now requires TLS provisioning before startup.
