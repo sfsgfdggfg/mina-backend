@@ -5180,3 +5180,22 @@ Consistency warnings are advisory: they surface commercial differences but do no
 ### Consequences
 
 The final customer communication is operator-owned while MINAI remains the drafting and consistency assistant. Customer-specific communication-style learning may be added later from revision history.
+
+## DEC-113 — Verified Pilot Data Packs Are Immutable
+
+**Status:** Accepted
+**Date:** 2026-08-16
+
+### Decision
+
+Real controlled-pilot customer and supplier master data remains outside the repository and is prepared through the external pilot data-pack workflow.
+
+Before verification, guided customer and supplier intake validates each candidate dataset with the existing production structural validators before atomically replacing the external file. Guided listing must not expose trusted customer sender addresses or supplier contact email addresses.
+
+Verification requires explicit final human review and records fingerprints for the exact final customer and supplier bytes. Once a provenance registry exists, the data pack is frozen: guided intake and verification must refuse in-place changes or replacement of the verification registry.
+
+Any later operational-data change requires a new data-pack version, fresh human review, new SHA-256 fingerprints and fresh provenance verification.
+
+### Consequences
+
+A previously verified pilot pack cannot be silently edited and re-certified in place. Operational master-data corrections are explicit new verification events rather than mutations of already approved evidence.

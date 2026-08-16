@@ -25,6 +25,13 @@ from src.core.operational_data import (
 from src.core.supplier_capability_validator import (
     validate_supplier_capabilities_file,
 )
+from src.pilot_data_pack_intake import (
+    PilotDataPackIntakeError,
+    add_customer_profile,
+    add_supplier_profile,
+    list_customer_profiles,
+    list_supplier_profiles,
+)
 from src.paths import REPO_ROOT
 
 
@@ -265,9 +272,13 @@ def verify_pack(
         )
 
     paths = resolve_pack_paths(pack_dir, require_datasets=True)
-    if paths.provenance_registry.is_symlink():
+    if (
+        paths.provenance_registry.exists()
+        or paths.provenance_registry.is_symlink()
+    ):
         raise PilotDataPackError(
-            "Pilot provenance registry must not be a symlink."
+            "Pilot data pack already contains a verification registry; "
+            "create a new pack version instead of overwriting verified evidence."
         )
     registry = {
         "version": 1,
@@ -379,6 +390,100 @@ def _parser() -> argparse.ArgumentParser:
             "by the named verifier."
         ),
     )
+
+    customer = commands.add_parser("customer")
+    customer_commands = customer.add_subparsers(
+        dest="customer_action",
+        required=True,
+    )
+    customer_list = customer_commands.add_parser("list")
+    customer_list.add_argument("--pack-dir", required=True, type=Path)
+    customer_add = customer_commands.add_parser("add")
+    customer_add.add_argument("--pack-dir", required=True, type=Path)
+    customer_add.add_argument("--name", required=True)
+    customer_add.add_argument("--alias", action="append")
+    customer_add.add_argument("--trusted-address", action="append")
+    customer_add.add_argument("--trusted-domain", action="append")
+    customer_add.add_argument("--default-commodity")
+    customer_add.add_argument("--default-equipment")
+    customer_add.add_argument(
+        "--price-sensitivity",
+        choices=("low", "medium", "high"),
+    )
+    customer_add.add_argument(
+        "--time-sensitivity",
+        choices=("low", "medium", "high"),
+    )
+    customer_add.add_argument("--pickup-city")
+    customer_add.add_argument("--pickup-area")
+    customer_add.add_argument("--pickup-country")
+    customer_add.add_argument("--delivery-city")
+    customer_add.add_argument("--delivery-country")
+    customer_add.add_argument("--note", action="append")
+    customer_add.add_argument("--inactive", action="store_true")
+
+    supplier = commands.add_parser("supplier")
+    supplier_commands = supplier.add_subparsers(
+        dest="supplier_action",
+        required=True,
+    )
+    supplier_list = supplier_commands.add_parser("list")
+    supplier_list.add_argument("--pack-dir", required=True, type=Path)
+    supplier_add = supplier_commands.add_parser("add")
+    supplier_add.add_argument("--pack-dir", required=True, type=Path)
+    supplier_add.add_argument("--name", required=True)
+    supplier_add.add_argument(
+        "--role",
+        required=True,
+        choices=("primary", "backup", "specialist"),
+    )
+    supplier_add.add_argument(
+        "--route-region",
+        action="append",
+        required=True,
+    )
+    supplier_add.add_argument(
+        "--country",
+        action="append",
+        required=True,
+    )
+    supplier_add.add_argument(
+        "--service-type",
+        action="append",
+        required=True,
+        choices=("FTL", "LTL"),
+    )
+    supplier_add.add_argument(
+        "--equipment-type",
+        action="append",
+        required=True,
+    )
+    supplier_add.add_argument(
+        "--special-capability",
+        action="append",
+    )
+    supplier_add.add_argument(
+        "--priority-route",
+        action="append",
+    )
+    supplier_add.add_argument(
+        "--reliability-score",
+        required=True,
+        type=float,
+    )
+    supplier_add.add_argument(
+        "--price-score",
+        required=True,
+        type=float,
+    )
+    supplier_add.add_argument(
+        "--speed-score",
+        required=True,
+        type=float,
+    )
+    supplier_add.add_argument("--notes", required=True)
+    supplier_add.add_argument("--contact-email", required=True)
+    supplier_add.add_argument("--inactive", action="store_true")
     return parser
 
 
@@ -402,6 +507,71 @@ def main(
             _print_result(result, output)
             return 0
 
+        if args.command == "customer":
+            paths = resolve_pack_paths(
+                args.pack_dir,
+                require_datasets=True,
+            )
+            if args.customer_action == "list":
+                result = list_customer_profiles(
+                    paths.customer_memory
+                )
+            else:
+                result = add_customer_profile(
+                    customer_memory_path=paths.customer_memory,
+                    provenance_registry_path=paths.provenance_registry,
+                    customer_name=args.name,
+                    active=not args.inactive,
+                    aliases=args.alias,
+                    trusted_sender_addresses=args.trusted_address,
+                    trusted_sender_domains=args.trusted_domain,
+                    default_commodity=args.default_commodity,
+                    default_equipment_type=args.default_equipment,
+                    price_sensitivity=args.price_sensitivity,
+                    time_sensitivity=args.time_sensitivity,
+                    default_pickup_city=args.pickup_city,
+                    default_pickup_area=args.pickup_area,
+                    default_pickup_country=args.pickup_country,
+                    default_delivery_city=args.delivery_city,
+                    default_delivery_country=args.delivery_country,
+                    operational_notes=args.note,
+                )
+            _print_result(result, output)
+            return 0
+
+        if args.command == "supplier":
+            paths = resolve_pack_paths(
+                args.pack_dir,
+                require_datasets=True,
+            )
+            if args.supplier_action == "list":
+                result = list_supplier_profiles(
+                    paths.supplier_capabilities
+                )
+            else:
+                result = add_supplier_profile(
+                    supplier_capabilities_path=(
+                        paths.supplier_capabilities
+                    ),
+                    provenance_registry_path=paths.provenance_registry,
+                    supplier_name=args.name,
+                    active=not args.inactive,
+                    role=args.role,
+                    route_regions=args.route_region,
+                    countries=args.country,
+                    service_types=args.service_type,
+                    equipment_types=args.equipment_type,
+                    special_capabilities=args.special_capability,
+                    priority_routes=args.priority_route,
+                    reliability_score=args.reliability_score,
+                    price_score=args.price_score,
+                    speed_score=args.speed_score,
+                    notes=args.notes,
+                    primary_contact_email=args.contact_email,
+                )
+            _print_result(result, output)
+            return 0
+
         if args.command == "validate":
             result = validate_pack(args.pack_dir)
             _print_result(result, output)
@@ -419,7 +589,7 @@ def main(
         )
         _print_result(result, output)
         return 0 if result.get("verified") is True else 1
-    except PilotDataPackError as exc:
+    except (PilotDataPackError, PilotDataPackIntakeError) as exc:
         _print_result(
             {
                 "valid": False,
