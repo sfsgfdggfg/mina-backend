@@ -16,6 +16,7 @@ from src.simulation.authorized_sanitized_replay import (
     main as authorized_main,
     run_authorized_replay,
 )
+from src.simulation.replay_receipt import ReleaseIdentity
 from src.simulation.pilot_rehearsal import (
     _snapshot,
     _write_synthetic_sources,
@@ -261,6 +262,41 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             cli_rc == 0
             and "Sanitized historical replay: PASS" in output,
         )
+        mutation_receipt = root / "mutation-receipt.json"
+        mutation_calls = {"count": 0}
+
+        def mutating_parser(safe_text):
+            mutation_calls["count"] += 1
+            if mutation_calls["count"] == 1:
+                fixture.write_text(
+                    fixture.read_text(encoding="utf-8") + "\n",
+                    encoding="utf-8",
+                )
+            return _synthetic_parser(safe_text)
+
+        with patch.dict(
+            os.environ,
+            {"MINAI_PILOT_DATA_DIR": str(pack_root)},
+            clear=False,
+        ):
+            with contextlib.redirect_stdout(io.StringIO()):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    mutation_rc = authorized_main(
+                        [
+                            "--input", str(fixture),
+                            "--confirm-pre-sanitized",
+                            "--confirm-openai-data-use-approved",
+                            "--confirm-no-autonomous-outbound",
+                            "--receipt", str(mutation_receipt),
+                        ],
+                        parser_func=mutating_parser,
+                        release_identity_func=lambda: ReleaseIdentity("a" * 40, True),
+                    )
+        require(
+            "replay source mutation blocks receipt",
+            mutation_rc == 2 and not mutation_receipt.exists(),
+        )
+
         require(
             "authorized CLI output omits replay values",
             "logistics@customer.invalid" not in output

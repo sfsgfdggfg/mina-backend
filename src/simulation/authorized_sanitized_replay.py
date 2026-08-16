@@ -55,9 +55,12 @@ from src.simulation.sanitized_replay import (
 from src.simulation.replay_receipt import (
     ReleaseIdentity,
     ReplayReceiptError,
+    ReplaySourceIdentity,
     build_replay_receipt,
     collect_release_identity,
+    collect_replay_source_identity,
     require_clean_release_identity,
+    require_same_replay_source_identity,
     write_replay_receipt,
 )
 from src.workflow.pipeline import process_shipment
@@ -391,11 +394,22 @@ def main(
             )
             return 2
 
+    source_identity: ReplaySourceIdentity | None = None
     try:
-        cases = load_cases(args.input)
         sources = operational_data_sources_from_environment(
             require_external=True,
         )
+        if args.receipt is not None:
+            source_identity = collect_replay_source_identity(
+                args.input,
+                sources,
+            )
+        cases = load_cases(args.input)
+        if source_identity is not None:
+            require_same_replay_source_identity(
+                source_identity,
+                collect_replay_source_identity(args.input, sources),
+            )
         result = run_authorized_replay(
             cases,
             parser=parser_func or parse_email_with_ai,
@@ -414,6 +428,12 @@ def main(
         print(
             "Authorized replay blocked: "
             "operational_data_not_verified",
+            file=sys.stderr,
+        )
+        return 2
+    except ReplayReceiptError as exc:
+        print(
+            f"Authorized replay blocked: {exc.code}",
             file=sys.stderr,
         )
         return 2
@@ -450,11 +470,18 @@ def main(
                 or current_identity.commit_sha != release_identity.commit_sha
             ):
                 raise ReplayReceiptError("repository_changed_during_replay")
+            if source_identity is None:
+                raise ReplayReceiptError("replay_source_identity_unavailable")
+            require_same_replay_source_identity(
+                source_identity,
+                collect_replay_source_identity(args.input, sources),
+            )
             receipt = build_replay_receipt(
                 result,
                 input_path=args.input,
                 operational_data_sources=sources,
                 release_identity=release_identity,
+                source_identity=source_identity,
             )
             write_replay_receipt(args.receipt, receipt)
         except ReplayReceiptError as exc:

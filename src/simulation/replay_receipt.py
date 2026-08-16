@@ -42,6 +42,13 @@ class ReleaseIdentity:
     clean_worktree: bool
 
 
+@dataclass(frozen=True)
+class ReplaySourceIdentity:
+    replay_input_sha256: str
+    customer_memory_sha256: str
+    supplier_capabilities_sha256: str
+
+
 class ReplayReceiptError(ValueError):
     """Safe receipt failure whose code contains no customer/replay values."""
 
@@ -245,16 +252,41 @@ def _verified_dataset_hashes(
     return result
 
 
+def collect_replay_source_identity(
+    input_path: Path,
+    sources: OperationalDataSources,
+) -> ReplaySourceIdentity:
+    resolved_input = validate_external_path(input_path)
+    dataset_hashes = _verified_dataset_hashes(sources)
+    return ReplaySourceIdentity(
+        replay_input_sha256=_sha256_file(resolved_input),
+        customer_memory_sha256=dataset_hashes["customer_memory"],
+        supplier_capabilities_sha256=dataset_hashes["supplier_capabilities"],
+    )
+
+
+def require_same_replay_source_identity(
+    expected: ReplaySourceIdentity,
+    current: ReplaySourceIdentity,
+) -> None:
+    if current != expected:
+        raise ReplayReceiptError("replay_sources_changed_during_execution")
+
+
 def build_replay_receipt(
     result: ReplayAggregateResult,
     *,
     input_path: Path,
     operational_data_sources: OperationalDataSources,
     release_identity: ReleaseIdentity,
+    source_identity: ReplaySourceIdentity | None = None,
     completed_at: datetime | None = None,
 ) -> ReplayReceipt:
     require_clean_release_identity(release_identity)
-    resolved_input = validate_external_path(input_path)
+    source_identity = source_identity or collect_replay_source_identity(
+        input_path,
+        operational_data_sources,
+    )
     counts: Counter[str] = result.outcome_counts
     return ReplayReceipt(
         pilot_commit_sha=release_identity.commit_sha,
@@ -262,10 +294,11 @@ def build_replay_receipt(
         result="pass" if result.passed else "fail",
         case_count=len(result.cases),
         safety_critical_mismatches=result.safety_critical_mismatches,
-        replay_input_sha256=_sha256_file(resolved_input),
-        operational_dataset_sha256=_verified_dataset_hashes(
-            operational_data_sources
-        ),
+        replay_input_sha256=source_identity.replay_input_sha256,
+        operational_dataset_sha256={
+            "customer_memory": source_identity.customer_memory_sha256,
+            "supplier_capabilities": source_identity.supplier_capabilities_sha256,
+        },
         privacy_transform_version=PRIVACY_TRANSFORM_VERSION,
         metrics=ReplayMetrics(
             extraction_fields_evaluated=result.ground_truth_fields,
