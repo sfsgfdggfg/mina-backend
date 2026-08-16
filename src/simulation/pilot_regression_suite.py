@@ -40,6 +40,7 @@ from src.simulation.road_rfq_commercial_safety_regressions import (
 from src.simulation.safe_api_entrypoint_regressions import evaluate_safe_api_entrypoint_regressions
 from src.simulation.source_compile_regressions import evaluate_source_compile_regressions
 from src.simulation.sanitized_replay_regressions import evaluate_sanitized_replay_regressions
+from src.simulation.authorized_sanitized_replay_regressions import evaluate_authorized_sanitized_replay_regressions
 from src.simulation.supplier_response_ingestion_regressions import evaluate_supplier_response_ingestion_regressions
 from src.simulation.supplier_rfq_lifecycle_regressions import evaluate_supplier_rfq_lifecycle_regressions
 from src.simulation import test_reporter
@@ -62,6 +63,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Pilot launcher", evaluate_pilot_launcher_regressions),
     Suite("Synthetic pilot rehearsal", evaluate_pilot_rehearsal_regressions),
     Suite("Sanitized historical replay harness", evaluate_sanitized_replay_regressions),
+    Suite("Authorized sanitized historical replay", evaluate_authorized_sanitized_replay_regressions),
     Suite("Pilot readiness assessment", evaluate_pilot_readiness_regressions),
     Suite("Safe API entry point", evaluate_safe_api_entrypoint_regressions),
     Suite("Python source compilation", evaluate_source_compile_regressions),

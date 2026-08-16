@@ -37,7 +37,7 @@ SCORED_FIELDS = {
     "customer_name", "pickup_country", "pickup_city", "pickup_postcode",
     "delivery_country", "delivery_city", "delivery_postcode", "commodity",
     "gross_weight_kg", "packages", "service_type", "equipment_type",
-    "transport_mode", "cargo_ready_date", "is_adr",
+    "transport_mode", "cargo_ready_date", "required_delivery_date", "is_adr",
     "is_temperature_controlled", "temperature_requirement", "is_high_value",
     "is_oversize_or_project",
 }
@@ -347,7 +347,11 @@ def run_replay(cases: Iterable[ReplayCase], extractor: ExtractionCallable) -> Re
     )
 
 
-def print_summary(result: ReplayAggregateResult, stream: TextIO = sys.stdout) -> None:
+def print_summary(
+    result: ReplayAggregateResult,
+    stream: TextIO | None = None,
+) -> None:
+    stream = stream or sys.stdout
     c = result.outcome_counts
     print("Sanitized replay summary", file=stream)
     print(f"Cases: {len(result.cases)}", file=stream)
