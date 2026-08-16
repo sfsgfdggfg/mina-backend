@@ -206,3 +206,13 @@ External pack seçimi tek başına pilot yetkisi değildir. `customer_memory` ve
 `supplier_capabilities` yine production provenance doğrulayıcısından geçmeli;
 registered path, consumed path ve final-byte SHA-256 uyuşmazlığı fail-closed
 blok üretir.
+
+## P1.14 Guided Data-Pack Workflow
+
+The supported pilot-data preparation path is the external guided CLI rather than manual JSON editing.
+
+Initialize a new external pack with `python -m src.pilot_data_pack init --pack-dir <absolute-external-pack-path>`.
+
+Add customer records with `python -m src.pilot_data_pack customer add ...` and supplier records with `python -m src.pilot_data_pack supplier add ...`. Trusted customer sender identity values and the supplier primary RFQ contact email are requested interactively with hidden terminal input so they are not placed in shell command history.
+
+Use `customer list` and `supplier list` for safe summaries, then `validate` before final human review. After final review, `verify --confirm-final-reviewed` writes exact-byte provenance fingerprints and freezes the pack. A verified pack is not edited or re-verified in place; any later change requires a new external pack version and a fresh review and verification cycle.

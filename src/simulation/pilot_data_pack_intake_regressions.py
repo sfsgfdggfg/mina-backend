@@ -193,6 +193,12 @@ def evaluate_pilot_data_pack_intake_regressions() -> dict:
         initialize_pack(root)
         output = io.StringIO()
 
+        sensitive_values = iter([
+            "ops@cli-customer.invalid",
+            "",
+            "rfq@cli-supplier.invalid",
+        ])
+
         customer_rc = data_pack_main(
             [
                 "customer",
@@ -201,10 +207,9 @@ def evaluate_pilot_data_pack_intake_regressions() -> dict:
                 str(root),
                 "--name",
                 "CLI Customer",
-                "--trusted-address",
-                "ops@cli-customer.invalid",
             ],
             stream=output,
+            sensitive_input_func=lambda _: next(sensitive_values),
         )
         supplier_rc = data_pack_main(
             [
@@ -234,10 +239,9 @@ def evaluate_pilot_data_pack_intake_regressions() -> dict:
                 "0.8",
                 "--notes",
                 "Synthetic CLI intake.",
-                "--contact-email",
-                "rfq@cli-supplier.invalid",
             ],
             stream=output,
+            sensitive_input_func=lambda _: next(sensitive_values),
         )
         customer_list_rc = data_pack_main(
             [
@@ -247,6 +251,7 @@ def evaluate_pilot_data_pack_intake_regressions() -> dict:
                 str(root),
             ],
             stream=output,
+            sensitive_input_func=lambda _: next(sensitive_values),
         )
         supplier_list_rc = data_pack_main(
             [
@@ -256,6 +261,7 @@ def evaluate_pilot_data_pack_intake_regressions() -> dict:
                 str(root),
             ],
             stream=output,
+            sensitive_input_func=lambda _: next(sensitive_values),
         )
 
         if (

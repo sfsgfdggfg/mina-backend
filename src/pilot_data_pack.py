@@ -8,8 +8,9 @@ import os
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from getpass import getpass
 from pathlib import Path
-from typing import Any, Mapping, Sequence, TextIO
+from typing import Any, Callable, Mapping, Sequence, TextIO
 
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.data_provenance import (
@@ -366,6 +367,22 @@ def _print_result(result: dict[str, Any], stream: TextIO) -> None:
     print(json.dumps(result, ensure_ascii=False, indent=2), file=stream)
 
 
+def _split_sensitive_values(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _read_sensitive_value(
+    prompt: str,
+    reader: Callable[[str], str],
+) -> str:
+    try:
+        return reader(prompt)
+    except (EOFError, KeyboardInterrupt) as exc:
+        raise PilotDataPackError(
+            "Interactive sensitive intake was cancelled or unavailable."
+        ) from exc
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -398,12 +415,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     customer_list = customer_commands.add_parser("list")
     customer_list.add_argument("--pack-dir", required=True, type=Path)
-    customer_add = customer_commands.add_parser("add")
+    customer_add = customer_commands.add_parser(
+        "add",
+        description=(
+            "Trusted sender values are requested interactively with hidden "
+            "input and are not accepted as command-line arguments."
+        ),
+    )
     customer_add.add_argument("--pack-dir", required=True, type=Path)
     customer_add.add_argument("--name", required=True)
     customer_add.add_argument("--alias", action="append")
-    customer_add.add_argument("--trusted-address", action="append")
-    customer_add.add_argument("--trusted-domain", action="append")
     customer_add.add_argument("--default-commodity")
     customer_add.add_argument("--default-equipment")
     customer_add.add_argument(
@@ -429,7 +450,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     supplier_list = supplier_commands.add_parser("list")
     supplier_list.add_argument("--pack-dir", required=True, type=Path)
-    supplier_add = supplier_commands.add_parser("add")
+    supplier_add = supplier_commands.add_parser(
+        "add",
+        description=(
+            "The primary RFQ contact email is requested interactively with "
+            "hidden input and is not accepted as a command-line argument."
+        ),
+    )
     supplier_add.add_argument("--pack-dir", required=True, type=Path)
     supplier_add.add_argument("--name", required=True)
     supplier_add.add_argument(
@@ -482,7 +509,6 @@ def _parser() -> argparse.ArgumentParser:
         type=float,
     )
     supplier_add.add_argument("--notes", required=True)
-    supplier_add.add_argument("--contact-email", required=True)
     supplier_add.add_argument("--inactive", action="store_true")
     return parser
 
@@ -491,8 +517,10 @@ def main(
     argv: Sequence[str] | None = None,
     *,
     stream: TextIO | None = None,
+    sensitive_input_func: Callable[[str], str] | None = None,
 ) -> int:
     output = stream or __import__("sys").stdout
+    read_sensitive = sensitive_input_func or getpass
     args = _parser().parse_args(argv)
 
     try:
@@ -517,14 +545,28 @@ def main(
                     paths.customer_memory
                 )
             else:
+                trusted_addresses = _split_sensitive_values(
+                    _read_sensitive_value(
+                        "Trusted sender address(es), comma-separated "
+                        "(input hidden; blank if none): ",
+                        read_sensitive,
+                    )
+                )
+                trusted_domains = _split_sensitive_values(
+                    _read_sensitive_value(
+                        "Trusted sender domain(s), comma-separated "
+                        "(input hidden; blank if none): ",
+                        read_sensitive,
+                    )
+                )
                 result = add_customer_profile(
                     customer_memory_path=paths.customer_memory,
                     provenance_registry_path=paths.provenance_registry,
                     customer_name=args.name,
                     active=not args.inactive,
                     aliases=args.alias,
-                    trusted_sender_addresses=args.trusted_address,
-                    trusted_sender_domains=args.trusted_domain,
+                    trusted_sender_addresses=trusted_addresses,
+                    trusted_sender_domains=trusted_domains,
                     default_commodity=args.default_commodity,
                     default_equipment_type=args.default_equipment,
                     price_sensitivity=args.price_sensitivity,
@@ -549,6 +591,10 @@ def main(
                     paths.supplier_capabilities
                 )
             else:
+                primary_contact_email = _read_sensitive_value(
+                    "Primary RFQ contact email (input hidden): ",
+                    read_sensitive,
+                ).strip()
                 result = add_supplier_profile(
                     supplier_capabilities_path=(
                         paths.supplier_capabilities
@@ -567,7 +613,7 @@ def main(
                     price_score=args.price_score,
                     speed_score=args.speed_score,
                     notes=args.notes,
-                    primary_contact_email=args.contact_email,
+                    primary_contact_email=primary_contact_email,
                 )
             _print_result(result, output)
             return 0

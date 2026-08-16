@@ -3102,3 +3102,9 @@ Customer and supplier intake must remain outside the repository, respect control
 Final verification requires explicit human confirmation and exact-byte SHA-256 fingerprints. The presence of a provenance registry freezes the pack: guided mutation and repeated verification must fail closed rather than overwrite verified evidence.
 
 Any change to verified customer or supplier operational data requires a new pack version and a complete fresh verification cycle. Removing or bypassing verification evidence to edit a frozen pack is not an approved pilot workflow.
+
+## RULE-133 — Pilot Contact Addresses Must Not Be Command-Line Arguments
+
+The supported guided pilot-data CLI must collect trusted customer sender addresses, trusted sender domains and supplier primary RFQ contact email addresses through interactive hidden input rather than command-line arguments.
+
+These contact values may be written only to the approved external operational data pack as required identity evidence. Guided list output must continue to omit the address values themselves. Regression injection may bypass interactive prompting only for deterministic synthetic tests.

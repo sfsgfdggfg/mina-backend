@@ -5199,3 +5199,18 @@ Any later operational-data change requires a new data-pack version, fresh human 
 ### Consequences
 
 A previously verified pilot pack cannot be silently edited and re-certified in place. Operational master-data corrections are explicit new verification events rather than mutations of already approved evidence.
+
+## DEC-114 — Sensitive Pilot Contact Inputs Are Interactive
+
+**Status:** Accepted
+**Date:** 2026-08-16
+
+### Decision
+
+Trusted customer sender addresses, trusted sender domains and supplier primary RFQ contact email addresses must not be supplied as pilot data-pack command-line arguments.
+
+The guided intake CLI requests these values interactively using hidden terminal input. Programmatic core intake functions remain injectable for deterministic regression testing, but the supported human CLI does not place these contact values in shell command history.
+
+### Consequences
+
+Pilot contact identity evidence is still stored in the external operational data pack where required, but the supported intake workflow avoids creating an unnecessary copy in shell history. Listing output continues to expose counts and operational summaries rather than contact addresses.
