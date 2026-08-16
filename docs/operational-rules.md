@@ -3108,3 +3108,17 @@ Any change to verified customer or supplier operational data requires a new pack
 The supported guided pilot-data CLI must collect trusted customer sender addresses, trusted sender domains and supplier primary RFQ contact email addresses through interactive hidden input rather than command-line arguments.
 
 These contact values may be written only to the approved external operational data pack as required identity evidence. Guided list output must continue to omit the address values themselves. Regression injection may bypass interactive prompting only for deterministic synthetic tests.
+
+## RULE-134 — Authorized Sanitized Replay Must Be External, Explicit and Evidence-Bound
+
+Historical replay input must be pre-sanitized before MINAI receives it, must remain outside the repository, and must not be treated as trusted customer identity evidence.
+
+Authorized replay may use the production AI parser only after explicit confirmation of pre-sanitization, approved OpenAI data use, and disabled autonomous supplier/customer outbound. The selected customer and supplier operational datasets must pass production pilot provenance and structural validation.
+
+Extraction proposals are scored as AI evidence only. Operational replay after the extraction checkpoint must use operator-confirmed historical truth; unknown required safety truth must stop at extraction confirmation.
+
+When a replay evidence receipt is requested, the Git worktree must be clean. The receipt must bind the run to the exact Git commit, replay-input SHA-256, verified customer-memory SHA-256, verified supplier-capabilities SHA-256, privacy-transform version, safe aggregate metrics, and safety-critical mismatch count.
+
+Replay input or operational data mutation during execution must block receipt creation. Receipt files must be create-only, stored outside the repository, and must not contain case IDs, sender addresses, customer identities, raw/sanitized message text, secrets, or operational contact values.
+
+A replay receipt does not prove trusted-sender customer identity and does not by itself authorize pilot GO.

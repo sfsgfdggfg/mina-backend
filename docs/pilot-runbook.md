@@ -83,57 +83,103 @@ Any missing prerequisite is NO-GO.
 
 ### Sanitized Historical Replay
 
-The synthetic controlled-pilot rehearsal and sanitized historical replay are
-different validation layers. The rehearsal uses generated temporary cases to
-exercise lifecycle controls. The replay harness measures extraction and
-operational-decision evidence against operator-confirmed truth from historical
-inquiries. P1.5 supplies that harness but does not authorize historical data,
-OpenAI real-data use, or an actual replay.
+The synthetic controlled-pilot rehearsal and authorized sanitized historical
+replay are different validation layers. The rehearsal uses generated temporary
+cases to exercise lifecycle controls. Historical replay evaluates extraction and
+operational-decision evidence against operator-confirmed truth from
+pre-sanitized historical inquiries.
 
-Replay input is versioned JSONL and must be pre-sanitized, stored outside this
-repository, and supplied explicitly:
+The provider-neutral harness remains offline-safe:
 
 ```bash
 python -m src.simulation.sanitized_replay \
   --input /approved/external/path/replay.jsonl
 ```
 
-There is no default input. Repository paths are rejected. Each line contains
+That CLI validates the external replay contract and intentionally does not
+invoke a production provider. The provider-neutral module also exposes the
+injected replay runner used by deterministic regressions. It does not authorize
+production AI use.
+
+The explicitly authorized production-parser boundary is separate:
+
+```bash
+python -m src.simulation.authorized_sanitized_replay \
+  --input /approved/external/path/replay.jsonl \
+  --confirm-pre-sanitized \
+  --confirm-openai-data-use-approved \
+  --confirm-no-autonomous-outbound
+```
+
+The three confirmations are mandatory. They are operational assertions, not
+software proof of legal or organizational approval. Do not run the authorized
+command until the responsible organization has approved the replay and the
+configured OpenAI data use.
+
+There is no default replay input. The JSONL must be pre-sanitized and stored
+outside the repository. Repository paths are rejected. Each line contains
 `schema_version` (`"1.0"`), a pseudonymous `case_id`, `.invalid`
 `sender_address` (and optional `sender_domain`), sanitized `subject` and
-`body_text`, and `expected`. `expected.facts` maps current Shipment/extraction
-field names to `{ "state": "known", "value": ... }`,
-`{ "state": "unknown" }`, or `{ "state": "not_applicable" }`. It also gives
-an expected disposition and may give expected equipment and supplier
-progression. Optional notes and tags must also be sanitized.
+`body_text`, and `expected`. `expected.facts` represents operator-confirmed
+historical truth with `known`, `unknown`, or `not_applicable` states.
 
-Input must already be sanitized. Defensive validation rejects suspicious normal
-email domains, phone numbers, Turkish IBANs, and non-pseudonymous expected
-customer identifiers; it does not silently redact and continue and does not
-claim perfect anonymization. A rejection prints only a safe case identifier,
-category, and field. Replay files and reports must never be committed.
+Defensive validation rejects suspicious normal email domains, phone numbers,
+Turkish IBANs, and non-pseudonymous expected customer identifiers. This is a
+fail-closed check and is not a claim of perfect anonymization. Never place raw
+historical email, real contact addresses, customer names, supplier contact
+values, tokens, or secrets in the replay JSONL.
 
-The CLI currently validates the external contract and then stops non-zero
-because no authorized extraction adapter is configured. The internal replay
-runner accepts an injected extraction callable compatible with the current mail
-parser boundary. Synthetic regressions use deterministic callables, temporary
-inputs, blocked network connections, and no OpenAI key. Connecting the current
-AI parser is a later execution step requiring pre-sanitized input and explicit
-organizational/legal approval; P1.5 does not add a live-provider switch.
+The authorized adapter applies the production privacy transform before the
+production AI parser. AI extraction output is scored as proposal evidence only.
+It is not promoted directly into the operational workflow. Downstream replay
+uses the operator-confirmed historical expected facts as the confirmed shipment,
+which preserves the mandatory human extraction-confirmation boundary. If a
+required safety fact is unknown, the replay stops at
+`extraction_confirmation_required`.
 
-Actual replay also requires separately approved operational reference datasets.
-Repository/demo datasets are not automatically valid for replay. Any later
-downstream evaluation must use explicit `OperationalDataSources`, temporary
-SQLite, and no supplier/customer outbound action. Historical text is never a
-trusted customer identity source. P0.14 remains required for a real pilot.
+The same external pilot operational data pack used for pilot decisions must be
+selected through `MINAI_PILOT_DATA_DIR`. Customer memory and supplier
+capabilities must be `pilot_verified`, exact-fingerprint valid, structurally
+valid, and usable for the controlled pilot. Repository/demo datasets do not
+qualify. Supplier/customer autonomous outbound must remain disabled.
 
-Results distinguish field extraction outcomes (correct, incorrect, missing,
-correctly unknown, unexpected inference, and not applicable), workflow
-decisions, and safety failures. No numeric pilot-readiness threshold is set by
-P1.5. ADR or temperature-control truth lost, an excluded/high-value/project or
-non-road case allowed, or supplier progression despite a required clarification
-or stop is safety-critical and makes a replay fail. Every such mismatch must be
-investigated with the logistics operator before pilot GO.
+For durable technical evidence, request a create-only external receipt:
+
+```bash
+python -m src.simulation.authorized_sanitized_replay \
+  --input /approved/external/path/replay.jsonl \
+  --confirm-pre-sanitized \
+  --confirm-openai-data-use-approved \
+  --confirm-no-autonomous-outbound \
+  --receipt /approved/external/path/replay-receipt.json
+```
+
+Receipt creation requires a clean Git worktree. The receipt binds safe aggregate
+results to the exact Git commit, replay-input SHA-256, verified customer-memory
+SHA-256, verified supplier-capabilities SHA-256, and active privacy-transform
+version. Replay input and operational-data fingerprints are checked across the
+execution boundary; mutation blocks receipt creation. The destination must be
+an absolute external path and an existing receipt is never overwritten.
+
+The receipt contains aggregate metrics only. It must not contain replay case
+values, sender/customer identities, message text, contact values, tokens, or
+other secrets. Its
+`customer_identity_mode=pseudonymous_replay_no_trusted_sender_assertion`
+explicitly records a limitation: sanitized historical replay does not prove the
+production trusted-sender/customer-memory identity path.
+
+A passing receipt requires a non-failing replay result and zero
+safety-critical mismatches for GO evidence. It is still only technical replay
+evidence. It does not replace organization, privacy/legal, OpenAI data-control,
+deployment/storage, retention/deletion, named-operator, or senior-road-reviewer
+approval, and it does not by itself authorize the real pilot.
+
+Results distinguish field extraction outcomes, workflow decisions, equipment
+decisions, supplier progression, and safety failures. ADR or
+temperature-control truth lost, an excluded/high-value/project or non-road case
+allowed, or supplier progression despite a required clarification or stop is
+safety-critical. Every such mismatch must be investigated with the logistics
+operator before pilot GO.
 
 Configure the operator terminal without saving the token in source control,
 shell scripts, command arguments, or command history:
@@ -431,6 +477,19 @@ cases, legal documents, passwords, API keys, or tokens. Forbidden sensitive keys
 such as `body_text`, `email_body`, `token`, `password`, `api_key`, and
 `raw_email` cause rejection, and evidence values are not echoed.
 
+
+For P1.15 replay evidence, keep the generated `replay-receipt.json` beside the
+external readiness evidence. The receipt is the technical source of truth for
+the replay execution. The `sanitized_replay` object in the human readiness
+attestation must reflect the receipt's safe readiness summary: `completed`,
+`result`, `completed_at`, `case_count`, and `safety_critical_mismatches`.
+
+Do not copy replay case content or customer/supplier values into the readiness
+attestation. The receipt's exact commit and source fingerprints must be retained
+for audit review. A receipt bound to another commit or another operational data
+pack is not evidence for the current release. Readiness still requires all
+independent human approvals and production provenance checks; the replay receipt
+cannot override a failed or missing prerequisite.
 `EXPECTED DISABLED` for automated supplier RFQ and customer quote outbound is
 the correct controlled-pilot state and is non-blocking. Enabling either is a
 block. The allowed scope remains road-only, one pilot logistics firm, and human
