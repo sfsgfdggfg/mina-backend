@@ -52,6 +52,14 @@ from src.simulation.sanitized_replay import (
     replay_exit_code,
     run_replay,
 )
+from src.simulation.replay_receipt import (
+    ReleaseIdentity,
+    ReplayReceiptError,
+    build_replay_receipt,
+    collect_release_identity,
+    require_clean_release_identity,
+    write_replay_receipt,
+)
 from src.workflow.pipeline import process_shipment
 
 
@@ -342,10 +350,23 @@ def _parser() -> argparse.ArgumentParser:
             "for this replay."
         ),
     )
+    parser.add_argument(
+        "--receipt",
+        type=Path,
+        help=(
+            "Optional absolute external path for a create-only, "
+            "commit-bound replay evidence receipt."
+        ),
+    )
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    parser_func: ParserCallable | None = None,
+    release_identity_func: Callable[[], ReleaseIdentity] = collect_release_identity,
+) -> int:
     args = _parser().parse_args(argv)
     if not (
         args.confirm_pre_sanitized
@@ -358,6 +379,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    release_identity: ReleaseIdentity | None = None
+    if args.receipt is not None:
+        try:
+            release_identity = release_identity_func()
+            require_clean_release_identity(release_identity)
+        except ReplayReceiptError as exc:
+            print(
+                f"Authorized replay blocked: {exc.code}",
+                file=sys.stderr,
+            )
+            return 2
+
     try:
         cases = load_cases(args.input)
         sources = operational_data_sources_from_environment(
@@ -365,7 +398,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         result = run_authorized_replay(
             cases,
-            parser=parse_email_with_ai,
+            parser=parser_func or parse_email_with_ai,
             operational_data_sources=sources,
         )
     except ReplayValidationError as exc:
@@ -407,6 +440,30 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 3
+
+    if args.receipt is not None:
+        try:
+            current_identity = release_identity_func()
+            require_clean_release_identity(current_identity)
+            if (
+                release_identity is None
+                or current_identity.commit_sha != release_identity.commit_sha
+            ):
+                raise ReplayReceiptError("repository_changed_during_replay")
+            receipt = build_replay_receipt(
+                result,
+                input_path=args.input,
+                operational_data_sources=sources,
+                release_identity=release_identity,
+            )
+            write_replay_receipt(args.receipt, receipt)
+        except ReplayReceiptError as exc:
+            print(
+                f"Authorized replay blocked: {exc.code}",
+                file=sys.stderr,
+            )
+            return 2
+        print("Replay evidence receipt written.")
 
     print_summary(result)
     return replay_exit_code(result)
