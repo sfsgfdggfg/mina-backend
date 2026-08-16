@@ -5214,3 +5214,50 @@ The guided intake CLI requests these values interactively using hidden terminal 
 ### Consequences
 
 Pilot contact identity evidence is still stored in the external operational data pack where required, but the supported intake workflow avoids creating an unnecessary copy in shell history. Listing output continues to expose counts and operational summaries rather than contact addresses.
+
+## DEC-115 — Authorized Sanitized Historical Replay and Commit-Bound Evidence
+
+**Status:** Accepted
+**Date:** 2026-08-16
+
+### Decision
+
+Historical replay execution is separated from the provider-neutral offline replay harness.
+
+The supported execution boundary is:
+
+    python -m src.simulation.authorized_sanitized_replay
+
+It may call the production AI parser only when all of the following are explicit:
+
+- the replay JSONL is pre-sanitized and stored outside the repository;
+- organizational/legal approval exists for the configured OpenAI data use;
+- supplier and customer autonomous outbound remain disabled;
+- the external pilot operational data pack is selected and production provenance/structure checks pass.
+
+AI extraction output is evidence to be scored. It is not treated as an operationally confirmed shipment. Downstream workflow replay uses the historical operator-confirmed expected facts as the human-confirmed ground truth, preserving the production extraction-confirmation boundary.
+
+If required safety truth is unknown, replay stops at extraction confirmation rather than inventing a negative safety value.
+
+The execution CLI may optionally write a replay evidence receipt to an absolute external path. Receipt creation requires a clean Git worktree and binds the evidence to:
+
+- the exact 40-character Git commit SHA;
+- SHA-256 of the pre-sanitized replay input;
+- SHA-256 of the verified customer-memory dataset;
+- SHA-256 of the verified supplier-capabilities dataset;
+- the active privacy-transform version;
+- safe aggregate replay metrics and safety-critical mismatch count.
+
+Replay input and operational dataset fingerprints are checked before and after execution. If they change, receipt creation fails closed. Existing receipt files are never overwritten.
+
+The receipt intentionally records the customer identity mode as pseudonymous replay evidence and does not claim trusted-sender/customer-memory identity verification.
+
+### Consequences
+
+- The offline replay harness remains provider-neutral and network-safe.
+- Live-provider replay requires explicit human confirmations and verified external operational data.
+- AI extraction cannot bypass the mandatory human extraction-confirmation architecture.
+- Replay evidence can be tied to the exact code and operational reference data used.
+- A mutated replay input or operational dataset cannot silently produce a valid receipt.
+- Receipt output contains aggregate evidence rather than case, sender, customer, or raw-message values.
+- A passing replay receipt is technical evidence only; it does not replace organizational, legal, privacy, deployment, operator, reviewer, retention, or pilot GO approval.
