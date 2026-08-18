@@ -45,6 +45,9 @@ from src.simulation.replay_receipt_regressions import evaluate_replay_receipt_re
 from src.simulation.authorized_sanitized_replay_regressions import evaluate_authorized_sanitized_replay_regressions
 from src.simulation.supplier_response_ingestion_regressions import evaluate_supplier_response_ingestion_regressions
 from src.simulation.supplier_rfq_lifecycle_regressions import evaluate_supplier_rfq_lifecycle_regressions
+from src.simulation.transition_concurrency_regressions import (
+    evaluate_transition_concurrency_regressions,
+)
 from src.simulation import test_reporter
 
 
@@ -80,6 +83,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Durable pilot persistence", evaluate_pilot_persistence_regressions),
     Suite("Durable provenance recovery", evaluate_provenance_recovery_regressions),
     Suite("Atomic workflow transitions", evaluate_atomic_transition_regressions),
+    Suite(
+        "State transition concurrency",
+        evaluate_transition_concurrency_regressions,
+    ),
     Suite("Supplier RFQ lifecycle", evaluate_supplier_rfq_lifecycle_regressions),
     Suite(
         "Road RFQ commercial safety",

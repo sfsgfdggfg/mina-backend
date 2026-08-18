@@ -70,7 +70,8 @@ def evaluate_pilot_regression_suite_regressions() -> dict:
         "synthetic pilot rehearsal",
         "sanitized historical replay",
         "pilot readiness assessment",
-        "pilot scope", "persistence", "recovery", "atomic", "supplier rfq lifecycle",
+        "pilot scope", "persistence", "recovery", "atomic",
+        "state transition concurrency", "supplier rfq lifecycle",
         "manual rfq sent", "supplier response ingestion", "quote approval",
         "quote case repository", "pilot operator", "runtime reproducibility preflight",
     }
