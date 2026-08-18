@@ -34,6 +34,9 @@ from src.simulation.reliability_hardening_regressions import (
 from src.simulation.quote_revision_regressions import (
     evaluate_quote_revision_regressions,
 )
+from src.simulation.quote_final_output_regressions import (
+    evaluate_quote_final_output_regressions,
+)
 from src.simulation.road_rfq_commercial_safety_regressions import (
     evaluate_road_rfq_commercial_safety_regressions,
 )
@@ -108,6 +111,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Editable customer quote revisions",
         evaluate_quote_revision_regressions,
+    ),
+    Suite(
+        "Approved final customer quote output",
+        evaluate_quote_final_output_regressions,
     ),
     _reporter_suite("evaluate_commodity_dictionary_validation", "Commodity dictionary validation"),
     _reporter_suite("evaluate_supplier_capability_validation", "Supplier capability validation"),

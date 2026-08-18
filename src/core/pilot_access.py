@@ -46,6 +46,7 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("POST", re.compile(r"^/quote-approvals/[^/]+/invalidate$")),
     ("GET", re.compile(r"^/quote-cases$")),
     ("GET", re.compile(r"^/quote-cases/[^/]+$")),
+    ("GET", re.compile(r"^/quote-cases/[^/]+/final-output$")),
     ("POST", re.compile(r"^/quote-cases/[^/]+/revise$")),
 )
 

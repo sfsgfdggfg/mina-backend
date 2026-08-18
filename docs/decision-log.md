@@ -5261,3 +5261,48 @@ The receipt intentionally records the customer identity mode as pseudonymous rep
 - A mutated replay input or operational dataset cannot silently produce a valid receipt.
 - Receipt output contains aggregate evidence rather than case, sender, customer, or raw-message values.
 - A passing replay receipt is technical evidence only; it does not replace organizational, legal, privacy, deployment, operator, reviewer, retention, or pilot GO approval.
+
+## DEC-116 — Approved Customer Quote Final Output Is a Manual Handoff
+
+**Status:** Accepted
+**Date:** 2026-08-18
+
+### Decision
+
+In the controlled shadow pilot, the final customer quotation output is a
+read-only manual handoff rather than an outbound delivery action.
+
+A final output may be produced only for the current `QuoteCase` when its current
+approval record is loaded from durable approval storage and the existing quote
+send-safety evaluation confirms that the approval is valid for the exact current
+supplier quote, customer quote and customer-facing email snapshot.
+
+The final output contains the exact approved customer-facing subject and body,
+structured final customer price and currency, approval identity and timestamp,
+and current revision number. Its delivery mode is explicitly
+`manual_external_operation`, and `automated_send_performed` is always false.
+
+Any customer-quote revision supersedes the previous approval authority. A
+previously approved version cannot authorize the revised quote. The revised
+version remains unavailable as final output until its fresh current approval is
+approved and matches the revised quote snapshot.
+
+The controlled-pilot operator interface exposes this boundary as a read-only
+`case final` action. It does not expose customer SMTP, provider delivery,
+automatic quote sending or any other autonomous customer outbound action.
+
+### Consequences
+
+The operations person receives one explicit, unambiguous approved customer quote
+to copy into the authoritative external logistics email system.
+
+MINAI remains the drafting, revision, approval and consistency assistant while
+the real logistics operation remains authoritative for customer delivery.
+
+A successful technical send-safety evaluation does not itself perform or prove
+delivery. Final customer delivery remains an external human-controlled
+operational action.
+
+Editing an approved quote intentionally removes the previous version's delivery
+authority and requires a new human approval before a new final manual handoff can
+be produced.

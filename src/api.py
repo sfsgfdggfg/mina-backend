@@ -82,6 +82,11 @@ from src.core.quote_revision_service import (
     QuoteRevisionTransitionError,
     revise_quote_case as revise_quote_case_service,
 )
+from src.core.quote_final_output import (
+    QuoteFinalOutputNotFoundError,
+    QuoteFinalOutputTransitionError,
+    build_quote_final_output,
+)
 from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.core.supplier_rfq import SupplierRFQResponse
@@ -701,6 +706,33 @@ def get_quote_case(case_id: str):
     return _enrich_quote_case_with_current_approval(
         quote_case
     ).model_dump()
+
+
+@app.get("/quote-cases/{case_id}/final-output")
+def get_quote_case_final_output(case_id: str):
+    try:
+        result = build_quote_final_output(
+            quote_case_repository=quote_case_repository,
+            approval_repository=quote_approval_repository,
+            case_id=case_id,
+        )
+    except QuoteFinalOutputNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+    except QuoteFinalOutputTransitionError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    return result.model_dump()
 
 
 @app.post("/quote-cases/{case_id}/revise")

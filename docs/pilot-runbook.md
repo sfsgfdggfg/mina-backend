@@ -311,25 +311,73 @@ workflow recoverable without guessing IDs.
 
    Record `quote_approval.approval_id` and `quote_case.case_id`.
 
-9. Review and decide the quote approval:
+9. Review the current customer quote case and its current approval:
 
    ```bash
    python -m src.pilot_operator approval list
    python -m src.pilot_operator approval get <approval_id>
    python -m src.pilot_operator case list
    python -m src.pilot_operator case get <case_id>
-   python -m src.pilot_operator approval approve <approval_id>
+   ```
+
+   The AI-generated customer email is an editable draft. If the subject, body,
+   tone, wording or customer sales price needs to change, revise the case before
+   final approval:
+
+   ```bash
+   python -m src.pilot_operator case revise <case_id> \
+     --approval-id <current_approval_id> \
+     --subject 'Revised customer quote subject' \
+     --body-file /approved/input/revised-customer-quote.txt
+   ```
+
+   `--final-price <amount>` and `--note 'Operator note'` may be supplied when
+   needed. A revision never sends an email. It invalidates any pending or
+   approved authority for the previous version and creates a fresh pending
+   approval for the exact revised subject, body and structured customer price.
+
+   Record the returned `new_approval.approval_id`, then re-read the case and the
+   fresh approval. Never approve an older approval ID after a revision.
+
+10. Approve only the current quote version:
+
+   ```bash
+   python -m src.pilot_operator case get <case_id>
+   python -m src.pilot_operator approval get <current_approval_id>
+   python -m src.pilot_operator approval approve <current_approval_id>
    ```
 
    The available alternative decisions are:
 
    ```bash
-   python -m src.pilot_operator approval reject <approval_id> --reason 'Reason'
-   python -m src.pilot_operator approval invalidate <approval_id>
+   python -m src.pilot_operator approval reject <current_approval_id> --reason 'Reason'
+   python -m src.pilot_operator approval invalidate <current_approval_id>
    ```
 
-   These are lifecycle decisions only. The client has no customer quote-send
-   action.
+   After approval, re-read the case if needed. The current approval and current
+   quote snapshot must still match. Any later revision requires a new approval.
+
+11. Produce the final read-only customer quote handoff:
+
+   ```bash
+   python -m src.pilot_operator case final <case_id>
+   ```
+
+   This command is available only when the current customer quote has a valid
+   current human approval and the approved snapshot matches the current case.
+   The output contains the exact approved customer-facing `subject`, `body`,
+   structured `final_price`, currency and approval metadata.
+
+   Copy the approved subject and body into the authoritative external logistics
+   email system and perform the real customer delivery there under normal
+   operational controls.
+
+   `delivery_mode=manual_external_operation` and
+   `automated_send_performed=false` are the expected controlled-pilot state.
+   `case final` does not send, schedule or prepare an autonomous customer email.
+
+   If the case is edited after approval, the previous approval loses authority
+   and `case final` remains blocked until the fresh revised approval is approved.
 
 ## D. Common Blocks and Errors
 
@@ -346,7 +394,8 @@ The client prints a short safe message and no traceback by default:
 | 422 | Input/correction violates the model. Correct the input after reviewing the proposal/RFQ. |
 | 503 | Pilot configuration, provenance, or system safety block. Stop until an authorized owner resolves it. |
 
-Safe reads (`status`, `proposal get`, RFQ/approval/case list/get) may be repeated.
+Safe reads (`status`, `proposal get`, RFQ/approval/case list/get`, and
+`case final`) may be repeated.
 State-changing commands are never silently retried by the client. After an
 interruption, read current state before deciding whether any action is safe.
 
