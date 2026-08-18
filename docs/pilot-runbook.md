@@ -493,52 +493,84 @@ evidence are current. This expected exit code is `1`. Invalid invocation or an
 unsafe/malformed evidence file exits `2`; GO exits `0`. There is no numeric
 readiness score: every mandatory prerequisite must pass.
 
-Evidence is optional and must be stored outside the repository:
+Readiness evidence must be stored outside the repository.
+Do not manually construct or transcribe the readiness JSON.
+
+After an authorized sanitized historical replay has produced a passing
+external `replay-receipt.json`, build the readiness evidence with the
+guided builder:
+
+```bash
+python -m src.pilot_readiness_evidence build \
+  --replay-receipt /approved/external/path/replay-receipt.json \
+  --output /approved/external/path/readiness-evidence.json
+```
+
+The builder fails closed before collecting human attestations unless all
+of the following are true:
+
+- the Git worktree is clean;
+- the replay receipt is bound to the exact current Git commit;
+- the replay result is `pass`, contains at least one case, and has zero
+  safety-critical mismatches;
+- the configured external pilot operational data pack is
+  production-verified;
+- the exact SHA-256 fingerprints of `customer_memory` and
+  `supplier_capabilities` match the fingerprints recorded in the replay
+  receipt.
+
+The builder then requests each required human approval interactively.
+The operator must type the exact word `CONFIRM` for every approval and
+identify the role or person that already granted it.
+
+The seven independent attestations are:
+
+- organization approval;
+- privacy/legal approval;
+- OpenAI data-control approval;
+- deployment/storage approval;
+- retention/deletion procedure approval;
+- named operators confirmation;
+- senior road reviewer confirmation.
+
+The builder records approvals that already exist. It does not grant
+approval, perform legal review, authorize the pilot, or start the real
+shadow pilot.
+
+Generated readiness evidence uses schema version 2.
+
+It binds the evidence to:
+
+- the exact pilot Git commit;
+- `customer_memory` SHA-256;
+- `supplier_capabilities` SHA-256;
+- the validated sanitized replay result.
+
+Legacy schema version 1 readiness evidence is rejected because it does
+not bind replay evidence to the exact operational data pack.
+
+The output path must be absolute and outside the repository.
+Existing evidence files are never overwritten. On POSIX systems the
+generated file is owner-only (`0600`).
+
+Never include raw mail, replay cases, customer/supplier records,
+passwords, API keys, tokens, or other secret/raw operational values in
+readiness evidence.
+
+After creating the evidence file, run:
 
 ```bash
 python -m src.pilot_readiness \
   --evidence /approved/external/path/readiness-evidence.json
 ```
 
-Schema version 1 contains only compact attestation metadata:
+A stale commit, dirty worktree, changed operational data pack, failed
+live gate, failed provenance check, missing approval, failed replay, or
+critical replay mismatch blocks GO.
 
-```json
-{
-  "schema_version": 1,
-  "pilot_commit_sha": "<exact-current-40-character-git-sha>",
-  "organization_approval": {"confirmed": true, "confirmed_by": "authorized-role-01", "confirmed_at": "2026-08-15T00:00:00+00:00"},
-  "privacy_legal_approval": {"confirmed": true, "confirmed_by": "authorized-role-02", "confirmed_at": "2026-08-15T00:00:00+00:00"},
-  "openai_data_control_approval": {"confirmed": true, "confirmed_by": "authorized-role-03", "confirmed_at": "2026-08-15T00:00:00+00:00"},
-  "deployment_storage_approval": {"confirmed": true, "confirmed_by": "authorized-role-04", "confirmed_at": "2026-08-15T00:00:00+00:00"},
-  "retention_deletion_approval": {"confirmed": true, "confirmed_by": "authorized-role-05", "confirmed_at": "2026-08-15T00:00:00+00:00"},
-  "named_operators_confirmed": {"confirmed": true, "confirmed_by": "authorized-role-06", "confirmed_at": "2026-08-15T00:00:00+00:00"},
-  "senior_road_reviewer_confirmed": {"confirmed": true, "confirmed_by": "authorized-role-07", "confirmed_at": "2026-08-15T00:00:00+00:00"},
-  "sanitized_replay": {"completed": true, "result": "pass", "completed_at": "2026-08-15T00:00:00+00:00", "case_count": 12, "safety_critical_mismatches": 0}
-}
-```
+Keep `replay-receipt.json` and `readiness-evidence.json` together in the
+approved external evidence location for audit review.
 
-This file is a human attestation, not software verification of legal truth. It
-must match the exact current Git SHA. A stale SHA, dirty worktree, failed live
-gate, failed provenance check, incomplete/failed replay, or any critical replay
-mismatch blocks GO. Attestations cannot override technical or provenance
-failures. Never include raw mail, customer/supplier records or names, replay
-cases, legal documents, passwords, API keys, or tokens. Forbidden sensitive keys
-such as `body_text`, `email_body`, `token`, `password`, `api_key`, and
-`raw_email` cause rejection, and evidence values are not echoed.
-
-
-For P1.15 replay evidence, keep the generated `replay-receipt.json` beside the
-external readiness evidence. The receipt is the technical source of truth for
-the replay execution. The `sanitized_replay` object in the human readiness
-attestation must reflect the receipt's safe readiness summary: `completed`,
-`result`, `completed_at`, `case_count`, and `safety_critical_mismatches`.
-
-Do not copy replay case content or customer/supplier values into the readiness
-attestation. The receipt's exact commit and source fingerprints must be retained
-for audit review. A receipt bound to another commit or another operational data
-pack is not evidence for the current release. Readiness still requires all
-independent human approvals and production provenance checks; the replay receipt
-cannot override a failed or missing prerequisite.
 `EXPECTED DISABLED` for automated supplier RFQ and customer quote outbound is
 the correct controlled-pilot state and is non-blocking. Enabling either is a
 block. The allowed scope remains road-only, one pilot logistics firm, and human

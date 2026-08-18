@@ -11,7 +11,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from src.core.data_provenance import calculate_bytes_sha256
+from src.core.data_provenance import (
+    calculate_bytes_sha256,
+    calculate_dataset_sha256,
+)
 from src.pilot_readiness import (
     EvidenceValidationError, Status, TechnicalGateResults, assess_readiness,
     collect_outbound_policy, collect_technical_gates,
@@ -27,15 +30,46 @@ def _gates(*, canonical: Status = Status.PASS, clean: bool = True, sha: str = HE
     return TechnicalGateResults(Status.PASS, canonical, Status.PASS, sha, clean)
 
 
-def _evidence(sha: str = HEAD, *, mismatches: int = 0) -> dict:
-    approval = {"confirmed": True, "confirmed_by": "authorized-role-01", "confirmed_at": "2026-08-15T00:00:00+00:00"}
+def _dataset_hashes(sources) -> dict[str, str]:
     return {
-        "schema_version": 1, "pilot_commit_sha": sha,
-        "organization_approval": dict(approval), "privacy_legal_approval": dict(approval),
-        "openai_data_control_approval": dict(approval), "deployment_storage_approval": dict(approval),
-        "retention_deletion_approval": dict(approval), "named_operators_confirmed": dict(approval),
+        "customer_memory": calculate_dataset_sha256(
+            sources.customer_memory_path
+        ),
+        "supplier_capabilities": calculate_dataset_sha256(
+            sources.supplier_capabilities_path
+        ),
+    }
+
+
+def _evidence(
+    sources,
+    sha: str = HEAD,
+    *,
+    mismatches: int = 0,
+) -> dict:
+    approval = {
+        "confirmed": True,
+        "confirmed_by": "authorized-role-01",
+        "confirmed_at": "2026-08-15T00:00:00+00:00",
+    }
+    return {
+        "schema_version": 2,
+        "pilot_commit_sha": sha,
+        "operational_dataset_sha256": _dataset_hashes(sources),
+        "organization_approval": dict(approval),
+        "privacy_legal_approval": dict(approval),
+        "openai_data_control_approval": dict(approval),
+        "deployment_storage_approval": dict(approval),
+        "retention_deletion_approval": dict(approval),
+        "named_operators_confirmed": dict(approval),
         "senior_road_reviewer_confirmed": dict(approval),
-        "sanitized_replay": {"completed": True, "result": "pass", "completed_at": "2026-08-15T00:00:00+00:00", "case_count": 12, "safety_critical_mismatches": mismatches},
+        "sanitized_replay": {
+            "completed": True,
+            "result": "pass",
+            "completed_at": "2026-08-15T00:00:00+00:00",
+            "case_count": 12,
+            "safety_critical_mismatches": mismatches,
+        },
     }
 
 
@@ -104,10 +138,47 @@ def evaluate_pilot_readiness_regressions() -> dict:
         require("missing approvals not verified", _status(default, "organization_approval") == Status.NOT_VERIFIED)
         require("missing replay not run", _status(default, "sanitized_replay") == Status.NOT_RUN)
 
-        controlled = assess_readiness(_gates(), evidence=_evidence(), data_sources=sources)
+        controlled = assess_readiness(_gates(), evidence=_evidence(sources), data_sources=sources)
         require("controlled technical gates represented PASS", all(_status(controlled, key) == Status.PASS for key in ("runtime_preflight", "canonical_regression", "synthetic_rehearsal")))
         require("all required synthetic evidence can GO", controlled.real_shadow_pilot_go)
         require("GO exact commit match", _status(controlled, "organization_approval") == Status.PASS)
+        require(
+            "GO replay operational data binding passes",
+            _status(
+                controlled,
+                "replay_operational_data_binding",
+            ) == Status.PASS,
+        )
+
+        pack_b_root = root / "pack-b"
+        pack_b_root.mkdir()
+        pack_b_sources = _write_synthetic_sources(pack_b_root)
+        pack_b_rows = json.loads(
+            pack_b_sources.customer_memory_path.read_text(
+                encoding="utf-8"
+            )
+        )
+        pack_b_rows[0]["operational_notes"] = (
+            "Distinct verified pack B regression fixture."
+        )
+        rewrite_verified_dataset(
+            pack_b_sources,
+            "customer_memory",
+            pack_b_rows,
+        )
+        cross_pack = assess_readiness(
+            _gates(),
+            evidence=_evidence(sources),
+            data_sources=pack_b_sources,
+        )
+        require(
+            "replay evidence from pack A blocks against pack B",
+            not cross_pack.real_shadow_pilot_go
+            and _status(
+                cross_pack,
+                "replay_operational_data_binding",
+            ) == Status.BLOCKED,
+        )
         require(
             "controlled customer cardinality passes",
             _status(
@@ -144,7 +215,7 @@ def evaluate_pilot_readiness_regressions() -> dict:
         )
         undersized_customer = assess_readiness(
             _gates(),
-            evidence=_evidence(),
+            evidence=_evidence(undersized_customer_sources),
             data_sources=undersized_customer_sources,
         )
         require(
@@ -183,7 +254,7 @@ def evaluate_pilot_readiness_regressions() -> dict:
         )
         trustless_customer = assess_readiness(
             _gates(),
-            evidence=_evidence(),
+            evidence=_evidence(trustless_customer_sources),
             data_sources=trustless_customer_sources,
         )
         require(
@@ -216,7 +287,7 @@ def evaluate_pilot_readiness_regressions() -> dict:
         )
         undersized_supplier = assess_readiness(
             _gates(),
-            evidence=_evidence(),
+            evidence=_evidence(undersized_supplier_sources),
             data_sources=undersized_supplier_sources,
         )
         require(
@@ -250,7 +321,7 @@ def evaluate_pilot_readiness_regressions() -> dict:
         )
         uncontactable_supplier = assess_readiness(
             _gates(),
-            evidence=_evidence(),
+            evidence=_evidence(uncontactable_supplier_sources),
             data_sources=uncontactable_supplier_sources,
         )
         require(
@@ -292,7 +363,7 @@ def evaluate_pilot_readiness_regressions() -> dict:
 
         schema_blocked = assess_readiness(
             _gates(),
-            evidence=_evidence(),
+            evidence=_evidence(invalid_sources),
             data_sources=invalid_sources,
         )
         require(
@@ -304,25 +375,25 @@ def evaluate_pilot_readiness_regressions() -> dict:
             ) == Status.BLOCKED,
         )
 
-        stale = assess_readiness(_gates(), evidence=_evidence("b" * 40), data_sources=sources)
+        stale = assess_readiness(_gates(), evidence=_evidence(sources, "b" * 40), data_sources=sources)
         require("stale commit blocks", not stale.real_shadow_pilot_go and _status(stale, "sanitized_replay") == Status.NOT_VERIFIED)
-        replay_failed = assess_readiness(_gates(), evidence=_evidence(mismatches=1), data_sources=sources)
+        replay_failed = assess_readiness(_gates(), evidence=_evidence(sources, mismatches=1), data_sources=sources)
         require("critical replay mismatch blocks", not replay_failed.real_shadow_pilot_go and _status(replay_failed, "sanitized_replay") == Status.BLOCKED)
 
-        provenance_override = assess_readiness(_gates(), evidence=_evidence())
+        provenance_override = assess_readiness(_gates(), evidence=_evidence(sources))
         require("attestation cannot override provenance", not provenance_override.real_shadow_pilot_go and _status(provenance_override, "customer_memory") == Status.BLOCKED)
-        technical_override = assess_readiness(_gates(canonical=Status.FAIL), evidence=_evidence(), data_sources=sources)
+        technical_override = assess_readiness(_gates(canonical=Status.FAIL), evidence=_evidence(sources), data_sources=sources)
         require("attestation cannot override canonical failure", not technical_override.real_shadow_pilot_go and _status(technical_override, "canonical_regression") == Status.FAIL)
         require("disabled outbound non-blocking", _status(controlled, "supplier_outbound") == Status.EXPECTED_DISABLED and "supplier_outbound" not in controlled.blocking_check_ids)
-        outbound = assess_readiness(_gates(), evidence=_evidence(), data_sources=sources, supplier_outbound_enabled=True)
+        outbound = assess_readiness(_gates(), evidence=_evidence(sources), data_sources=sources, supplier_outbound_enabled=True)
         require("enabled outbound blocks", not outbound.real_shadow_pilot_go and _status(outbound, "supplier_outbound") == Status.BLOCKED)
-        dirty = assess_readiness(_gates(clean=False), evidence=_evidence(), data_sources=sources)
+        dirty = assess_readiness(_gates(clean=False), evidence=_evidence(sources), data_sources=sources)
         require("dirty worktree blocks", not dirty.real_shadow_pilot_go and _status(dirty, "clean_worktree") == Status.BLOCKED)
 
         skipped = collect_technical_gates(run_gates=False)
         skipped_result = assess_readiness(
             skipped,
-            evidence=_evidence(),
+            evidence=_evidence(sources),
             data_sources=sources,
         )
         require(
@@ -340,8 +411,49 @@ def evaluate_pilot_readiness_regressions() -> dict:
         )
 
         evidence_path = root / "readiness.json"
-        evidence_path.write_text(json.dumps(_evidence()), encoding="utf-8")
-        require("valid external evidence loads", load_external_evidence(evidence_path)["schema_version"] == 1)
+        evidence_path.write_text(json.dumps(_evidence(sources)), encoding="utf-8")
+        require("valid external evidence loads", load_external_evidence(evidence_path)["schema_version"] == 2)
+
+        legacy_v1 = _evidence(sources)
+        legacy_v1["schema_version"] = 1
+        legacy_v1.pop("operational_dataset_sha256")
+        legacy_v1_path = root / "legacy-v1-readiness.json"
+        legacy_v1_path.write_text(
+            json.dumps(legacy_v1),
+            encoding="utf-8",
+        )
+        try:
+            load_external_evidence(legacy_v1_path)
+        except EvidenceValidationError:
+            legacy_v1_rejected = True
+        else:
+            legacy_v1_rejected = False
+        require(
+            "legacy schema v1 evidence rejected",
+            legacy_v1_rejected,
+       )
+
+        malformed_binding = _evidence(sources)
+        malformed_binding["operational_dataset_sha256"][
+            "customer_memory"
+        ] = "not-a-sha256"
+        malformed_binding_path = (
+            root / "malformed-dataset-binding.json"
+        )
+        malformed_binding_path.write_text(
+            json.dumps(malformed_binding),
+            encoding="utf-8",
+        )
+        try:
+            load_external_evidence(malformed_binding_path)
+        except EvidenceValidationError:
+            malformed_binding_rejected = True
+        else:
+            malformed_binding_rejected = False
+        require(
+            "malformed operational dataset binding rejected",
+            malformed_binding_rejected,
+        )
         malformed = root / "malformed.json"
         malformed.write_text("[]", encoding="utf-8")
         try:
@@ -353,7 +465,7 @@ def evaluate_pilot_readiness_regressions() -> dict:
         require("malformed evidence rejected safely", malformed_rejected)
         inside = Path(".pilot-readiness-regression-evidence.json")
         try:
-            inside.write_text(json.dumps(_evidence()), encoding="utf-8")
+            inside.write_text(json.dumps(_evidence(sources)), encoding="utf-8")
             try:
                 load_external_evidence(inside)
             except EvidenceValidationError:
@@ -363,7 +475,7 @@ def evaluate_pilot_readiness_regressions() -> dict:
         finally:
             inside.unlink(missing_ok=True)
         require("repository evidence path rejected", inside_rejected)
-        sensitive = _evidence()
+        sensitive = _evidence(sources)
         sensitive["organization_approval"]["token"] = "do-not-print-this-secret"
         sensitive_path = root / "sensitive.json"
         sensitive_path.write_text(json.dumps(sensitive), encoding="utf-8")
@@ -437,7 +549,7 @@ def evaluate_pilot_readiness_regressions() -> dict:
             network_attempts.append((args, kwargs))
             raise AssertionError("network attempted")
         with patch.object(socket, "create_connection", reject_network), patch.object(socket.socket, "connect", reject_network):
-            isolated = assess_readiness(_gates(), evidence=_evidence(), data_sources=sources)
+            isolated = assess_readiness(_gates(), evidence=_evidence(sources), data_sources=sources)
         require("no network OpenAI or outbound", isolated.real_shadow_pilot_go and not network_attempts)
 
     after_data = {p.relative_to(data_root): p.read_bytes() for p in data_root.rglob("*") if p.is_file()}

@@ -5306,3 +5306,91 @@ operational action.
 Editing an approved quote intentionally removes the previous version's delivery
 authority and requires a new human approval before a new final manual handoff can
 be produced.
+
+## DEC-117 — Readiness Evidence Is Commit- and Operational-Data-Bound
+
+**Status:** Accepted
+**Date:** 2026-08-18
+
+### Decision
+
+Real shadow-pilot readiness evidence uses schema version 2 and must bind
+authorized sanitized historical replay evidence to both the exact release
+commit and the exact verified operational master data used by that replay.
+
+Readiness evidence therefore records SHA-256 fingerprints for:
+
+- `customer_memory`;
+- `supplier_capabilities`.
+
+Those fingerprints must exactly match the currently configured verified
+external pilot data pack.
+
+A replay receipt produced against one verified data pack cannot authorize
+readiness against another data pack, even when both use the same Git commit.
+
+Legacy schema version 1 readiness evidence is rejected because it does not
+contain this operational-data binding.
+
+The supported operator workflow is:
+
+    python -m src.pilot_readiness_evidence build
+
+The guided builder:
+
+- accepts an external authorized replay receipt;
+- requires a clean Git worktree;
+- verifies the exact current Git commit;
+- verifies the current operational dataset fingerprints;
+- requires a passing replay with at least one case;
+- requires zero safety-critical replay mismatches;
+- records the seven independent human attestations interactively.
+
+Each attestation requires the exact confirmation word `CONFIRM`, a non-empty
+confirming role or person, and a timezone-aware timestamp.
+
+The builder records approvals that already exist. It does not itself grant an
+approval, perform legal review, authorize the pilot, or start the real shadow
+pilot.
+
+Generated readiness evidence must be written to an absolute external
+create-only path. Existing evidence files are not overwritten.
+
+Raw replay cases, customer or supplier records, message content, secrets and
+credentials are not copied into readiness evidence.
+
+### Rationale
+
+Commit binding alone is insufficient for controlled-pilot evidence.
+
+Without operational-data fingerprint binding, replay evidence generated
+against verified data pack A could theoretically be combined with readiness
+assessment against verified data pack B when both use the same Git commit.
+
+Readiness evidence must therefore identify both the exact code and the exact
+operational reference data for which the replay evidence was produced.
+
+Manual transcription of replay summaries and operational-data fingerprints
+also creates an avoidable evidence-integrity risk. The guided builder derives
+those values from the validated replay receipt and verified operational data
+instead.
+
+### Consequences
+
+A changed customer-memory or supplier-capability dataset requires a newly
+verified pilot data pack and fresh replay evidence before REAL SHADOW PILOT GO
+can be reached.
+
+Replay evidence from one verified pack cannot be reused against another pack.
+
+Operators no longer manually construct readiness JSON or manually transcribe
+the replay result into the human-attestation file.
+
+Readiness evidence remains an evidence record, not an approval mechanism.
+
+Organizational, privacy/legal, OpenAI data-control, deployment/storage,
+retention/deletion, named-operator and senior-road-reviewer approvals remain
+independent human prerequisites.
+
+Automated supplier RFQ and customer quote outbound remain disabled for the
+controlled shadow pilot.

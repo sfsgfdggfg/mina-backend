@@ -22,6 +22,7 @@ from src.simulation.pilot_operator_regressions import evaluate_pilot_operator_re
 from src.simulation.pilot_data_pack_regressions import evaluate_pilot_data_pack_regressions
 from src.simulation.pilot_data_pack_intake_regressions import evaluate_pilot_data_pack_intake_regressions
 from src.simulation.pilot_readiness_regressions import evaluate_pilot_readiness_regressions
+from src.simulation.pilot_readiness_evidence_regressions import evaluate_pilot_readiness_evidence_regressions
 from src.simulation.pilot_persistence_regressions import evaluate_pilot_persistence_regressions
 from src.simulation.pilot_scope_regressions import evaluate_pilot_scope_regressions
 from src.simulation.privacy_boundary_regressions import evaluate_privacy_boundary_regressions
@@ -75,6 +76,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Authorized sanitized historical replay", evaluate_authorized_sanitized_replay_regressions),
     Suite("Sanitized replay evidence receipt", evaluate_replay_receipt_regressions),
     Suite("Pilot readiness assessment", evaluate_pilot_readiness_regressions),
+    Suite(
+        "Guided pilot readiness evidence",
+        evaluate_pilot_readiness_evidence_regressions,
+    ),
     Suite("Safe API entry point", evaluate_safe_api_entrypoint_regressions),
     Suite("Python source compilation", evaluate_source_compile_regressions),
     Suite("Extraction confirmation", evaluate_extraction_confirmation_regressions),
