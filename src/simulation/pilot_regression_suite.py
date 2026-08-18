@@ -40,10 +40,14 @@ from src.simulation.road_rfq_commercial_safety_regressions import (
 from src.simulation.safe_api_entrypoint_regressions import evaluate_safe_api_entrypoint_regressions
 from src.simulation.source_compile_regressions import evaluate_source_compile_regressions
 from src.simulation.sanitized_replay_regressions import evaluate_sanitized_replay_regressions
+from src.simulation.safety_truth_regressions import evaluate_safety_truth_regressions
 from src.simulation.replay_receipt_regressions import evaluate_replay_receipt_regressions
 from src.simulation.authorized_sanitized_replay_regressions import evaluate_authorized_sanitized_replay_regressions
 from src.simulation.supplier_response_ingestion_regressions import evaluate_supplier_response_ingestion_regressions
 from src.simulation.supplier_rfq_lifecycle_regressions import evaluate_supplier_rfq_lifecycle_regressions
+from src.simulation.transition_concurrency_regressions import (
+    evaluate_transition_concurrency_regressions,
+)
 from src.simulation import test_reporter
 
 
@@ -60,6 +64,7 @@ def _reporter_suite(function_name: str, display_name: str) -> Suite:
 # Membership is deliberately explicit. Do not replace this with file discovery.
 CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Privacy boundary", evaluate_privacy_boundary_regressions),
+    Suite("Safety truth authority", evaluate_safety_truth_regressions),
     Suite("Pilot access", evaluate_pilot_access_regressions),
     Suite("Pilot launcher", evaluate_pilot_launcher_regressions),
     Suite("Synthetic pilot rehearsal", evaluate_pilot_rehearsal_regressions),
@@ -78,6 +83,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Durable pilot persistence", evaluate_pilot_persistence_regressions),
     Suite("Durable provenance recovery", evaluate_provenance_recovery_regressions),
     Suite("Atomic workflow transitions", evaluate_atomic_transition_regressions),
+    Suite(
+        "State transition concurrency",
+        evaluate_transition_concurrency_regressions,
+    ),
     Suite("Supplier RFQ lifecycle", evaluate_supplier_rfq_lifecycle_regressions),
     Suite(
         "Road RFQ commercial safety",
