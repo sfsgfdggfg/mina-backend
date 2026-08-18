@@ -240,6 +240,13 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append((_last_contract(session), ("GET", "/quote-cases", None)))
     client.get_case("case-1")
     contracts.append((_last_contract(session), ("GET", "/quote-cases/case-1", None)))
+    client.get_case_final_output("case-1")
+    contracts.append(
+        (
+            _last_contract(session),
+            ("GET", "/quote-cases/case-1/final-output", None),
+        )
+    )
     client.revise_case(
         "case-1",
         expected_approval_id="approval-4",
@@ -323,9 +330,61 @@ def evaluate_pilot_operator_regressions() -> dict:
         "/quote-approvals/approval-1",
         "/quote-cases",
         "/quote-cases/case-1",
+        "/quote-cases/case-1/final-output",
     }
     if not recovery_paths.issubset(requested_paths):
         failures.append("interrupted workflow lacks read/list recovery calls")
+
+    cli_session = _Session(
+        [
+            _Response(
+                200,
+                {
+                    "case_id": "case-cli",
+                    "delivery_mode": "manual_external_operation",
+                    "automated_send_performed": False,
+                },
+            )
+        ]
+    )
+    cli_client = _client(cli_session)
+    cli_stdout = io.StringIO()
+    cli_stderr = io.StringIO()
+
+    with patch.object(
+        PilotOperatorClient,
+        "from_environment",
+        return_value=cli_client,
+    ):
+        with contextlib.redirect_stdout(cli_stdout), contextlib.redirect_stderr(
+            cli_stderr
+        ):
+            cli_exit = main(["case", "final", "case-cli"])
+
+    if cli_exit != 0:
+        failures.append("case final CLI command failed")
+
+    if not cli_session.calls:
+        failures.append("case final CLI made no API request")
+    else:
+        cli_method, cli_path, cli_payload = _last_contract(cli_session)
+        if (
+            cli_method,
+            cli_path,
+            cli_payload,
+        ) != (
+            "GET",
+            "/quote-cases/case-cli/final-output",
+            None,
+        ):
+            failures.append(
+                "case final CLI mapped to the wrong API contract"
+            )
+
+    if "manual_external_operation" not in cli_stdout.getvalue():
+        failures.append(
+            "case final CLI did not print final handoff result"
+        )
 
     secret = "never-print-this-bearer-token"
     stdout = io.StringIO()

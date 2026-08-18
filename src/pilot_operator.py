@@ -256,6 +256,12 @@ class PilotOperatorClient:
     def get_case(self, case_id: str) -> Any:
         return self._request("GET", f"/quote-cases/{self._id(case_id)}")
 
+    def get_case_final_output(self, case_id: str) -> Any:
+        return self._request(
+            "GET",
+            f"/quote-cases/{self._id(case_id)}/final-output",
+        )
+
     def revise_case(
         self,
         case_id: str,
@@ -357,6 +363,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     case.add_parser("list")
     case.add_parser("get").add_argument("case_id")
+    case.add_parser("final").add_argument("case_id")
 
     revise = case.add_parser("revise")
     revise.add_argument("case_id")
@@ -471,6 +478,9 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
 
     if args.action == "get":
         return client.get_case(args.case_id)
+
+    if args.action == "final":
+        return client.get_case_final_output(args.case_id)
 
     return client.revise_case(
         args.case_id,

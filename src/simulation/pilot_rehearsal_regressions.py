@@ -51,6 +51,8 @@ def evaluate_pilot_rehearsal_regressions() -> dict:
         "durable approved current case": "approved case was stale after restart",
         "current quote case": "post-approval case was not current",
         "quote send safety recomputed": "quote-send safety was not refreshed",
+        "final manual handoff": "approved final manual handoff was not produced",
+        "durable final manual handoff": "final manual handoff did not survive restart",
         "ADR scope": "ADR did not fail closed",
         "reefer scope": "reefer did not fail closed",
         "automated send unavailable": "automated outbound route was available",

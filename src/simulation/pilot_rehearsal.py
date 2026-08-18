@@ -455,6 +455,29 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         result.require("quote approval", approved["approval_status"] == "approved" and approved["approved_by"] == authenticated_operator and approved["approved_at"] is not None)
         result.require("current quote case", current_case["quote_approval"]["approval_status"] == "approved")
         result.require("quote send safety recomputed", safety is not None and safety["can_send"] is True and safety["approved_by"] == authenticated_operator)
+
+        final_output = api.get_quote_case_final_output(
+            quote_case.case_id
+        )
+        result.require(
+            "final manual handoff",
+            final_output["case_id"] == quote_case.case_id
+            and final_output["approval_id"] == approved["approval_id"]
+            and final_output["approved_by"] == authenticated_operator
+            and final_output["approved_at"] is not None
+            and final_output["subject"]
+            == current_case["quote_draft"]["subject"]
+            and final_output["body"]
+            == current_case["quote_draft"]["body"]
+            and final_output["final_price"]
+            == current_case["customer_quote"]["final_price"]
+            and final_output["currency"]
+            == current_case["customer_quote"]["currency"]
+            and final_output["delivery_mode"]
+            == "manual_external_operation"
+            and final_output["automated_send_performed"] is False,
+        )
+
         result.evidence.update({
             "proposal_id": proposal.proposal_id, "workflow_id": workflow.workflow_id,
             "rfq_id": draft.rfq_id, "approval_id": approval.approval_id,
@@ -513,6 +536,9 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         )
         durable_approval = api.quote_approval_repository.get(result.evidence["approval_id"])
         durable_case = api.get_quote_case(result.evidence["case_id"])
+        durable_final_output = api.get_quote_case_final_output(
+            result.evidence["case_id"]
+        )
         result.require("durable restart", all((durable_proposal, durable_workflow, durable_rfq, durable_approval, durable_case))
                        and durable_proposal.resume_status == "completed"
                        and durable_rfq.status == "responded"
@@ -520,6 +546,13 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         result.require("durable approved current case", durable_approval.approval_status == "approved"
                        and durable_case["quote_approval"]["approval_status"] == "approved"
                        and durable_case["quote_send_safety"]["can_send"] is True)
+        result.require(
+            "durable final manual handoff",
+            durable_final_output == final_output
+            and durable_final_output["delivery_mode"]
+            == "manual_external_operation"
+            and durable_final_output["automated_send_performed"] is False,
+        )
         result.require("durable authenticated authority", durable_proposal.confirmed_by == authenticated_operator
                        and durable_rfq.approved_by == authenticated_operator
                        and len(durable_manual_send_evidence) == 1
@@ -575,6 +608,7 @@ CLI_STAGES = (
     ("quote progression", "quote progression injected data"),
     ("quote approval", "quote approval"),
     ("quote-case refresh", "current quote case"),
+    ("final manual handoff", "final manual handoff"),
     ("durable restart", "durable restart"),
     ("provenance fail-closed", "provenance fail-closed"),
     ("scope fail-closed", "ADR scope"),
