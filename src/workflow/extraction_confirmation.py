@@ -191,35 +191,37 @@ def confirm_extraction_proposal(
     corrections: dict[str, Any] | None = None,
     confirmed_at: datetime | None = None,
 ) -> ShipmentExtractionProposal:
-    proposal = _load_proposal(repository, proposal_id)
-    if proposal.extraction_status != "proposed":
-        raise ExtractionConfirmationTransitionError(
-            "Extraction proposal has already been confirmed."
-        )
     normalized_operator = operator_identity.strip()
     if not normalized_operator:
         raise ValueError("Operator identity is required.")
 
-    confirmed_shipment, normalized_corrections, changed_fields = (
-        _validated_confirmed_shipment(
-            proposal.proposed_shipment,
-            corrections or {},
+    with atomic_repository_transaction(repository):
+        proposal = _load_proposal(repository, proposal_id)
+        if proposal.extraction_status != "proposed":
+            raise ExtractionConfirmationTransitionError(
+                "Extraction proposal has already been confirmed."
+            )
+
+        confirmed_shipment, normalized_corrections, changed_fields = (
+            _validated_confirmed_shipment(
+                proposal.proposed_shipment,
+                corrections or {},
+            )
         )
-    )
-    updated = ShipmentExtractionProposal.model_validate(
-        {
-            **proposal.model_dump(
-                exclude={"unknown_fields", "unknown_safety_fields"}
-            ),
-            "extraction_status": "confirmed",
-            "confirmed_shipment": confirmed_shipment,
-            "operator_corrections": normalized_corrections,
-            "changed_fields": changed_fields,
-            "confirmed_by": normalized_operator,
-            "confirmed_at": confirmed_at or utc_now(),
-        }
-    )
-    return repository.save(updated)
+        updated = ShipmentExtractionProposal.model_validate(
+            {
+                **proposal.model_dump(
+                    exclude={"unknown_fields", "unknown_safety_fields"}
+                ),
+                "extraction_status": "confirmed",
+                "confirmed_shipment": confirmed_shipment,
+                "operator_corrections": normalized_corrections,
+                "changed_fields": changed_fields,
+                "confirmed_by": normalized_operator,
+                "confirmed_at": confirmed_at or utc_now(),
+            }
+        )
+        return repository.save(updated)
 
 
 def resume_confirmed_extraction(
