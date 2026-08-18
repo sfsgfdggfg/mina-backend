@@ -14,7 +14,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping, Sequence, TextIO
 
-from src.core.data_provenance import DataProvenanceError, require_pilot_operational_dataset
+from src.core.data_provenance import (
+    DataProvenanceError,
+    calculate_dataset_sha256,
+    require_pilot_operational_dataset,
+)
 from src.core.operational_data import (
     DEFAULT_OPERATIONAL_DATA_SOURCES,
     OperationalDataSourceConfigurationError,
@@ -37,6 +41,11 @@ APPROVAL_KEYS = (
     "deployment_storage_approval", "retention_deletion_approval",
     "named_operators_confirmed", "senior_road_reviewer_confirmed",
 )
+OPERATIONAL_DATASET_KEYS = (
+    "customer_memory",
+    "supplier_capabilities",
+)
+READINESS_EVIDENCE_SCHEMA_VERSION = 2
 
 MIN_ACTIVE_PILOT_CUSTOMERS = 2
 MAX_ACTIVE_PILOT_CUSTOMERS = 3
@@ -153,6 +162,17 @@ def _timestamp(value: Any) -> bool:
     return parsed.tzinfo is not None
 
 
+def _hex_digest(value: Any, length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == length
+        and all(
+            character in "0123456789abcdef"
+            for character in value
+        )
+    )
+
+
 def load_external_evidence(path: Path) -> dict[str, Any]:
     resolved = path.expanduser().resolve()
     try:
@@ -167,11 +187,33 @@ def load_external_evidence(path: Path) -> dict[str, Any]:
         raise EvidenceValidationError("evidence_unreadable_or_invalid_json") from exc
     if not isinstance(value, dict) or _contains_forbidden_key(value):
         raise EvidenceValidationError("evidence_schema_or_privacy_invalid")
-    expected = {"schema_version", "pilot_commit_sha", *APPROVAL_KEYS, "sanitized_replay"}
-    if set(value) != expected or value.get("schema_version") != 1:
+    expected = {
+        "schema_version",
+        "pilot_commit_sha",
+        "operational_dataset_sha256",
+        *APPROVAL_KEYS,
+        "sanitized_replay",
+    }
+    if (
+        set(value) != expected
+        or value.get("schema_version")
+        != READINESS_EVIDENCE_SCHEMA_VERSION
+    ):
         raise EvidenceValidationError("evidence_schema_invalid")
-    if not isinstance(value.get("pilot_commit_sha"), str) or len(value["pilot_commit_sha"]) != 40:
+    if not _hex_digest(value.get("pilot_commit_sha"), 40):
         raise EvidenceValidationError("evidence_commit_invalid")
+    dataset_hashes = value.get("operational_dataset_sha256")
+    if (
+        not isinstance(dataset_hashes, dict)
+        or set(dataset_hashes) != set(OPERATIONAL_DATASET_KEYS)
+        or any(
+            not _hex_digest(dataset_hashes.get(key), 64)
+            for key in OPERATIONAL_DATASET_KEYS
+        )
+    ):
+        raise EvidenceValidationError(
+            "evidence_operational_dataset_binding_invalid"
+        )
     for key in APPROVAL_KEYS:
         item = value.get(key)
         if not isinstance(item, dict) or set(item) != {"confirmed", "confirmed_by", "confirmed_at"}:
@@ -225,6 +267,7 @@ def assess_readiness(
         str,
         Mapping[str, Any] | None,
     ] = {}
+    dataset_hashes: dict[str, str | None] = {}
 
     for dataset_key, dataset_path in (
         (
@@ -299,6 +342,19 @@ def assess_readiness(
             )
             else None
         )
+
+        if state == Status.PASS:
+            try:
+                dataset_hashes[dataset_key] = (
+                    calculate_dataset_sha256(dataset_path)
+                )
+            except (OSError, ValueError):
+                dataset_hashes[dataset_key] = None
+                dataset_validations[dataset_key] = None
+                state = Status.BLOCKED
+                reason = f"{dataset_key}_hash_unavailable"
+        else:
+            dataset_hashes[dataset_key] = None
 
         checks.append(
             _check(
@@ -430,6 +486,41 @@ def assess_readiness(
     )
 
 
+    current_dataset_hashes = {
+        key: dataset_hashes.get(key)
+        for key in OPERATIONAL_DATASET_KEYS
+    }
+    evidence_dataset_hashes = (
+        evidence.get("operational_dataset_sha256")
+        if evidence is not None
+        else None
+    )
+    if evidence is None:
+        binding_state = Status.NOT_VERIFIED
+        binding_reason = "readiness_evidence_not_provided"
+    elif any(
+        not isinstance(current_dataset_hashes[key], str)
+        for key in OPERATIONAL_DATASET_KEYS
+    ):
+        binding_state = Status.BLOCKED
+        binding_reason = (
+            "current_operational_data_binding_unavailable"
+        )
+    elif evidence_dataset_hashes != current_dataset_hashes:
+        binding_state = Status.BLOCKED
+        binding_reason = "replay_operational_data_mismatch"
+    else:
+        binding_state = Status.PASS
+        binding_reason = "replay_operational_data_bound"
+    checks.append(
+        _check(
+            "replay_operational_data_binding",
+            "Replay operational-data binding",
+            binding_state,
+            binding_reason,
+            binding_reason,
+        )
+    )
 
     commit_matches = bool(evidence and gates.git_commit_sha and evidence.get("pilot_commit_sha") == gates.git_commit_sha)
     if evidence is None:
