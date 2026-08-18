@@ -329,6 +329,9 @@ def _explicit_adr_state(email_text: str) -> tuple[bool | None, str | None]:
         text,
     )
 
+    if adr_negated and adr_class_match:
+        # Conflicting explicit safety signals must remain unresolved.
+        return None, None
     if adr_negated:
         return False, None
     if adr_class_match:
@@ -387,18 +390,30 @@ def build_shipment_from_extraction(
 
     explicit_adr, explicit_adr_class = _explicit_adr_state(email_text)
     proposed_adr = explicit_adr
-    if proposed_adr is None:
-        proposed_adr = extracted.is_adr
-    if proposed_adr is None and extracted.adr_class:
+    if proposed_adr is None and (
+        extracted.is_adr is True or extracted.adr_class
+    ):
+        # AI may conservatively raise a safety flag, but it cannot establish
+        # a negative safety fact when the source text did not establish one.
         proposed_adr = True
 
-    proposed_temperature = extracted.is_temperature_controlled
-    if proposed_temperature is None and shipment.is_temperature_controlled:
-        proposed_temperature = True
+    proposed_temperature = (
+        True
+        if (
+            extracted.is_temperature_controlled is True
+            or shipment.is_temperature_controlled
+        )
+        else None
+    )
 
-    proposed_high_value = extracted.is_high_value
-    if proposed_high_value is None and shipment.is_high_value:
-        proposed_high_value = True
+    proposed_high_value = (
+        True
+        if (
+            extracted.is_high_value is True
+            or shipment.is_high_value
+        )
+        else None
+    )
 
     proposal_data = shipment.model_dump()
     proposal_data.update(

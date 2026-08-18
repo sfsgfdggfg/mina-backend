@@ -172,6 +172,35 @@ def evaluate_sanitized_replay_regressions() -> dict:
         unknown = next(item for item in result.cases[8].fields if item.field == "cargo_ready_date")
         require("unknown truth not extraction error", unknown.outcome == "correctly_unknown")
         require("unexpected inference identified", result.outcome_counts["unexpected_inference"] == 1)
+
+        safety_unknown_path = root / "safety-unknown-inference.jsonl"
+        _write(
+            safety_unknown_path,
+            [
+                _case(
+                    "safety-unknown-inference",
+                    {"is_adr": _fact(None, "unknown")},
+                    "extraction_confirmation_required",
+                    progression=False,
+                )
+            ],
+        )
+        safety_unknown_case = load_cases(safety_unknown_path)[0]
+        safety_unknown_result = run_replay(
+            [safety_unknown_case],
+            lambda _case: ReplayActual(
+                facts={"is_adr": False},
+                disposition="extraction_confirmation_required",
+                supplier_progressed=False,
+            ),
+        )
+        require(
+            "safety-field unexpected inference fails aggregate",
+            not safety_unknown_result.passed
+            and safety_unknown_result.safety_critical_mismatches == 1
+            and not safety_unknown_result.cases[0].passed_safety,
+        )
+
         require("ordinary mismatch visible", result.grouped_mismatches["field:delivery_city"] == 1)
         require("safety mismatch fails aggregate", not result.passed and result.safety_critical_mismatches >= 1)
         require("safety mismatch produces nonzero", replay_exit_code(result) != 0)

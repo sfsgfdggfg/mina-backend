@@ -286,9 +286,18 @@ def _safety_mismatches(case: ReplayCase, actual: ReplayActual, fields: list[Repl
     for name in SAFETY_FIELDS:
         expected = case.expected.facts.get(name)
         item = by_name.get(name)
-        if expected and expected.state == "known" and item and item.outcome != "correct":
-            if name == "transport_mode" or expected.value is True:
-                critical.append(f"safety_field:{name}")
+        if item is None:
+            continue
+        if item.outcome == "unexpected_inference":
+            critical.append(f"safety_field:{name}")
+            continue
+        if (
+            expected
+            and expected.state == "known"
+            and item.outcome != "correct"
+            and (name == "transport_mode" or expected.value is True)
+        ):
+            critical.append(f"safety_field:{name}")
     if case.expected.disposition == "pilot_scope_excluded" and actual.disposition != "pilot_scope_excluded":
         critical.append("scope_exclusion_lost")
     if case.expected.disposition in {"clarification_required", "pilot_scope_excluded", "data_provenance_blocked"} and actual.supplier_progressed:
