@@ -64,6 +64,7 @@ from src.workflow.extraction_confirmation import (
     resume_confirmed_extraction,
 )
 from src.core.pilot_store import SQLitePilotStore
+from src.core.runtime_release import runtime_release_payload
 from src.core.pilot_access import (
     authorize_pilot_request,
     pilot_mode_enabled,
@@ -667,6 +668,11 @@ def health_check():
         "status": "ok",
         "service": "MINAI Freight OS API",
     }
+
+
+@app.get("/runtime/release")
+def runtime_release():
+    return runtime_release_payload()
 
 
 def _enrich_quote_case_with_current_approval(quote_case):

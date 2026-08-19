@@ -126,6 +126,19 @@ def _extraction_required_result(
     }
 
 
+
+def existing_proposal_for_mail(
+    *,
+    mail: InboundMailEnvelope,
+    repository: ExtractionProposalRepository,
+):
+    """Return an exact prior customer ingestion or fail on ID reuse."""
+    return _existing_proposal_for_mail(
+        mail=mail,
+        repository=repository,
+    )
+
+
 def process_customer_inquiry_mail(
     *,
     mail: InboundMailEnvelope,

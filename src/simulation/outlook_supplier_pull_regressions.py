@@ -52,6 +52,17 @@ SUPPLIER = "pricing@supplier.example"
 TOKEN = "supplier-pull-secret-token"
 
 
+
+class _EmptyProposalRepository:
+    """Supplier-only fixture with no prior customer ingestion."""
+
+    def find_by_message_key(
+        self,
+        message_key: str,
+    ):
+        return None
+
+
 def _repository(
     rfq_id="rfq-outlook-supplier",
 ):
@@ -246,7 +257,7 @@ def evaluate_outlook_supplier_pull_regressions():
                         lambda value: value
                     ),
                     supplier_parser=parser,
-                    proposal_repository=object(),
+                    proposal_repository=_EmptyProposalRepository(),
                     supplier_repository=repository,
                     operational_data_sources=object(),
                     token_provider=(
@@ -305,7 +316,7 @@ def evaluate_outlook_supplier_pull_regressions():
                         lambda value: value
                     ),
                     supplier_parser=parser,
-                    proposal_repository=object(),
+                    proposal_repository=_EmptyProposalRepository(),
                     supplier_repository=repository,
                     operational_data_sources=object(),
                     token_provider=(
@@ -362,7 +373,7 @@ def evaluate_outlook_supplier_pull_regressions():
                         lambda value: value
                     ),
                     supplier_parser=parser,
-                    proposal_repository=object(),
+                    proposal_repository=_EmptyProposalRepository(),
                     supplier_repository=repository,
                     operational_data_sources=object(),
                     token_provider=(
@@ -425,7 +436,7 @@ def evaluate_outlook_supplier_pull_regressions():
                         lambda value: value
                     ),
                     supplier_parser=parser,
-                    proposal_repository=object(),
+                    proposal_repository=_EmptyProposalRepository(),
                     supplier_repository=repository,
                     operational_data_sources=object(),
                     token_provider=(
@@ -498,7 +509,7 @@ def evaluate_outlook_supplier_pull_regressions():
                     supplier_parser=(
                         legacy_parser
                     ),
-                    proposal_repository=object(),
+                    proposal_repository=_EmptyProposalRepository(),
                     supplier_repository=(
                         legacy_repository
                     ),
@@ -615,7 +626,7 @@ def evaluate_outlook_supplier_pull_regressions():
                     supplier_parser=(
                         _UnavailableParser()
                     ),
-                    proposal_repository=object(),
+                    proposal_repository=_EmptyProposalRepository(),
                     supplier_repository=(
                         unavailable_repository
                     ),

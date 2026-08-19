@@ -791,3 +791,195 @@ Implementation regressions for P1-20 are deterministic and offline. Completion
 of this code change is not evidence that a live Microsoft tenant/mailbox supplier
 reply has been exercised; live pilot tenant validation remains a separate
 deployment-readiness activity.
+
+## P1-21 Addendum — Controlled Live Outlook Smoke Validation
+
+P1-21 validates the existing read-only Outlook integration against one
+explicitly approved live Microsoft tenant/mailbox. It does not widen the
+mailbox permission or outbound authority introduced by P1-19/P1-20.
+
+Do not perform the live smoke while the implementation branch is dirty or
+before the P1-21 code has been reviewed, merged, and selected as the approved
+pilot release commit.
+
+### Required Environment
+
+The approved pilot host must provide, through the approved secret/deployment
+mechanism and not through committed files:
+
+```env
+MINAI_PILOT_MODE=true
+MINAI_PILOT_BIND_HOST=<approved-loopback-or-private-IP>
+MINAI_PILOT_PORT=8000
+MINAI_PILOT_ALLOWED_NETWORKS=<approved-private-or-loopback-CIDRs>
+MINAI_PILOT_OPERATORS_JSON=<named-operator-secret-map>
+MINAI_PILOT_DB_PATH=<approved-pilot-db-path>
+
+MINAI_PILOT_DATA_DIR=<approved-external-pilot-data-pack>
+
+MINAI_OUTLOOK_TENANT_ID=<approved-tenant-uuid>
+MINAI_OUTLOOK_CLIENT_ID=<approved-public-client-app-uuid>
+MINAI_OUTLOOK_MAILBOX_ID=<approved-pilot-mailbox>
+MINAI_OUTLOOK_TOKEN_CACHE_PATH=<approved-external-private-cache-path>
+
+OPENAI_API_KEY=<approved-provider-secret>
+```
+
+Do not paste the real values into chat, source code, shell scripts, Git,
+receipts, screenshots, or pilot logs.
+
+The configured operational data pack must remain external to the repository
+and its required operational datasets must be current `pilot_verified`,
+`pilot_usable`, and SHA-256 matched.
+
+### Microsoft Authorization
+
+The Microsoft application remains delegated `Mail.Read` only.
+
+Perform initial or explicit reauthorization on the pilot host:
+
+```bash
+python -m src.outlook_auth
+```
+
+Sign in only as the mailbox identity configured by
+`MINAI_OUTLOOK_MAILBOX_ID`.
+
+Do not grant `Mail.ReadWrite`, `Mail.Send`, application mailbox permissions,
+or additional Microsoft Graph scopes for this smoke.
+
+### Prepare Four Controlled Messages
+
+Before the smoke, an authorized operator must prepare exactly one identifiable
+inbox message for each scenario:
+
+1. trusted pilot customer sender, no attachment;
+2. known supplier sender replying to an RFQ already in
+   `awaiting_response`/supported response lifecycle and carrying a deterministic
+   RFQ reference;
+3. untrusted/wrong supplier sender that must not match customer or supplier
+   scope;
+4. message with an attachment.
+
+Use controlled test content appropriate for the approved live pilot. Do not use
+unnecessary personal or commercial data.
+
+Because the Outlook pull reads newest inbox messages first, keep the four smoke
+messages within the selected pull limit and avoid unrelated new inbox traffic
+during the two-pass validation window.
+
+### Start the Approved Release
+
+Start only the controlled launcher:
+
+```bash
+python -m src.pilot_launcher
+```
+
+From the authenticated operator environment:
+
+```bash
+python -m src.pilot_operator status
+```
+
+The P1-21 runner also verifies the authenticated server startup release through
+`/runtime/release`. The server commit must equal the clean local commit used to
+run the smoke.
+
+### Pass 1 — Prepare Private Manifest
+
+Choose an absolute external path outside the repository. The destination must
+not already exist.
+
+Example:
+
+```bash
+python -m src.outlook_live_smoke prepare \
+  --manifest /approved/external/evidence/p1-21-outlook-manifest.json \
+  --limit 10 \
+  --confirm-live-tenant-approved \
+  --confirm-openai-data-use-approved \
+  --confirm-four-test-messages-prepared \
+  --confirm-no-autonomous-outbound
+```
+
+This performs one explicit bounded Outlook pull.
+
+The command succeeds only if it can identify exactly one result for each
+required scenario.
+
+The manifest contains the four immutable Microsoft Graph message identifiers
+and is therefore sensitive operational evidence. It is create-only and must
+remain outside the repository. On POSIX systems it is written owner-only.
+
+Do not paste or commit the manifest.
+
+### Pass 2 — Verify Replay and Produce Receipt
+
+Without changing the four source messages or their senders, run the second pass:
+
+```bash
+python -m src.outlook_live_smoke run \
+  --manifest /approved/external/evidence/p1-21-outlook-manifest.json \
+  --receipt /approved/external/evidence/p1-21-outlook-receipt.json \
+  --confirm-live-tenant-approved \
+  --confirm-openai-data-use-approved \
+  --confirm-four-test-messages-prepared \
+  --confirm-no-autonomous-outbound
+```
+
+The second pull must preserve deterministic routing/idempotency:
+
+- customer message: existing extraction proposal replay;
+- supplier message: existing supplier response replay;
+- wrong sender: still blocked/manual review;
+- attachment message: still blocked/manual review.
+
+The final receipt is create-only and contains only aggregate safe evidence.
+It must not contain mailbox identities, sender identities, raw email bodies,
+Graph message IDs, proposal IDs, RFQ IDs, Microsoft tokens, OpenAI keys, or
+supplier/customer commercial payloads.
+
+A passing result also requires:
+
+```text
+mailbox_write_performed = false
+automated_send_performed = false
+```
+
+### Failure Handling
+
+Stop the live smoke and investigate if any of these occur:
+
+- local worktree is dirty;
+- local release and server startup commit differ;
+- runtime release identity is unavailable;
+- Microsoft authorization is missing or belongs to the wrong mailbox;
+- operational data provenance is not verified;
+- parser/provider becomes unavailable;
+- any required scenario is missing or ambiguous;
+- immutable message ID appears with changed sender/body;
+- the same immutable message has conflicting prior route history;
+- attachment reaches AI;
+- mailbox-write or automated-send invariant is not false.
+
+Do not alter the receipt manually to convert a failure into a pass.
+
+### Current Evidence State
+
+The P1-21 implementation and regression suite are deterministic/offline until
+the authorized two-pass live command above is executed against the approved
+tenant.
+
+Implementation completion alone must not be described as live Outlook pilot
+validation.
+
+### P1-21 Manifest Stability Hardening
+
+The private first-pass manifest must not be edited, regenerated, replaced, or
+otherwise changed while the second live smoke pass is running.
+
+The runner binds the exact manifest byte snapshot before the Outlook pull and
+rechecks its SHA-256 before creating the final receipt.
+
+Any change during execution fails closed and produces no receipt.

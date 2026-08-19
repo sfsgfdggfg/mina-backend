@@ -44,6 +44,22 @@ def evaluate_pilot_access_regressions() -> dict:
     if no_auth.allowed or no_auth.status_code != 401:
         failures.append("pilot workflow accepted unauthenticated request")
 
+    runtime_no_auth = authorize_pilot_request(
+        method="GET",
+        path="/runtime/release",
+        client_host="127.0.0.1",
+        authorization=None,
+        environ=env,
+    )
+    if (
+        runtime_no_auth.allowed
+        or runtime_no_auth.status_code != 401
+    ):
+        failures.append(
+            "runtime release identity was exposed "
+            "without operator authentication"
+        )
+
     private_env = {
         **env,
         "MINAI_PILOT_BIND_HOST": "10.42.1.9",
@@ -131,6 +147,7 @@ def evaluate_pilot_access_regressions() -> dict:
             )
 
     expected_routes = (
+        ("GET", "/runtime/release"),
         ("POST", "/process-email"),
         ("POST", "/extraction-proposals/p1/confirm"),
         ("POST", "/extraction-proposals/p1/resume"),

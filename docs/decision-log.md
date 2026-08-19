@@ -5582,3 +5582,139 @@ The P1-20 implementation and canonical regressions are deterministic/offline.
 No live Microsoft tenant/mailbox supplier-response network pull is claimed by
 this implementation pass. A live approved pilot tenant must be validated
 separately before operational reliance.
+
+## DEC-120 — Live Outlook Validation Requires Commit-Bound Two-Pass Evidence
+
+**Status:** Accepted
+**Date:** 2026-08-19
+
+### Decision
+
+P1-21 introduces a controlled live Microsoft Outlook smoke-validation
+procedure for the approved pilot mailbox.
+
+Live Outlook validation is not represented by a successful network request
+alone. Technical evidence is accepted only when all of the following are true:
+
+- the local release worktree is clean;
+- the running pilot API exposes the same startup commit SHA through the
+  authenticated `/runtime/release` route;
+- the live Microsoft tenant and mailbox use the existing delegated
+  `Mail.Read`-only integration;
+- explicit human confirmations exist for live-tenant authorization,
+  configured OpenAI data use, preparation of the four controlled smoke
+  messages, and continued prohibition of autonomous outbound;
+- the first Outlook pull identifies exactly one controlled case for each
+  required scenario;
+- the second pull verifies deterministic replay/idempotency for the same
+  immutable Microsoft Graph message IDs;
+- the resulting evidence receipt is create-only, stored outside the
+  repository, and contains no mailbox identity, sender identity, raw message
+  body, Microsoft token, Graph message ID, proposal ID, RFQ ID, or commercial
+  response payload;
+- mailbox writes and automated sends remain false.
+
+The four required live smoke scenarios are:
+
+1. trusted customer inquiry routes to the customer extraction-proposal path;
+2. known supplier reply routes to the already-correlated supplier RFQ path;
+3. wrong/untrusted supplier sender fails closed before AI;
+4. message with attachments requires manual review and does not send the
+   attachment to AI.
+
+### Route-History Integrity
+
+An immutable Outlook message already consumed through the customer route must
+remain a customer replay even if later supplier/RFQ state would cause a new
+current-state supplier correlation.
+
+Likewise, an immutable message already consumed through the supplier route
+must remain a supplier replay.
+
+Reuse of the same immutable message identity with different body content or
+sender identity fails closed.
+
+If durable evidence says the same immutable message was previously consumed
+through both customer and supplier routes, processing fails closed as an
+idempotency conflict.
+
+Historical route evidence therefore takes precedence over later mutable
+routing state.
+
+### Runtime Identity
+
+The pilot API captures release identity once at process startup.
+
+`GET /runtime/release` is available only inside the authenticated pilot
+boundary. It exposes only:
+
+- whether repository identity was available;
+- the startup commit SHA;
+- whether the startup worktree was clean.
+
+It exposes no secret, token, mailbox, customer, supplier, or message data.
+
+The live smoke runner refuses to execute if the server startup commit and
+the clean local release commit differ.
+
+### Evidence Boundary
+
+The first live pass writes an external private manifest containing the four
+immutable Graph message identifiers. That manifest is operationally sensitive
+and must remain outside the repository with owner-only permissions where the
+platform supports them.
+
+The final receipt does not reproduce those identifiers. It stores only:
+
+- pilot commit SHA;
+- manifest SHA-256;
+- timestamp;
+- aggregate scenario pass/fail status;
+- safe pull counts/status;
+- explicit confirmation flags;
+- no-mailbox-write and no-automated-send invariants.
+
+A passing receipt is technical integration evidence only. It does not replace
+organizational approval, privacy/legal approval, Microsoft tenant
+administration, OpenAI data-use approval, operational-data verification,
+retention/deletion procedures, or human workflow controls.
+
+### Out of Scope
+
+P1-21 does not add:
+
+- `Mail.ReadWrite`;
+- `Mail.Send`;
+- mailbox marking, moving, deleting, flagging, replying, or sending;
+- webhooks or subscriptions;
+- background polling or autonomous monitoring;
+- autonomous supplier RFQ delivery;
+- autonomous customer quotation delivery;
+- automatic quote progression after supplier-response ingestion.
+
+Until a live tenant run produces a passing commit-bound receipt, Outlook live
+integration remains implemented but not live-pilot-validated.
+
+## DEC-121 — Live Smoke Manifest Must Remain Stable During Execution
+
+**Status:** Accepted
+**Date:** 2026-08-19
+
+### Decision
+
+The P1-21 private manifest is treated as immutable evidence input for one
+live smoke execution.
+
+The runner reads and hashes one exact manifest byte snapshot before the live
+Outlook pull. After the network execution and before receipt creation, it
+re-reads the protected external manifest and verifies that its SHA-256 is
+unchanged.
+
+If the manifest changes during execution, the run fails closed with
+`outlook_smoke_manifest_changed_during_execution` and no receipt is created.
+
+The final receipt is bound to the SHA-256 of the exact manifest snapshot that
+was parsed for routing verification, not to a later independently read version.
+
+This closes the time-of-check/time-of-use gap between manifest parsing,
+live network execution, and evidence receipt creation.

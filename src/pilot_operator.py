@@ -173,6 +173,12 @@ class PilotOperatorClient:
         self._request("GET", "/supplier-rfqs")
         return {"health": health, "authentication": "ok"}
 
+    def runtime_release(self) -> Any:
+        return self._request(
+            "GET",
+            "/runtime/release",
+        )
+
     def process_email(self, **payload: Any) -> Any:
         return self._request("POST", "/process-email", payload)
 
