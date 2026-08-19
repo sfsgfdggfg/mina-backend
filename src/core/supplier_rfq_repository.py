@@ -74,7 +74,19 @@ class SupplierRFQRepository(Protocol):
     def has_ingested_message(self, message_key: str) -> bool:
         ...
 
-    def record_ingested_message(self, message_key: str) -> None:
+    def get_ingested_message_evidence(
+        self,
+        message_key: str,
+    ) -> dict[str, str] | None:
+        ...
+
+    def record_ingested_message(
+        self,
+        message_key: str,
+        *,
+        body_sha256: Optional[str] = None,
+        sender_address: Optional[str] = None,
+    ) -> None:
         ...
 
 
@@ -118,6 +130,10 @@ class InMemorySupplierRFQRepository:
             str, SupplierRFQManualSentEvidence
         ] = {}
         self._ingested_message_keys: set[str] = set()
+        self._ingested_message_evidence: dict[
+            str,
+            dict[str, str],
+        ] = {}
 
     def save_drafts(
         self,
@@ -209,5 +225,41 @@ class InMemorySupplierRFQRepository:
     def has_ingested_message(self, message_key: str) -> bool:
         return message_key in self._ingested_message_keys
 
-    def record_ingested_message(self, message_key: str) -> None:
+    def get_ingested_message_evidence(
+        self,
+        message_key: str,
+    ) -> dict[str, str] | None:
+        evidence = self._ingested_message_evidence.get(
+            message_key
+        )
+        return (
+            None
+            if evidence is None
+            else dict(evidence)
+        )
+
+    def record_ingested_message(
+        self,
+        message_key: str,
+        *,
+        body_sha256: Optional[str] = None,
+        sender_address: Optional[str] = None,
+    ) -> None:
         self._ingested_message_keys.add(message_key)
+
+        payload = {
+            "message_key": message_key,
+        }
+
+        if body_sha256 is not None:
+            payload["body_sha256"] = body_sha256
+
+        if sender_address is not None:
+            payload["sender_address"] = (
+                sender_address
+            )
+
+        self._ingested_message_evidence.setdefault(
+            message_key,
+            payload,
+        )

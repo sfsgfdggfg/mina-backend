@@ -6,6 +6,9 @@ from typing import Any
 from src.ai.email_parser import (
     EmailParserUnavailableError,
 )
+from src.ai.supplier_response_parser import (
+    SupplierResponseParserUnavailableError,
+)
 from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
@@ -23,8 +26,8 @@ from src.integrations.outlook_graph import (
 from src.workflow.mail_ingestion import (
     InboundMailIdempotencyConflictError,
 )
-from src.workflow.outlook_inbound_ingestion import (
-    process_controlled_outlook_customer_mail,
+from src.workflow.outlook_inbound_router import (
+    process_controlled_outlook_inbound_mail,
 )
 
 
@@ -72,6 +75,15 @@ def _safe_result_summary(
         "reason_code": result.get(
             "reason_code"
         ),
+        "inbound_route": result.get(
+            "inbound_route"
+        ),
+        "rfq_id": result.get(
+            "rfq_id"
+        ),
+        "correlation_method": result.get(
+            "correlation_method"
+        ),
         "proposal_id": proposal_id,
     }
 
@@ -93,6 +105,8 @@ def pull_controlled_outlook_inbox(
     operational_data_sources: (
         OperationalDataSources | None
     ),
+    supplier_parser=None,
+    supplier_repository=None,
     token_provider: Callable[
         [MicrosoftAuthConfig],
         str,
@@ -102,7 +116,7 @@ def pull_controlled_outlook_inbox(
     ] = OutlookGraphReadClient,
     inbound_processor: Callable[
         ..., dict
-    ] = process_controlled_outlook_customer_mail,
+    ] = process_controlled_outlook_inbound_mail,
 ) -> dict:
     access_token = token_provider(
         config
@@ -130,6 +144,12 @@ def pull_controlled_outlook_inbox(
                 ),
                 operational_data_sources=(
                     operational_data_sources
+                ),
+                supplier_parser=(
+                    supplier_parser
+                ),
+                supplier_repository=(
+                    supplier_repository
                 ),
             )
 
@@ -160,6 +180,20 @@ def pull_controlled_outlook_inbox(
             }
             parser_unavailable = True
 
+        except SupplierResponseParserUnavailableError:
+            result = {
+                "result_type": (
+                    "supplier_response_parser_unavailable"
+                ),
+                "ingestion_status": "blocked",
+                "reason_code": (
+                    "supplier_response_parser_unavailable"
+                ),
+                "inbound_route": "supplier",
+                "extraction_proposal": None,
+            }
+            parser_unavailable = True
+
         summaries.append(
             _safe_result_summary(
                 mail,
@@ -176,6 +210,26 @@ def pull_controlled_outlook_inbox(
         if item.get("proposal_id")
     )
 
+    supplier_response_count = sum(
+        1
+        for item in summaries
+        if (
+            item.get("inbound_route")
+            == "supplier"
+            and item.get(
+                "ingestion_status"
+            )
+            == "response_attached"
+        )
+    )
+
+    manual_review_count = sum(
+        1
+        for item in summaries
+        if item.get("inbound_route")
+        == "manual_review"
+    )
+
     return {
         "provider": GRAPH_PROVIDER_NAME,
         "mailbox_id": config.mailbox_id,
@@ -185,6 +239,12 @@ def pull_controlled_outlook_inbox(
             len(summaries)
         ),
         "proposal_count": proposal_count,
+        "supplier_response_count": (
+            supplier_response_count
+        ),
+        "manual_review_count": (
+            manual_review_count
+        ),
         "pull_status": (
             "partial_parser_unavailable"
             if parser_unavailable
