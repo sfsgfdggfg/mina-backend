@@ -12,6 +12,7 @@ SUPPORTED_PYTHON_FAMILY = (3, 12)
 REQUIRED_RUNTIME_PACKAGES: dict[str, str] = {
     "fastapi": "0.141.1",
     "openai": "2.53.0",
+    "msal": "1.37.0",
     "pydantic": "2.13.4",
     "python-dotenv": "1.2.2",
     "requests": "2.34.2",

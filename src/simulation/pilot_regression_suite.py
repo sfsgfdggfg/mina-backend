@@ -13,6 +13,10 @@ from src.simulation.data_provenance_regressions import evaluate_data_provenance_
 from src.simulation.data_path_regressions import evaluate_data_path_regressions
 from src.simulation.extraction_confirmation_regressions import evaluate_extraction_confirmation_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
+from src.simulation.microsoft_auth_regressions import evaluate_microsoft_auth_regressions
+from src.simulation.outlook_graph_read_regressions import evaluate_outlook_graph_read_regressions
+from src.simulation.outlook_inbound_gate_regressions import evaluate_outlook_inbound_gate_regressions
+from src.simulation.outlook_pull_regressions import evaluate_outlook_pull_regressions
 from src.simulation.operational_data_injection_regressions import evaluate_operational_data_injection_regressions
 from src.simulation.manual_rfq_sent_regressions import evaluate_manual_rfq_sent_regressions
 from src.simulation.pilot_access_regressions import evaluate_pilot_access_regressions
@@ -101,6 +105,22 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
         evaluate_road_rfq_commercial_safety_regressions,
     ),
     Suite("Mail adapter boundary", evaluate_mail_adapter_regressions),
+    Suite(
+        "Microsoft delegated Outlook authentication",
+        evaluate_microsoft_auth_regressions,
+    ),
+    Suite(
+        "Read-only Outlook Graph ingestion",
+        evaluate_outlook_graph_read_regressions,
+    ),
+    Suite(
+        "Controlled Outlook inbound gate",
+        evaluate_outlook_inbound_gate_regressions,
+    ),
+    Suite(
+        "Controlled Outlook operator pull",
+        evaluate_outlook_pull_regressions,
+    ),
     Suite("Manual RFQ sent evidence", evaluate_manual_rfq_sent_regressions),
     Suite("Supplier response ingestion", evaluate_supplier_response_ingestion_regressions),
     Suite("Pilot operator client", evaluate_pilot_operator_regressions),

@@ -30,6 +30,7 @@ class PilotAccessDecision:
 _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("GET", re.compile(r"^/health$")),
     ("POST", re.compile(r"^/process-email$")),
+    ("POST", re.compile(r"^/inbound/outlook/pull$")),
     ("GET", re.compile(r"^/extraction-proposals/[^/]+$")),
     ("POST", re.compile(r"^/extraction-proposals/[^/]+/confirm$")),
     ("POST", re.compile(r"^/extraction-proposals/[^/]+/resume$")),

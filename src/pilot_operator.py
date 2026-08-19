@@ -31,6 +31,7 @@ _STATUS_MESSAGES = {
     404: "Resource was not found or this route is disabled in pilot mode.",
     426: "Secure HTTPS transport is required for this pilot connection.",
     409: "Lifecycle conflict or stale attempt. Refresh state before acting.",
+    428: "Outlook authorization is required on the pilot host.",
     422: "Input or correction was rejected. Review the supplied values.",
     503: "Pilot configuration, provenance, or system safety block.",
 }
@@ -175,6 +176,17 @@ class PilotOperatorClient:
     def process_email(self, **payload: Any) -> Any:
         return self._request("POST", "/process-email", payload)
 
+    def pull_outlook(
+        self,
+        *,
+        limit: int = 10,
+    ) -> Any:
+        return self._request(
+            "POST",
+            "/inbound/outlook/pull",
+            {"limit": limit},
+        )
+
     def get_proposal(self, proposal_id: str) -> Any:
         return self._request(
             "GET", f"/extraction-proposals/{self._id(proposal_id)}"
@@ -310,6 +322,24 @@ def _build_parser() -> argparse.ArgumentParser:
     process.add_argument("--subject", required=True)
     process.add_argument("--external-message-id")
 
+    outlook = commands.add_parser(
+        "outlook"
+    ).add_subparsers(
+        dest="action",
+        required=True,
+    )
+
+    outlook_pull = outlook.add_parser(
+        "pull"
+    )
+    outlook_pull.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        choices=range(1, 51),
+        metavar="1-50",
+    )
+
     proposal = commands.add_parser("proposal").add_subparsers(
         dest="action", required=True
     )
@@ -426,6 +456,10 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
                     "external_message_id": args.external_message_id,
                 }
             )
+        )
+    if args.command == "outlook":
+        return client.pull_outlook(
+            limit=args.limit
         )
     if args.command == "proposal":
         if args.action == "get":

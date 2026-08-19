@@ -194,6 +194,69 @@ HTTP carries a bearer credential and is allowed only on loopback or an approved
 trusted private network/VPN. Use HTTPS where the approved deployment provides
 it.
 
+### Read-Only Outlook Inbound Setup
+
+The controlled pilot may read customer inquiries directly from one approved
+Microsoft 365 / Outlook mailbox through Microsoft Graph.
+
+This capability is inbound-only. The Microsoft application uses delegated
+`Mail.Read` permission. Do not grant `Mail.ReadWrite`, `Mail.Send`,
+application-wide mailbox permissions, or any other outbound/mailbox-write
+permission for this pilot.
+
+Configure the pilot host through the approved secret/deployment mechanism:
+
+```env
+MINAI_OUTLOOK_TENANT_ID=<approved-microsoft-tenant-uuid>
+MINAI_OUTLOOK_CLIENT_ID=<approved-public-client-application-uuid>
+MINAI_OUTLOOK_MAILBOX_ID=<approved-pilot-mailbox-sign-in-address>
+MINAI_OUTLOOK_TOKEN_CACHE_PATH=/approved/external/minai-pilot/secrets/outlook-token-cache.json
+```
+
+The token-cache path must be absolute, outside the repository, and protected
+from other users. Existing cache files with group/other permissions are
+rejected on POSIX systems. The cache contains Microsoft authentication material
+and must be handled as a secret.
+
+The Microsoft application must be configured as a public client capable of the
+device-code flow. MINAI does not require or store a Microsoft client secret for
+this delegated pilot integration.
+
+Perform the initial Microsoft authorization, or an explicit reauthorization,
+on the pilot host:
+
+```bash
+python -m src.outlook_auth
+```
+
+Follow the Microsoft device-login instruction printed by the command and sign
+in only as the exact mailbox identity configured by
+`MINAI_OUTLOOK_MAILBOX_ID`. A different authorized account is rejected.
+
+The authorization command may display the Microsoft device-login instruction
+and one-time device code. It must not print access tokens, refresh tokens, or
+the serialized token cache.
+
+Normal operator pulls use silent authentication from the server-side cache.
+The MINAI operator terminal never receives the Microsoft Graph token.
+
+Microsoft Graph access remains deliberately narrow:
+
+- inbox messages are read with HTTP GET only;
+- message IDs are requested as immutable IDs for durable deduplication;
+- message bodies are requested as text;
+- redirects are refused;
+- each operator pull is explicitly bounded to 1-50 messages;
+- MINAI does not mark mail as read, move it, delete it, flag it, reply to it, or
+  send any message;
+- P1-19 does not add webhooks, subscriptions, polling daemons, or background
+  autonomous mailbox monitoring.
+
+Before using Outlook inbound with real customer mail, the configured
+`MINAI_PILOT_DATA_DIR` must select the approved external pilot operational data
+pack. Customer-memory provenance and trusted-sender records remain part of the
+safety boundary.
+
 ## B. Starting the Pilot
 
 From the repository root, start only the safe launcher:
@@ -223,8 +286,59 @@ still apply.
 Keep the printed identifiers in the approved external pilot log. They make the
 workflow recoverable without guessing IDs.
 
-1. Save the inbound email body in a temporary operator-controlled file, then
-   submit it with its identity metadata:
+1. Pull the approved Outlook inbox from the authenticated operator terminal:
+
+   ```bash
+   python -m src.pilot_operator outlook pull --limit 10
+   ```
+
+   The operator command talks only to the authenticated MINAI API. Microsoft
+   authentication and Graph access remain server-side.
+
+   For each fetched message, the server first enforces the controlled inbound
+   gate. A message reaches AI extraction only when all of the following are
+   true:
+
+   - it came from the server-side Microsoft Graph adapter with complete provider
+     metadata;
+   - it has no attachments;
+   - the configured external customer-memory dataset is currently verified;
+   - the sender matches exactly one active pilot customer through an explicitly
+     trusted sender address or domain.
+
+   Untrusted or ambiguous senders stop before the AI parser. Messages with
+   attachments return `inbound_mail_manual_review_required`; attachments are not
+   downloaded or interpreted by P1-19. A provenance failure also stops before
+   parsing.
+
+   A permitted message passes through the existing privacy transform before the
+   AI parser. AI output remains only an extraction proposal and cannot enter the
+   operational workflow without the existing explicit human confirmation.
+
+   The pull response intentionally contains only a minimal operational summary:
+   immutable external message ID, received time, result/ingestion state,
+   safe reason code when applicable, and proposal ID when one exists. It does
+   not return the raw customer body, sender identity, or Microsoft token.
+
+   Re-pulling the same Outlook message is safe. Deduplication uses Microsoft
+   Graph provider identity, mailbox identity and immutable message ID. An
+   existing identical message returns the existing proposal without a second AI
+   parse. Reuse of the same message ID with different content or sender is
+   blocked as a conflict.
+
+   Record every returned `proposal_id` that requires review. `mailbox_write_performed=false`
+   and `automated_send_performed=false` are the expected controlled-pilot
+   invariants.
+
+   If the pull returns an Outlook reauthentication requirement, stop and have an
+   authorized person run `python -m src.outlook_auth` on the pilot host. Do not
+   place Microsoft tokens in command-line arguments, operator environment
+   variables, chat, source files, or the pilot log.
+
+   The existing manual inbound path remains an explicit fallback when the
+   approved Outlook integration is unavailable or a message must be handled
+   manually. Save the inbound body in a temporary operator-controlled file and
+   submit it as manual source data:
 
    ```bash
    python -m src.pilot_operator process-email \
@@ -235,11 +349,9 @@ workflow recoverable without guessing IDs.
      --external-message-id 'mailbox-reference'
    ```
 
-   Record `extraction_proposal.proposal_id`. Review `proposed_shipment`,
-   `unknown_fields`, `unknown_safety_fields`, `extraction_status`, and
-   `resume_status` in the output. Remove the temporary raw-email file according
-   to the approved real-data handling procedure; MINAI does not retain the raw
-   body in pilot storage.
+   Manual submission cannot claim Microsoft Graph provider identity. Remove the
+   temporary raw-email file according to the approved real-data handling
+   procedure after submission.
 
 2. Re-read the proposal whenever needed:
 
@@ -391,6 +503,7 @@ The client prints a short safe message and no traceback by default:
 | 403 | Client address is outside the allowed network. Stop and contact the deployment owner. |
 | 404 | ID is wrong, resource is absent, or route is pilot-disabled. Use read/list commands; do not guess IDs. |
 | 409 | State conflict, duplicate, or stale attempt. Read the resource first. Do not repeat unless its current state proves the action did not commit. |
+| 428 | Outlook delegated authorization is missing or expired. Stop the pull and perform explicit host-side reauthorization with `python -m src.outlook_auth`; do not bypass authentication. |
 | 422 | Input/correction violates the model. Correct the input after reviewing the proposal/RFQ. |
 | 503 | Pilot configuration, provenance, or system safety block. Stop until an authorized owner resolves it. |
 
