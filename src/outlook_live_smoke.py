@@ -249,9 +249,9 @@ def write_manifest(
     return destination
 
 
-def load_manifest(
+def _read_private_manifest_bytes(
     path: Path,
-):
+) -> bytes:
     candidate = path.expanduser()
 
     if (
@@ -296,44 +296,58 @@ def load_manifest(
             )
 
     try:
-        raw = json.loads(
-            resolved.read_text(
-                encoding="utf-8"
-            )
-        )
-
-        manifest = (
-            OutlookLiveSmokeManifest
-            .model_validate(raw)
-        )
-
-    except Exception as exc:
-        raise OutlookLiveSmokeRunnerError(
-            "outlook_smoke_manifest_invalid"
-        ) from exc
-
-    return manifest
-
-
-def manifest_sha256(path: Path):
-    digest = hashlib.sha256()
-
-    try:
-        with path.open("rb") as stream:
-            for chunk in iter(
-                lambda: stream.read(
-                    1024 * 1024
-                ),
-                b"",
-            ):
-                digest.update(chunk)
+        return resolved.read_bytes()
     except OSError as exc:
         raise OutlookLiveSmokeRunnerError(
             "outlook_smoke_manifest_unreadable"
         ) from exc
 
-    return digest.hexdigest()
 
+def load_manifest_snapshot(
+    path: Path,
+):
+    payload = _read_private_manifest_bytes(
+        path
+    )
+
+    digest = hashlib.sha256(
+        payload
+    ).hexdigest()
+
+    try:
+        raw = json.loads(
+            payload.decode("utf-8")
+        )
+        manifest = (
+            OutlookLiveSmokeManifest
+            .model_validate(raw)
+        )
+    except Exception as exc:
+        raise OutlookLiveSmokeRunnerError(
+            "outlook_smoke_manifest_invalid"
+        ) from exc
+
+    return manifest, digest
+
+
+def load_manifest(
+    path: Path,
+):
+    manifest, _ = load_manifest_snapshot(
+        path
+    )
+    return manifest
+
+
+def manifest_sha256(
+    path: Path,
+):
+    payload = _read_private_manifest_bytes(
+        path
+    )
+    return hashlib.sha256(
+        payload
+    ).hexdigest()
 
 def _require_local_release(
     identity: ReleaseIdentity,
@@ -640,8 +654,10 @@ def run_live_smoke(
         release_identity
     )
 
-    manifest = load_manifest(
-        manifest_path
+    manifest, expected_manifest_sha256 = (
+        load_manifest_snapshot(
+            manifest_path
+        )
     )
 
     if (
@@ -662,6 +678,21 @@ def run_live_smoke(
         client,
         manifest.pull_limit,
     )
+
+    current_manifest_sha256 = (
+        manifest_sha256(
+            manifest_path
+        )
+    )
+
+    if (
+        current_manifest_sha256
+        != expected_manifest_sha256
+    ):
+        raise OutlookLiveSmokeRunnerError(
+            "outlook_smoke_manifest_"
+            "changed_during_execution"
+        )
 
     ids = manifest.message_ids
 
@@ -692,9 +723,7 @@ def run_live_smoke(
                 release_identity
             ),
             manifest_sha256=(
-                manifest_sha256(
-                    manifest_path
-                )
+                expected_manifest_sha256
             ),
             confirmations=confirmed,
         )

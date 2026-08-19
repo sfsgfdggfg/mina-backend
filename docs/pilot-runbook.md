@@ -973,3 +973,13 @@ tenant.
 
 Implementation completion alone must not be described as live Outlook pilot
 validation.
+
+### P1-21 Manifest Stability Hardening
+
+The private first-pass manifest must not be edited, regenerated, replaced, or
+otherwise changed while the second live smoke pass is running.
+
+The runner binds the exact manifest byte snapshot before the Outlook pull and
+rechecks its SHA-256 before creating the final receipt.
+
+Any change during execution fails closed and produces no receipt.

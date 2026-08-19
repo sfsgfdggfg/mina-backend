@@ -5694,3 +5694,27 @@ P1-21 does not add:
 
 Until a live tenant run produces a passing commit-bound receipt, Outlook live
 integration remains implemented but not live-pilot-validated.
+
+## DEC-121 — Live Smoke Manifest Must Remain Stable During Execution
+
+**Status:** Accepted
+**Date:** 2026-08-19
+
+### Decision
+
+The P1-21 private manifest is treated as immutable evidence input for one
+live smoke execution.
+
+The runner reads and hashes one exact manifest byte snapshot before the live
+Outlook pull. After the network execution and before receipt creation, it
+re-reads the protected external manifest and verifies that its SHA-256 is
+unchanged.
+
+If the manifest changes during execution, the run fails closed with
+`outlook_smoke_manifest_changed_during_execution` and no receipt is created.
+
+The final receipt is bound to the SHA-256 of the exact manifest snapshot that
+was parsed for routing verification, not to a later independently read version.
+
+This closes the time-of-check/time-of-use gap between manifest parsing,
+live network execution, and evidence receipt creation.

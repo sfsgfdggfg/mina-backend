@@ -141,6 +141,60 @@ class _Client:
         return self.pulls.pop(0)
 
 
+
+class _MutatingClient(_Client):
+    def __init__(
+        self,
+        pulls,
+        *,
+        manifest_path,
+        runtime_sha=HEAD,
+    ):
+        super().__init__(
+            pulls,
+            runtime_sha=runtime_sha,
+        )
+        self.manifest_path = (
+            manifest_path
+        )
+
+    def pull_outlook(
+        self,
+        *,
+        limit,
+    ):
+        result = super().pull_outlook(
+            limit=limit
+        )
+
+        raw = json.loads(
+            self.manifest_path.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        raw["message_ids"][
+            "trusted_customer"
+        ] = (
+            raw["message_ids"][
+                "trusted_customer"
+            ]
+            + "-changed"
+        )
+
+        self.manifest_path.write_text(
+            json.dumps(
+                raw,
+                sort_keys=True,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        return result
+
+
 def evaluate_outlook_live_smoke_regressions():
     failures = []
     passes = []
@@ -388,6 +442,69 @@ def evaluate_outlook_live_smoke_regressions():
         check(
             safe_filesystem_failure,
             "manifest filesystem failures are safely summarized",
+        )
+
+    with TemporaryDirectory() as temp:
+        root = Path(temp)
+
+        manifest_path = (
+            root
+            / "changing-manifest.json"
+        )
+
+        receipt_path = (
+            root
+            / "changing-receipt.json"
+        )
+
+        identity = ReleaseIdentity(
+            HEAD,
+            True,
+        )
+
+        prepare_client = _Client(
+            [_first_pull()]
+        )
+
+        prepare_live_smoke_manifest(
+            client=prepare_client,
+            release_identity=identity,
+            manifest_path=manifest_path,
+            pull_limit=4,
+            confirmations=CONFIRMATIONS,
+        )
+
+        mutating_client = _MutatingClient(
+            [_second_pull()],
+            manifest_path=manifest_path,
+        )
+
+        try:
+            run_live_smoke(
+                client=mutating_client,
+                release_identity=identity,
+                manifest_path=manifest_path,
+                receipt_path=receipt_path,
+                confirmations=CONFIRMATIONS,
+            )
+        except OutlookLiveSmokeRunnerError as exc:
+            changed_blocked = (
+                exc.code
+                == (
+                    "outlook_smoke_manifest_"
+                    "changed_during_execution"
+                )
+            )
+        else:
+            changed_blocked = False
+
+        check(
+            changed_blocked
+            and not receipt_path.exists(),
+            (
+                "manifest changes during live pull "
+                "block receipt creation"
+            ),
         )
 
     return {
