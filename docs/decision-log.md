@@ -5500,3 +5500,85 @@ fallback and cannot impersonate Graph-originated mail.
 
 Supplier RFQ delivery and customer quotation delivery remain manual external
 operations. P1-19 adds no autonomous outbound capability.
+
+## DEC-119 — Outlook Supplier Replies Use Deterministic Pre-AI Routing
+
+**Status:** Accepted
+**Date:** 2026-08-19
+
+### Decision
+
+The controlled shadow pilot may ingest supplier RFQ replies through the same
+explicit delegated read-only Microsoft Graph inbox pull introduced by P1-19.
+
+A Graph message does not reach a supplier-response AI parser merely because its
+text appears to be a quotation. Supplier authority and RFQ authority are
+deterministic system concerns and must be established before AI use.
+
+Before supplier AI extraction, MINAI requires the existing RFQ correlation and
+lifecycle checks to establish a single eligible RFQ and the expected supplier
+sender identity. Conflicting customer/supplier authority, ambiguous RFQ
+correlation, unknown senders, unsupported attachments or invalid Graph
+provenance fail closed before AI.
+
+After deterministic supplier/RFQ correlation succeeds, the approved inbound
+privacy transform runs on the supplier body. The production supplier-response
+parser accepts PrivacySafeText only.
+
+Supplier AI authority is restricted to structured commercial response fields.
+It cannot select or mutate the supplier identity, RFQ identity, customer,
+workflow or lifecycle state.
+
+A validated supplier response may be durably attached to the already-correlated
+RFQ. Immutable provider/mailbox/message identity provides inbound idempotency so
+the same Outlook message cannot create a second response.
+
+The existing explicit operator Outlook pull remains bounded and read-only. Its
+summary may expose safe routing state, RFQ ID and deterministic correlation
+method, but does not expose the raw supplier body, sender address, commercial
+price payload, Microsoft token material or provider error body.
+
+A production supplier-parser availability failure stops the current bounded pull
+as partial_parser_unavailable rather than silently degrading into an uncertain
+commercial result.
+
+P1-20 does not automatically resume quote progression after a response is
+attached. It also does not send supplier RFQs or customer quotes, write to the
+mailbox, mark messages as read, move/delete/flag messages, create subscriptions
+or add background polling.
+
+### Rationale
+
+Supplier replies are part of the Phase 1 email-to-quote workflow, but allowing
+AI to decide which supplier or RFQ a message belongs to would give model output
+lifecycle authority it must not have.
+
+The existing deterministic RFQ reference, sender continuity, lifecycle and
+duplicate protections already provide the authoritative boundary. Reusing
+those controls for Graph-originated replies closes the inbound supplier gap
+without broadening mailbox or outbound permissions.
+
+The same privacy boundary used before customer AI extraction should also apply
+to supplier commercial extraction. Contact details, signatures and unrelated
+quoted-thread material do not need to cross the AI boundary merely to extract a
+rate.
+
+### Consequences
+
+One explicit Outlook pull can safely route both approved customer inquiries and
+deterministically correlated supplier replies.
+
+Customer/supplier identity overlap and ambiguous supplier correlation require
+manual review instead of guessing.
+
+Supplier commercial responses can enter durable RFQ state without manual
+copy/paste, while quote progression and all outbound delivery remain under the
+existing human-controlled workflow.
+
+Attachments remain outside automated ingestion until a separately designed
+attachment boundary exists.
+
+The P1-20 implementation and canonical regressions are deterministic/offline.
+No live Microsoft tenant/mailbox supplier-response network pull is claimed by
+this implementation pass. A live approved pilot tenant must be validated
+separately before operational reliance.

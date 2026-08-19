@@ -16,6 +16,9 @@ from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regres
 from src.simulation.microsoft_auth_regressions import evaluate_microsoft_auth_regressions
 from src.simulation.outlook_graph_read_regressions import evaluate_outlook_graph_read_regressions
 from src.simulation.outlook_inbound_gate_regressions import evaluate_outlook_inbound_gate_regressions
+from src.simulation.outlook_inbound_router_regressions import evaluate_outlook_inbound_router_regressions
+from src.simulation.outlook_supplier_pull_regressions import evaluate_outlook_supplier_pull_regressions
+from src.simulation.supplier_response_privacy_regressions import evaluate_supplier_response_privacy_regressions
 from src.simulation.outlook_pull_regressions import evaluate_outlook_pull_regressions
 from src.simulation.operational_data_injection_regressions import evaluate_operational_data_injection_regressions
 from src.simulation.manual_rfq_sent_regressions import evaluate_manual_rfq_sent_regressions
@@ -116,6 +119,18 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Controlled Outlook inbound gate",
         evaluate_outlook_inbound_gate_regressions,
+    ),
+    Suite(
+        "Supplier response privacy boundary",
+        evaluate_supplier_response_privacy_regressions,
+    ),
+    Suite(
+        "Deterministic Outlook inbound router",
+        evaluate_outlook_inbound_router_regressions,
+    ),
+    Suite(
+        "Controlled Outlook supplier reply pull",
+        evaluate_outlook_supplier_pull_regressions,
     ),
     Suite(
         "Controlled Outlook operator pull",

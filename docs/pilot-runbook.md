@@ -738,3 +738,56 @@ python -m src.pilot_launcher
 Readiness and the API resolve the same operational source set. Extraction
 resume and supplier RFQ quote progression cannot accept remote filesystem path
 overrides; operational data source selection is deployment-local only.
+
+## P1-20 Addendum — Controlled Outlook Supplier Replies
+
+P1-20 extends the existing explicit read-only Outlook pull so the same approved
+mailbox pull can handle both trusted pilot customer inquiries and supplier RFQ
+replies. The P1-19 customer-only routing description remains historical; this
+addendum defines the current controlled inbound behavior.
+
+Every Graph message is still required to carry complete server-created
+Microsoft Graph provenance and to have no attachments before routing begins.
+Attachments remain manual-review-only.
+
+Routing is deterministic and occurs before any AI parser:
+
+- an exactly trusted active pilot customer sender may enter the existing customer
+  inquiry path;
+- a supplier sender may enter the supplier-response path only when existing RFQ
+  lifecycle and sender evidence deterministically match an RFQ that is awaiting
+  a response or clarification;
+- a sender that simultaneously matches customer and supplier authority is
+  blocked for manual review;
+- ambiguous RFQ correlation, ambiguous customer identity, unknown senders or
+  invalid provider provenance stop before AI.
+
+Supplier-response AI has commercial extraction authority only. It cannot select
+or change the supplier, RFQ, customer, workflow or RFQ lifecycle state.
+Deterministic correlation therefore runs first. Only after correlation succeeds
+does the approved privacy transform create the PrivacySafeText supplied to the
+production supplier-response parser.
+
+A valid supplier response may record commercial response fields against the
+already-correlated RFQ. Duplicate immutable Outlook message identities do not
+create a second response. A supplier parser outage stops the bounded pull with
+partial_parser_unavailable rather than continuing with uncertain state.
+
+The operator continues to use the existing explicit Outlook pull command.
+The returned summary may now additionally contain inbound_route, rfq_id and
+correlation_method. Supplier price/body/sender data, Microsoft token material
+and raw provider payloads remain excluded from the pull summary. Detailed
+commercial review continues through the existing RFQ records.
+
+Attaching a supplier response does not automatically send any customer quote
+and does not automatically resume quote progression. Existing human/operator
+workflow controls remain required. Supplier RFQ delivery and customer quote
+delivery remain manual external operations.
+
+P1-20 introduces no mailbox writes, Mail.ReadWrite, Mail.Send, background
+polling, subscription, webhook or autonomous outbound capability.
+
+Implementation regressions for P1-20 are deterministic and offline. Completion
+of this code change is not evidence that a live Microsoft tenant/mailbox supplier
+reply has been exercised; live pilot tenant validation remains a separate
+deployment-readiness activity.

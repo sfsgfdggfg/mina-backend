@@ -24,6 +24,9 @@ from src.ai.email_parser import (
     EmailParserUnavailableError,
     parse_email_with_ai,
 )
+from src.ai.supplier_response_parser import (
+    OpenAISupplierResponseParser,
+)
 from src.workflow.pipeline import process_shipment
 from src.workflow.supplier_rfq_progression import (
     SupplierRFQWorkflowProgressionError,
@@ -981,6 +984,12 @@ def pull_outlook_inbound(
                 ),
                 operational_data_sources=(
                     operational_data_sources
+                ),
+                supplier_parser=(
+                    OpenAISupplierResponseParser()
+                ),
+                supplier_repository=(
+                    supplier_rfq_repository
                 ),
             )
         )

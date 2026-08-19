@@ -5,8 +5,12 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from src.ai.supplier_response_parser import SupplierResponseParser
+from src.ai.supplier_response_parser import (
+    SupplierResponseParser,
+    SupplierResponseParserUnavailableError,
+)
 from src.core.mail import InboundMailEnvelope
+from src.core.privacy import prepare_privacy_safe_text
 from src.core.supplier_response_ingestion import (
     SupplierReplyIngestionResult,
     SupplierResponseExtraction,
@@ -69,8 +73,13 @@ def _resolve_extraction(
         )
 
     try:
-        parsed = parser.parse(reply)
+        safe_text = prepare_privacy_safe_text(
+            reply.body_text
+        ).safe_text
+        parsed = parser.parse(safe_text)
         extraction = SupplierResponseExtraction.model_validate(parsed)
+    except SupplierResponseParserUnavailableError:
+        raise
     except Exception:
         return (
             None,
