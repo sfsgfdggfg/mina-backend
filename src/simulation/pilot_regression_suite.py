@@ -18,6 +18,15 @@ from src.simulation.outlook_graph_read_regressions import evaluate_outlook_graph
 from src.simulation.outlook_inbound_gate_regressions import evaluate_outlook_inbound_gate_regressions
 from src.simulation.outlook_inbound_router_regressions import evaluate_outlook_inbound_router_regressions
 from src.simulation.outlook_supplier_pull_regressions import evaluate_outlook_supplier_pull_regressions
+from src.simulation.outlook_live_smoke_receipt_regressions import (
+    evaluate_outlook_live_smoke_receipt_regressions,
+)
+from src.simulation.outlook_live_smoke_regressions import (
+    evaluate_outlook_live_smoke_regressions,
+)
+from src.simulation.outlook_route_history_regressions import (
+    evaluate_outlook_route_history_regressions,
+)
 from src.simulation.supplier_response_privacy_regressions import evaluate_supplier_response_privacy_regressions
 from src.simulation.outlook_pull_regressions import evaluate_outlook_pull_regressions
 from src.simulation.operational_data_injection_regressions import evaluate_operational_data_injection_regressions
@@ -131,6 +140,18 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Controlled Outlook supplier reply pull",
         evaluate_outlook_supplier_pull_regressions,
+    ),
+    Suite(
+        "Live Outlook smoke evidence contract",
+        evaluate_outlook_live_smoke_receipt_regressions,
+    ),
+    Suite(
+        "Controlled live Outlook smoke runner",
+        evaluate_outlook_live_smoke_regressions,
+    ),
+    Suite(
+        "Global Outlook route history idempotency",
+        evaluate_outlook_route_history_regressions,
     ),
     Suite(
         "Controlled Outlook operator pull",

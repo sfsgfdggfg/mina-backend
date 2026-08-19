@@ -26,6 +26,10 @@ from src.core.supplier_response_ingestion import (
 from src.core.supplier_rfq_repository import (
     SupplierRFQRepository,
 )
+from src.workflow.mail_ingestion import (
+    InboundMailIdempotencyConflictError,
+    existing_proposal_for_mail,
+)
 from src.workflow.outlook_inbound_ingestion import (
     OUTLOOK_GRAPH_PROVIDER,
     process_controlled_outlook_customer_mail,
@@ -134,10 +138,31 @@ def process_controlled_outlook_inbound_mail(
             ),
         )
 
-    if supplier_message_is_exact_replay(
-        reply=mail,
-        repository=supplier_repository,
+    supplier_replay = (
+        supplier_message_is_exact_replay(
+            reply=mail,
+            repository=supplier_repository,
+        )
+    )
+
+    existing_customer_proposal = (
+        existing_proposal_for_mail(
+            mail=mail,
+            repository=proposal_repository,
+        )
+    )
+
+    if (
+        supplier_replay
+        and existing_customer_proposal
+        is not None
     ):
+        raise InboundMailIdempotencyConflictError(
+            "Inbound message has conflicting "
+            "prior route history."
+        )
+
+    if supplier_replay:
         return {
             "result_type": (
                 "supplier_response_duplicate"
@@ -150,6 +175,24 @@ def process_controlled_outlook_inbound_mail(
             ),
             "inbound_route": "supplier",
             "extraction_proposal": None,
+            "supplier_response": None,
+        }
+
+    if existing_customer_proposal is not None:
+        return {
+            "result_type": (
+                "extraction_confirmation_required"
+            ),
+            "ingestion_status": (
+                "duplicate_existing_proposal"
+            ),
+            "reason_code": (
+                "customer_message_already_ingested"
+            ),
+            "inbound_route": "customer",
+            "extraction_proposal": (
+                existing_customer_proposal
+            ),
             "supplier_response": None,
         }
 
