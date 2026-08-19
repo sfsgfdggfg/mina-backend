@@ -24,6 +24,12 @@ from src.core.supplier_rfq_lifecycle import (
     approve_supplier_rfq,
     send_supplier_rfq,
 )
+from src.core.pilot_store import (
+    SQLitePilotStore,
+)
+from src.core.sqlite_repositories import (
+    SQLiteSupplierRFQRepository,
+)
 from src.core.supplier_rfq_repository import (
     InMemorySupplierRFQRepository,
 )
@@ -109,12 +115,15 @@ def _repository(
 def _mail(
     message_id,
     rfq_id="rfq-outlook-supplier",
+    *,
+    sender=SUPPLIER,
+    body_text=None,
 ):
     return InboundMailEnvelope(
         external_message_id=message_id,
         provider_name="microsoft_graph",
         mailbox_id=MAILBOX,
-        sender_address=SUPPLIER,
+        sender_address=sender,
         recipient_addresses=[MAILBOX],
         subject=(
             "Re: ["
@@ -124,9 +133,12 @@ def _mail(
             + "]"
         ),
         body_text=(
-            "We quote EUR 2200 all in. "
-            "RAW SUPPLIER BODY MUST NOT "
-            "APPEAR IN PULL SUMMARY."
+            body_text
+            or (
+                "We quote EUR 2200 all in. "
+                "RAW SUPPLIER BODY MUST NOT "
+                "APPEAR IN PULL SUMMARY."
+            )
         ),
         received_at=datetime(
             2026,
@@ -316,6 +328,249 @@ def evaluate_outlook_supplier_pull_regressions():
             == "duplicate_response"
             and parser.calls == 1,
             "supplier Outlook message is idempotent",
+        )
+
+        def changed_body_factory(
+            *,
+            access_token,
+            mailbox_id,
+        ):
+            return _GraphClient(
+                access_token=access_token,
+                mailbox_id=mailbox_id,
+                messages=[
+                    _mail(
+                        "supplier-message-1",
+                        body_text=(
+                            "We now quote EUR 9999."
+                        ),
+                    ),
+                ],
+            )
+
+        with patch(
+            "src.workflow."
+            "outlook_inbound_router."
+            "load_customer_memory",
+            return_value=[],
+        ):
+            changed_body = (
+                pull_controlled_outlook_inbox(
+                    config=config,
+                    limit=1,
+                    shipment_parser=(
+                        lambda value: value
+                    ),
+                    supplier_parser=parser,
+                    proposal_repository=object(),
+                    supplier_repository=repository,
+                    operational_data_sources=object(),
+                    token_provider=(
+                        lambda value: TOKEN
+                    ),
+                    graph_client_factory=(
+                        changed_body_factory
+                    ),
+                )
+            )
+
+        check(
+            changed_body["results"][0][
+                "reason_code"
+            ]
+            == "inbound_message_id_conflict"
+            and changed_body["results"][0][
+                "ingestion_status"
+            ]
+            == "blocked"
+            and parser.calls == 1
+            and len(
+                repository.list_responses()
+            )
+            == 1
+            and "9999"
+            not in repr(changed_body),
+            "changed supplier body under same message ID conflicts",
+        )
+
+        def changed_sender_factory(
+            *,
+            access_token,
+            mailbox_id,
+        ):
+            return _GraphClient(
+                access_token=access_token,
+                mailbox_id=mailbox_id,
+                messages=[
+                    _mail(
+                        "supplier-message-1",
+                        sender=(
+                            "outsider@example.invalid"
+                        ),
+                    ),
+                ],
+            )
+
+        with patch(
+            "src.workflow."
+            "outlook_inbound_router."
+            "load_customer_memory",
+            return_value=[],
+        ):
+            changed_sender = (
+                pull_controlled_outlook_inbox(
+                    config=config,
+                    limit=1,
+                    shipment_parser=(
+                        lambda value: value
+                    ),
+                    supplier_parser=parser,
+                    proposal_repository=object(),
+                    supplier_repository=repository,
+                    operational_data_sources=object(),
+                    token_provider=(
+                        lambda value: TOKEN
+                    ),
+                    graph_client_factory=(
+                        changed_sender_factory
+                    ),
+                )
+            )
+
+        check(
+            changed_sender["results"][0][
+                "reason_code"
+            ]
+            == "inbound_message_id_conflict"
+            and parser.calls == 1
+            and "outsider@example.invalid"
+            not in repr(changed_sender),
+            "changed supplier sender under same message ID conflicts",
+        )
+
+        legacy_repository = _repository(
+            "rfq-legacy-evidence"
+        )
+        legacy_mail = _mail(
+            "supplier-legacy-message",
+            "rfq-legacy-evidence",
+        )
+        legacy_key = (
+            legacy_mail.message_deduplication_key
+        )
+
+        if legacy_key is None:
+            raise RuntimeError(
+                "Regression mail did not create "
+                "a message key."
+            )
+
+        legacy_repository.record_ingested_message(
+            legacy_key
+        )
+
+        legacy_parser = _SupplierParser()
+
+        def legacy_factory(
+            *,
+            access_token,
+            mailbox_id,
+        ):
+            return _GraphClient(
+                access_token=access_token,
+                mailbox_id=mailbox_id,
+                messages=[legacy_mail],
+            )
+
+        with patch(
+            "src.workflow."
+            "outlook_inbound_router."
+            "load_customer_memory",
+            return_value=[],
+        ):
+            legacy_result = (
+                pull_controlled_outlook_inbox(
+                    config=config,
+                    limit=1,
+                    shipment_parser=(
+                        lambda value: value
+                    ),
+                    supplier_parser=(
+                        legacy_parser
+                    ),
+                    proposal_repository=object(),
+                    supplier_repository=(
+                        legacy_repository
+                    ),
+                    operational_data_sources=object(),
+                    token_provider=(
+                        lambda value: TOKEN
+                    ),
+                    graph_client_factory=(
+                        legacy_factory
+                    ),
+                )
+            )
+
+        check(
+            legacy_result["results"][0][
+                "reason_code"
+            ]
+            == "inbound_message_id_conflict"
+            and legacy_parser.calls == 0
+            and not legacy_repository.list_responses(),
+            "legacy supplier message evidence fails closed",
+        )
+
+        sqlite_path = (
+            Path(temp)
+            / "supplier-integrity.sqlite3"
+        )
+        sqlite_repository = (
+            SQLiteSupplierRFQRepository(
+                SQLitePilotStore(
+                    sqlite_path
+                )
+            )
+        )
+
+        sqlite_repository.record_ingested_message(
+            "microsoft_graph:"
+            "operations@example.invalid:"
+            "durable-evidence-1",
+            body_sha256="abc123",
+            sender_address=SUPPLIER,
+        )
+
+        reopened_repository = (
+            SQLiteSupplierRFQRepository(
+                SQLitePilotStore(
+                    sqlite_path
+                )
+            )
+        )
+
+        durable_evidence = (
+            reopened_repository
+            .get_ingested_message_evidence(
+                "microsoft_graph:"
+                "operations@example.invalid:"
+                "durable-evidence-1"
+            )
+        )
+
+        check(
+            durable_evidence
+            == {
+                "message_key": (
+                    "microsoft_graph:"
+                    "operations@example.invalid:"
+                    "durable-evidence-1"
+                ),
+                "body_sha256": "abc123",
+                "sender_address": SUPPLIER,
+            },
+            "supplier message integrity evidence is durable",
         )
 
         unavailable_repository = (

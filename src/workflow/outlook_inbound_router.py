@@ -32,6 +32,7 @@ from src.workflow.outlook_inbound_ingestion import (
 )
 from src.workflow.supplier_response_ingestion import (
     ingest_supplier_reply,
+    supplier_message_is_exact_replay,
 )
 
 
@@ -133,13 +134,9 @@ def process_controlled_outlook_inbound_mail(
             ),
         )
 
-    message_key = mail.message_deduplication_key
-
-    if (
-        message_key
-        and supplier_repository.has_ingested_message(
-            message_key
-        )
+    if supplier_message_is_exact_replay(
+        reply=mail,
+        repository=supplier_repository,
     ):
         return {
             "result_type": (

@@ -160,9 +160,55 @@ class SQLiteSupplierRFQRepository:
         responses = [_model_from_payload(SupplierRFQResponse, p) for p in self.store.list_all(namespace=self.RESPONSE_NAMESPACE)]
         return responses if rfq_id is None else [r for r in responses if r.rfq_id == rfq_id]
     def has_ingested_message(self, message_key: str) -> bool:
-        return self.store.exists(namespace=self.INGESTED_MESSAGE_NAMESPACE, record_key=message_key)
-    def record_ingested_message(self, message_key: str) -> None:
-        self.store.insert_once(namespace=self.INGESTED_MESSAGE_NAMESPACE, record_key=message_key, payload={"message_key": message_key}, event_type="supplier_message_ingested", entity_type="supplier_ingested_message")
+        return self.store.exists(
+            namespace=self.INGESTED_MESSAGE_NAMESPACE,
+            record_key=message_key,
+        )
+
+    def get_ingested_message_evidence(
+        self,
+        message_key: str,
+    ) -> dict[str, str] | None:
+        payload = self.store.get(
+            namespace=self.INGESTED_MESSAGE_NAMESPACE,
+            record_key=message_key,
+        )
+
+        if not isinstance(payload, dict):
+            return None
+
+        return {
+            str(key): str(value)
+            for key, value in payload.items()
+        }
+
+    def record_ingested_message(
+        self,
+        message_key: str,
+        *,
+        body_sha256: str | None = None,
+        sender_address: str | None = None,
+    ) -> None:
+        payload = {
+            "message_key": message_key,
+        }
+
+        if body_sha256 is not None:
+            payload["body_sha256"] = body_sha256
+
+        if sender_address is not None:
+            payload["sender_address"] = (
+                sender_address
+            )
+
+        self.store.insert_once(
+            namespace=self.INGESTED_MESSAGE_NAMESPACE,
+            record_key=message_key,
+            payload=payload,
+            event_type="supplier_message_ingested",
+            entity_type="supplier_ingested_message",
+        )
+
 
 class SQLiteQuoteApprovalRepository:
     NAMESPACE = "quote_approvals"

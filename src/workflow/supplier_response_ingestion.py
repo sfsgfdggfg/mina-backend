@@ -10,7 +10,10 @@ from src.ai.supplier_response_parser import (
     SupplierResponseParserUnavailableError,
 )
 from src.core.mail import InboundMailEnvelope
-from src.core.privacy import prepare_privacy_safe_text
+from src.core.privacy import (
+    fingerprint_text,
+    prepare_privacy_safe_text,
+)
 from src.core.supplier_response_ingestion import (
     SupplierReplyIngestionResult,
     SupplierResponseExtraction,
@@ -28,6 +31,9 @@ from src.core.supplier_rfq_repository import (
     SupplierRFQRepository,
 )
 from src.core.sqlite_repositories import atomic_repository_transaction
+from src.workflow.mail_ingestion import (
+    InboundMailIdempotencyConflictError,
+)
 
 
 class SupplierReplyIngestionRequest(BaseModel):
@@ -122,6 +128,52 @@ def _validate_required_extraction(
     return None, None
 
 
+def supplier_message_is_exact_replay(
+    *,
+    reply: InboundMailEnvelope,
+    repository: SupplierRFQRepository,
+) -> bool:
+    message_key = reply.message_deduplication_key
+
+    if message_key is None:
+        return False
+
+    evidence = (
+        repository.get_ingested_message_evidence(
+            message_key
+        )
+    )
+
+    if evidence is None:
+        if repository.has_ingested_message(
+            message_key
+        ):
+            raise (
+                InboundMailIdempotencyConflictError(
+                    "Previously ingested supplier "
+                    "message lacks integrity evidence."
+                )
+            )
+        return False
+
+    incoming_hash = fingerprint_text(
+        reply.body_text
+    )
+
+    if (
+        evidence.get("body_sha256")
+        != incoming_hash
+        or evidence.get("sender_address")
+        != reply.sender_address
+    ):
+        raise InboundMailIdempotencyConflictError(
+            "Inbound supplier message ID was "
+            "reused with different content or sender."
+        )
+
+    return True
+
+
 def ingest_supplier_reply(
     *,
     reply: InboundMailEnvelope,
@@ -130,11 +182,20 @@ def ingest_supplier_reply(
     parser: SupplierResponseParser | None = None,
 ) -> SupplierReplyIngestionResult:
     message_key = reply.message_deduplication_key
-    if message_key and repository.has_ingested_message(message_key):
+
+    if supplier_message_is_exact_replay(
+        reply=reply,
+        repository=repository,
+    ):
         return SupplierReplyIngestionResult(
             status="duplicate_response",
-            reason="Inbound supplier message has already been ingested.",
-            external_message_id=reply.external_message_id,
+            reason=(
+                "Inbound supplier message has "
+                "already been ingested."
+            ),
+            external_message_id=(
+                reply.external_message_id
+            ),
         )
 
     correlation = correlate_supplier_reply(reply, repository)
@@ -222,7 +283,15 @@ def ingest_supplier_reply(
         with atomic_repository_transaction(repository):
             responded = attach_supplier_rfq_response(repository, response)
             if message_key:
-                repository.record_ingested_message(message_key)
+                repository.record_ingested_message(
+                    message_key,
+                    body_sha256=fingerprint_text(
+                        reply.body_text
+                    ),
+                    sender_address=(
+                        reply.sender_address
+                    ),
+                )
     except DuplicateSupplierRFQResponseError as exc:
         return SupplierReplyIngestionResult(
             status="duplicate_response",

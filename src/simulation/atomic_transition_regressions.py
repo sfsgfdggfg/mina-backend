@@ -243,9 +243,20 @@ def _ingestion_marker_atomicity(failures: list[str], root: Path) -> None:
     message_key = reply.message_deduplication_key
     original_record = rfqs.record_ingested_message
 
-    def fail_after_marker(message_key_value: str):
-        original_record(message_key_value)
-        raise InjectedPersistenceError("after ingestion marker write")
+    def fail_after_marker(
+        message_key_value: str,
+        *,
+        body_sha256=None,
+        sender_address=None,
+    ):
+        original_record(
+            message_key_value,
+            body_sha256=body_sha256,
+            sender_address=sender_address,
+        )
+        raise InjectedPersistenceError(
+            "after ingestion marker write"
+        )
 
     with patch.object(
         rfqs,
