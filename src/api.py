@@ -39,6 +39,19 @@ from src.workflow.mail_ingestion import (
     InboundMailIdempotencyConflictError,
     process_customer_inquiry_mail,
 )
+from src.workflow.outlook_pull import (
+    pull_controlled_outlook_inbox,
+)
+from src.integrations.microsoft_auth import (
+    MicrosoftAuthConfig,
+    MicrosoftAuthConfigurationError,
+    MicrosoftAuthenticationError,
+)
+from src.integrations.outlook_graph import (
+    MAX_PULL_MESSAGES,
+    OutlookGraphMessageError,
+    OutlookGraphReadError,
+)
 from src.workflow.extraction_confirmation import (
     ExtractionConfirmationTransitionError,
     ExtractionCorrectionError,
@@ -178,6 +191,15 @@ class ProcessEmailRequest(BaseModel):
     @classmethod
     def validate_email_text(cls, value: str) -> str:
         return validate_inbound_mail_body(value)
+
+
+
+class OutlookPullRequest(BaseModel):
+    limit: int = Field(
+        default=10,
+        ge=1,
+        le=MAX_PULL_MESSAGES,
+    )
 
 
 class ConfirmExtractionRequest(BaseModel):
@@ -936,6 +958,61 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
         ) from exc
 
     return result.model_dump()
+
+
+@app.post("/inbound/outlook/pull")
+def pull_outlook_inbound(
+    request: OutlookPullRequest,
+):
+    try:
+        config = (
+            MicrosoftAuthConfig.from_environment()
+        )
+
+        result = (
+            pull_controlled_outlook_inbox(
+                config=config,
+                limit=request.limit,
+                shipment_parser=(
+                    parse_email_with_ai
+                ),
+                proposal_repository=(
+                    extraction_proposal_repository
+                ),
+                operational_data_sources=(
+                    operational_data_sources
+                ),
+            )
+        )
+
+    except MicrosoftAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "outlook_auth_configuration_invalid"
+            ),
+        ) from exc
+
+    except MicrosoftAuthenticationError as exc:
+        raise HTTPException(
+            status_code=428,
+            detail=exc.code,
+        ) from exc
+
+    except (
+        OutlookGraphReadError,
+        OutlookGraphMessageError,
+    ) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=getattr(
+                exc,
+                "code",
+                "outlook_graph_read_failed",
+            ),
+        ) from exc
+
+    return result
 
 
 @app.post("/process-email")

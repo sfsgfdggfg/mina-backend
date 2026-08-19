@@ -5394,3 +5394,109 @@ independent human prerequisites.
 
 Automated supplier RFQ and customer quote outbound remain disabled for the
 controlled shadow pilot.
+
+## DEC-118 — Outlook Inbound Is Delegated Read-Only and Human-Gated
+
+**Status:** Accepted
+**Date:** 2026-08-19
+
+### Decision
+
+The controlled shadow pilot may ingest customer inquiry email directly from one
+approved Microsoft 365 / Outlook mailbox through Microsoft Graph.
+
+Microsoft authorization uses a delegated public-client flow with the minimum
+`Mail.Read` permission. The pilot does not request `Mail.ReadWrite`,
+`Mail.Send`, application-wide mailbox access, or a Microsoft client secret.
+
+The initial authorization or later reauthorization is an explicit host-side
+device-code action. Normal inbox pulls use silent server-side authentication
+from an external token cache. The token cache must be stored outside the
+repository and must be owner-only on POSIX systems.
+
+Microsoft access tokens and refresh-token material are never transferred to the
+MINAI operator client, included in pull results, or printed by normal operator
+workflow output.
+
+The provider adapter is read-only. It lists inbox messages through HTTP GET,
+requests immutable Microsoft Graph message IDs and text message bodies, refuses
+redirects, and bounds each explicit pull to at most 50 messages.
+
+P1-19 does not mark messages as read, move, delete, flag, reply to or send mail.
+It does not introduce Graph subscriptions, webhooks, background mailbox polling
+or autonomous mailbox monitoring.
+
+Microsoft Graph provider identity is created only by the server-side adapter.
+The existing manual `/process-email` path remains `source=manual` and cannot
+assert Microsoft Graph provenance.
+
+Before any Outlook message can reach the AI parser, the controlled inbound gate
+requires:
+
+- complete Microsoft Graph provider metadata;
+- no attachments;
+- a currently verified external pilot customer-memory dataset;
+- an active customer profile;
+- exactly one trusted-sender address/domain match.
+
+An untrusted sender, ambiguous customer match, unsupported attachment, missing
+pilot operational data, or unverifiable provenance stops before AI extraction.
+
+For an allowed message, the existing privacy transform runs before the
+production AI parser. The parser still creates only a non-authoritative
+extraction proposal. Explicit human extraction confirmation remains mandatory
+before the shipment may enter the operational workflow.
+
+Inbound idempotency uses provider identity, mailbox identity and the immutable
+external message ID. Re-reading an identical message reuses the existing
+proposal without another AI parse. Reuse of the same message identity with
+different content or sender is fail-closed.
+
+The operator-facing pull response is deliberately minimized. It may expose the
+immutable external message ID, received timestamp, safe result state/reason and
+proposal ID. It must not expose the raw customer body, sender address, Microsoft
+token material or provider error payload.
+
+### Rationale
+
+Manual copy/paste of every customer inquiry creates avoidable operator effort
+and transcription risk, but giving MINAI mailbox write or send authority would
+expand the controlled-pilot autonomy boundary unnecessarily.
+
+Delegated read-only Graph access closes the inbound operational gap while
+preserving the existing privacy, identity, extraction-confirmation, provenance
+and human-approval controls.
+
+Trusted-sender filtering must occur before AI use because the controlled pilot
+is limited to explicitly approved customers. Reading a message from the mailbox
+is not itself sufficient evidence that its content is authorized for AI
+processing.
+
+Attachments remain outside the automated P1-19 boundary because interpreting
+them would add a materially different file-ingestion and content-safety surface.
+
+### Consequences
+
+The operator can explicitly pull real approved customer inquiries from Outlook
+without manually copying the normal message body into MINAI.
+
+The Outlook integration is still operator-triggered and inbound-only. It does
+not make MINAI an autonomous mailbox agent.
+
+Messages outside the verified pilot-customer scope do not reach the AI parser.
+
+Messages with attachments require manual review outside this automated inbound
+path until a separately designed attachment-ingestion boundary exists.
+
+Repeated pulls do not cause repeated extraction of the same immutable Outlook
+message.
+
+Loss or expiry of delegated Microsoft authorization blocks Outlook pulling and
+requires explicit reauthorization; it does not fall back to a broader
+permission.
+
+The existing manual inbound path remains available as an explicitly manual
+fallback and cannot impersonate Graph-originated mail.
+
+Supplier RFQ delivery and customer quotation delivery remain manual external
+operations. P1-19 adds no autonomous outbound capability.

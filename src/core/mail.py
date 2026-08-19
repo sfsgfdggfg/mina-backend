@@ -73,6 +73,7 @@ class InboundMailEnvelope(BaseModel):
     received_at: Optional[datetime] = None
     in_reply_to_message_id: Optional[str] = None
     explicit_rfq_reference: Optional[str] = None
+    has_attachments: bool = False
     source: InboundMailChannel = "manual"
 
     @field_validator("body_text")

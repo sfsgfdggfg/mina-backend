@@ -74,6 +74,10 @@ def evaluate_pilot_regression_suite_regressions() -> dict:
         "pilot scope", "persistence", "recovery", "atomic",
         "state transition concurrency", "supplier rfq lifecycle",
         "manual rfq sent", "supplier response ingestion", "quote approval",
+        "microsoft delegated outlook authentication",
+        "read-only outlook graph ingestion",
+        "controlled outlook inbound gate",
+        "controlled outlook operator pull",
         "quote case repository", "final customer quote output",
         "pilot operator", "runtime reproducibility preflight",
     }
