@@ -61,3 +61,27 @@ The CLI never:
 A supplier smoke reply still requires a real controlled test RFQ to have been
 truthfully sent and recorded into the supported response lifecycle before the
 mailbox pull.
+
+## Guided controlled supplier RFQ setup
+
+The Outlook smoke status now routes a missing supplier-response lifecycle to:
+
+```bash
+python -m src.pilot_ops outlook-smoke setup-rfq
+```
+
+This command automates only the mechanical local/API lifecycle needed to prepare
+one controlled supplier RFQ. It uses the verified technical smoke pack, sends
+synthetic technical inquiry text to the configured OpenAI parser, shows the
+extracted shipment for explicit human review, generates the supplier RFQ, and
+shows the exact manual-send From/To/Subject/Body.
+
+It never calls an outbound mail adapter. The RFQ is recorded as manually sent
+only after the operator types the exact `SENT` confirmation after genuinely
+sending the displayed message. A cancelled or non-exact confirmation leaves the
+RFQ unrecorded. Re-running after an RFQ is already `awaiting_response` is
+idempotent and does not create another inquiry or sent-evidence record.
+
+After PASS, the next real-world action is to reply to that RFQ from the
+controlled supplier mailbox so the deterministic RFQ reference arrives in the
+configured Outlook pilot inbox for the later four-message live smoke.
