@@ -1,0 +1,2 @@
+MINAI GitHub Operator smoke test.
+Disposable branch only.
