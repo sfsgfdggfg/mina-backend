@@ -22,6 +22,7 @@ from src.outlook_live_smoke import main as outlook_live_smoke_main
 from src.paths import REPO_ROOT
 from src.pilot_data_pack import (
     PilotDataPackError,
+    resolve_pack_paths,
     status_pack,
     verify_pack,
 )
@@ -399,7 +400,7 @@ def _status(
         print("Configure/start the controlled pilot runtime, then rerun this status command.")
         return 0
     if rfq_state != "PASS":
-        print("Prepare and truthfully send one controlled test supplier RFQ before recording it as sent.")
+        print("Run: python -m src.pilot_ops outlook-smoke setup-rfq")
         return 0
     if evidence_state in {"NOT_STARTED", "INCOMPLETE"}:
         print("Prepare the four controlled messages, then run: python -m src.pilot_ops outlook-smoke prepare")
@@ -622,6 +623,446 @@ def _run(
     return 0
 
 
+
+SMOKE_RFQ_INQUIRY_SUBJECT = "MINAI controlled smoke RFQ setup"
+SMOKE_RFQ_INQUIRY_BODY = (
+    "Please quote one controlled FTL road shipment.\n\n"
+    "Pickup: Adana, Türkiye.\n"
+    "Delivery: Hamburg 20095, Germany.\n"
+    "Cargo: non-dangerous textile goods.\n"
+    "Quantity: 33 EUR pallets, each 120 x 80 x 150 cm.\n"
+    "Total gross weight: 20,000 kg.\n"
+    "Equipment: Tenteli / Curtainsider.\n"
+    "Temperature control: not required.\n"
+    "ADR: no.\n"
+    "Ready date: 2026-08-24.\n"
+    "Requested delivery: standard road transit.\n\n"
+    "This is controlled technical smoke-test content only.\n"
+)
+
+
+def _load_json_list(path: Path, *, label: str) -> list[dict]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PilotOpsError(f"{label} could not be read") from exc
+    if not isinstance(raw, list):
+        raise PilotOpsError(f"{label} payload is invalid")
+    return [item for item in raw if isinstance(item, dict)]
+
+
+def _technical_smoke_identities(
+    environ: Mapping[str, str],
+) -> tuple[str, str, str]:
+    pack = _smoke_pack_path(environ)
+    try:
+        paths = resolve_pack_paths(pack)
+    except (PilotDataPackError, OSError, ValueError) as exc:
+        raise PilotOpsError("smoke data-pack paths are unavailable") from exc
+
+    customers = _load_json_list(
+        paths.customer_memory,
+        label="customer smoke dataset",
+    )
+    suppliers = _load_json_list(
+        paths.supplier_capabilities,
+        label="supplier smoke dataset",
+    )
+
+    trusted: list[str] = []
+    for profile in customers:
+        if profile.get("active") is not True:
+            continue
+        addresses = profile.get("trusted_sender_addresses")
+        if not isinstance(addresses, list):
+            continue
+        for value in addresses:
+            address = str(value or "").strip().lower()
+            if address and not address.endswith(".invalid"):
+                trusted.append(address)
+
+    supplier_contacts: list[tuple[str, str]] = []
+    for supplier in suppliers:
+        if supplier.get("active") is not True:
+            continue
+        if str(supplier.get("role") or "").strip().lower() != "primary":
+            continue
+        supplier_name = str(supplier.get("supplier_name") or "").strip()
+        contacts = supplier.get("contacts")
+        if not isinstance(contacts, list):
+            continue
+        for contact in contacts:
+            if not isinstance(contact, dict):
+                continue
+            if contact.get("active") is not True:
+                continue
+            if contact.get("is_primary") is not True:
+                continue
+            address = str(contact.get("email") or "").strip().lower()
+            if address and not address.endswith(".invalid"):
+                supplier_contacts.append((supplier_name, address))
+
+    trusted = sorted(set(trusted))
+    supplier_contacts = sorted(set(supplier_contacts))
+
+    if len(trusted) != 1:
+        raise PilotOpsError(
+            "technical smoke pack must contain exactly one non-filler trusted customer address"
+        )
+    if len(supplier_contacts) != 1:
+        raise PilotOpsError(
+            "technical smoke pack must contain exactly one non-filler primary supplier contact"
+        )
+
+    supplier_name, supplier_email = supplier_contacts[0]
+    return trusted[0], supplier_name, supplier_email
+
+
+def _rfq_list(payload: object) -> list[dict]:
+    if not isinstance(payload, dict):
+        raise PilotOpsError("supplier RFQ list payload is invalid")
+    items = payload.get("supplier_rfqs")
+    if not isinstance(items, list):
+        raise PilotOpsError("supplier RFQ list payload is invalid")
+    return [item for item in items if isinstance(item, dict)]
+
+
+def _find_string(payload: object, key: str) -> str | None:
+    if isinstance(payload, dict):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        for item in payload.values():
+            found = _find_string(item, key)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _find_string(item, key)
+            if found:
+                return found
+    return None
+
+
+def _proposal_review_payload(proposal: object) -> object:
+    if not isinstance(proposal, dict):
+        return {"proposal": "available"}
+    for key in (
+        "proposed_shipment",
+        "extracted_shipment",
+        "shipment",
+    ):
+        value = proposal.get(key)
+        if isinstance(value, dict):
+            return value
+    return {
+        key: proposal.get(key)
+        for key in ("proposal_id", "status", "confirmation_status")
+        if key in proposal
+    }
+
+
+def _matching_supplier_rfqs(
+    rfqs: list[dict],
+    supplier_email: str,
+    statuses: set[str],
+) -> list[dict]:
+    return [
+        item
+        for item in rfqs
+        if str(item.get("recipient_email") or "").strip().lower()
+        == supplier_email
+        and str(item.get("status") or "").strip().lower()
+        in statuses
+        and isinstance(item.get("rfq_id"), str)
+        and item.get("rfq_id")
+    ]
+
+
+def _require_runtime_ready(
+    environ: Mapping[str, str],
+    *,
+    client_factory=PilotOperatorClient.from_environment,
+    release_func=collect_release_identity,
+):
+    state, message, _ = _runtime_status(
+        environ,
+        client_factory=client_factory,
+        release_func=release_func,
+    )
+    if state != "PASS":
+        raise PilotOpsError(message)
+    try:
+        return client_factory(environ)
+    except (OperatorAPIError, OperatorConfigurationError) as exc:
+        raise PilotOpsError("pilot operator client is unavailable") from exc
+
+
+def _setup_rfq(
+    environ: Mapping[str, str],
+    *,
+    status_func=status_pack,
+    client_factory=PilotOperatorClient.from_environment,
+    release_func=collect_release_identity,
+    input_func=input,
+) -> int:
+    _require_verified_pack(environ, status_func=status_func)
+    client = _require_runtime_ready(
+        environ,
+        client_factory=client_factory,
+        release_func=release_func,
+    )
+
+    customer_email, supplier_name, supplier_email = (
+        _technical_smoke_identities(environ)
+    )
+
+    try:
+        initial = _rfq_list(client.list_rfqs())
+    except (OperatorAPIError, OperatorConfigurationError) as exc:
+        raise PilotOpsError("supplier RFQ state could not be read") from exc
+
+    awaiting = _matching_supplier_rfqs(
+        initial,
+        supplier_email,
+        {"awaiting_response"},
+    )
+    if len(awaiting) == 1:
+        print("Controlled supplier RFQ setup: PASS")
+        print("A truthfully sent controlled RFQ is already awaiting a response.")
+        print(
+            "NEXT HUMAN ACTION: reply to that RFQ from the controlled supplier "
+            "mailbox so the reply arrives in the configured Outlook pilot inbox."
+        )
+        return 0
+    if len(awaiting) > 1:
+        raise PilotOpsError(
+            "multiple controlled supplier RFQs are awaiting responses; manual cleanup is required"
+        )
+
+    reusable = _matching_supplier_rfqs(
+        initial,
+        supplier_email,
+        {"draft", "approved"},
+    )
+
+    if len(reusable) > 1:
+        raise PilotOpsError(
+            "multiple reusable controlled supplier RFQs exist; manual review is required"
+        )
+
+    draft: dict | None = reusable[0] if reusable else None
+
+    if draft is None:
+        if not (environ.get("OPENAI_API_KEY") or "").strip():
+            raise PilotOpsError(
+                "OPENAI_API_KEY is required to create the controlled synthetic inquiry"
+            )
+
+        print("Controlled RFQ setup")
+        print("====================")
+        print(
+            "This step sends only the synthetic technical inquiry below to the "
+            "configured OpenAI parser through the local pilot API."
+        )
+        print("It does NOT read Outlook and does NOT send any email.")
+        print()
+        print(SMOKE_RFQ_INQUIRY_BODY.rstrip())
+        print()
+
+        if not _read_exact(
+            "Approve creation of this synthetic technical inquiry.",
+            "CREATE",
+            input_func=input_func,
+        ):
+            raise PilotOpsError("controlled inquiry creation was cancelled")
+
+        before_ids = {
+            str(item.get("rfq_id"))
+            for item in initial
+            if item.get("rfq_id")
+        }
+
+        try:
+            result = client.process_email(
+                email_text=SMOKE_RFQ_INQUIRY_BODY,
+                sender_address=customer_email,
+                sender_name="Controlled Smoke Customer",
+                subject=SMOKE_RFQ_INQUIRY_SUBJECT,
+                external_message_id=(
+                    "pilot-ops-rfq-setup-"
+                    + release_func().commit_sha[:16]
+                ),
+            )
+        except (OperatorAPIError, OperatorConfigurationError) as exc:
+            raise PilotOpsError(
+                "controlled synthetic inquiry processing failed"
+            ) from exc
+
+        proposal_id = _find_string(result, "proposal_id")
+        if not proposal_id:
+            raise PilotOpsError(
+                "controlled inquiry did not return an extraction proposal"
+            )
+
+        try:
+            proposal = client.get_proposal(proposal_id)
+        except (OperatorAPIError, OperatorConfigurationError) as exc:
+            raise PilotOpsError(
+                "extraction proposal could not be read for human review"
+            ) from exc
+
+        print("Extracted technical shipment review")
+        print("===================================")
+        print(
+            json.dumps(
+                _proposal_review_payload(proposal),
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+            )
+        )
+
+        if not _read_exact(
+            "Confirm this extracted technical shipment without corrections.",
+            "REVIEWED",
+            input_func=input_func,
+        ):
+            raise PilotOpsError(
+                "extraction proposal remains unconfirmed; no RFQ was approved or sent"
+            )
+
+        try:
+            client.confirm_proposal(proposal_id, {})
+            client.resume_proposal(proposal_id)
+            after = _rfq_list(client.list_rfqs())
+        except (OperatorAPIError, OperatorConfigurationError) as exc:
+            raise PilotOpsError(
+                "proposal confirmation/RFQ generation was blocked; "
+                "use the existing proposal correction workflow if a safety field needs correction"
+            ) from exc
+
+        created = [
+            item
+            for item in _matching_supplier_rfqs(
+                after,
+                supplier_email,
+                {"draft", "approved"},
+            )
+            if str(item.get("rfq_id")) not in before_ids
+        ]
+
+        if len(created) != 1:
+            raise PilotOpsError(
+                "controlled inquiry did not create exactly one reusable RFQ for the test supplier"
+            )
+        draft = created[0]
+
+    rfq_id = str(draft.get("rfq_id") or "").strip()
+    if not rfq_id:
+        raise PilotOpsError("controlled supplier RFQ identifier is missing")
+
+    try:
+        current = client.get_rfq(rfq_id)
+    except (OperatorAPIError, OperatorConfigurationError) as exc:
+        raise PilotOpsError("controlled supplier RFQ could not be read") from exc
+
+    if not isinstance(current, dict):
+        raise PilotOpsError("controlled supplier RFQ payload is invalid")
+
+    subject = str(current.get("subject") or "").strip()
+    body = str(current.get("body") or "").strip()
+    status = str(current.get("status") or "").strip().lower()
+
+    if not subject or not body:
+        raise PilotOpsError("controlled supplier RFQ has no sendable subject/body")
+
+    print()
+    print("Controlled supplier RFQ review")
+    print("==============================")
+    print(f"Supplier:  {supplier_name}")
+    print(f"To:        {supplier_email}")
+    print(f"Reference: MINAI-RFQ:{rfq_id}")
+    print(f"Subject:   {subject}")
+    print()
+    print(body)
+    print()
+
+    if status == "draft":
+        if not _read_exact(
+            "Approve this controlled RFQ for manual external sending.",
+            "APPROVE",
+            input_func=input_func,
+        ):
+            raise PilotOpsError(
+                "controlled RFQ remains draft; no email was sent"
+            )
+        try:
+            current = client.approve_rfq(rfq_id)
+        except (OperatorAPIError, OperatorConfigurationError) as exc:
+            raise PilotOpsError("controlled supplier RFQ approval failed") from exc
+        if not isinstance(current, dict):
+            raise PilotOpsError("controlled supplier RFQ approval payload is invalid")
+        status = str(current.get("status") or "").strip().lower()
+
+    if status != "approved":
+        raise PilotOpsError(
+            f"controlled supplier RFQ is in unexpected lifecycle state: {status or 'unknown'}"
+        )
+
+    try:
+        mailbox = MicrosoftAuthConfig.from_environment(environ).mailbox_id
+    except MicrosoftAuthConfigurationError as exc:
+        raise PilotOpsError(
+            "configured Outlook mailbox identity is unavailable"
+        ) from exc
+
+    print()
+    print("NEXT HUMAN ACTION")
+    print("=================")
+    print("Send this RFQ manually now. MINAI will not send it for you.")
+    print(f"From: {mailbox}")
+    print(f"To:   {supplier_email}")
+    print("Use the exact Subject and Body shown above.")
+    print(
+        "After the message is genuinely present in the Sent folder, return here."
+    )
+
+    if not _read_exact(
+        "Confirm the exact controlled RFQ was genuinely sent manually.",
+        "SENT",
+        input_func=input_func,
+    ):
+        raise PilotOpsError(
+            "manual send was not confirmed; sent evidence was NOT recorded"
+        )
+
+    try:
+        client.record_rfq_manually_sent(rfq_id)
+        final = client.get_rfq(rfq_id)
+    except (OperatorAPIError, OperatorConfigurationError) as exc:
+        raise PilotOpsError(
+            "manual-send evidence could not be recorded"
+        ) from exc
+
+    if (
+        not isinstance(final, dict)
+        or str(final.get("status") or "").strip().lower()
+        != "awaiting_response"
+    ):
+        raise PilotOpsError(
+            "controlled RFQ did not reach awaiting_response after truthful manual-send evidence"
+        )
+
+    print("Controlled supplier RFQ setup: PASS")
+    print(f"RFQ reference: MINAI-RFQ:{rfq_id}")
+    print(
+        "NEXT HUMAN ACTION: open the controlled supplier mailbox, reply to the "
+        "RFQ without changing its reference, and make sure the reply arrives in "
+        "the configured Outlook pilot inbox."
+    )
+    return 0
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Guided MINAI pilot operations with explicit human safety gates."
@@ -637,6 +1078,7 @@ def _parser() -> argparse.ArgumentParser:
     smoke_commands = smoke.add_subparsers(dest="smoke_action")
     smoke_commands.add_parser("status")
     smoke_commands.add_parser("verify")
+    smoke_commands.add_parser("setup-rfq")
     smoke_commands.add_parser("prepare")
     smoke_commands.add_parser("run")
 
@@ -682,6 +1124,14 @@ def main(
                 env,
                 status_func=status_func,
                 verify_func=verify_func,
+                input_func=input_func,
+            )
+        if action == "setup-rfq":
+            return _setup_rfq(
+                env,
+                status_func=status_func,
+                client_factory=client_factory,
+                release_func=release_func,
                 input_func=input_func,
             )
         if action == "prepare":
