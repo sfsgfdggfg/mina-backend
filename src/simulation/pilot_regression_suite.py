@@ -35,6 +35,7 @@ from src.simulation.pilot_access_regressions import evaluate_pilot_access_regres
 from src.simulation.pilot_launcher_regressions import evaluate_pilot_launcher_regressions
 from src.simulation.pilot_rehearsal_regressions import evaluate_pilot_rehearsal_regressions
 from src.simulation.pilot_operator_regressions import evaluate_pilot_operator_regressions
+from src.simulation.pilot_ops_regressions import evaluate_pilot_ops_regressions
 from src.simulation.pilot_data_pack_regressions import evaluate_pilot_data_pack_regressions
 from src.simulation.pilot_data_pack_intake_regressions import evaluate_pilot_data_pack_intake_regressions
 from src.simulation.pilot_readiness_regressions import evaluate_pilot_readiness_regressions
@@ -160,6 +161,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Manual RFQ sent evidence", evaluate_manual_rfq_sent_regressions),
     Suite("Supplier response ingestion", evaluate_supplier_response_ingestion_regressions),
     Suite("Pilot operator client", evaluate_pilot_operator_regressions),
+    Suite("Guided pilot operations CLI", evaluate_pilot_ops_regressions),
     Suite("Pilot operational data pack builder", evaluate_pilot_data_pack_regressions),
     Suite("Guided pilot data-pack intake", evaluate_pilot_data_pack_intake_regressions),
     Suite("Clarification resolution", evaluate_clarification_resolution_regressions),
