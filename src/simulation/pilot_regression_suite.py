@@ -30,6 +30,9 @@ from src.simulation.outlook_route_history_regressions import (
 from src.simulation.supplier_response_privacy_regressions import evaluate_supplier_response_privacy_regressions
 from src.simulation.outlook_pull_regressions import evaluate_outlook_pull_regressions
 from src.simulation.operational_data_injection_regressions import evaluate_operational_data_injection_regressions
+from src.simulation.openai_structured_output_regressions import (
+    evaluate_openai_structured_output_regressions,
+)
 from src.simulation.manual_rfq_sent_regressions import evaluate_manual_rfq_sent_regressions
 from src.simulation.pilot_access_regressions import evaluate_pilot_access_regressions
 from src.simulation.pilot_launcher_regressions import evaluate_pilot_launcher_regressions
@@ -101,6 +104,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Safe API entry point", evaluate_safe_api_entrypoint_regressions),
     Suite("Python source compilation", evaluate_source_compile_regressions),
     Suite("Extraction confirmation", evaluate_extraction_confirmation_regressions),
+    Suite(
+        "OpenAI structured output contract",
+        evaluate_openai_structured_output_regressions,
+    ),
     Suite("Customer identity trust", evaluate_customer_identity_trust_regressions),
     Suite("Data provenance", evaluate_data_provenance_regressions),
     Suite("Repository data path normalization", evaluate_data_path_regressions),

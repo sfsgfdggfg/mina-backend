@@ -66,7 +66,7 @@ class ExtractedPackage(BaseModel):
     )
 
 
-class ShipmentExtraction(BaseModel):
+class _ShipmentExtractionFields(BaseModel):
     customer_name: str = Field(
         default="Unknown Customer",
         description="Customer name if known from the email",
@@ -138,14 +138,16 @@ class ShipmentExtraction(BaseModel):
     )
     special_notes: Optional[str] = None
 
-    commodity_attributes: Dict[
-        str, ClarificationAnswerValue
-    ] = Field(
+    packages: List[ExtractedPackage] = Field(default_factory=list)
+
+
+class ShipmentExtraction(_ShipmentExtractionFields):
+    """Internal/domain representation used by downstream shipment mapping."""
+
+    commodity_attributes: Dict[str, ClarificationAnswerValue] = Field(
         default_factory=dict,
         description=_commodity_attribute_description(),
     )
-
-    packages: List[ExtractedPackage] = Field(default_factory=list)
 
     @field_validator("commodity_attributes")
     @classmethod
@@ -154,3 +156,38 @@ class ShipmentExtraction(BaseModel):
         value: Dict[str, ClarificationAnswerValue],
     ) -> Dict[str, ClarificationAnswerValue]:
         return normalize_clarification_answers(value)
+
+
+class OpenAICommodityAttribute(BaseModel):
+    key: str = Field(
+        description="Canonical commodity clarification key",
+    )
+    value: ClarificationAnswerValue = Field(
+        description="Explicit boolean, number, or text answer",
+    )
+
+
+class OpenAIShipmentExtraction(_ShipmentExtractionFields):
+    """Strict Structured Outputs wire representation for OpenAI."""
+
+    commodity_attributes: List[OpenAICommodityAttribute] = Field(
+        default_factory=list,
+        description=(
+            _commodity_attribute_description()
+            + " Represent each answer as an object with key and value."
+        ),
+    )
+
+    def to_internal(self) -> ShipmentExtraction:
+        attributes: Dict[str, ClarificationAnswerValue] = {}
+        for entry in self.commodity_attributes:
+            key = entry.key.strip()
+            if key in attributes:
+                raise ValueError(
+                    f"Duplicate commodity attribute key: {key}"
+                )
+            attributes[key] = entry.value
+
+        data = self.model_dump(exclude={"commodity_attributes"})
+        data["commodity_attributes"] = attributes
+        return ShipmentExtraction.model_validate(data)

@@ -9,7 +9,10 @@ from src.paths import data_path
 from src.core.models import Shipment, Package
 from src.core.gtip import interpret_gtip_from_email
 from src.core.commodity_profile import apply_commodity_profile_to_shipment
-from src.ai.extraction_models import ShipmentExtraction
+from src.ai.extraction_models import (
+    OpenAIShipmentExtraction,
+    ShipmentExtraction,
+)
 from src.ai.extraction_mapping import shipment_from_extraction
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
 from src.core.privacy import PrivacyBoundaryError, PrivacySafeText
@@ -465,7 +468,8 @@ def parse_email_with_ai(
                     "Özel ekipman sadece açıkça belirtilmişse çıkar. "
                     "ADR, reefer, yüksek değerli yük gibi riskli bilgileri asla varsayma. "
                     "Commodity-specific bilgiler mailde açıkça varsa "
-                    "commodity_attributes alanında yalnızca schema'daki canonical key'leri kullan. "
+                    "commodity_attributes alanında yalnızca schema'daki canonical key'leri "
+                    "key/value nesneleri olarak kullan. "
                     "Açık false / hayır cevabını false olarak sakla; eksik bilgi için key oluşturma. "
                     "Tarihleri mümkünse YYYY-MM-DD formatına çevir. Emin değilsen null bırak."
                     "Ülke ve ürün adlarını mümkünse Türkçe canonical değerlerle çıkar: Türkiye, Almanya, Makine, Tekstil, Gıda gibi."
@@ -476,19 +480,21 @@ def parse_email_with_ai(
                 "content": email_text,
             },
             ],
-            response_format=ShipmentExtraction,
+            response_format=OpenAIShipmentExtraction,
         )
     except APIError as exc:
         raise EmailParserUnavailableError(
             "AI email parser is temporarily unavailable."
         ) from exc
 
-    extracted = response.choices[0].message.parsed
+    wire_extraction = response.choices[0].message.parsed
 
-    if extracted is None:
+    if wire_extraction is None:
         raise EmailParserUnavailableError(
             "AI email parser returned no structured result."
         )
+
+    extracted = wire_extraction.to_internal()
 
     return build_shipment_from_extraction(
         extracted,
