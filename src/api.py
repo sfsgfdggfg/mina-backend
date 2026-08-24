@@ -59,7 +59,6 @@ from src.workflow.extraction_confirmation import (
     ExtractionConfirmationTransitionError,
     ExtractionCorrectionError,
     ExtractionProposalNotFoundError,
-    UnresolvedSafetyFactsError,
     confirm_extraction_proposal,
     resume_confirmed_extraction,
 )
@@ -1094,11 +1093,7 @@ def confirm_extraction_proposal_endpoint(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ExtractionConfirmationTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (
-        ExtractionCorrectionError,
-        UnresolvedSafetyFactsError,
-        ValueError,
-    ) as exc:
+    except (ExtractionCorrectionError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return proposal.model_dump()
 

@@ -52,13 +52,13 @@ class Shipment(BaseModel):
     cargo_ready_date: Optional[str] = None
     required_delivery_date: Optional[str] = None
 
-    is_adr: bool = False
+    is_adr: Optional[bool] = None
     adr_class: Optional[str] = None
 
-    is_temperature_controlled: bool = False
+    is_temperature_controlled: Optional[bool] = None
     temperature_requirement: Optional[str] = None
 
-    is_high_value: bool = False
+    is_high_value: Optional[bool] = None
     special_notes: Optional[str] = None
 
     commodity_attributes: dict[

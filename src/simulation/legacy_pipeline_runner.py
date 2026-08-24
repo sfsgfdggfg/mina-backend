@@ -182,10 +182,6 @@ def run_ai_email_test_suite():
             repository=proposal_repository,
             proposal_id=proposal.proposal_id,
             operator_identity="AI regression confirmation fixture",
-            corrections={
-                field_name: False
-                for field_name in proposal.unknown_safety_fields
-            },
         )
         result = resume_confirmed_extraction(
             repository=proposal_repository,
