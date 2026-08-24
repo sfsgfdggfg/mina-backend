@@ -6,7 +6,6 @@ from typing import Any, Protocol
 from pydantic import ValidationError
 
 from src.core.extraction_confirmation import (
-    SAFETY_SENSITIVE_FIELDS,
     ShipmentExtractionProposal,
     ShipmentProposalSnapshot,
     utc_now,
@@ -52,10 +51,6 @@ class ExtractionConfirmationTransitionError(ValueError):
 
 
 class ExtractionCorrectionError(ValueError):
-    pass
-
-
-class UnresolvedSafetyFactsError(ValueError):
     pass
 
 
@@ -145,16 +140,6 @@ def _validated_confirmed_shipment(
             "Shipment corrections are invalid."
         ) from exc
 
-    unresolved = [
-        field_name
-        for field_name in SAFETY_SENSITIVE_FIELDS
-        if getattr(candidate, field_name) is None
-    ]
-    if unresolved:
-        raise UnresolvedSafetyFactsError(
-            "Safety-sensitive facts require explicit human resolution: "
-            + ", ".join(unresolved)
-        )
     if candidate.is_adr is False and candidate.adr_class is not None:
         raise ExtractionCorrectionError(
             "ADR class must be empty when ADR status is explicitly false."

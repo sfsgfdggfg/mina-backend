@@ -72,7 +72,6 @@ def evaluate_extraction_confirmation_regressions() -> dict:
         ExtractionConfirmationTransitionError,
         ExtractionCorrectionError,
         ExtractionProposalNotFoundError,
-        UnresolvedSafetyFactsError,
         confirm_extraction_proposal,
         create_extraction_proposal,
         resume_confirmed_extraction,
@@ -269,19 +268,32 @@ def evaluate_extraction_confirmation_regressions() -> dict:
         "is_high_value",
     }:
         failures.append("unknown safety facts were not preserved explicitly")
-    try:
-        confirm_extraction_proposal(
-            repository=unknown_repository,
-            proposal_id=unknown.proposal_id,
-            operator_identity="Safety Operator",
-        )
-    except UnresolvedSafetyFactsError:
-        pass
-    else:
-        failures.append("unknown safety facts were silently confirmed as false")
-    if unknown_repository.get(unknown.proposal_id).extraction_status != "proposed":
-        failures.append("failed unknown-safety confirmation mutated proposal")
+    unknown_confirmation = confirm_extraction_proposal(
+        repository=unknown_repository,
+        proposal_id=unknown.proposal_id,
+        operator_identity="Safety Operator",
+    )
+    if (
+        unknown_confirmation.confirmed_shipment is None
+        or unknown_confirmation.confirmed_shipment.is_adr is not None
+        or unknown_confirmation.confirmed_shipment.is_temperature_controlled
+        is not None
+        or unknown_confirmation.confirmed_shipment.is_high_value is not None
+        or unknown_confirmation.changed_fields
+        or unknown_confirmation.operator_corrections
+    ):
+        failures.append("unknown safety facts were not confirmed unchanged")
+    unknown_result = resume_confirmed_extraction(
+        repository=unknown_repository,
+        proposal_id=unknown.proposal_id,
+        rfq_repository=InMemorySupplierRFQRepository(),
+        approval_repository=InMemoryQuoteApprovalRepository(),
+        quote_case_repository=InMemoryQuoteCaseRepository(),
+    )
+    if unknown_result.get("result_type") != "supplier_rfq_approval_required":
+        failures.append("ordinary shipment with unknown safety facts did not resume")
 
+    explicit_false_repository = InMemoryExtractionProposalRepository()
     explicit_false = create_extraction_proposal(
         mail=mail,
         proposed_shipment=_snapshot(
@@ -289,10 +301,84 @@ def evaluate_extraction_confirmation_regressions() -> dict:
             is_temperature_controlled=False,
             is_high_value=False,
         ),
-        repository=InMemoryExtractionProposalRepository(),
+        repository=explicit_false_repository,
     )
     if explicit_false.unknown_safety_fields:
         failures.append("explicit false safety facts were treated as unknown")
+    explicit_false_confirmation = confirm_extraction_proposal(
+        repository=explicit_false_repository,
+        proposal_id=explicit_false.proposal_id,
+        operator_identity="Explicit False Operator",
+    )
+    explicit_false_shipment = explicit_false_confirmation.confirmed_shipment
+    if (
+        explicit_false_shipment is None
+        or explicit_false_shipment.is_adr is not False
+        or explicit_false_shipment.is_temperature_controlled is not False
+        or explicit_false_shipment.is_high_value is not False
+    ):
+        failures.append("explicit false safety facts were not preserved")
+
+    positive_repository = InMemoryExtractionProposalRepository()
+    positive = create_extraction_proposal(
+        mail=mail,
+        proposed_shipment=_snapshot(
+            is_adr=True,
+            adr_class="3",
+            is_temperature_controlled=True,
+            temperature_requirement="2-8 C",
+            is_high_value=True,
+        ),
+        repository=positive_repository,
+    )
+    confirm_extraction_proposal(
+        repository=positive_repository,
+        proposal_id=positive.proposal_id,
+        operator_identity="Positive Risk Operator",
+    )
+    positive_result = resume_confirmed_extraction(
+        repository=positive_repository,
+        proposal_id=positive.proposal_id,
+        rfq_repository=InMemorySupplierRFQRepository(),
+        approval_repository=InMemoryQuoteApprovalRepository(),
+        quote_case_repository=InMemoryQuoteCaseRepository(),
+    )
+    positive_shipment = positive_result.get("shipment")
+    positive_risk = positive_result.get("risk_assessment")
+    if (
+        positive_shipment is None
+        or positive_shipment.is_adr is not True
+        or positive_shipment.is_temperature_controlled is not True
+        or positive_shipment.is_high_value is not True
+        or positive_risk is None
+        or not positive_risk.requires_human_review
+        or positive_result.get("result_type") != "supplier_selection_required"
+    ):
+        failures.append("positive exception signals lost downstream protection")
+
+    for contradictory_snapshot in (
+        _snapshot(is_adr=False, adr_class="3"),
+        _snapshot(
+            is_temperature_controlled=False,
+            temperature_requirement="2-8 C",
+        ),
+    ):
+        contradiction_repository = InMemoryExtractionProposalRepository()
+        contradiction = create_extraction_proposal(
+            mail=mail,
+            proposed_shipment=contradictory_snapshot,
+            repository=contradiction_repository,
+        )
+        try:
+            confirm_extraction_proposal(
+                repository=contradiction_repository,
+                proposal_id=contradiction.proposal_id,
+                operator_identity="Contradiction Operator",
+            )
+        except ExtractionCorrectionError:
+            pass
+        else:
+            failures.append("safety contradiction was accepted")
 
     atomic_repository = InMemoryExtractionProposalRepository()
     atomic = create_extraction_proposal(
