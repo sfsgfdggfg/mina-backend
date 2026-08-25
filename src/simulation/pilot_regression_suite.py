@@ -12,6 +12,7 @@ from src.simulation.customer_identity_trust_regressions import evaluate_customer
 from src.simulation.data_provenance_regressions import evaluate_data_provenance_regressions
 from src.simulation.data_path_regressions import evaluate_data_path_regressions
 from src.simulation.extraction_confirmation_regressions import evaluate_extraction_confirmation_regressions
+from src.simulation.initial_supplier_rfq_regressions import evaluate_initial_supplier_rfq_regressions
 from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
 from src.simulation.microsoft_auth_regressions import evaluate_microsoft_auth_regressions
@@ -123,6 +124,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
         evaluate_transition_concurrency_regressions,
     ),
     Suite("Supplier RFQ lifecycle", evaluate_supplier_rfq_lifecycle_regressions),
+    Suite("Initial supplier RFQ draft", evaluate_initial_supplier_rfq_regressions),
     Suite(
         "Road RFQ commercial safety",
         evaluate_road_rfq_commercial_safety_regressions,

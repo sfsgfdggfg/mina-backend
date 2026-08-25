@@ -409,11 +409,15 @@ def process_shipment(
         shipment=shipment,
         email_text=email_text,
     )
+    initial_supplier_selection = {
+        **supplier_selection,
+        "selected_suppliers": supplier_selection["selected_suppliers"][:1],
+    }
     supplier_rfq_drafts = generate_supplier_rfq_drafts(
         workflow_id=supplier_rfq_workflow.workflow_id,
         shipment=shipment,
         equipment_decision=equipment_decision,
-        supplier_selection=supplier_selection,
+        supplier_selection=initial_supplier_selection,
     )
 
     supplier_rfq_workflow = SupplierRFQWorkflow.model_validate(
