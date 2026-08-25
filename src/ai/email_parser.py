@@ -318,6 +318,7 @@ def _explicit_adr_state(email_text: str) -> tuple[bool | None, str | None]:
         re.search(pattern, text)
         for pattern in [
             r"\bnon[\s-]?adr\b",
+            r"\badr\s*[:=\-]\s*(?:no|hayır|hayir|false|yok)\b",
             r"\badr\s+(?:değil|degil|değildir|degildir|yok)\b",
             r"\badr\s+kapsam(?:ı|i)nda\s+(?:değil|degil|değildir|degildir)\b",
             r"\badr\s+kapsam(?:ı|i)\s+dış(?:ı|i)nda\b",
@@ -344,6 +345,38 @@ def _explicit_adr_state(email_text: str) -> tuple[bool | None, str | None]:
     return None, None
 
 
+def _explicit_temperature_control_state(email_text: str) -> bool | None:
+    text = (email_text or "").lower()
+    negative = any(re.search(pattern, text) for pattern in [
+        r"\btemperature\s+control\s*[:=\-]?\s*(?:not\s+required|no|false)\b",
+        r"\btemperature[-\s]?controlled\s*[:=\-]?\s*(?:no|false)\b",
+        r"\breefer\s*[:=\-]?\s*(?:not\s+required|no|false)\b",
+        r"\bsıcaklık\s+kontrollü\s+(?:değil|degil)\b",
+    ])
+    return False if negative else None
+
+
+def _explicit_stackable_state(email_text: str) -> bool | None:
+    text = (email_text or "").lower()
+    negative = any(re.search(pattern, text) for pattern in [
+        r"\bnon[-\s]?stackable\b", r"\bnot\s+stackable\b",
+        r"\bstackable\s*[:=\-]\s*(?:no|false)\b", r"\bistiflenemez\b",
+    ])
+    if negative:
+        return False
+
+    positive = any(re.search(pattern, text) for pattern in [
+        r"\bstackable\s*[:=\-]\s*(?:yes|true)\b", r"\bistiflenebilir\b",
+    ])
+    return True if positive else None
+
+
+def _apply_package_source_truth_overrides(shipment, email_text: str):
+    stackable_state = _explicit_stackable_state(email_text)
+    for package in shipment.packages:
+        package.stackable = stackable_state
+    return shipment
+
 def _apply_email_text_safety_overrides(shipment, email_text: str):
     """
     Critical logistics signals should not depend only on AI extraction.
@@ -369,6 +402,12 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
         shipment.adr_class = None
         shipment.commodity_attributes["adr status"] = True
 
+    temperature_state = _explicit_temperature_control_state(email_text)
+    if temperature_state is False:
+        shipment.is_temperature_controlled = False
+        shipment.temperature_requirement = None
+
+    shipment = _apply_package_source_truth_overrides(shipment, email_text)
     shipment = _apply_commodity_safety_overrides(shipment, email_text)
     shipment = _apply_gtip_safety_overrides(shipment, email_text)
     shipment = apply_commodity_profile_to_shipment(shipment)
@@ -419,14 +458,13 @@ def build_shipment_from_extraction(
         # a negative safety fact when the source text did not establish one.
         proposed_adr = True
 
-    proposed_temperature = (
-        True
-        if (
-            extracted.is_temperature_controlled is True
-            or shipment.is_temperature_controlled
-        )
-        else None
-    )
+    explicit_temperature = _explicit_temperature_control_state(email_text)
+    proposed_temperature = explicit_temperature
+    if proposed_temperature is None and (
+        extracted.is_temperature_controlled is True
+        or shipment.is_temperature_controlled is True
+    ):
+        proposed_temperature = True
 
     proposed_high_value = (
         True

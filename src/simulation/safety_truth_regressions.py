@@ -50,6 +50,38 @@ def evaluate_safety_truth_regressions() -> dict:
     if explicit_non_adr.is_adr is not False:
         failures.append("explicit non-ADR source evidence was not preserved")
 
+    explicit_labeled_non_adr = build_shipment_from_extraction(
+        _extraction(is_adr=True),
+        neutral_text + " Cargo: non-dangerous textile goods. ADR: no.",
+    )
+    if explicit_labeled_non_adr.is_adr is not False:
+        failures.append("explicit ADR: no source evidence was not preserved")
+
+    explicit_temperature_negative = build_shipment_from_extraction(
+        _extraction(is_temperature_controlled=True),
+        neutral_text + " Temperature control: not required.",
+    )
+    if explicit_temperature_negative.is_temperature_controlled is not False:
+        failures.append("explicit temperature-control negative was not preserved")
+
+    unsupported_stackable = build_shipment_from_extraction(
+        _extraction(
+            packages=[
+                {
+                    "package_type": "pallet",
+                    "quantity": 33,
+                    "length_cm": 120,
+                    "width_cm": 80,
+                    "height_cm": 150,
+                    "stackable": True,
+                }
+            ]
+        ),
+        neutral_text + " 33 pallets 120 x 80 x 150 cm.",
+    )
+    if unsupported_stackable.packages[0].stackable is not None:
+        failures.append("AI-only stackability became authoritative")
+
     conflicting_adr = build_shipment_from_extraction(
         _extraction(is_adr=False),
         neutral_text + " Yük ADR değil. ADR Class 3.",
