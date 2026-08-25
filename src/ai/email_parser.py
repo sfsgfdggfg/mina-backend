@@ -376,6 +376,24 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
     return shipment
 
 
+def _apply_explicit_road_mode_inference(shipment, email_text: str):
+    if shipment.transport_mode is not None:
+        return shipment
+
+    text = (email_text or "").lower()
+    if any(
+        re.search(pattern, text)
+        for pattern in (
+            r"(?<!\w)tenteli(?!\w)",
+            r"(?<!\w)curtain\s*sider(?!\w)",
+            r"(?<!\w)komple\s+araç(?!\w)",
+        )
+    ):
+        shipment.transport_mode = "road"
+
+    return shipment
+
+
 def build_shipment_from_extraction(
     extracted: ShipmentExtraction,
     email_text: str,
@@ -388,6 +406,7 @@ def build_shipment_from_extraction(
         email_text=email_text,
     )
 
+    shipment = _apply_explicit_road_mode_inference(shipment, email_text)
     shipment = _apply_email_text_safety_overrides(shipment, email_text)
     shipment = normalize_shipment(shipment)
 

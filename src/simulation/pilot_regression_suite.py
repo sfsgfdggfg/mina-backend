@@ -12,6 +12,7 @@ from src.simulation.customer_identity_trust_regressions import evaluate_customer
 from src.simulation.data_provenance_regressions import evaluate_data_provenance_regressions
 from src.simulation.data_path_regressions import evaluate_data_path_regressions
 from src.simulation.extraction_confirmation_regressions import evaluate_extraction_confirmation_regressions
+from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
 from src.simulation.microsoft_auth_regressions import evaluate_microsoft_auth_regressions
 from src.simulation.outlook_graph_read_regressions import evaluate_outlook_graph_read_regressions
@@ -104,6 +105,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Safe API entry point", evaluate_safe_api_entrypoint_regressions),
     Suite("Python source compilation", evaluate_source_compile_regressions),
     Suite("Extraction confirmation", evaluate_extraction_confirmation_regressions),
+    Suite("Explicit road-mode inference", evaluate_explicit_road_inference_regressions),
     Suite(
         "OpenAI structured output contract",
         evaluate_openai_structured_output_regressions,
