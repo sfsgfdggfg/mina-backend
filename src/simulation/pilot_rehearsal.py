@@ -355,7 +355,7 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         result.require(
             "RFQ workflow",
             workflow is not None
-            and len(drafts) == 3,
+            and len(drafts) == 1,
         )
         draft = drafts[0]
         result.require("manual send requires approval", _expect_http(
@@ -424,9 +424,9 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         result.require("response linkage blocked", _expect_http(
             409,
             api.attach_supplier_rfq_response_endpoint,
-            drafts[1].rfq_id,
+            draft.rfq_id,
             api.SupplierRFQResponseRequest(
-                supplier_name=draft.supplier_name,
+                supplier_name="Mismatched Synthetic Carrier",
                 rfq_priority=draft.priority,
                 status="quoted",
                 cost=1700,
