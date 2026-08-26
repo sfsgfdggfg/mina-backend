@@ -371,10 +371,33 @@ def _explicit_stackable_state(email_text: str) -> bool | None:
     return True if positive else None
 
 
+def _source_has_explicit_per_piece_weight(email_text: str) -> bool:
+    text = (email_text or "").lower()
+    patterns = [
+        r"\b\d+(?:[.,]\d+)?\s*kg\s*(?:/|per\s+)(?:pallet|piece|package|box|crate|palet|koli|adet|parça)\b",
+        r"\b(?:per|her)\s+(?:pallet|piece|package|box|crate|palet|koli|adet|parça|biri)\b[^.\n;]{0,40}\b\d+(?:[.,]\d+)?\s*kg\b",
+        r"\b(?:pallet|piece|package|box|crate|palet|koli|adet|parça)\s+başına\b[^.\n;]{0,20}\b\d+(?:[.,]\d+)?\s*kg\b",
+        r"\beach\b[^.\n;]{0,40}\b\d+(?:[.,]\d+)?\s*kg\b",
+    ]
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
 def _apply_package_source_truth_overrides(shipment, email_text: str):
     stackable_state = _explicit_stackable_state(email_text)
+    explicit_per_piece_weight = _source_has_explicit_per_piece_weight(email_text)
+    single_package_line = len(shipment.packages) == 1
+
     for package in shipment.packages:
         package.stackable = stackable_state
+
+        safe_single_piece_total = single_package_line and package.quantity == 1
+        safe_explicit_per_piece = single_package_line and explicit_per_piece_weight
+
+        if package.weight_kg is not None and not (
+            safe_single_piece_total or safe_explicit_per_piece
+        ):
+            package.weight_kg = None
+
     return shipment
 
 def _apply_email_text_safety_overrides(shipment, email_text: str):

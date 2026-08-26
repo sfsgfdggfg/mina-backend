@@ -82,6 +82,50 @@ def evaluate_safety_truth_regressions() -> dict:
     if unsupported_stackable.packages[0].stackable is not None:
         failures.append("AI-only stackability became authoritative")
 
+    unsupported_package_weight = build_shipment_from_extraction(
+        _extraction(
+            gross_weight_kg=20000,
+            packages=[
+                {
+                    "package_type": "pallet",
+                    "quantity": 33,
+                    "length_cm": 120,
+                    "width_cm": 80,
+                    "height_cm": 150,
+                    "weight_kg": 20000,
+                }
+            ],
+        ),
+        (
+            "Adana'dan Hamburg'a 33 palet tekstil. "
+            "Paletler 120 x 80 x 150 cm. Total gross weight: 20,000 kg."
+        ),
+    )
+    if unsupported_package_weight.packages[0].weight_kg is not None:
+        failures.append("AI-only package-line weight became authoritative")
+
+    explicit_per_piece_weight = build_shipment_from_extraction(
+        _extraction(
+            gross_weight_kg=19800,
+            packages=[
+                {
+                    "package_type": "pallet",
+                    "quantity": 33,
+                    "length_cm": 120,
+                    "width_cm": 80,
+                    "height_cm": 150,
+                    "weight_kg": 600,
+                }
+            ],
+        ),
+        (
+            "Adana'dan Hamburg'a 33 palet tekstil. "
+            "Each pallet is 600 kg. Total gross weight: 19,800 kg."
+        ),
+    )
+    if explicit_per_piece_weight.packages[0].weight_kg != 600:
+        failures.append("explicit per-piece package weight was not preserved")
+
     conflicting_adr = build_shipment_from_extraction(
         _extraction(is_adr=False),
         neutral_text + " Yük ADR değil. ADR Class 3.",
