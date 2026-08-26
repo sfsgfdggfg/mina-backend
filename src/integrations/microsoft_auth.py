@@ -22,6 +22,7 @@ TOKEN_CACHE_PATH_ENV = (
 AUTHORITY_BASE = (
     "https://login.microsoftonline.com"
 )
+CONSUMERS_TENANT = "consumers"
 
 OUTLOOK_SCOPES = (
     "Mail.Read",
@@ -67,9 +68,8 @@ class MicrosoftAuthConfig:
             else os.environ
         )
 
-        tenant_id = _required_uuid(
-            env.get(TENANT_ID_ENV),
-            name=TENANT_ID_ENV,
+        tenant_id = _tenant_identity(
+            env.get(TENANT_ID_ENV)
         )
 
         client_id = _required_uuid(
@@ -91,6 +91,20 @@ class MicrosoftAuthConfig:
             mailbox_id=mailbox_id,
             token_cache_path=cache_path,
         )
+
+
+def _tenant_identity(
+    value: str | None,
+) -> str:
+    normalized = (value or "").strip().lower()
+
+    if normalized == CONSUMERS_TENANT:
+        return CONSUMERS_TENANT
+
+    return _required_uuid(
+        normalized,
+        name=TENANT_ID_ENV,
+    )
 
 
 def _required_uuid(
