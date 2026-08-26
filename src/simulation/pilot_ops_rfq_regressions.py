@@ -9,7 +9,11 @@ import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from src.pilot_ops import PilotOpsError, _setup_rfq
+from src.pilot_ops import (
+    PilotOpsError,
+    _setup_rfq,
+    _smoke_pack_fingerprint,
+)
 from src.pilot_data_pack import resolve_pack_paths
 from src.simulation.replay_receipt import ReleaseIdentity
 
@@ -20,6 +24,7 @@ class _Client:
         self.record_calls = 0
         self.approve_calls = 0
         self.process_calls = 0
+        self.process_payloads = []
         self.confirm_calls = 0
         self.resume_calls = 0
 
@@ -38,6 +43,7 @@ class _Client:
 
     def process_email(self, **payload):
         self.process_calls += 1
+        self.process_payloads.append(dict(payload))
         return {"proposal_id": "proposal-1"}
 
     def get_proposal(self, proposal_id):
@@ -200,6 +206,21 @@ def evaluate_pilot_ops_rfq_regressions() -> dict:
 
         if client.record_calls != 0:
             failures.append("setup fabricated manual-send evidence after cancelled send")
+
+        expected_message_id = (
+            "pilot-ops-rfq-setup-"
+            + ("a" * 16)
+            + "-"
+            + _smoke_pack_fingerprint(root)[:16]
+        )
+        if (
+            not client.process_payloads
+            or client.process_payloads[0].get("external_message_id")
+            != expected_message_id
+        ):
+            failures.append(
+                "controlled RFQ setup dedup key did not include smoke-pack fingerprint"
+            )
 
         if (
             client.process_calls != 1

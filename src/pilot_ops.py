@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -59,6 +60,25 @@ OUTLOOK_AUTH_ENVS = (
     MAILBOX_ID_ENV,
     TOKEN_CACHE_PATH_ENV,
 )
+
+def _smoke_pack_fingerprint(pack_dir: Path) -> str:
+    paths = resolve_pack_paths(pack_dir, require_datasets=True)
+    digest = hashlib.sha256()
+    try:
+        for dataset_path in (
+            paths.customer_memory,
+            paths.supplier_capabilities,
+        ):
+            digest.update(dataset_path.name.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(dataset_path.read_bytes())
+            digest.update(b"\0")
+    except OSError as exc:
+        raise PilotOpsError(
+            "verified technical smoke pack fingerprint could not be calculated"
+        ) from exc
+    return digest.hexdigest()
+
 
 CONFIRMATION_PROMPTS = (
     (
@@ -806,7 +826,7 @@ def _setup_rfq(
     release_func=collect_release_identity,
     input_func=input,
 ) -> int:
-    _require_verified_pack(environ, status_func=status_func)
+    pack_path = _require_verified_pack(environ, status_func=status_func)
     client = _require_runtime_ready(
         environ,
         client_factory=client_factory,
@@ -892,6 +912,8 @@ def _setup_rfq(
                 external_message_id=(
                     "pilot-ops-rfq-setup-"
                     + release_func().commit_sha[:16]
+                    + "-"
+                    + _smoke_pack_fingerprint(pack_path)[:16]
                 ),
             )
         except (OperatorAPIError, OperatorConfigurationError) as exc:
