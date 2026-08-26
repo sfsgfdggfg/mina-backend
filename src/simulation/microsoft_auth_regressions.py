@@ -167,6 +167,31 @@ def evaluate_microsoft_auth_regressions():
             "Outlook auth configuration normalized",
         )
 
+        consumer_env = _environment(cache_path)
+        consumer_env["MINAI_OUTLOOK_TENANT_ID"] = "consumers"
+        consumer_config = MicrosoftAuthConfig.from_environment(consumer_env)
+
+        check(
+            consumer_config.tenant_id == "consumers"
+            and consumer_config.authority
+            == "https://login.microsoftonline.com/consumers",
+            "personal Microsoft account authority supported",
+        )
+
+        invalid_tenant_rejected = False
+        invalid_env = _environment(cache_path)
+        invalid_env["MINAI_OUTLOOK_TENANT_ID"] = "common"
+
+        try:
+            MicrosoftAuthConfig.from_environment(invalid_env)
+        except MicrosoftAuthConfigurationError:
+            invalid_tenant_rejected = True
+
+        check(
+            invalid_tenant_rejected,
+            "unsupported Microsoft authority aliases rejected",
+        )
+
         output: list[str] = []
 
         with patch(
