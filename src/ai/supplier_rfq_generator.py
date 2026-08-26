@@ -121,6 +121,10 @@ def generate_supplier_rfq_drafts(
             f"[{rfq_reference}] Navlun Talebi | "
             f"{pickup} - {delivery}"
         )
+        required_delivery_text = (
+            shipment.required_delivery_date
+            or "Belirtilmedi"
+        )
 
         body = f"""
 Merhaba,
@@ -137,7 +141,7 @@ Brüt Ağırlık: {shipment.gross_weight_kg:g} kg
 Servis Tipi: {shipment.service_type}
 Araç / Ekipman: {equipment_decision.selected_equipment}
 Yük Hazır Tarihi: {shipment.cargo_ready_date}
-Gerekli Teslim Tarihi: {shipment.required_delivery_date}
+Gerekli Teslim Tarihi: {required_delivery_text}
 Özel Notlar: {shipment.special_notes or "-"}
 
 Lütfen aşağıdaki bilgileri paylaşınız:

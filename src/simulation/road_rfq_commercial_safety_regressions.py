@@ -144,7 +144,6 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
         "delivery country",
         "gross weight",
         "package count and dimensions",
-        "required delivery date",
     }
 
     if (
@@ -155,6 +154,40 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
     ):
         failures.append(
             "incomplete road commercial facts did not fail closed"
+        )
+
+    optional_deadline = _shipment().model_copy(
+        update={"required_delivery_date": None}
+    )
+    optional_deadline_readiness = apply_road_rfq_readiness(
+        optional_deadline,
+        check_missing_information(optional_deadline),
+    )
+
+    if (
+        not optional_deadline_readiness.can_continue_to_quote
+        or "required delivery date"
+        in optional_deadline_readiness.missing_fields
+    ):
+        failures.append(
+            "missing customer delivery deadline incorrectly blocked road RFQ"
+        )
+
+    invalid_deadline = _shipment().model_copy(
+        update={"required_delivery_date": "not-a-date"}
+    )
+    invalid_deadline_readiness = apply_road_rfq_readiness(
+        invalid_deadline,
+        check_missing_information(invalid_deadline),
+    )
+
+    if (
+        invalid_deadline_readiness.can_continue_to_quote
+        or "required delivery date"
+        not in invalid_deadline_readiness.missing_fields
+    ):
+        failures.append(
+            "explicit invalid customer delivery deadline did not block road RFQ"
         )
 
     foreign_pickup = _shipment().model_copy(
@@ -207,6 +240,22 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
                     "RFQ omitted required fact: "
                     + expected_text
                 )
+
+    optional_deadline_drafts = generate_supplier_rfq_drafts(
+        shipment=optional_deadline,
+        equipment_decision=equipment,
+        supplier_selection=_selection(),
+        workflow_id="road-rfq-no-deadline",
+    )
+
+    if (
+        len(optional_deadline_drafts) != 1
+        or "Gerekli Teslim Tarihi: Belirtilmedi"
+        not in optional_deadline_drafts[0].body
+    ):
+        failures.append(
+            "road RFQ without customer deadline was not generated truthfully"
+        )
 
     with patch.dict(
         os.environ,
@@ -386,6 +435,25 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
     ):
         failures.append(
             "complete supplier quote was not commercially eligible"
+        )
+
+    optional_deadline_safety = evaluate_supplier_commercial_safety(
+        response=final_response,
+        shipment=optional_deadline,
+        expected_equipment="Tenteli",
+        as_of=AS_OF,
+    )
+
+    if (
+        not optional_deadline_safety.eligible_for_customer_quote
+        or optional_deadline_safety.delivery_deadline_met is not None
+        or str(optional_deadline_safety.projected_delivery_date)
+        != "2026-08-27"
+        or "required_delivery_date_missing_or_invalid"
+        in optional_deadline_safety.reasons
+    ):
+        failures.append(
+            "supplier quote without customer delivery deadline was incorrectly rejected"
         )
 
     comparisons = build_supplier_quote_comparisons(
