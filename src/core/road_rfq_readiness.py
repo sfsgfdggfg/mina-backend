@@ -110,6 +110,9 @@ def apply_road_rfq_readiness(
                 break
 
     ready_date = _parse_date(shipment.cargo_ready_date)
+    required_delivery_provided = bool(
+        str(shipment.required_delivery_date or "").strip()
+    )
     required_date = _parse_date(
         shipment.required_delivery_date
     )
@@ -117,7 +120,7 @@ def apply_road_rfq_readiness(
     if ready_date is None:
         _append_unique(missing, "cargo ready date")
 
-    if (
+    if required_delivery_provided and (
         required_date is None
         or (
             ready_date is not None

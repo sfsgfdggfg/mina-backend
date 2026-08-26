@@ -345,6 +345,9 @@ def evaluate_supplier_commercial_safety(
     cargo_ready = parse_commercial_date(
         shipment.cargo_ready_date
     )
+    required_delivery_provided = bool(
+        str(shipment.required_delivery_date or "").strip()
+    )
     required_delivery = parse_commercial_date(
         shipment.required_delivery_date
     )
@@ -357,14 +360,13 @@ def evaluate_supplier_commercial_safety(
             "cargo_ready_date_missing_or_invalid"
         )
 
-    if required_delivery is None:
+    if required_delivery_provided and required_delivery is None:
         reasons.append(
             "required_delivery_date_missing_or_invalid"
         )
 
     if (
         cargo_ready is not None
-        and required_delivery is not None
         and vehicle_available is not None
         and transit is not None
     ):
@@ -378,14 +380,15 @@ def evaluate_supplier_commercial_safety(
             transit,
         )
 
-        deadline_met = (
-            projected <= required_delivery
-        )
-
-        if not deadline_met:
-            reasons.append(
-                "required_delivery_date_not_achievable"
+        if required_delivery is not None:
+            deadline_met = (
+                projected <= required_delivery
             )
+
+            if not deadline_met:
+                reasons.append(
+                    "required_delivery_date_not_achievable"
+                )
 
     return SupplierCommercialSafety(
         eligible_for_customer_quote=not reasons,
