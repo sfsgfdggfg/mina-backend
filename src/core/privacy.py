@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from src.core.mail import InboundMailEnvelope
 
 
-PRIVACY_TRANSFORM_VERSION = "p1.12-v2"
+PRIVACY_TRANSFORM_VERSION = "p1.28-v3"
 
 _EMAIL_RE = re.compile(
     r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"
@@ -103,6 +103,14 @@ def _strip_quoted_reply(text: str) -> str:
         if (
             normalized.startswith("on ")
             and normalized.endswith(" wrote:")
+        ):
+            return "\n".join(
+                lines[:index]
+            ).rstrip()
+
+        if (
+            normalized.endswith(" tarihinde şunu yazdı:")
+            and _EMAIL_RE.search(line)
         ):
             return "\n".join(
                 lines[:index]
