@@ -19,6 +19,7 @@ from src.integrations.microsoft_auth import (
     MicrosoftAuthenticationError,
 )
 from src.integrations.outlook_graph import (
+    OutlookGraphMessageRejection,
     OutlookGraphReadError,
 )
 from src.pilot_operator import (
@@ -83,11 +84,15 @@ class _GraphClient:
         mailbox_id,
         messages,
         capture,
+        rejections=None,
     ):
         capture["token"] = access_token
         capture["mailbox"] = mailbox_id
         self.messages = messages
         self.capture = capture
+        self.last_message_rejections = list(
+            rejections or []
+        )
 
     def list_inbox_messages(
         self,
@@ -233,6 +238,70 @@ def evaluate_outlook_pull_regressions():
                 "automated_send_performed"
             ] is False,
             "pull returns minimal safe proposal summary",
+        )
+
+        rejection_capture = {}
+
+        def rejection_factory(
+            *,
+            access_token,
+            mailbox_id,
+        ):
+            return _GraphClient(
+                access_token=access_token,
+                mailbox_id=mailbox_id,
+                messages=[
+                    _mail("valid-after-empty"),
+                ],
+                capture=rejection_capture,
+                rejections=[
+                    OutlookGraphMessageRejection(
+                        external_message_id=(
+                            "empty-body-message"
+                        ),
+                        received_at=(
+                            "2026-08-27T06:49:07Z"
+                        ),
+                        reason_code=(
+                            "graph_empty_message_body"
+                        ),
+                    )
+                ],
+            )
+
+        resilient = pull_controlled_outlook_inbox(
+            config=config,
+            limit=2,
+            shipment_parser=lambda value: value,
+            proposal_repository=object(),
+            operational_data_sources=object(),
+            token_provider=(
+                lambda value: SECRET_TOKEN
+            ),
+            graph_client_factory=(
+                rejection_factory
+            ),
+            inbound_processor=processor,
+        )
+
+        rejection_results = [
+            item
+            for item in resilient["results"]
+            if item.get("reason_code")
+            == "graph_empty_message_body"
+        ]
+
+        check(
+            resilient["fetched_message_count"] == 2
+            and resilient["handled_message_count"] == 2
+            and resilient["manual_review_count"] == 1
+            and resilient["proposal_count"] == 1
+            and len(rejection_results) == 1
+            and rejection_results[0]["inbound_route"]
+            == "manual_review"
+            and rejection_results[0]["ingestion_status"]
+            == "blocked",
+            "blank Graph message is surfaced without blocking pull",
         )
 
         def conflict_processor(**kwargs):
