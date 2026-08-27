@@ -144,6 +144,30 @@ def evaluate_privacy_boundary_regressions() -> dict:
             "current operational text was lost while stripping quoted mail"
         )
 
+    turkish_gmail_thread = prepare_privacy_safe_text(
+        "Merhaba Mina hanım,\n\n"
+        "Bir aracımız hazırdır. Maliyetimiz 2400 EUR'dur.\n\n"
+        "Mina <mina.ai.test@gmail.com>, 26 Ağu 2026 Çar, "
+        "17:22 tarihinde şunu yazdı:\n\n"
+        "Araç / Ekipman: Tenteli / Curtainsider\n"
+        "Fiyatın all-in olup olmadığı\n"
+    )
+
+    turkish_gmail_safe = str(turkish_gmail_thread.safe_text)
+
+    if (
+        "Tenteli / Curtainsider" in turkish_gmail_safe
+        or "all-in" in turkish_gmail_safe
+    ):
+        failures.append(
+            "Turkish Gmail quoted history survived privacy minimization"
+        )
+
+    if "2400 EUR" not in turkish_gmail_safe:
+        failures.append(
+            "current Turkish Gmail reply was lost while stripping history"
+        )
+
     try:
         PrivacySafeText(
             raw_body,
