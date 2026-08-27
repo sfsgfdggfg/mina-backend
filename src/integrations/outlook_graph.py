@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -35,6 +36,13 @@ class OutlookGraphMessageError(ValueError):
     def __init__(self, code: str):
         self.code = code
         super().__init__(code)
+
+
+@dataclass(frozen=True)
+class OutlookGraphMessageRejection:
+    external_message_id: str
+    received_at: str
+    reason_code: str
 
 
 def _required_text(
@@ -90,6 +98,56 @@ def _graph_email_address(
     )
 
     return address, name
+
+
+def _blank_text_body_rejection(
+    raw_message: dict[str, Any],
+) -> OutlookGraphMessageRejection | None:
+    body = raw_message.get("body")
+    if not isinstance(body, dict):
+        return None
+
+    content_type = body.get("contentType")
+    content = body.get("content")
+
+    if (
+        not isinstance(content_type, str)
+        or content_type.strip().lower() != "text"
+        or not isinstance(content, str)
+        or content.strip()
+    ):
+        return None
+
+    message_id = _required_text(
+        raw_message.get("id"),
+        code="graph_message_id_missing",
+    )
+    received_at = _required_text(
+        raw_message.get("receivedDateTime"),
+        code="graph_received_time_missing",
+    )
+
+    is_draft = raw_message.get("isDraft")
+    if not isinstance(is_draft, bool):
+        raise OutlookGraphMessageError(
+            "graph_message_draft_state_missing"
+        )
+    if is_draft:
+        raise OutlookGraphMessageError(
+            "graph_draft_message_rejected"
+        )
+
+    has_attachments = raw_message.get("hasAttachments")
+    if not isinstance(has_attachments, bool):
+        raise OutlookGraphMessageError(
+            "graph_attachment_state_missing"
+        )
+
+    return OutlookGraphMessageRejection(
+        external_message_id=message_id,
+        received_at=received_at,
+        reason_code="graph_empty_message_body",
+    )
 
 
 def normalize_graph_message(
@@ -265,6 +323,9 @@ class OutlookGraphReadClient:
         self.mailbox_id = normalized_mailbox.lower()
         self.timeout = timeout
         self.session = session or requests.Session()
+        self.last_message_rejections: list[
+            OutlookGraphMessageRejection
+        ] = []
 
         try:
             self.session.trust_env = False
@@ -356,8 +417,10 @@ class OutlookGraphReadClient:
         }
 
         messages: list[InboundMailEnvelope] = []
+        self.last_message_rejections = []
+        examined_count = 0
 
-        while url and len(messages) < limit:
+        while url and examined_count < limit:
             payload = self._get_json(
                 url,
                 params=params,
@@ -370,13 +433,24 @@ class OutlookGraphReadClient:
                 )
 
             for raw_item in raw_items:
-                if len(messages) >= limit:
+                if examined_count >= limit:
                     break
+
+                examined_count += 1
 
                 if not isinstance(raw_item, dict):
                     raise OutlookGraphReadError(
                         "microsoft_graph_message_invalid"
                     )
+
+                rejection = _blank_text_body_rejection(
+                    raw_item
+                )
+                if rejection is not None:
+                    self.last_message_rejections.append(
+                        rejection
+                    )
+                    continue
 
                 messages.append(
                     normalize_graph_message(
@@ -389,7 +463,7 @@ class OutlookGraphReadClient:
                 payload.get("@odata.nextLink")
             )
 
-            if len(messages) >= limit:
+            if examined_count >= limit:
                 break
 
             url = next_link

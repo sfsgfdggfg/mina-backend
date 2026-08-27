@@ -21,6 +21,7 @@ from src.integrations.microsoft_auth import (
 )
 from src.integrations.outlook_graph import (
     GRAPH_PROVIDER_NAME,
+    OutlookGraphMessageRejection,
     OutlookGraphReadClient,
 )
 from src.workflow.mail_ingestion import (
@@ -94,6 +95,21 @@ def _safe_result_summary(
     }
 
 
+def _safe_rejection_summary(
+    rejection: OutlookGraphMessageRejection,
+) -> dict:
+    return {
+        "external_message_id": (
+            rejection.external_message_id
+        ),
+        "received_at": rejection.received_at,
+        "result_type": "inbound_message_rejected",
+        "ingestion_status": "blocked",
+        "reason_code": rejection.reason_code,
+        "inbound_route": "manual_review",
+    }
+
+
 def pull_controlled_outlook_inbox(
     *,
     config: MicrosoftAuthConfig,
@@ -130,8 +146,18 @@ def pull_controlled_outlook_inbox(
     mails = graph_client.list_inbox_messages(
         limit=limit
     )
+    rejections = list(
+        getattr(
+            graph_client,
+            "last_message_rejections",
+            (),
+        )
+    )
 
-    summaries: list[dict] = []
+    summaries: list[dict] = [
+        _safe_rejection_summary(rejection)
+        for rejection in rejections
+    ]
     parser_unavailable = False
 
     for mail in mails:
@@ -234,7 +260,9 @@ def pull_controlled_outlook_inbox(
         "provider": GRAPH_PROVIDER_NAME,
         "mailbox_id": config.mailbox_id,
         "requested_limit": limit,
-        "fetched_message_count": len(mails),
+        "fetched_message_count": (
+            len(mails) + len(rejections)
+        ),
         "handled_message_count": (
             len(summaries)
         ),

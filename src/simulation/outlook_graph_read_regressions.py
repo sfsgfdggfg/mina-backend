@@ -194,6 +194,50 @@ def evaluate_outlook_graph_read_regressions() -> dict:
         "provider message normalized",
     )
 
+    blank_message = _graph_message(
+        message_id="blank-body-message"
+    )
+    blank_message["body"]["content"] = " \r\n"
+
+    blank_session = _FakeSession(
+        [
+            _FakeResponse(
+                200,
+                {
+                    "value": [
+                        blank_message,
+                        _graph_message(
+                            message_id="valid-after-blank"
+                        ),
+                    ]
+                },
+            )
+        ]
+    )
+    blank_client = OutlookGraphReadClient(
+        access_token="private-token",
+        mailbox_id="operations@example.invalid",
+        session=blank_session,
+    )
+    blank_batch = blank_client.list_inbox_messages(
+        limit=2
+    )
+
+    check(
+        len(blank_batch) == 1
+        and blank_batch[0].external_message_id
+        == "valid-after-blank"
+        and len(
+            blank_client.last_message_rejections
+        )
+        == 1
+        and blank_client.last_message_rejections[0].external_message_id
+        == "blank-body-message"
+        and blank_client.last_message_rejections[0].reason_code
+        == "graph_empty_message_body",
+        "blank text body isolated without blocking batch",
+    )
+
     check(
         mail.message_deduplication_key
         == (
@@ -435,6 +479,7 @@ def evaluate_outlook_graph_read_regressions() -> dict:
                 + failure_session.requests
                 + redirect_session.requests
                 + malformed_session.requests
+                + blank_session.requests
             )
         ),
         "regression adapter performed no writes",
