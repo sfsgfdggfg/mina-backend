@@ -172,19 +172,6 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
             ),
         )
 
-    # High value cargo
-    if shipment.is_high_value:
-        return EquipmentDecision(
-            selected_equipment="Box Trailer",
-            reason="Yüksek değerli yük için kapalı kasa önerilir.",
-            confidence=0.75,
-            source="rule_engine",
-            explanation=(
-                "Yük yüksek değerli veya hırsızlık riski taşıyan kargo olarak işaretlendi. "
-                "Bu nedenle sert duvarlı kapalı kasa ekipman önerildi."
-            ),
-        )
-
     # Customer memory / explicit equipment preference
     if shipment.equipment_type:
         return EquipmentDecision(

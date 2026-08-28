@@ -5821,3 +5821,24 @@ sent after a revision or approval change.
 Send evidence is append-only within the quote case. A later quote revision may
 be approved and sent again, but it must create a new evidence record while the
 prior delivery record remains auditable.
+
+## DEC-126 — Cargo Value Is a Risk Signal, Not an Automatic Quote Block
+
+**Status:** Accepted
+**Date:** 2026-08-28
+
+### Decision
+
+Unknown cargo value does not block a standard road RFQ or customer-pricing
+workflow merely to complete a record. MINAI must preserve `is_high_value=None`
+until the customer, operator or other authoritative source establishes the fact.
+
+Confirmed high-value cargo is no longer an automatic shadow-pilot scope
+exclusion. It becomes an operational review signal for carrier liability limits,
+additional cargo insurance where relevant, security conditions and carrier
+acceptance. It does not by itself require management approval; an agency-specific
+policy may introduce such a threshold later.
+
+Cargo value alone must not silently replace an explicitly requested equipment
+type. Supplier capability or insurance constraints may later require a deliberate
+operator decision, but high value is not itself a universal Box Trailer rule.

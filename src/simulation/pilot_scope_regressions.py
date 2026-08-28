@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
+from src.core.equipment import decide_equipment
 from src.core.models import Package, Shipment
+from src.core.risk import assess_risk
 from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.quote_approval_repository import InMemoryQuoteApprovalRepository
 from src.core.quote_case_repository import InMemoryQuoteCaseRepository
@@ -264,7 +266,6 @@ def evaluate_pilot_scope_regressions() -> dict:
         "temperature requirement": _road_shipment(
             temperature_requirement="+4C",
         ),
-        "high-value": _road_shipment(is_high_value=True),
         "medical": _road_shipment(commodity="Medikal Ürün"),
         "medical alias": _road_shipment(commodity="Medical device supplies"),
         "pharmaceutical": _road_shipment(commodity="İlaç / Pharma"),
@@ -296,6 +297,36 @@ def evaluate_pilot_scope_regressions() -> dict:
     )
     if not eligible.eligible or eligible.result_type != "pilot_scope_eligible":
         failures.append("simple road freight was blocked by pilot scope")
+
+    unknown_value = evaluate_pilot_scope(
+        _road_shipment(is_high_value=None),
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if not unknown_value.eligible:
+        failures.append("unknown cargo value blocked otherwise eligible road freight")
+
+    high_value_shipment = _road_shipment(
+        is_high_value=True,
+        equipment_type="Tenteli",
+    )
+    high_value_scope = evaluate_pilot_scope(
+        high_value_shipment,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if not high_value_scope.eligible:
+        failures.append("confirmed high-value cargo was treated as an automatic pilot-scope exclusion")
+
+    high_value_risk = assess_risk(high_value_shipment)
+    if (
+        high_value_risk.risk_level != "yellow"
+        or not high_value_risk.requires_human_review
+        or high_value_risk.requires_management_review
+        or not any("yüksek değerli" in reason.lower() for reason in high_value_risk.risk_reasons)
+    ):
+        failures.append("confirmed high-value cargo did not become a non-management review signal")
+
+    if decide_equipment(high_value_shipment).selected_equipment != "Tenteli":
+        failures.append("high-value signal silently overrode explicit customer equipment")
 
     from src.workflow.pipeline import process_shipment
 

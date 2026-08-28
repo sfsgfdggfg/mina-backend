@@ -74,6 +74,14 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
         )
         requires_human_review = True
 
+    # High-value cargo is a review signal, not an automatic scope block.
+    if shipment.is_high_value:
+        risk_reasons.append(
+            "Yük yüksek değerli olarak teyit edildi. Taşıyıcı sorumluluk limiti, "
+            "gerekirse ek emtia sigortası ve güvenlik/taşıyıcı kabul şartları kontrol edilmeli."
+        )
+        requires_human_review = True
+
     # Commodity operational profile
     commodity_profile = get_commodity_operational_profile(shipment.commodity)
     if commodity_profile.get("requires_human_review"):

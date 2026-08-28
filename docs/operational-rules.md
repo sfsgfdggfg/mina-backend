@@ -3258,3 +3258,21 @@ Revising a previously sent quote must preserve all earlier send evidence. A
 freshly revised quote requires fresh approval and, if actually sent, a new
 manual-send evidence record. Recording evidence never performs a provider send
 and never weakens the existing human-approval boundary.
+
+## RULE-141 — High-Value Status Must Not Be Invented or Used as a Universal Stop
+
+If cargo value is unknown, MINAI keeps `is_high_value` unknown and continues a
+standard road pricing workflow when the other required commercial and safety
+facts are sufficient. It must not ask for cargo value solely to fill a field.
+
+If high value is explicitly confirmed, MINAI flags the shipment for human review
+of carrier liability, optional additional cargo insurance, security requirements
+and carrier acceptance. High value alone does not exclude the shipment from the
+pilot and does not automatically require management review unless an agency
+policy explicitly configures such a threshold.
+
+High-value status does not automatically change the requested vehicle to a box
+trailer. Explicit customer equipment remains authoritative unless a real safety,
+carrier-capability or commercial constraint requires an operator-reviewed change.
+Explicit Turkish statements such as `Isı kontrollü değildir` establish
+`is_temperature_controlled=false` and must not remain unknown.
