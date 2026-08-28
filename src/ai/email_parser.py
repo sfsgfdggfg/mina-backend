@@ -465,6 +465,30 @@ def _is_turkiye_country(value: str | None) -> bool:
     return normalized in {"turkiye", "turkey"}
 
 
+def _apply_indicative_quote_inference(shipment, email_text: str):
+    text = (email_text or "").replace("İ", "i").replace("I", "i").lower().replace("ı", "i")
+    if not re.search(r"(?<!\w)(?:indikatif|indicative)(?!\w)", text):
+        return shipment
+
+    shipment.quote_mode = "indicative"
+
+    outbound = bool(re.search(
+        r"(?<!\w)(?:gider|gidis|ihracat|export)(?!\w)", text
+    ))
+    inbound = bool(re.search(
+        r"(?<!\w)(?:gelir|gelis|ithalat|import)(?!\w)", text
+    ))
+    if outbound != inbound:
+        if outbound and not shipment.pickup_country:
+            if not _is_turkiye_country(shipment.delivery_country):
+                shipment.pickup_country = "Türkiye"
+        elif inbound and not shipment.delivery_country:
+            if not _is_turkiye_country(shipment.pickup_country):
+                shipment.delivery_country = "Türkiye"
+
+    return shipment
+
+
 def _apply_trade_direction_country_inference(shipment, email_text: str):
     """Infer only the Turkish endpoint established by an explicit trade direction."""
     export_signal = _has_directional_quote_signal(email_text, "export")
@@ -534,6 +558,7 @@ def build_shipment_from_extraction(
     )
 
     shipment = _apply_explicit_road_mode_inference(shipment, email_text)
+    shipment = _apply_indicative_quote_inference(shipment, email_text)
     shipment = _apply_trade_direction_country_inference(shipment, email_text)
     shipment = _apply_email_text_safety_overrides(shipment, email_text)
     shipment = normalize_shipment(shipment)

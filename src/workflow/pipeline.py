@@ -408,6 +408,7 @@ def process_shipment(
     supplier_rfq_workflow = SupplierRFQWorkflow(
         shipment=shipment,
         email_text=email_text,
+        sender_address=sender_address,
     )
     initial_supplier_selection = {
         **supplier_selection,

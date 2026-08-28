@@ -164,6 +164,23 @@ def evaluate_safety_truth_regressions() -> dict:
     if conflicting_adr.is_adr is not None:
         failures.append("conflicting ADR source signals did not remain unresolved")
 
+    indicative = build_shipment_from_extraction(
+        _extraction(
+            pickup_country=None,
+            pickup_city=None,
+            delivery_country="Almanya",
+            delivery_city="Hamburg",
+            transport_mode=None,
+        ),
+        "İndikatif olarak Almanya Hamburg bir tır kaça gider?",
+    )
+    if (
+        indicative.quote_mode != "indicative"
+        or indicative.transport_mode != "road"
+        or indicative.pickup_country != "Türkiye"
+    ):
+        failures.append("indicative one-ended road request was not inferred safely")
+
     electronics_candidate = build_shipment_from_extraction(
         _extraction(commodity="Elektronik", is_high_value=None),
         "Adana'dan Hamburg'a elektronik ürün için fiyat rica ederiz.",

@@ -10,6 +10,7 @@ from src.ai.supplier_response_parser import (
     SupplierResponseParserUnavailableError,
 )
 from src.core.mail import InboundMailEnvelope
+from src.core.relative_dates import infer_supplier_vehicle_available_date
 from src.core.privacy import (
     fingerprint_text,
     prepare_privacy_safe_text,
@@ -84,6 +85,14 @@ def _resolve_extraction(
         ).safe_text
         parsed = parser.parse(safe_text)
         extraction = SupplierResponseExtraction.model_validate(parsed)
+        if extraction.vehicle_available_date is None:
+            inferred_available = infer_supplier_vehicle_available_date(
+                str(safe_text), reply.received_at
+            )
+            if inferred_available is not None:
+                extraction = extraction.model_copy(
+                    update={"vehicle_available_date": inferred_available}
+                )
     except SupplierResponseParserUnavailableError:
         raise
     except Exception:

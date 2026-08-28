@@ -234,7 +234,6 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
             "120 × 80 × 160 cm",
             "20000 kg",
             "2026-08-27",
-            "all-in",
         ):
             if expected_text not in body:
                 failures.append(
@@ -525,7 +524,30 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
             "late supplier quote remained customer-quote eligible"
         )
 
-    # F. Expiry, equipment mismatch and non-all-in terms fail closed.
+    # F. Missing optional road metadata must not block; explicit commercial
+    # contradictions still fail closed.
+    minimal_road_quote = final_response.model_copy(
+        update={
+            "validity_date": None,
+            "vehicle_available_date": None,
+            "equipment_type": None,
+            "pricing_basis": None,
+            "included_costs": None,
+            "excluded_costs": None,
+        }
+    )
+    minimal_safety = evaluate_supplier_commercial_safety(
+        response=minimal_road_quote,
+        shipment=_shipment(),
+        expected_equipment="Tenteli",
+        as_of=AS_OF,
+    )
+    if (
+        not minimal_safety.eligible_for_customer_quote
+        or str(minimal_safety.projected_delivery_date) != "2026-08-27"
+    ):
+        failures.append("minimal standard road quote was incorrectly blocked")
+
     unsafe_updates = (
         (
             "expired quote",
@@ -549,14 +571,7 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
                 ),
                 "excluded_costs": ["tolls"],
             },
-            "supplier_price_not_confirmed_all_in",
-        ),
-        (
-            "unknown excluded costs",
-            {
-                "excluded_costs": None,
-            },
-            "supplier_excluded_costs_unknown",
+            "supplier_price_has_unpriced_extras",
         ),
     )
 
@@ -582,6 +597,52 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
             failures.append(
                 f"{label} did not fail closed"
             )
+
+    indicative_shipment = _shipment().model_copy(
+        update={
+            "quote_mode": "indicative",
+            "commodity": None,
+            "gross_weight_kg": None,
+            "packages": [],
+            "cargo_ready_date": None,
+            "required_delivery_date": None,
+            "delivery_postcode": None,
+        }
+    )
+    indicative_readiness = apply_road_rfq_readiness(
+        indicative_shipment, check_missing_information(indicative_shipment)
+    )
+    if not indicative_readiness.can_continue_to_quote:
+        failures.append("indicative route was blocked by firm quote fields")
+    indicative_drafts = generate_supplier_rfq_drafts(
+        shipment=indicative_shipment,
+        equipment_decision=equipment,
+        supplier_selection=_selection(),
+        workflow_id="indicative-road",
+    )
+    if (
+        len(indicative_drafts) != 1
+        or "İNDİKATİF" not in indicative_drafts[0].body
+        or "araç rezervasyonu değildir" not in indicative_drafts[0].body
+    ):
+        failures.append("indicative supplier RFQ was not marked non-binding")
+    indicative_response = SupplierRFQResponse(
+        rfq_id=indicative_drafts[0].rfq_id,
+        supplier_name="Synthetic Carrier",
+        rfq_priority=1,
+        status="quoted",
+        cost=2100,
+        currency="EUR",
+        source="manual",
+    )
+    indicative_safety = evaluate_supplier_commercial_safety(
+        response=indicative_response,
+        shipment=indicative_shipment,
+        expected_equipment="Tenteli",
+        as_of=AS_OF,
+    )
+    if not indicative_safety.eligible_for_customer_quote:
+        failures.append("indicative price+currency response was incorrectly blocked")
 
     advisory_base = MissingInfoResult(
         can_continue_to_quote=True,

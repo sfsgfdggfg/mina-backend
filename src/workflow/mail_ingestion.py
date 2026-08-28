@@ -12,6 +12,7 @@ from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
 from src.core.mail import InboundMailEnvelope
+from src.core.relative_dates import infer_customer_cargo_ready_date
 from src.core.privacy import (
     PrivacySafeText,
     fingerprint_text,
@@ -175,9 +176,18 @@ def process_customer_inquiry_mail(
         proposed_shipment = shipment_parser(
             safe_text
         )
+        proposal_updates = {}
         if trusted_customer_name and trusted_customer_name.strip():
+            proposal_updates["customer_name"] = trusted_customer_name.strip()
+        if not proposed_shipment.cargo_ready_date:
+            inferred_ready = infer_customer_cargo_ready_date(
+                str(safe_text), mail.received_at
+            )
+            if inferred_ready is not None:
+                proposal_updates["cargo_ready_date"] = inferred_ready
+        if proposal_updates:
             proposed_shipment = proposed_shipment.model_copy(
-                update={"customer_name": trusted_customer_name.strip()}
+                update=proposal_updates
             )
         proposal = create_extraction_proposal(
             mail=safe_mail,

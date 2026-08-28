@@ -65,6 +65,22 @@ def apply_road_rfq_readiness(
     if shipment.transport_mode != "road":
         return base
 
+    if getattr(shipment, "quote_mode", "firm") == "indicative":
+        missing: list[str] = []
+        if not shipment.pickup_country:
+            _append_unique(missing, "pickup country")
+        if not shipment.delivery_country:
+            _append_unique(missing, "delivery country")
+        return MissingInfoResult(
+            can_continue_to_quote=not missing,
+            missing_fields=missing,
+            reason=(
+                "İndikatif road fiyatı için rota bilgisi yeterli."
+                if not missing
+                else "İndikatif fiyat için temel rota bilgisi eksik."
+            ),
+        )
+
     missing = list(base.missing_fields)
     road_blocking_missing: list[str] = []
 
