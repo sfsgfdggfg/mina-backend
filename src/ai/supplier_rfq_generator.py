@@ -126,7 +126,39 @@ def generate_supplier_rfq_drafts(
             or "Belirtilmedi"
         )
 
-        body = f"""
+        if getattr(shipment, "quote_mode", "firm") == "indicative":
+            package_text = packages or "Belirtilmedi - standart FTL varsayımı"
+            weight_text = (
+                f"{shipment.gross_weight_kg:g} kg"
+                if shipment.gross_weight_kg is not None
+                else "Belirtilmedi - standart FTL varsayımı"
+            )
+            body = f"""
+Merhaba,
+
+Aşağıdaki hat için İNDİKATİF / bağlayıcı olmayan bütçe navlunu rica ederiz. Bu talep araç rezervasyonu değildir.
+
+RFQ Referansı: {rfq_reference}
+
+Yükleme: {pickup}
+Teslimat: {delivery}
+Ürün: {shipment.commodity or "Standart non-ADR genel yük varsayımı"}
+Paket / Ölçüler: {package_text}
+Brüt Ağırlık: {weight_text}
+Servis Tipi: {shipment.service_type}
+Araç / Ekipman: {equipment_decision.selected_equipment}
+
+Varsayım: standart non-ADR, sıcaklık kontrolü gerektirmeyen FTL/tenteli yük.
+
+Lütfen indikatif navlun fiyatı ve para birimini paylaşınız. Varsa tahmini transit süreyi de ekleyebilirsiniz.
+
+Teşekkürler.
+
+Saygılarımızla,
+MINAI Freight OS
+""".strip()
+        else:
+            body = f"""
 Merhaba,
 
 Aşağıdaki taşıma için fiyat ve araç uygunluğunuzu rica ederiz.
@@ -147,13 +179,9 @@ Gerekli Teslim Tarihi: {required_delivery_text}
 Lütfen aşağıdaki bilgileri paylaşınız:
 
 - Navlun fiyatı ve para birimi
-- Fiyatın all-in olup olmadığı
-- Fiyata dahil masraflar
-- Fiyattan hariç masraflar
-- Araç uygunluk tarihi
 - Tahmini transit süre ve zaman birimi
-- Teklif geçerlilik tarihi
-- Teklif edilen araç / ekipman tipi
+- Varsa standart navluna dahil olmayan ek / hariç masraflar
+- Talep edilenden farklı bir araç / ekipman öneriyorsanız ekipman tipi
 
 Teşekkürler.
 

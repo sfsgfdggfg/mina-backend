@@ -181,9 +181,24 @@ def _score_route(supplier: Dict[str, Any], shipment: Any) -> float:
     ):
         return 0.95
 
-    if (
-        delivery_country in supported_countries
-        and any(region != "domestic" for region in route_regions)
+    has_international_region = any(
+        region != "domestic" for region in route_regions
+    )
+
+    # In a Türkiye-based road forwarding network, `countries` describes the
+    # foreign lane countries the supplier serves. The same country capability
+    # therefore supports both export (Türkiye -> country) and import
+    # (country -> Türkiye), unless a stricter exact route is declared above.
+    turkiye_values = {"turkiye", "turkey"}
+    if has_international_region and (
+        (
+            pickup_country in turkiye_values
+            and delivery_country in supported_countries
+        )
+        or (
+            delivery_country in turkiye_values
+            and pickup_country in supported_countries
+        )
     ):
         return 0.85
 

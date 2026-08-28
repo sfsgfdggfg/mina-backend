@@ -44,6 +44,7 @@ class Shipment(BaseModel):
     weight_is_approximate: bool = True
 
     service_type: str = "FTL"
+    quote_mode: Literal["firm", "indicative"] = "firm"
     transport_mode: Optional[
         Literal["road", "rail", "sea", "air", "multimodal"]
     ] = None

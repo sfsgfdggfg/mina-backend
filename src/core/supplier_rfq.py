@@ -77,6 +77,7 @@ class SupplierRFQWorkflow(BaseModel):
     workflow_id: str = Field(default_factory=lambda: str(uuid4()))
     shipment: Shipment
     email_text: Optional[str] = None
+    sender_address: Optional[str] = None
     rfq_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -212,6 +212,51 @@ def evaluate_outlook_inbound_gate_regressions():
         "duplicate Outlook mail does not reparse",
     )
 
+
+    def unknown_customer_parser(body: str) -> ShipmentProposalSnapshot:
+        parsed_bodies.append(str(body))
+        return _shipment().model_copy(update={"customer_name": "Unknown Customer"})
+
+    with patch(
+        "src.workflow.outlook_inbound_ingestion.load_customer_memory",
+        return_value=_trusted_profiles(),
+    ):
+        trusted_identity = process_controlled_outlook_customer_mail(
+            mail=_mail(message_id="trusted-identity-1"),
+            shipment_parser=unknown_customer_parser,
+            proposal_repository=repository,
+            operational_data_sources=_sources(),
+        )
+
+    check(
+        trusted_identity["extraction_proposal"].proposed_shipment.customer_name
+        == "Pilot Customer",
+        "trusted sender identity populates proposal customer name",
+    )
+
+    def no_ready_parser(body: str) -> ShipmentProposalSnapshot:
+        parsed_bodies.append(str(body))
+        return _shipment().model_copy(update={"cargo_ready_date": None})
+
+    relative_mail = _mail(message_id="relative-ready-1").model_copy(
+        update={"body_text": "Yük yarın hazır. Adana Hamburg karayolu fiyat rica ederiz."}
+    )
+    with patch(
+        "src.workflow.outlook_inbound_ingestion.load_customer_memory",
+        return_value=_trusted_profiles(),
+    ):
+        relative_result = process_controlled_outlook_customer_mail(
+            mail=relative_mail,
+            shipment_parser=no_ready_parser,
+            proposal_repository=repository,
+            operational_data_sources=_sources(),
+        )
+    check(
+        relative_result["extraction_proposal"].proposed_shipment.cargo_ready_date
+        == "2026-08-19",
+        "relative customer ready date uses received date",
+    )
+
     attachment_calls = len(parsed_bodies)
 
     with patch(

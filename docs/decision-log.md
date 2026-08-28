@@ -5718,3 +5718,64 @@ was parsed for routing verification, not to a later independently read version.
 
 This closes the time-of-check/time-of-use gap between manifest parsing,
 live network execution, and evidence receipt creation.
+
+## DEC-122 — Remove Human-Obvious Road Workflow Stops
+
+**Status:** Accepted
+**Date:** 2026-08-28
+
+### Decision
+
+MINAI road workflows must distinguish genuinely missing operational facts from
+facts an experienced operator can resolve safely from trusted identity,
+explicit direction, explicit road language and message-relative timing.
+
+The trusted inbound sender identity is carried into downstream customer memory.
+Import/export Türkiye endpoint inference is symmetric. Explicit road language
+may establish road mode. Relative `today/tomorrow/ready/immediately` language
+may be resolved against message time when positive and unambiguous.
+
+`high_value_candidate` remains a candidate/review signal and is not confirmed
+high-value source truth. Non-critical commodity questions remain advisory.
+Supplier country capability for Türkiye international lanes is symmetric for
+import/export to the same supported foreign country, without creating arbitrary
+foreign-to-foreign authority.
+
+A terminal supplier negative response prepares the next eligible supplier RFQ
+draft for human approval. A commercially incomplete quoted response reopens the
+same RFQ for clarification and prepares a follow-up draft; it does not consume
+the RFQ permanently.
+
+### Safety Boundary
+
+These changes reduce redundant manual work but do not authorize automatic RFQ
+or customer-quote sending, bypass sender trust, weaken explicit customer
+delivery deadlines, or overwrite contradictory source facts.
+
+## DEC-123 — Turkish Road Commercial Defaults and Indicative Quote Mode
+
+**Status:** Accepted
+**Date:** 2026-08-28
+
+### Decision
+
+For standard Turkish road freight pricing, supplier quote validity and separate
+vehicle availability dates are optional. Standard road price is treated as
+all-in unless the supplier explicitly states extras/exclusions. Included and
+excluded cost lists are not mandatory when no exception is stated. A supplier
+reply to the exact RFQ implicitly accepts the requested equipment unless it
+explicitly proposes a different one. Transit remains required for a normal firm
+road customer quote.
+
+If a validity date is explicitly provided, it is preserved and communicated to
+the customer; a parseably expired quote is not used. Explicit extra/excluded
+charges, base-freight-plus-extras terms, or equipment mismatch remain commercial
+exceptions requiring clarification/review rather than silent normalization.
+
+Customer requests containing explicit `indikatif` / `indicative` intent use a
+separate `quote_mode=indicative`. Indicative pricing is non-binding budgetary
+pricing for a future/not-yet-firm move. Route-level information may be enough;
+firm shipment details such as exact weight, dimensions and ready date are not
+mandatory solely for indicative pricing. Supplier RFQs and customer output must
+both disclose the non-binding nature. A future real shipment requires fresh
+firm-price confirmation and vehicle-availability confirmation.

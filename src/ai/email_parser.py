@@ -438,19 +438,108 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
     return shipment
 
 
+def _has_directional_quote_signal(email_text: str, direction: str) -> bool:
+    text = (email_text or "").replace("İ", "i").replace("I", "i").lower().replace("ı", "i")
+    if direction == "export":
+        direction_terms = ("ihracat", "export")
+    elif direction == "import":
+        direction_terms = ("ithalat", "import")
+    else:
+        raise ValueError(f"Unsupported trade direction: {direction}")
+
+    request_terms = (
+        "teklif", "fiyat", "navlun", "taşıma", "tasima", "yük", "yuk",
+        "quote", "rate", "freight", "shipment", "load",
+    )
+    direction_group = "(?:" + "|".join(direction_terms) + ")"
+    request_group = "(?:" + "|".join(request_terms) + ")"
+    patterns = (
+        rf"\b{direction_group}\b[^\n.;]{{0,60}}\b{request_group}\b",
+        rf"\b{request_group}\b[^\n.;]{{0,60}}\b{direction_group}\b",
+    )
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def _is_turkiye_country(value: str | None) -> bool:
+    normalized = (str(value or "").strip().lower().replace("ü", "u"))
+    return normalized in {"turkiye", "turkey"}
+
+
+def _apply_indicative_quote_inference(shipment, email_text: str):
+    text = (email_text or "").replace("İ", "i").replace("I", "i").lower().replace("ı", "i")
+    if not re.search(r"(?<!\w)(?:indikatif|indicative)(?!\w)", text):
+        return shipment
+
+    shipment.quote_mode = "indicative"
+
+    outbound = bool(re.search(
+        r"(?<!\w)(?:gider|gidis|ihracat|export)(?!\w)", text
+    ))
+    inbound = bool(re.search(
+        r"(?<!\w)(?:gelir|gelis|ithalat|import)(?!\w)", text
+    ))
+    if outbound != inbound:
+        if outbound and not shipment.pickup_country:
+            if not _is_turkiye_country(shipment.delivery_country):
+                shipment.pickup_country = "Türkiye"
+        elif inbound and not shipment.delivery_country:
+            if not _is_turkiye_country(shipment.pickup_country):
+                shipment.delivery_country = "Türkiye"
+
+    return shipment
+
+
+def _apply_trade_direction_country_inference(shipment, email_text: str):
+    """Infer only the Turkish endpoint established by an explicit trade direction."""
+    export_signal = _has_directional_quote_signal(email_text, "export")
+    import_signal = _has_directional_quote_signal(email_text, "import")
+
+    # Conflicting direction language (for example a company name containing both
+    # "ithalat" and "ihracat") is not sufficient evidence for an endpoint default.
+    if export_signal == import_signal:
+        return shipment
+
+    if export_signal and not shipment.pickup_country:
+        if _is_turkiye_country(shipment.delivery_country):
+            return shipment
+        shipment.pickup_country = "Türkiye"
+
+    if import_signal and not shipment.delivery_country:
+        if _is_turkiye_country(shipment.pickup_country):
+            return shipment
+        shipment.delivery_country = "Türkiye"
+
+    return shipment
+
+
 def _apply_explicit_road_mode_inference(shipment, email_text: str):
     if shipment.transport_mode is not None:
         return shipment
 
-    text = (email_text or "").lower()
-    if any(
-        re.search(pattern, text)
-        for pattern in (
-            r"(?<!\w)tenteli(?!\w)",
-            r"(?<!\w)curtain\s*sider(?!\w)",
-            r"(?<!\w)komple\s+araç(?!\w)",
-        )
-    ):
+    text = (email_text or "").replace("İ", "i").replace("I", "i").lower().replace("ı", "i")
+    road_patterns = (
+        r"(?<!\w)tenteli(?!\w)",
+        r"(?<!\w)curtain\s*sider(?!\w)",
+        r"(?<!\w)komple\s+araç(?!\w)",
+        r"(?<!\w)karayolu(?!\w)",
+        r"(?<!\w)road\s+(?:freight|transport)(?!\w)",
+        r"(?<!\w)(?:tır|tir|kamyon|truck|dorse)(?!\w)",
+        r"(?<!\w)(?:ftl|ltl|parsiyel)(?!\w)",
+        r"(?<!\w)partial\s+(?:load|truckload)(?!\w)",
+    )
+    conflicting_mode_patterns = (
+        r"(?<!\w)(?:denizyolu|deniz\s+yolu)(?!\w)",
+        r"(?<!\w)(?:sea|ocean)\s+freight(?!\w)",
+        r"(?<!\w)(?:havayolu|hava\s+yolu)(?!\w)",
+        r"(?<!\w)air\s+freight(?!\w)",
+        r"(?<!\w)(?:demiryolu|demir\s+yolu)(?!\w)",
+        r"(?<!\w)rail\s+freight(?!\w)",
+    )
+    has_road = any(re.search(pattern, text) for pattern in road_patterns)
+    has_conflict = any(
+        re.search(pattern, text) for pattern in conflicting_mode_patterns
+    )
+    if has_road and not has_conflict:
         shipment.transport_mode = "road"
 
     return shipment
@@ -469,6 +558,8 @@ def build_shipment_from_extraction(
     )
 
     shipment = _apply_explicit_road_mode_inference(shipment, email_text)
+    shipment = _apply_indicative_quote_inference(shipment, email_text)
+    shipment = _apply_trade_direction_country_inference(shipment, email_text)
     shipment = _apply_email_text_safety_overrides(shipment, email_text)
     shipment = normalize_shipment(shipment)
 

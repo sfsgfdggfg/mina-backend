@@ -3122,3 +3122,107 @@ When a replay evidence receipt is requested, the Git worktree must be clean. The
 Replay input or operational data mutation during execution must block receipt creation. Receipt files must be create-only, stored outside the repository, and must not contain case IDs, sender addresses, customer identities, raw/sanitized message text, secrets, or operational contact values.
 
 A replay receipt does not prove trusted-sender customer identity and does not by itself authorize pilot GO.
+
+## RULE-135 — Human-Obvious Road Facts Must Not Cause Redundant Clarification
+
+For trusted inbound customer mail, the customer identity established by the
+verified sender gate must follow the extraction and operational workflow so
+customer memory can be applied without requiring the customer name to be
+repeated in the message body.
+
+For Turkish road operations, deterministic source evidence may resolve facts
+that an experienced operator would treat as unambiguous. Explicit import and
+export direction may establish the Türkiye endpoint when that endpoint country
+is omitted. Explicit road signals such as karayolu, tır/truck, FTL, LTL and
+parsiyel may establish road mode when no conflicting transport mode is stated.
+Explicit relative availability such as bugün, yarın, hazır or hemen may be
+resolved against the inbound message date; negative availability must never be
+converted into a positive date.
+
+A commodity profile flag named `high_value_candidate` is a review signal only
+and must not become confirmed `is_high_value=true` source truth.
+
+Non-critical commodity clarification items must remain advisory and must not
+become blocking merely because the road RFQ readiness layer runs after the
+commodity missing-information layer.
+
+For Türkiye-based international road supplier capability data, a supported
+foreign lane country applies in both directions between Türkiye and that
+country unless stricter exact-route evidence says otherwise. This symmetric
+rule does not authorize unrelated foreign-to-foreign lanes.
+
+## RULE-136 — Standard Turkish Road Quote Commercial Semantics
+
+This rule supersedes only the stricter standard-road commercial metadata
+requirements in RULE-128; RULE-128's evidence preservation, deadline safety,
+and fail-closed handling of explicit contradictions remain in force.
+
+For a standard Turkish road freight RFQ, supplier price plus currency and a
+usable transit duration are sufficient commercial foundations when the
+shipment itself is firm-quote ready. A separate supplier quote validity date
+and a separate vehicle availability/reservation date are optional. If a
+supplier provides a parseable validity date, an already-expired quote remains
+unusable; if a validity date is provided and used, it must be carried to the
+customer-facing quote.
+
+Standard Turkish road freight pricing is treated as all-in by default. The
+supplier does not need to repeat an `all_in` label or enumerate included and
+excluded cost lists. An explicit base-freight-plus-extras statement or an
+explicit excluded/additional charge is a commercial exception and must not be
+silently converted into the normal all-in customer quote.
+
+A supplier replying to the exact RFQ is treated as accepting the requested
+equipment unless the supplier explicitly proposes a different equipment type.
+An explicit equipment mismatch remains blocking.
+
+Normal loading/unloading-site equipment such as forklift organization is the
+customer/site responsibility unless the commercial request explicitly makes it
+a carrier-provided charge.
+
+## RULE-137 — Supplier Negative and Incomplete Responses Must Advance the Work
+
+A terminal supplier response such as `no_capacity` or `declined` must not leave
+an operator to recreate the next routine step. If another selected eligible
+supplier exists, MINAI prepares the next supplier RFQ draft automatically and
+stops at the existing human RFQ approval gate. No automatic outbound send is
+authorized by this rule.
+
+A quoted supplier response that contains a fixable commercial gap must preserve
+the original response evidence, reopen that same RFQ as
+`clarification_required`, and prepare a supplier follow-up draft asking only
+for the missing or contradictory commercial facts. The same trusted supplier
+contact may then provide a later final response on the same RFQ reference.
+
+A supplier that cannot meet an explicit customer delivery deadline may be
+skipped in favor of the next eligible supplier; the deadline itself must not be
+weakened or removed to make a quote selectable.
+
+## RULE-138 — Indicative Road Quotes Are Explicitly Non-Binding
+
+When the customer explicitly asks for an `indikatif` / `indicative` price,
+MINAI must mark the shipment `quote_mode=indicative`. Indicative pricing is a
+budget exercise for a future or not-yet-firm shipment and is not a vehicle
+reservation or binding freight commitment.
+
+For an indicative standard road request, route-level country information is
+enough to begin supplier pricing. Firm-quote requirements such as exact weight,
+package dimensions, cargo-ready date and delivery deadline must not create
+clarification solely because they are absent. Explicit special-risk signals
+such as ADR, reefer, oversize/project cargo or another stated special equipment
+condition remain authoritative and must not be erased by indicative mode.
+
+One-ended indicative language may establish the Türkiye endpoint only when the
+message itself gives a clear outbound/inbound direction (for example `gider`,
+`gelir`, export/import). Ambiguous direction must remain unresolved rather than
+inventing an endpoint.
+
+Supplier indicative RFQs must say clearly that the request is indicative,
+non-binding and not a vehicle reservation. For an indicative standard-road
+supplier response, price and currency are enough; transit, validity and vehicle
+availability are optional unless explicitly provided.
+
+The customer-facing indicative quote must prominently state that it is
+non-binding and that current freight and vehicle availability will be
+reconfirmed when the shipment becomes real. A later firm shipment requires a
+fresh firm-quote workflow; an old indicative price must not silently become a
+booking or firm customer quote.

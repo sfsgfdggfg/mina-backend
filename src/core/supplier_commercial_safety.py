@@ -282,122 +282,78 @@ def evaluate_supplier_commercial_safety(
 ) -> SupplierCommercialSafety:
     reasons: list[str] = []
     reference_date = as_of or date.today()
+    quote_mode = getattr(shipment, "quote_mode", "firm")
 
     if not response.is_price_usable:
         reasons.append("supplier_price_not_usable")
 
-    transit = parse_transit_time(
-        response.transit_time
-    )
+    transit = parse_transit_time(response.transit_time)
+    if transit is None and quote_mode != "indicative":
+        reasons.append("supplier_transit_missing_or_unparseable")
 
-    if transit is None:
-        reasons.append(
-            "supplier_transit_missing_or_unparseable"
-        )
-
-    validity = parse_commercial_date(
-        response.validity_date
-    )
-
-    if validity is None:
-        reasons.append(
-            "supplier_validity_date_missing_or_invalid"
-        )
-    elif validity < reference_date:
+    # Road quote validity is optional. If a supplier explicitly provides a
+    # parseable expiry, however, an already-expired quote must not be used.
+    validity = parse_commercial_date(response.validity_date)
+    if validity is not None and validity < reference_date:
         reasons.append("supplier_quote_expired")
 
-    vehicle_available = parse_commercial_date(
-        response.vehicle_available_date
-    )
+    # A separate vehicle reservation/availability date is not a prerequisite
+    # for Turkish road pricing. Preserve it when present and parseable.
+    vehicle_available = parse_commercial_date(response.vehicle_available_date)
 
-    if vehicle_available is None:
-        reasons.append(
-            "supplier_vehicle_availability_missing_or_invalid"
-        )
-
-    if not response.equipment_type:
-        reasons.append("supplier_equipment_missing")
-    elif not equipment_matches(
-        expected_equipment,
-        response.equipment_type,
+    # Replying to an RFQ is treated as acceptance of the requested equipment
+    # unless the supplier explicitly proposes another equipment type.
+    if response.equipment_type and not equipment_matches(
+        expected_equipment, response.equipment_type
     ):
         reasons.append("supplier_equipment_mismatch")
 
-    if response.pricing_basis != "all_in":
-        reasons.append(
-            "supplier_price_not_confirmed_all_in"
-        )
+    # Standard Turkish road freight pricing is all-in by default. Only an
+    # explicit base-freight-plus-extras statement contradicts that default.
+    if response.pricing_basis == "base_freight_plus_extras":
+        reasons.append("supplier_price_has_unpriced_extras")
 
-    if response.included_costs is None:
-        reasons.append(
-            "supplier_included_costs_unknown"
-        )
+    # Included/excluded lists are optional evidence. Explicit exclusions are
+    # commercially material and must be reviewed before customer quotation.
+    if response.excluded_costs:
+        reasons.append("supplier_has_excluded_costs")
 
-    if response.excluded_costs is None:
-        reasons.append(
-            "supplier_excluded_costs_unknown"
-        )
-    elif response.excluded_costs:
-        reasons.append(
-            "supplier_has_excluded_costs"
-        )
-
-    cargo_ready = parse_commercial_date(
-        shipment.cargo_ready_date
-    )
+    cargo_ready = parse_commercial_date(shipment.cargo_ready_date)
     required_delivery_provided = bool(
         str(shipment.required_delivery_date or "").strip()
     )
-    required_delivery = parse_commercial_date(
-        shipment.required_delivery_date
-    )
+    required_delivery = parse_commercial_date(shipment.required_delivery_date)
 
     projected = None
     deadline_met = None
 
-    if cargo_ready is None:
-        reasons.append(
-            "cargo_ready_date_missing_or_invalid"
-        )
-
-    if required_delivery_provided and required_delivery is None:
-        reasons.append(
-            "required_delivery_date_missing_or_invalid"
-        )
+    if cargo_ready is None and quote_mode != "indicative":
+        reasons.append("cargo_ready_date_missing_or_invalid")
 
     if (
-        cargo_ready is not None
-        and vehicle_available is not None
-        and transit is not None
+        quote_mode != "indicative"
+        and required_delivery_provided
+        and required_delivery is None
     ):
-        transport_start = max(
-            cargo_ready,
-            vehicle_available,
-        )
+        reasons.append("required_delivery_date_missing_or_invalid")
 
-        projected = projected_delivery_date(
-            transport_start,
-            transit,
+    if cargo_ready is not None and transit is not None:
+        transport_start = (
+            max(cargo_ready, vehicle_available)
+            if vehicle_available is not None
+            else cargo_ready
         )
+        projected = projected_delivery_date(transport_start, transit)
 
         if required_delivery is not None:
-            deadline_met = (
-                projected <= required_delivery
-            )
-
+            deadline_met = projected <= required_delivery
             if not deadline_met:
-                reasons.append(
-                    "required_delivery_date_not_achievable"
-                )
+                reasons.append("required_delivery_date_not_achievable")
 
     return SupplierCommercialSafety(
         eligible_for_customer_quote=not reasons,
         reasons=reasons,
-        transit_days=(
-            transit.scoring_days
-            if transit is not None
-            else None
-        ),
+        transit_days=transit.scoring_days if transit is not None else None,
         validity_date=validity,
         vehicle_available_date=vehicle_available,
         projected_delivery_date=projected,

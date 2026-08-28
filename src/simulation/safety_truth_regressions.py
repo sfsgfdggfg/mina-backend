@@ -126,12 +126,87 @@ def evaluate_safety_truth_regressions() -> dict:
     if explicit_per_piece_weight.packages[0].weight_kg != 600:
         failures.append("explicit per-piece package weight was not preserved")
 
+    export_country_inference = build_shipment_from_extraction(
+        _extraction(pickup_country=None),
+        "Adana'dan Hamburg'a ihracat navlunu için teklif rica ederiz.",
+    )
+    if export_country_inference.pickup_country != "Türkiye":
+        failures.append("explicit export request did not infer Türkiye pickup country")
+
+    import_country_inference = build_shipment_from_extraction(
+        _extraction(pickup_country="Almanya", delivery_country=None),
+        "Hamburg'dan Adana'ya ithalat navlunu için fiyat rica ederiz.",
+    )
+    if import_country_inference.delivery_country != "Türkiye":
+        failures.append("explicit import request did not infer Türkiye delivery country")
+
+    explicit_country_preserved = build_shipment_from_extraction(
+        _extraction(pickup_country="Bulgaristan"),
+        "Bulgaristan çıkışlı ihracat navlunu için teklif rica ederiz.",
+    )
+    if explicit_country_preserved.pickup_country != "Bulgaristan":
+        failures.append("explicit pickup country was overwritten by export inference")
+
+    conflicting_direction = build_shipment_from_extraction(
+        _extraction(pickup_country=None, delivery_country=None),
+        "İthalat ihracat operasyonlarımız için navlun tekliflerinizi rica ederiz.",
+    )
+    if (
+        conflicting_direction.pickup_country is not None
+        or conflicting_direction.delivery_country is not None
+    ):
+        failures.append("conflicting trade direction inferred a Turkish endpoint")
+
     conflicting_adr = build_shipment_from_extraction(
         _extraction(is_adr=False),
         neutral_text + " Yük ADR değil. ADR Class 3.",
     )
     if conflicting_adr.is_adr is not None:
         failures.append("conflicting ADR source signals did not remain unresolved")
+
+    indicative = build_shipment_from_extraction(
+        _extraction(
+            pickup_country=None,
+            pickup_city=None,
+            delivery_country="Almanya",
+            delivery_city="Hamburg",
+            transport_mode=None,
+        ),
+        "İndikatif olarak Almanya Hamburg bir tır kaça gider?",
+    )
+    if (
+        indicative.quote_mode != "indicative"
+        or indicative.transport_mode != "road"
+        or indicative.pickup_country != "Türkiye"
+    ):
+        failures.append("indicative one-ended road request was not inferred safely")
+
+    electronics_candidate = build_shipment_from_extraction(
+        _extraction(commodity="Elektronik", is_high_value=None),
+        "Adana'dan Hamburg'a elektronik ürün için fiyat rica ederiz.",
+    )
+    if electronics_candidate.is_high_value is not None:
+        failures.append("electronic high-value candidate became confirmed high-value")
+
+    for road_text in (
+        "Adana Hamburg karayolu navlun rica ederiz.",
+        "Adana Hamburg tır fiyatı rica ederiz.",
+        "Adana Hamburg parsiyel fiyat rica ederiz.",
+        "Adana Hamburg LTL rate please.",
+    ):
+        road = build_shipment_from_extraction(
+            _extraction(transport_mode=None),
+            road_text,
+        )
+        if road.transport_mode != "road":
+            failures.append(f"explicit road signal was not inferred: {road_text}")
+
+    ambiguous_mode = build_shipment_from_extraction(
+        _extraction(transport_mode=None),
+        "Karayolu veya denizyolu alternatif fiyat rica ederiz.",
+    )
+    if ambiguous_mode.transport_mode is not None:
+        failures.append("ambiguous transport modes were collapsed to road")
 
     conservative_positive = build_shipment_from_extraction(
         _extraction(

@@ -156,9 +156,9 @@ def generate_action_recommendation(
             title="Kullanılabilir Tedarikçi Teklifi Bekleniyor",
             message=(
                 "Seçilen tedarikçilerden ticari olarak kullanılabilir "
-                "bir cevap alınamadı. Fiyat, all-in kapsam, ekipman, araç "
-                "uygunluk tarihi, transit, geçerlilik ve teslim termini "
-                "güvenli biçimde doğrulanmadan müşteri teklifi oluşturulmaz."
+                "bir cevap alınamadı. Standart road fiyatı, transit ve varsa "
+                "açık ticari istisnalar güvenli biçimde değerlendirilmeden "
+                "müşteri teklifi oluşturulmaz."
             ),
             priority="high",
             checklist=_extend_checklist(
@@ -166,8 +166,8 @@ def generate_action_recommendation(
                     "Tedarikçi cevap durumlarını kontrol et.",
                     "No capacity veya declined cevaplarını incele.",
                     "Needs clarification cevabı varsa aynı RFQ üzerinden gerekli bilgiyi paylaş.",
-                    "Teklifin all-in kapsamını ve hariç masraflarını doğrula.",
-                    "Ekipman, araç uygunluk tarihi, transit ve teklif geçerliliğini kontrol et.",
+                    "Varsa açık ekstra / hariç masrafları kontrol et.",
+                    "Transit bilgisini ve açık ekipman sapmalarını kontrol et.",
                     "Gerekli teslim tarihinin karşılanabildiğini doğrula.",
                     "Gerekirse alternatif tedarikçilere RFQ gönder.",
                     "Ticari olarak tam teklif alınmadan müşteriye teklif oluşturma.",

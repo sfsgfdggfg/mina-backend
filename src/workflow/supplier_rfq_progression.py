@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from src.ai.quote_generator import generate_quote_draft
+from src.ai.supplier_follow_up_generator import build_supplier_follow_up_draft
+from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
 from src.core.action_recommendation import generate_action_recommendation
 from src.core.commodity_profile import get_commodity_record
 from src.core.customer_memory import enrich_shipment_with_customer_memory
@@ -130,6 +132,10 @@ def resume_supplier_rfq_workflow(
             supplier_rfq_responses=responses,
         )
 
+    pending_rfq_drafts = list(result.pop("_rfq_drafts_to_save", []))
+    pending_rfq_ids = [draft.rfq_id for draft in pending_rfq_drafts]
+    persisted_rfq_ids = list(dict.fromkeys([*started.rfq_ids, *pending_rfq_ids]))
+
     result_type = result.get("result_type")
     if result_type == "data_provenance_blocked":
         persisted = started.__class__.model_validate(
@@ -138,6 +144,7 @@ def resume_supplier_rfq_workflow(
                 "quote_progression_status": "provenance_blocked",
                 "last_provenance_blocked_at": datetime.utcnow(),
                 "last_provenance_blocked_result_type": result_type,
+                "rfq_ids": persisted_rfq_ids,
                 "updated_at": datetime.utcnow(),
             }
         )
@@ -147,6 +154,7 @@ def resume_supplier_rfq_workflow(
                 **started.model_dump(),
                 "quote_progression_status": "completed",
                 "quote_progressed_at": datetime.utcnow(),
+                "rfq_ids": persisted_rfq_ids,
                 "updated_at": datetime.utcnow(),
             }
         )
@@ -155,6 +163,7 @@ def resume_supplier_rfq_workflow(
             {
                 **started.model_dump(),
                 "quote_progression_status": "ready",
+                "rfq_ids": persisted_rfq_ids,
                 "updated_at": datetime.utcnow(),
             }
         )
@@ -168,6 +177,8 @@ def resume_supplier_rfq_workflow(
                 rfq_repository,
                 workflow,
             )
+            if pending_rfq_drafts:
+                rfq_repository.save_drafts(pending_rfq_drafts)
             result["quote_approval"] = approval_repository.save(
                 result["quote_approval"]
             )
@@ -181,9 +192,46 @@ def resume_supplier_rfq_workflow(
                 rfq_repository,
                 workflow,
             )
+            if pending_rfq_drafts:
+                rfq_repository.save_drafts(pending_rfq_drafts)
             persisted = rfq_repository.save_workflow(persisted)
     result["supplier_rfq_workflow"] = persisted
     return result
+
+
+def _next_supplier_rfq_draft(
+    *,
+    workflow,
+    shipment,
+    equipment_decision,
+    supplier_selection,
+    existing_drafts,
+):
+    existing_names = {draft.supplier_name for draft in existing_drafts}
+    next_supplier = next(
+        (
+            supplier
+            for supplier in supplier_selection.get("selected_suppliers", [])
+            if supplier.get("supplier_name") not in existing_names
+        ),
+        None,
+    )
+    if next_supplier is None:
+        return None
+    generated = generate_supplier_rfq_drafts(
+        workflow_id=workflow.workflow_id,
+        shipment=shipment,
+        equipment_decision=equipment_decision,
+        supplier_selection={
+            **supplier_selection,
+            "selected_suppliers": [next_supplier],
+        },
+    )
+    return generated[0] if generated else None
+
+
+def _draft_for_rfq(drafts, rfq_id):
+    return next((draft for draft in drafts if draft.rfq_id == rfq_id), None)
 
 
 def _progress_supplier_rfq_workflow(
@@ -197,6 +245,7 @@ def _progress_supplier_rfq_workflow(
     customer_memory = enrich_shipment_with_customer_memory(
         shipment=shipment,
         email_text=workflow.email_text,
+        sender_address=workflow.sender_address,
         operational_data_sources=operational_data_sources,
     )
     commodity_profile = get_commodity_record(shipment.commodity)
@@ -361,6 +410,138 @@ def _progress_supplier_rfq_workflow(
     )
 
     if supplier_quote is None:
+        # Prefer clarifying a real quoted response when its missing/contradictory
+        # commercial facts can be fixed on the same RFQ.
+        fixable_comparison = next(
+            (
+                comparison
+                for comparison in supplier_quote_comparisons
+                if not comparison.commercial_eligible
+                and any(
+                    reason in {
+                        "supplier_transit_missing_or_unparseable",
+                        "supplier_quote_expired",
+                        "supplier_equipment_mismatch",
+                        "supplier_price_has_unpriced_extras",
+                        "supplier_has_excluded_costs",
+                    }
+                    for reason in comparison.commercial_rejection_reasons
+                )
+            ),
+            None,
+        )
+        if fixable_comparison is not None:
+            current_draft = _draft_for_rfq(
+                supplier_rfq_drafts, fixable_comparison.rfq_id
+            )
+            follow_up = (
+                build_supplier_follow_up_draft(
+                    draft=current_draft,
+                    rejection_reasons=fixable_comparison.commercial_rejection_reasons,
+                )
+                if current_draft is not None
+                else None
+            )
+            if follow_up is not None and current_draft is not None:
+                reopened = current_draft.model_copy(
+                    update={"status": "clarification_required"}
+                )
+                visible_drafts = [
+                    reopened if draft.rfq_id == reopened.rfq_id else draft
+                    for draft in supplier_rfq_drafts
+                ]
+                action_recommendation = generate_action_recommendation(
+                    shipment=shipment,
+                    equipment_decision=equipment_decision,
+                    risk_assessment=risk_assessment,
+                    missing_info=missing_info,
+                    result_type="supplier_response_required",
+                )
+                result = _result(
+                    workflow=workflow,
+                    pilot_scope=pilot_scope,
+                    customer_memory=customer_memory,
+                    commodity_profile=commodity_profile,
+                    missing_info=missing_info,
+                    regulatory_compliance=regulatory_compliance,
+                    equipment_decision=equipment_decision,
+                    risk_assessment=risk_assessment,
+                    supplier_selection=supplier_selection,
+                    operational_consistency=operational_consistency,
+                    quote_readiness=None,
+                    drafts=visible_drafts,
+                    responses=supplier_rfq_responses,
+                    valid_responses=valid_supplier_rfq_responses,
+                    validation=supplier_rfq_response_validation,
+                    comparisons=supplier_quote_comparisons,
+                    selection_decision=supplier_quote_selection_decision,
+                    supplier_quote=None,
+                    result_type="supplier_response_required",
+                    action_recommendation=action_recommendation,
+                    supplier_follow_up_draft=follow_up,
+                )
+                result["_rfq_drafts_to_save"] = [reopened]
+                return result
+
+        # A terminal negative or a supplier that cannot meet the deadline should
+        # advance to the next selected carrier by preparing (not sending) an RFQ.
+        terminal_negative = any(
+            response.status in {"no_capacity", "declined"}
+            for response in valid_supplier_rfq_responses
+        )
+        deadline_miss = any(
+            "required_delivery_date_not_achievable"
+            in comparison.commercial_rejection_reasons
+            for comparison in supplier_quote_comparisons
+        )
+        waiting_on_existing = any(
+            draft.status in {
+                "draft", "approved", "sent", "awaiting_response",
+                "clarification_required",
+            }
+            for draft in supplier_rfq_drafts
+        )
+        if (terminal_negative or deadline_miss) and not waiting_on_existing:
+            fallback_draft = _next_supplier_rfq_draft(
+                workflow=workflow,
+                shipment=shipment,
+                equipment_decision=equipment_decision,
+                supplier_selection=supplier_selection,
+                existing_drafts=supplier_rfq_drafts,
+            )
+            if fallback_draft is not None:
+                action_recommendation = generate_action_recommendation(
+                    shipment=shipment,
+                    equipment_decision=equipment_decision,
+                    risk_assessment=risk_assessment,
+                    missing_info=missing_info,
+                    result_type="supplier_rfq_approval_required",
+                )
+                result = _result(
+                    workflow=workflow,
+                    pilot_scope=pilot_scope,
+                    customer_memory=customer_memory,
+                    commodity_profile=commodity_profile,
+                    missing_info=missing_info,
+                    regulatory_compliance=regulatory_compliance,
+                    equipment_decision=equipment_decision,
+                    risk_assessment=risk_assessment,
+                    supplier_selection=supplier_selection,
+                    operational_consistency=operational_consistency,
+                    quote_readiness=None,
+                    drafts=[*supplier_rfq_drafts, fallback_draft],
+                    responses=supplier_rfq_responses,
+                    valid_responses=valid_supplier_rfq_responses,
+                    validation=supplier_rfq_response_validation,
+                    comparisons=supplier_quote_comparisons,
+                    selection_decision=supplier_quote_selection_decision,
+                    supplier_quote=None,
+                    result_type="supplier_rfq_approval_required",
+                    action_recommendation=action_recommendation,
+                )
+                result["_rfq_drafts_to_save"] = [fallback_draft]
+                return result
+
         action_recommendation = generate_action_recommendation(
             shipment=shipment,
             equipment_decision=equipment_decision,
@@ -526,6 +707,7 @@ def _result(
     supplier_quote,
     result_type,
     action_recommendation,
+    supplier_follow_up_draft=None,
 ) -> dict:
     return {
         "shipment": workflow.shipment,
@@ -554,6 +736,7 @@ def _result(
         "quote_case": None,
         "clarification_draft": None,
         "management_review_draft": None,
+        "supplier_follow_up_draft": supplier_follow_up_draft,
         "result_type": result_type,
         "action_recommendation": action_recommendation,
     }

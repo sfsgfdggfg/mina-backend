@@ -65,32 +65,47 @@ def apply_road_rfq_readiness(
     if shipment.transport_mode != "road":
         return base
 
+    if getattr(shipment, "quote_mode", "firm") == "indicative":
+        missing: list[str] = []
+        if not shipment.pickup_country:
+            _append_unique(missing, "pickup country")
+        if not shipment.delivery_country:
+            _append_unique(missing, "delivery country")
+        return MissingInfoResult(
+            can_continue_to_quote=not missing,
+            missing_fields=missing,
+            reason=(
+                "İndikatif road fiyatı için rota bilgisi yeterli."
+                if not missing
+                else "İndikatif fiyat için temel rota bilgisi eksik."
+            ),
+        )
+
     missing = list(base.missing_fields)
+    road_blocking_missing: list[str] = []
+
+    def add_road_missing(value: str) -> None:
+        _append_unique(missing, value)
+        _append_unique(road_blocking_missing, value)
 
     if not shipment.pickup_country:
-        _append_unique(missing, "pickup country")
+        add_road_missing("pickup country")
 
     if not shipment.delivery_country:
-        _append_unique(missing, "delivery country")
+        add_road_missing("delivery country")
 
     if (
         shipment.gross_weight_kg is None
         or shipment.gross_weight_kg <= 0
     ):
-        _append_unique(missing, "gross weight")
+        add_road_missing("gross weight")
 
     if not shipment.packages:
-        _append_unique(
-            missing,
-            "package count and dimensions",
-        )
+        add_road_missing("package count and dimensions")
     else:
         for package in shipment.packages:
             if package.quantity <= 0:
-                _append_unique(
-                    missing,
-                    "package count and dimensions",
-                )
+                add_road_missing("package count and dimensions")
                 break
 
             dimensions = (
@@ -103,10 +118,7 @@ def apply_road_rfq_readiness(
                 value is None or value <= 0
                 for value in dimensions
             ):
-                _append_unique(
-                    missing,
-                    "package count and dimensions",
-                )
+                add_road_missing("package count and dimensions")
                 break
 
     ready_date = _parse_date(shipment.cargo_ready_date)
@@ -118,7 +130,7 @@ def apply_road_rfq_readiness(
     )
 
     if ready_date is None:
-        _append_unique(missing, "cargo ready date")
+        add_road_missing("cargo ready date")
 
     if required_delivery_provided and (
         required_date is None
@@ -127,26 +139,23 @@ def apply_road_rfq_readiness(
             and required_date < ready_date
         )
     ):
-        _append_unique(
-            missing,
-            "required delivery date",
-        )
+        add_road_missing("required delivery date")
 
     if (
         shipment.pickup_country
         and not _is_turkiye(shipment.pickup_country)
         and not shipment.pickup_postcode
     ):
-        _append_unique(missing, "pickup postcode")
+        add_road_missing("pickup postcode")
 
     if (
         shipment.delivery_country
         and not _is_turkiye(shipment.delivery_country)
         and not shipment.delivery_postcode
     ):
-        _append_unique(missing, "delivery postcode")
+        add_road_missing("delivery postcode")
 
-    if missing:
+    if not base.can_continue_to_quote or road_blocking_missing:
         return MissingInfoResult(
             can_continue_to_quote=False,
             missing_fields=missing,
@@ -158,6 +167,8 @@ def apply_road_rfq_readiness(
 
     return MissingInfoResult(
         can_continue_to_quote=True,
-        missing_fields=[],
-        reason="Karayolu RFQ bilgileri yeterli.",
+        missing_fields=missing,
+        reason=(
+            base.reason if missing else "Karayolu RFQ bilgileri yeterli."
+        ),
     )
