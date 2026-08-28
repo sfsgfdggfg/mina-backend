@@ -126,6 +126,37 @@ def evaluate_safety_truth_regressions() -> dict:
     if explicit_per_piece_weight.packages[0].weight_kg != 600:
         failures.append("explicit per-piece package weight was not preserved")
 
+    export_country_inference = build_shipment_from_extraction(
+        _extraction(pickup_country=None),
+        "Adana'dan Hamburg'a ihracat navlunu için teklif rica ederiz.",
+    )
+    if export_country_inference.pickup_country != "Türkiye":
+        failures.append("explicit export request did not infer Türkiye pickup country")
+
+    import_country_inference = build_shipment_from_extraction(
+        _extraction(pickup_country="Almanya", delivery_country=None),
+        "Hamburg'dan Adana'ya ithalat navlunu için fiyat rica ederiz.",
+    )
+    if import_country_inference.delivery_country != "Türkiye":
+        failures.append("explicit import request did not infer Türkiye delivery country")
+
+    explicit_country_preserved = build_shipment_from_extraction(
+        _extraction(pickup_country="Bulgaristan"),
+        "Bulgaristan çıkışlı ihracat navlunu için teklif rica ederiz.",
+    )
+    if explicit_country_preserved.pickup_country != "Bulgaristan":
+        failures.append("explicit pickup country was overwritten by export inference")
+
+    conflicting_direction = build_shipment_from_extraction(
+        _extraction(pickup_country=None, delivery_country=None),
+        "İthalat ihracat operasyonlarımız için navlun tekliflerinizi rica ederiz.",
+    )
+    if (
+        conflicting_direction.pickup_country is not None
+        or conflicting_direction.delivery_country is not None
+    ):
+        failures.append("conflicting trade direction inferred a Turkish endpoint")
+
     conflicting_adr = build_shipment_from_extraction(
         _extraction(is_adr=False),
         neutral_text + " Yük ADR değil. ADR Class 3.",
