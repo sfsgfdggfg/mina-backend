@@ -147,6 +147,7 @@ def process_customer_inquiry_mail(
         ShipmentProposalSnapshot,
     ],
     proposal_repository: ExtractionProposalRepository,
+    trusted_customer_name: str | None = None,
 ) -> dict:
     """Stop customer mail at a non-authoritative extraction proposal."""
 
@@ -174,6 +175,10 @@ def process_customer_inquiry_mail(
         proposed_shipment = shipment_parser(
             safe_text
         )
+        if trusted_customer_name and trusted_customer_name.strip():
+            proposed_shipment = proposed_shipment.model_copy(
+                update={"customer_name": trusted_customer_name.strip()}
+            )
         proposal = create_extraction_proposal(
             mail=safe_mail,
             proposed_shipment=proposed_shipment,

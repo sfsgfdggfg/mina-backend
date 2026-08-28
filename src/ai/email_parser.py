@@ -492,15 +492,30 @@ def _apply_explicit_road_mode_inference(shipment, email_text: str):
     if shipment.transport_mode is not None:
         return shipment
 
-    text = (email_text or "").lower()
-    if any(
-        re.search(pattern, text)
-        for pattern in (
-            r"(?<!\w)tenteli(?!\w)",
-            r"(?<!\w)curtain\s*sider(?!\w)",
-            r"(?<!\w)komple\s+araç(?!\w)",
-        )
-    ):
+    text = (email_text or "").replace("İ", "i").replace("I", "i").lower().replace("ı", "i")
+    road_patterns = (
+        r"(?<!\w)tenteli(?!\w)",
+        r"(?<!\w)curtain\s*sider(?!\w)",
+        r"(?<!\w)komple\s+araç(?!\w)",
+        r"(?<!\w)karayolu(?!\w)",
+        r"(?<!\w)road\s+(?:freight|transport)(?!\w)",
+        r"(?<!\w)(?:tır|tir|kamyon|truck|dorse)(?!\w)",
+        r"(?<!\w)(?:ftl|ltl|parsiyel)(?!\w)",
+        r"(?<!\w)partial\s+(?:load|truckload)(?!\w)",
+    )
+    conflicting_mode_patterns = (
+        r"(?<!\w)(?:denizyolu|deniz\s+yolu)(?!\w)",
+        r"(?<!\w)(?:sea|ocean)\s+freight(?!\w)",
+        r"(?<!\w)(?:havayolu|hava\s+yolu)(?!\w)",
+        r"(?<!\w)air\s+freight(?!\w)",
+        r"(?<!\w)(?:demiryolu|demir\s+yolu)(?!\w)",
+        r"(?<!\w)rail\s+freight(?!\w)",
+    )
+    has_road = any(re.search(pattern, text) for pattern in road_patterns)
+    has_conflict = any(
+        re.search(pattern, text) for pattern in conflicting_mode_patterns
+    )
+    if has_road and not has_conflict:
         shipment.transport_mode = "road"
 
     return shipment

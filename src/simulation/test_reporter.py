@@ -796,6 +796,20 @@ def evaluate_strict_supplier_eligibility() -> dict:
     if not ltl_names:
         failures.append("compatible LTL suppliers should remain eligible")
 
+    import_from_supported_country = Shipment(
+        pickup_country="Almanya",
+        delivery_country="Türkiye",
+        service_type="FTL",
+    )
+    import_names = selected_names(
+        import_from_supported_country,
+        "Tenteli / Curtainsider",
+    )
+    if not {"Anatolia Road", "EuroBridge Logistics"}.issubset(import_names):
+        failures.append(
+            "Türkiye import should accept suppliers serving the foreign lane country"
+        )
+
     origin_only = Shipment(
         pickup_country="Türkiye",
         delivery_country="İspanya",

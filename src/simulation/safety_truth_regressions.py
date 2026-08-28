@@ -164,6 +164,33 @@ def evaluate_safety_truth_regressions() -> dict:
     if conflicting_adr.is_adr is not None:
         failures.append("conflicting ADR source signals did not remain unresolved")
 
+    electronics_candidate = build_shipment_from_extraction(
+        _extraction(commodity="Elektronik", is_high_value=None),
+        "Adana'dan Hamburg'a elektronik ürün için fiyat rica ederiz.",
+    )
+    if electronics_candidate.is_high_value is not None:
+        failures.append("electronic high-value candidate became confirmed high-value")
+
+    for road_text in (
+        "Adana Hamburg karayolu navlun rica ederiz.",
+        "Adana Hamburg tır fiyatı rica ederiz.",
+        "Adana Hamburg parsiyel fiyat rica ederiz.",
+        "Adana Hamburg LTL rate please.",
+    ):
+        road = build_shipment_from_extraction(
+            _extraction(transport_mode=None),
+            road_text,
+        )
+        if road.transport_mode != "road":
+            failures.append(f"explicit road signal was not inferred: {road_text}")
+
+    ambiguous_mode = build_shipment_from_extraction(
+        _extraction(transport_mode=None),
+        "Karayolu veya denizyolu alternatif fiyat rica ederiz.",
+    )
+    if ambiguous_mode.transport_mode is not None:
+        failures.append("ambiguous transport modes were collapsed to road")
+
     conservative_positive = build_shipment_from_extraction(
         _extraction(
             is_adr=True,

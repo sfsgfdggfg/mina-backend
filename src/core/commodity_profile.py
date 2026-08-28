@@ -173,7 +173,6 @@ def apply_commodity_profile_to_shipment(shipment: Any):
             if default_temperature:
                 shipment.temperature_requirement = default_temperature
 
-    if profile.get("high_value_candidate"):
-        shipment.is_high_value = True
-
+    # A high-value candidate is a review signal, not confirmed source truth.
+    # Keep is_high_value unchanged until the customer/operator establishes it.
     return shipment

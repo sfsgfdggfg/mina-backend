@@ -10,6 +10,7 @@ from src.ai.supplier_rfq_generator import (
     generate_supplier_rfq_drafts,
 )
 from src.core.missing_info import check_missing_information
+from src.core.missing_info import MissingInfoResult
 from src.core.models import (
     EquipmentDecision,
     Package,
@@ -581,6 +582,15 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
             failures.append(
                 f"{label} did not fail closed"
             )
+
+    advisory_base = MissingInfoResult(
+        can_continue_to_quote=True,
+        missing_fields=["noncritical advisory"],
+        reason="Advisory only.",
+    )
+    advisory_result = apply_road_rfq_readiness(_shipment(), advisory_base)
+    if not advisory_result.can_continue_to_quote:
+        failures.append("noncritical base missing info became road RFQ blocker")
 
     return {
         "name": "Road RFQ commercial safety",

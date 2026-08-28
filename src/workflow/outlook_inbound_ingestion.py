@@ -145,6 +145,7 @@ def process_controlled_outlook_customer_mail(
         mail=mail,
         shipment_parser=shipment_parser,
         proposal_repository=proposal_repository,
+        trusted_customer_name=matches[0].customer_name,
     )
 
     result["inbound_gate_status"] = "pass"
