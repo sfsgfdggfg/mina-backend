@@ -3226,3 +3226,19 @@ non-binding and that current freight and vehicle availability will be
 reconfirmed when the shipment becomes real. A later firm shipment requires a
 fresh firm-quote workflow; an old indicative price must not silently become a
 booking or firm customer quote.
+
+## RULE-139 — Pilot Markup Is a Test Assumption; Production Profitability Is Configurable
+
+The controlled pilot may use a fixed 15% markup to keep deterministic pricing
+regressions and live smoke tests stable. This is test configuration, not a
+universal freight-pricing rule.
+
+The production product must obtain profitability from agency configuration and
+must permit an authorized quote-specific override before final customer quote
+approval. A quote-specific override must be explicit and auditable; MINAI must
+not silently replace the agency's configured commercial policy.
+
+Customer-facing quote drafts must not display placeholder punctuation or
+optional commercial fields as `Belirtilmedi` when no supplier fact exists. A
+missing optional transit or validity field in an indicative quote is omitted;
+provided facts remain visible and preserved.
