@@ -247,6 +247,24 @@ def evaluate_pilot_operator_regressions() -> dict:
             ("GET", "/quote-cases/case-1/final-output", None),
         )
     )
+    client.record_case_manually_sent(
+        "case-1",
+        expected_approval_id="approval-4",
+        recipient_email="customer@example.test",
+    )
+    contracts.append(
+        (
+            _last_contract(session),
+            (
+                "POST",
+                "/quote-cases/case-1/record-manually-sent",
+                {
+                    "expected_approval_id": "approval-4",
+                    "recipient_email": "customer@example.test",
+                },
+            ),
+        )
+    )
     client.revise_case(
         "case-1",
         expected_approval_id="approval-4",
@@ -385,6 +403,39 @@ def evaluate_pilot_operator_regressions() -> dict:
         failures.append(
             "case final CLI did not print final handoff result"
         )
+
+    sent_cli_session = _Session([_Response(200, {"source": "customer_quote_manual_sent_service"})])
+    sent_cli_client = _client(sent_cli_session)
+    sent_cli_stdout = io.StringIO()
+    sent_cli_stderr = io.StringIO()
+    with patch.object(
+        PilotOperatorClient,
+        "from_environment",
+        return_value=sent_cli_client,
+    ):
+        with contextlib.redirect_stdout(sent_cli_stdout), contextlib.redirect_stderr(
+            sent_cli_stderr
+        ):
+            sent_cli_exit = main([
+                "case",
+                "manual-sent",
+                "case-cli",
+                "--approval-id",
+                "approval-cli",
+                "--recipient-email",
+                "customer@example.test",
+            ])
+    if sent_cli_exit != 0:
+        failures.append("case manual-sent CLI command failed")
+    elif _last_contract(sent_cli_session) != (
+        "POST",
+        "/quote-cases/case-cli/record-manually-sent",
+        {
+            "expected_approval_id": "approval-cli",
+            "recipient_email": "customer@example.test",
+        },
+    ):
+        failures.append("case manual-sent CLI mapped to the wrong API contract")
 
     secret = "never-print-this-bearer-token"
     stdout = io.StringIO()

@@ -3242,3 +3242,19 @@ Customer-facing quote drafts must not display placeholder punctuation or
 optional commercial fields as `Belirtilmedi` when no supplier fact exists. A
 missing optional transit or validity field in an indicative quote is omitted;
 provided facts remain visible and preserved.
+
+## RULE-140 — Customer Quote Manual-Send Evidence Is Revision-Bound and Append-Only
+
+An approved customer quote may be recorded as manually sent only while the
+specified approval is still the current approval and the quote passes the same
+final-output send-safety checks used for manual handoff.
+
+The durable evidence must identify the quote case, approval ID, revision number,
+recipient address, sending operator, send timestamp and
+`source=manual_external_send`. The same approval/revision must not accept a
+second manual-send record.
+
+Revising a previously sent quote must preserve all earlier send evidence. A
+freshly revised quote requires fresh approval and, if actually sent, a new
+manual-send evidence record. Recording evidence never performs a provider send
+and never weakens the existing human-approval boundary.
