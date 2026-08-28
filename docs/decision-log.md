@@ -5799,3 +5799,25 @@ commercial decision belongs to the agency.
 The current controlled pilot may continue using a fixed 15% markup solely as a
 deterministic test assumption. That 15% value must not be presented or treated
 as the final product's mandatory profitability policy.
+
+## DEC-125 — Manual Customer Quote Delivery Requires Durable Evidence
+
+**Status:** Accepted
+**Date:** 2026-08-28
+
+### Decision
+
+When an approved customer quote is handed off for manual external sending, MINAI
+must be able to record that the operator confirms the send actually occurred.
+The record is evidence of a manual action; it does not authorize or claim an
+automated send.
+
+Each manual customer-quote send record is bound to the exact quote case,
+current approval ID and revision number, and preserves recipient address,
+operator identity, send timestamp and `manual_external_send` source. The caller
+must provide the expected current approval ID so a stale quote cannot be marked
+sent after a revision or approval change.
+
+Send evidence is append-only within the quote case. A later quote revision may
+be approved and sent again, but it must create a new evidence record while the
+prior delivery record remains auditable.

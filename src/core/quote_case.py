@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -21,6 +21,16 @@ from src.core.regulatory_compliance import (
 from src.core.supplier_quote_selection import (
     SupplierQuoteSelectionDecision,
 )
+
+
+class CustomerQuoteManualSentEvidence(BaseModel):
+    case_id: str
+    approval_id: str
+    revision_number: int = Field(ge=0)
+    recipient_email: str
+    sent_by: str
+    sent_at: datetime
+    source: Literal["manual_external_send"] = "manual_external_send"
 
 
 class QuoteCase(BaseModel):
@@ -48,6 +58,9 @@ class QuoteCase(BaseModel):
     quote_revisions: list[QuoteRevision] = Field(
         default_factory=list
     )
+    manual_sent_evidence: list[
+        CustomerQuoteManualSentEvidence
+    ] = Field(default_factory=list)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

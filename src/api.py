@@ -103,6 +103,11 @@ from src.core.quote_final_output import (
     QuoteFinalOutputTransitionError,
     build_quote_final_output,
 )
+from src.core.quote_manual_sent import (
+    CustomerQuoteManualSentNotFoundError,
+    CustomerQuoteManualSentTransitionError,
+    record_customer_quote_manually_sent,
+)
 from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.core.supplier_rfq import SupplierRFQResponse
@@ -227,6 +232,12 @@ class QuoteCaseRevisionRequest(BaseModel):
         gt=0,
     )
     operator_note: Optional[str] = None
+
+
+class QuoteCaseManualSentRequest(BaseModel):
+    expected_approval_id: str
+    recipient_email: str
+    sent_by: Optional[str] = None
 
 
 class QuoteApprovalApproveRequest(BaseModel):
@@ -736,6 +747,34 @@ def get_quote_case(case_id: str):
     return _enrich_quote_case_with_current_approval(
         quote_case
     ).model_dump()
+
+
+@app.post("/quote-cases/{case_id}/record-manually-sent")
+def record_quote_case_manually_sent(
+    case_id: str,
+    request: QuoteCaseManualSentRequest,
+    http_request: Request = None,
+):
+    try:
+        result = record_customer_quote_manually_sent(
+            quote_case_repository=quote_case_repository,
+            approval_repository=quote_approval_repository,
+            case_id=case_id,
+            expected_approval_id=request.expected_approval_id,
+            recipient_email=request.recipient_email,
+            sent_by=_authenticated_operator(
+                http_request,
+                request.sent_by,
+            ),
+        )
+    except CustomerQuoteManualSentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CustomerQuoteManualSentTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return result.model_dump()
 
 
 @app.get("/quote-cases/{case_id}/final-output")

@@ -280,6 +280,22 @@ class PilotOperatorClient:
             f"/quote-cases/{self._id(case_id)}/final-output",
         )
 
+    def record_case_manually_sent(
+        self,
+        case_id: str,
+        *,
+        expected_approval_id: str,
+        recipient_email: str,
+    ) -> Any:
+        return self._request(
+            "POST",
+            f"/quote-cases/{self._id(case_id)}/record-manually-sent",
+            {
+                "expected_approval_id": expected_approval_id,
+                "recipient_email": recipient_email,
+            },
+        )
+
     def revise_case(
         self,
         case_id: str,
@@ -400,6 +416,10 @@ def _build_parser() -> argparse.ArgumentParser:
     case.add_parser("list")
     case.add_parser("get").add_argument("case_id")
     case.add_parser("final").add_argument("case_id")
+    manual_sent = case.add_parser("manual-sent")
+    manual_sent.add_argument("case_id")
+    manual_sent.add_argument("--approval-id", required=True)
+    manual_sent.add_argument("--recipient-email", required=True)
 
     revise = case.add_parser("revise")
     revise.add_argument("case_id")
@@ -521,6 +541,13 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
 
     if args.action == "final":
         return client.get_case_final_output(args.case_id)
+
+    if args.action == "manual-sent":
+        return client.record_case_manually_sent(
+            args.case_id,
+            expected_approval_id=args.approval_id,
+            recipient_email=args.recipient_email,
+        )
 
     return client.revise_case(
         args.case_id,

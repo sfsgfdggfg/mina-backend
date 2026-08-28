@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -25,6 +26,10 @@ from src.core.quote_final_output import (
     QuoteFinalOutputTransitionError,
     build_quote_final_output,
 )
+from src.core.quote_manual_sent import (
+    CustomerQuoteManualSentTransitionError,
+    record_customer_quote_manually_sent,
+)
 from src.core.quote_revision_service import revise_quote_case
 from src.core.sqlite_repositories import (
     SQLiteQuoteApprovalRepository,
@@ -43,6 +48,14 @@ def evaluate_quote_final_output_regressions() -> dict:
             "controlled pilot final-output route is not allowed"
         )
 
+    if not route_allowed(
+        "POST",
+        "/quote-cases/case-1/record-manually-sent",
+    ):
+        failures.append(
+            "controlled pilot customer manual-sent route is not allowed"
+        )
+
     route_paths = {
         route.path
         for route in controlled_api.app.routes
@@ -54,6 +67,14 @@ def evaluate_quote_final_output_regressions() -> dict:
     ):
         failures.append(
             "final-output API route is not exposed"
+        )
+
+    if (
+        "/quote-cases/{case_id}/record-manually-sent"
+        not in route_paths
+    ):
+        failures.append(
+            "customer manual-sent API route is not exposed"
         )
 
     with TemporaryDirectory(
@@ -166,6 +187,22 @@ def evaluate_quote_final_output_regressions() -> dict:
                 "pending approval produced final output"
             )
 
+        try:
+            record_customer_quote_manually_sent(
+                quote_case_repository=cases,
+                approval_repository=approvals,
+                case_id=quote_case.case_id,
+                expected_approval_id=approval.approval_id,
+                recipient_email="customer@example.test",
+                sent_by="Pilot Operator One",
+            )
+        except CustomerQuoteManualSentTransitionError:
+            pass
+        else:
+            failures.append(
+                "pending customer quote accepted manual send evidence"
+            )
+
         approved = approve_quote(
             repository=approvals,
             approval_id=approval.approval_id,
@@ -249,6 +286,45 @@ def evaluate_quote_final_output_regressions() -> dict:
                 "final output claims automated delivery"
             )
 
+        first_sent_at = datetime(2026, 8, 28, 12, 0, 0)
+        first_sent = record_customer_quote_manually_sent(
+            quote_case_repository=cases,
+            approval_repository=approvals,
+            case_id=quote_case.case_id,
+            expected_approval_id=approved.approval_id,
+            recipient_email="customer@example.test",
+            sent_by="Pilot Operator One",
+            sent_at=first_sent_at,
+        )
+        first_evidence = first_sent.manual_sent_evidence
+        if (
+            first_evidence.approval_id != approved.approval_id
+            or first_evidence.revision_number != 0
+            or first_evidence.recipient_email != "customer@example.test"
+            or first_evidence.sent_by != "Pilot Operator One"
+            or first_evidence.sent_at != first_sent_at
+            or first_evidence.source != "manual_external_send"
+        ):
+            failures.append(
+                "manual customer quote send evidence lost current quote identity"
+            )
+
+        try:
+            record_customer_quote_manually_sent(
+                quote_case_repository=cases,
+                approval_repository=approvals,
+                case_id=quote_case.case_id,
+                expected_approval_id=approved.approval_id,
+                recipient_email="customer@example.test",
+                sent_by="Pilot Operator One",
+            )
+        except CustomerQuoteManualSentTransitionError:
+            pass
+        else:
+            failures.append(
+                "same customer quote revision accepted duplicate manual send evidence"
+            )
+
         revised = revise_quote_case(
             quote_case_repository=cases,
             approval_repository=approvals,
@@ -273,6 +349,22 @@ def evaluate_quote_final_output_regressions() -> dict:
         ):
             failures.append(
                 "revision did not invalidate old approval authority"
+            )
+
+        try:
+            record_customer_quote_manually_sent(
+                quote_case_repository=cases,
+                approval_repository=approvals,
+                case_id=quote_case.case_id,
+                expected_approval_id=approved.approval_id,
+                recipient_email="customer@example.test",
+                sent_by="Pilot Operator One",
+            )
+        except CustomerQuoteManualSentTransitionError:
+            pass
+        else:
+            failures.append(
+                "stale approval was accepted for revised quote manual-send evidence"
             )
 
         try:
@@ -394,6 +486,35 @@ def evaluate_quote_final_output_regressions() -> dict:
                 "revised final price is not current"
             )
 
+        case_after_revision = cases.get(quote_case.case_id)
+        if (
+            case_after_revision is None
+            or len(case_after_revision.manual_sent_evidence) != 1
+            or case_after_revision.manual_sent_evidence[0].approval_id
+            != approved.approval_id
+        ):
+            failures.append(
+                "quote revision did not preserve prior manual send evidence"
+            )
+
+        second_sent_at = datetime(2026, 8, 28, 12, 30, 0)
+        second_sent = record_customer_quote_manually_sent(
+            quote_case_repository=cases,
+            approval_repository=approvals,
+            case_id=quote_case.case_id,
+            expected_approval_id=fresh_approval.approval_id,
+            recipient_email="customer@example.test",
+            sent_by="Pilot Operator Two",
+            sent_at=second_sent_at,
+        )
+        if (
+            second_sent.manual_sent_evidence.revision_number != 1
+            or len(second_sent.quote_case.manual_sent_evidence) != 2
+        ):
+            failures.append(
+                "revised quote manual send evidence did not append to audit history"
+            )
+
         restarted_store = SQLitePilotStore(
             db_path,
             run_id="quote-final-output-b",
@@ -419,6 +540,19 @@ def evaluate_quote_final_output_regressions() -> dict:
         ):
             failures.append(
                 "final approved output changed after restart"
+            )
+
+        durable_case = restarted_cases.get(quote_case.case_id)
+        if (
+            durable_case is None
+            or len(durable_case.manual_sent_evidence) != 2
+            or [item.revision_number for item in durable_case.manual_sent_evidence]
+            != [0, 1]
+            or [item.approval_id for item in durable_case.manual_sent_evidence]
+            != [approved.approval_id, fresh_approval.approval_id]
+        ):
+            failures.append(
+                "customer quote manual send evidence was not durable across restart"
             )
 
     return {
