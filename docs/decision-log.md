@@ -5779,3 +5779,23 @@ firm shipment details such as exact weight, dimensions and ready date are not
 mandatory solely for indicative pricing. Supplier RFQs and customer output must
 both disclose the non-binding nature. A future real shipment requires fresh
 firm-price confirmation and vehicle-availability confirmation.
+
+## DEC-124 — Profitability Is Agency Policy, Not a MINAI Constant
+
+**Status:** Accepted
+**Date:** 2026-08-28
+
+### Decision
+
+Customer-quote profitability is not a universal MINAI business rule. Each
+freight agency may have its own pricing policy, and profitability may also vary
+for an individual quote.
+
+The production product must support an agency-level default profitability
+setting and an explicit quote-level override. Future customer-specific pricing
+policy may be layered on top without changing the principle that the final
+commercial decision belongs to the agency.
+
+The current controlled pilot may continue using a fixed 15% markup solely as a
+deterministic test assumption. That 15% value must not be presented or treated
+as the final product's mandatory profitability policy.

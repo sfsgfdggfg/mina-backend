@@ -236,8 +236,12 @@ def evaluate_human_operational_flow_regressions() -> dict:
             or qdraft is None
             or "İNDİKATİF / BAĞLAYICI DEĞİLDİR" not in qdraft.body
             or "yeniden teyit" not in qdraft.body
+            or "Yükleme: Türkiye" not in qdraft.body
+            or "Yükleme: -, Türkiye" in qdraft.body
+            or "Transit Süre: Belirtilmedi" in qdraft.body
+            or "Teklif Geçerliliği: Belirtilmedi" in qdraft.body
         ):
-            failures.append("indicative supplier price did not produce non-binding quote case")
+            failures.append("indicative supplier price did not produce clean non-binding quote case")
 
     return {
         "name": "Human operational flow",

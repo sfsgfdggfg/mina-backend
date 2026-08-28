@@ -1,6 +1,11 @@
 from src.core.models import Shipment, EquipmentDecision, RiskAssessment, SupplierQuote, CustomerQuote, QuoteDraft
 
 
+def _location_text(city: str | None, country: str | None) -> str:
+    parts = [part.strip() for part in (city, country) if isinstance(part, str) and part.strip()]
+    return ", ".join(parts) or "Belirtilmedi"
+
+
 def generate_quote_draft(
     shipment: Shipment,
     equipment_decision: EquipmentDecision,
@@ -23,13 +28,11 @@ def generate_quote_draft(
             "Detaylar operasyon ekibimiz tarafından ayrıca kontrol edilecektir."
         )
 
-    validity_text = supplier_quote.validity_date or "Belirtilmedi"
     weight_text = (
         f"{shipment.gross_weight_kg:g} kg"
         if shipment.gross_weight_kg is not None
         else "Belirtilmedi"
     )
-    transit_text = supplier_quote.transit_time or "Belirtilmedi"
     indicative_note = (
         "\n\nİNDİKATİF / BAĞLAYICI DEĞİLDİR: Bu rakam bütçe çalışması içindir. "
         "Gerçek yükleme tarihinde güncel navlun ve araç uygunluğu yeniden teyit edilecektir."
@@ -37,21 +40,28 @@ def generate_quote_draft(
         else ""
     )
 
+    commercial_lines = [
+        f"Fiyat: {customer_quote.final_price} {customer_quote.currency}"
+    ]
+    if supplier_quote.transit_time:
+        commercial_lines.append(f"Transit Süre: {supplier_quote.transit_time}")
+    if supplier_quote.validity_date:
+        commercial_lines.append(f"Teklif Geçerliliği: {supplier_quote.validity_date}")
+    commercial_text = "\n".join(commercial_lines)
+
     body = f"""
 Merhaba,
 
 Aşağıdaki taşıma talebinize istinaden {'indikatif fiyatımızı' if indicative else 'teklifimizi'} bilgilerinize sunarız.
 
-Yükleme: {shipment.pickup_city or '-'}, {shipment.pickup_country or '-'}
-Teslimat: {shipment.delivery_city or '-'}, {shipment.delivery_country or '-'}
+Yükleme: {_location_text(shipment.pickup_city, shipment.pickup_country)}
+Teslimat: {_location_text(shipment.delivery_city, shipment.delivery_country)}
 Yük: {shipment.commodity or 'Standart genel yük varsayımı'}
 Brüt Ağırlık: {weight_text}
 Servis Tipi: {shipment.service_type}
 Araç Tipi: {equipment_decision.selected_equipment}
 
-Fiyat: {customer_quote.final_price} {customer_quote.currency}
-Transit Süre: {transit_text}
-Teklif Geçerliliği: {validity_text}
+{commercial_text}
 
 Saygılarımızla,
 MINAI Freight OS
