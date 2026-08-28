@@ -3276,3 +3276,15 @@ trailer. Explicit customer equipment remains authoritative unless a real safety,
 carrier-capability or commercial constraint requires an operator-reviewed change.
 Explicit Turkish statements such as `Isı kontrollü değildir` establish
 `is_temperature_controlled=false` and must not remain unknown.
+
+
+## RULE-142 — External RFQ Notes Must Contain External Facts Only
+
+Supplier-facing RFQs must not expose internal MINAI annotations such as
+`[COMMODITY PROFILE]` notes. These annotations may remain available to internal
+risk, consistency and operator-review logic, but they are not supplier facts.
+
+When `special_notes` contains both a genuine customer/operator note and an
+internal commodity-profile annotation, MINAI sends only the genuine external
+note. When only internal annotations remain, the supplier RFQ omits the special
+notes field.
