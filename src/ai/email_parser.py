@@ -352,6 +352,10 @@ def _explicit_temperature_control_state(email_text: str) -> bool | None:
         r"\btemperature[-\s]?controlled\s*[:=\-]?\s*(?:no|false)\b",
         r"\breefer\s*[:=\-]?\s*(?:not\s+required|no|false)\b",
         r"\bsıcaklık\s+kontrollü\s+(?:değil|degil)\b",
+        r"\b(?:ısı|isı)\s+kontrollü\s+(?:değil|degil|değildir|degildir)\b",
+        r"\bisi\s+kontrollu\s+(?:degil|degildir)\b",
+        r"\b(?:ısı|isı)\s+kontrolü\s+(?:gerekmez|gerekmiyor|gerektirmez)\b",
+        r"\bisi\s+kontrolu\s+(?:gerekmez|gerekmiyor|gerektirmez)\b",
     ])
     return False if negative else None
 

@@ -64,6 +64,13 @@ def evaluate_safety_truth_regressions() -> dict:
     if explicit_temperature_negative.is_temperature_controlled is not False:
         failures.append("explicit temperature-control negative was not preserved")
 
+    explicit_turkish_temperature_negative = build_shipment_from_extraction(
+        _extraction(is_temperature_controlled=True),
+        neutral_text + " Isı kontrollü değildir.",
+    )
+    if explicit_turkish_temperature_negative.is_temperature_controlled is not False:
+        failures.append("explicit Turkish temperature-control negative was not preserved")
+
     unsupported_stackable = build_shipment_from_extraction(
         _extraction(
             packages=[

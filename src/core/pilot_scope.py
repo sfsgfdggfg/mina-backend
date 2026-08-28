@@ -138,8 +138,6 @@ def evaluate_pilot_scope(
             "A temperature requirement places the cargo outside shadow-pilot scope.",
         )
 
-    if shipment.is_high_value:
-        _append_reason(reasons, "High-value cargo is excluded from the shadow pilot.")
 
     classification = _commodity_classification(shipment)
     if classification in _MEDICAL_COMMODITIES:
