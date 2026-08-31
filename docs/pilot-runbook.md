@@ -983,3 +983,100 @@ The runner binds the exact manifest byte snapshot before the Outlook pull and
 rechecks its SHA-256 before creating the final receipt.
 
 Any change during execution fails closed and produces no receipt.
+
+## P1-40 Addendum — Controlled Firm Road Live Acceptance Evidence
+
+**Evidence date:** 2026-08-31
+
+This addendum records the first completed controlled live firm-road Email→Quote
+acceptance path. It is narrow pilot evidence, not a declaration that every MINAI
+transport mode, exception class, pricing policy, or supplier fallback path is
+production-ready.
+
+### Accepted Scope
+
+The accepted live scenario was standard road freight with these confirmed facts:
+
+- firm quote mode;
+- FTL service;
+- Tenteli equipment;
+- non-ADR cargo;
+- non-temperature-controlled cargo;
+- Adana, Türkiye → Hamburg 20095, Almanya;
+- 33 Euro pallets, 120 × 80 × 150 cm;
+- 20,000 kg gross weight;
+- cargo ready date 2026-09-01;
+- no customer-requested delivery deadline.
+
+The absent customer delivery deadline did not block pricing. Had the customer
+provided a requested deadline, feasibility would have remained mandatory.
+
+### Durable Live Evidence Chain
+
+The completed controlled chain is bound to these durable identifiers:
+
+- extraction proposal: `a130ff25-aa3b-4043-be8c-032ce244ff23`;
+- supplier RFQ workflow: `9d0e8f2f-3bd7-48c0-99c5-01e5fea8b8f4`;
+- supplier RFQ: `06dbb082-b1e8-45f5-b8db-cc3b52696437`;
+- supplier clarification follow-up: `441463e3-14ca-4215-babd-d876f8a906db`;
+- customer quote case: `1149a108-c3e3-47c0-8aa2-182496bba217`;
+- customer quote approval: `9e13699e-7994-4f5e-aa94-128a3705e5e1`.
+
+### Observed Live Behavior
+
+The supplier first replied with only `2400 EUR`. MINAI preserved that price and
+currency without inventing transit, validity, vehicle availability, equipment,
+or other commercial facts. Because the firm-road customer quote still required
+transit time, MINAI kept the same RFQ and prepared a human-gated clarification
+asking only for transit.
+
+After the clarification was manually sent, the supplier replied with only
+`5-7 gün`. MINAI consolidated that transit value with the earlier `2400 EUR`
+price on the same RFQ, preserving `cost` and `currency` as inherited fields and
+retaining both supplier response snapshots in the audit trail.
+
+Quote comparison then contained exactly one current candidate for the RFQ. The
+selected supplier quote was `2400 EUR / 5-7 gün`, commercially eligible for a
+firm standard-road customer quote.
+
+The controlled pilot's temporary 15% cost-markup assumption produced a customer
+price of `2760 EUR`. This value is evidence of the current pilot assumption only;
+it is not an accepted production profitability policy. The customer quote was
+human-approved and then manually sent with durable send evidence bound to the
+exact case, approval and revision.
+
+### Human and Automation Boundaries Proved
+
+The live run proved that:
+
+- supplier RFQ sending required human approval and manual external send evidence;
+- supplier clarification required its own human approval and manual send evidence;
+- customer quote sending required a current human approval;
+- customer delivery was manual and recorded durably;
+- Outlook pulls were read-only;
+- no supplier or customer email was automatically sent by the pilot runtime.
+
+### Defects Found and Closed During the Live Run
+
+The live run exposed issues that offline regressions had not fully exercised:
+
+- bare price-only supplier replies needed deterministic parsing;
+- historical supplier mail needed a temporal correlation boundary;
+- supplier clarification drafts needed durable lifecycle and audit evidence;
+- clarification human-gate routes needed pilot allowlist access;
+- earlier same-RFQ quote snapshots needed to be superseded in comparison by the
+  latest response while remaining preserved as evidence.
+
+These fixes reached `main` through PRs #31–#34. The final live acceptance run was
+completed on merge commit `cf2b16095f955ee81c10357a98aaacb1176fb11e`.
+
+### What This Evidence Does Not Yet Prove
+
+Separate controlled acceptance is still required for at least:
+
+- supplier terminal response / next-supplier fallback;
+- customer inquiries that are missing mandatory firm-pricing information;
+- requested-delivery-date feasibility failures;
+- agency/customer/quote-specific production pricing policy resolution;
+- excluded pilot categories such as ADR, temperature-controlled, oversize and
+  non-road freight.
