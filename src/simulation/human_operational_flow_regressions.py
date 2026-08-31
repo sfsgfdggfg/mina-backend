@@ -255,12 +255,26 @@ def evaluate_human_operational_flow_regressions() -> dict:
                     approval_repository=approvals,
                     quote_case_repository=cases,
                 )
+            comparisons = completed.get("supplier_quote_comparisons") or []
+            selection_decision = completed.get(
+                "supplier_quote_selection_decision"
+            )
             if (
                 completed.get("quote_case") is None
                 or completed.get("supplier_quote") is None
             ):
                 failures.append(
                     "incrementally clarified supplier response did not progress to quote case"
+                )
+            if (
+                len(comparisons) != 1
+                or comparisons[0].rfq_id != draft.rfq_id
+                or comparisons[0].transit_time != "4 gün"
+                or selection_decision is None
+                or selection_decision.rejected_alternatives
+            ):
+                failures.append(
+                    "superseded same-RFQ response remained a duplicate quote alternative"
                 )
 
     # Legacy/recovery state: clarification_required may predate durable follow-up
