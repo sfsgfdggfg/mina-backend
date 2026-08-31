@@ -5904,3 +5904,17 @@ are recorded explicitly; missing facts are not invented.
 
 For sender-identity fallback during an active clarification, the latest sent
 follow-up establishes the temporal lower bound for candidate supplier replies.
+
+## DEC-130 — Supplier Follow-Up Human Gates Must Be Reachable in Pilot Mode
+
+**Status:** Accepted
+**Date:** 2026-08-31
+
+### Decision
+
+Durable supplier follow-up read, approval and manual-send-evidence routes are part
+of the authenticated shadow-pilot operator surface. They must be available through
+the same private-network and bearer-authentication boundary as the parent RFQ.
+
+This does not authorize provider sending. No supplier follow-up automated-send
+route is enabled in pilot mode; external delivery remains a separate human action.
