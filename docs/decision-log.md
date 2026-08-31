@@ -5842,3 +5842,21 @@ policy may introduce such a threshold later.
 Cargo value alone must not silently replace an explicitly requested equipment
 type. Supplier capability or insurance constraints may later require a deliberate
 operator decision, but high value is not itself a universal Box Trailer rule.
+
+
+## DEC-127 — Internal Commodity Profile Notes Must Not Leak Into External RFQs
+
+**Status:** Accepted
+**Date:** 2026-08-28
+
+### Decision
+
+Commodity-profile notes are internal operational context. Even when they are
+carried in the shipment's working `special_notes` field, supplier-facing RFQ
+generation must remove `[COMMODITY PROFILE]` lines before creating external
+mail content.
+
+Customer- or operator-supplied special notes remain eligible for the supplier
+RFQ when commercially relevant. If filtering leaves no external special note,
+the RFQ omits the `Özel Notlar` line entirely rather than exposing an internal
+placeholder.

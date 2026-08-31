@@ -36,6 +36,19 @@ def _location(
     )
 
 
+def _external_special_notes(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    external_lines = [
+        line.strip()
+        for line in value.splitlines()
+        if line.strip()
+        and not line.strip().startswith("[COMMODITY PROFILE]")
+    ]
+    return "\n".join(external_lines) or None
+
+
 def _package_summary(shipment: Shipment) -> str:
     parts: list[str] = []
 
@@ -125,6 +138,14 @@ def generate_supplier_rfq_drafts(
             shipment.required_delivery_date
             or "Belirtilmedi"
         )
+        external_special_notes = _external_special_notes(
+            shipment.special_notes
+        )
+        special_notes_line = (
+            f"Özel Notlar: {external_special_notes}\n"
+            if external_special_notes
+            else ""
+        )
 
         if getattr(shipment, "quote_mode", "firm") == "indicative":
             package_text = packages or "Belirtilmedi - standart FTL varsayımı"
@@ -174,8 +195,7 @@ Servis Tipi: {shipment.service_type}
 Araç / Ekipman: {equipment_decision.selected_equipment}
 Yük Hazır Tarihi: {shipment.cargo_ready_date}
 Gerekli Teslim Tarihi: {required_delivery_text}
-Özel Notlar: {shipment.special_notes or "-"}
-
+{special_notes_line}
 Lütfen aşağıdaki bilgileri paylaşınız:
 
 - Navlun fiyatı ve para birimi

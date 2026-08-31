@@ -241,6 +241,40 @@ def evaluate_road_rfq_commercial_safety_regressions() -> dict:
                     + expected_text
                 )
 
+    internal_and_customer_notes = _shipment().model_copy(
+        update={
+            "special_notes": (
+                "Kapı tesliminde randevu gereklidir.\n"
+                "[COMMODITY PROFILE] Internal textile review note."
+            )
+        }
+    )
+    note_boundary_drafts = generate_supplier_rfq_drafts(
+        shipment=internal_and_customer_notes,
+        equipment_decision=equipment,
+        supplier_selection=_selection(),
+        workflow_id="road-rfq-external-note-boundary",
+    )
+    note_boundary_body = note_boundary_drafts[0].body
+    if "Kapı tesliminde randevu gereklidir." not in note_boundary_body:
+        failures.append("customer special note was removed from supplier RFQ")
+    if "[COMMODITY PROFILE]" in note_boundary_body:
+        failures.append("internal commodity profile note leaked into supplier RFQ")
+
+    internal_only_notes = _shipment().model_copy(
+        update={
+            "special_notes": "[COMMODITY PROFILE] Internal-only note."
+        }
+    )
+    internal_only_draft = generate_supplier_rfq_drafts(
+        shipment=internal_only_notes,
+        equipment_decision=equipment,
+        supplier_selection=_selection(),
+        workflow_id="road-rfq-internal-only-note",
+    )[0]
+    if "Özel Notlar:" in internal_only_draft.body:
+        failures.append("empty external special-note line was emitted")
+
     optional_deadline_drafts = generate_supplier_rfq_drafts(
         shipment=optional_deadline,
         equipment_decision=equipment,
