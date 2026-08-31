@@ -5860,3 +5860,22 @@ Customer- or operator-supplied special notes remain eligible for the supplier
 RFQ when commercially relevant. If filtering leaves no external special note,
 the RFQ omits the `Özel Notlar` line entirely rather than exposing an internal
 placeholder.
+
+
+## DEC-128 — Price-Only Supplier Replies Are Deterministic; Identity Fallback Is Time-Bounded
+
+**Status:** Accepted
+**Date:** 2026-08-31
+
+### Decision
+
+A privacy-minimized supplier reply consisting only of one positive monetary
+amount plus a supported ISO currency (`EUR`, `USD`, `GBP`, or `TRY`) is treated
+deterministically as a quoted rate. MINAI does not require AI inference to decide
+that `2400 EUR` is a quote, and it does not invent any absent transit, validity,
+availability, equipment, inclusion, or exclusion fields.
+
+Supplier-address-only RFQ correlation remains a fallback behind explicit and
+subject RFQ references. The fallback may consider only RFQs whose recorded send
+time is at or before the inbound message's received time. Missing timestamps or
+messages predating an RFQ send must not be attached to that later RFQ.

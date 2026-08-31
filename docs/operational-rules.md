@@ -3288,3 +3288,15 @@ When `special_notes` contains both a genuine customer/operator note and an
 internal commodity-profile annotation, MINAI sends only the genuine external
 note. When only internal annotations remain, the supplier RFQ omits the special
 notes field.
+
+
+## RULE-143 — Bare Rates and Historical Supplier Mail Must Fail Safely
+
+If a supplier reply, after privacy minimization, contains only a positive amount
+and supported ISO currency, MINAI records it as `quoted` with exactly that cost
+and currency. All other commercial fields remain unknown unless supplied.
+
+A supplier email without an explicit or subject RFQ reference may use sender
+identity only when its received timestamp is present and is not earlier than the
+RFQ's durable send timestamp. Historical mail must never be opportunistically
+attached to a newly opened RFQ from the same supplier.
