@@ -5918,3 +5918,20 @@ the same private-network and bearer-authentication boundary as the parent RFQ.
 
 This does not authorize provider sending. No supplier follow-up automated-send
 route is enabled in pilot mode; external delivery remains a separate human action.
+
+## DEC-131 — Latest Supplier Response Snapshot Supersedes Earlier Same-RFQ Quotes in Selection
+
+**Status:** Accepted
+**Date:** 2026-08-31
+
+### Decision
+
+Supplier response history remains append-only, but quote comparison and supplier
+selection treat only the latest response snapshot for each RFQ as authoritative.
+A consolidated clarification reply therefore supersedes the earlier incomplete
+quote for commercial comparison without deleting either response from the audit
+trail.
+
+The supersession rule is applied before price usability. If a later same-RFQ
+response is terminal or requests clarification, MINAI must not resurrect an older
+price merely because the older response was quote-usable.

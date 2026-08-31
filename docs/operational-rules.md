@@ -3327,3 +3327,11 @@ Authenticated pilot operators may read a durable supplier follow-up, approve it,
 and record durable evidence after a manual external send. The pilot allowlist must
 not expose an automated follow-up send endpoint. A successful approval is not
 evidence that the message was sent.
+
+## RULE-146 — One RFQ Produces One Current Quote Candidate
+
+Supplier quote comparison must contain at most one current candidate per RFQ.
+When multiple response snapshots exist, the latest received response supersedes
+earlier snapshots for comparison and selection while all historical responses
+remain durable evidence. Commercial-safety results must never be shared across
+different response snapshots merely because they have the same RFQ ID.

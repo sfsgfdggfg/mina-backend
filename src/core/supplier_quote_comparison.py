@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
@@ -56,6 +56,30 @@ def _extract_transit_days(
     )
 
 
+def _response_received_sort_key(
+    response: SupplierRFQResponse,
+) -> datetime:
+    received_at = response.received_at
+    if received_at.tzinfo is None:
+        received_at = received_at.replace(tzinfo=timezone.utc)
+    return received_at.astimezone(timezone.utc)
+
+
+def _latest_response_per_rfq(
+    responses: Iterable[SupplierRFQResponse],
+) -> list[SupplierRFQResponse]:
+    latest_by_rfq_id: dict[str, SupplierRFQResponse] = {}
+    for response in responses:
+        current = latest_by_rfq_id.get(response.rfq_id)
+        if (
+            current is None
+            or _response_received_sort_key(response)
+            >= _response_received_sort_key(current)
+        ):
+            latest_by_rfq_id[response.rfq_id] = response
+    return list(latest_by_rfq_id.values())
+
+
 def build_supplier_quote_comparisons(
     responses: Iterable[SupplierRFQResponse],
     supplier_selection: dict[str, Any],
@@ -85,9 +109,11 @@ def build_supplier_quote_comparisons(
         else None
     )
 
+    latest_responses = _latest_response_per_rfq(responses)
+
     usable_responses = [
         response
-        for response in responses
+        for response in latest_responses
         if response.is_price_usable
         and response.supplier_name in selected_suppliers
         and (
