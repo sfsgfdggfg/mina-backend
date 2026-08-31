@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -187,6 +188,21 @@ def _sender_matches_draft(
     return draft.recipient_email.strip().lower() == reply.sender_address
 
 
+def _utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _identity_time_matches_draft(
+    reply: InboundMailEnvelope,
+    draft: SupplierRFQDraft,
+) -> bool:
+    if reply.received_at is None or draft.sent_at is None:
+        return False
+    return _utc_datetime(reply.received_at) >= _utc_datetime(draft.sent_at)
+
+
 def _correlate_referenced_draft(
     *,
     reply: InboundMailEnvelope,
@@ -285,9 +301,14 @@ def correlate_supplier_reply(
         for draft in repository.list_drafts()
         if _sender_matches_draft(reply, draft)
     ]
-    awaiting_drafts = [
+    temporally_valid_sender_drafts = [
         draft
         for draft in sender_drafts
+        if _identity_time_matches_draft(reply, draft)
+    ]
+    awaiting_drafts = [
+        draft
+        for draft in temporally_valid_sender_drafts
         if draft.status in {
             "awaiting_response",
             "clarification_required",
@@ -312,8 +333,8 @@ def correlate_supplier_reply(
             ),
             candidate_rfq_ids=[draft.rfq_id for draft in awaiting_drafts],
         )
-    if len(sender_drafts) == 1:
-        draft = sender_drafts[0]
+    if len(temporally_valid_sender_drafts) == 1:
+        draft = temporally_valid_sender_drafts[0]
         return SupplierRFQCorrelationResult(
             status="rfq_not_awaiting_response",
             rfq_id=draft.rfq_id,
@@ -323,14 +344,22 @@ def correlate_supplier_reply(
                 f"response; current status is {draft.status}."
             ),
         )
-    if len(sender_drafts) > 1:
+    if len(temporally_valid_sender_drafts) > 1:
         return SupplierRFQCorrelationResult(
             status="ambiguous_rfq",
             method="supplier_identity",
             reason="Supplier identity matches multiple non-awaiting RFQs.",
-            candidate_rfq_ids=[draft.rfq_id for draft in sender_drafts],
+            candidate_rfq_ids=[
+                draft.rfq_id for draft in temporally_valid_sender_drafts
+            ],
         )
     return SupplierRFQCorrelationResult(
         status="unresolved_rfq",
-        reason="No deterministic Supplier RFQ match was found.",
+        method="supplier_identity" if sender_drafts else None,
+        reason=(
+            "Supplier identity fallback requires a received timestamp on or "
+            "after the RFQ send time."
+            if sender_drafts
+            else "No deterministic Supplier RFQ match was found."
+        ),
     )

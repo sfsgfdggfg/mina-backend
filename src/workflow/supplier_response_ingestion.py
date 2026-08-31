@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
+import re
 from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -44,6 +46,66 @@ class SupplierReplyIngestionRequest(BaseModel):
     extracted_response: Optional[dict[str, Any]] = None
 
 
+_PRICE_ONLY_REPLY_PATTERN = re.compile(
+    r"^\s*(?P<amount>[0-9][0-9., ]*)\s*"
+    r"(?P<currency>EUR|USD|GBP|TRY)\s*[.!]?\s*$",
+    flags=re.IGNORECASE,
+)
+
+
+def _normalized_price_amount(value: str) -> float | None:
+    compact = value.replace(" ", "")
+    if not compact or not compact[0].isdigit():
+        return None
+
+    separators = [separator for separator in (".", ",") if separator in compact]
+    if len(separators) == 2:
+        decimal_separator = max(separators, key=compact.rfind)
+        thousands_separator = "," if decimal_separator == "." else "."
+        compact = compact.replace(thousands_separator, "")
+        compact = compact.replace(decimal_separator, ".")
+    elif len(separators) == 1:
+        separator = separators[0]
+        parts = compact.split(separator)
+        if len(parts) > 2:
+            if all(len(part) == 3 for part in parts[1:]):
+                compact = "".join(parts)
+            else:
+                return None
+        elif len(parts) == 2:
+            left, right = parts
+            if len(right) == 3 and 1 <= len(left) <= 3:
+                compact = left + right
+            elif 1 <= len(right) <= 2:
+                compact = left + "." + right
+            else:
+                return None
+
+    try:
+        amount = Decimal(compact)
+    except InvalidOperation:
+        return None
+    if not amount.is_finite() or amount <= 0:
+        return None
+    return float(amount)
+
+
+def _deterministic_price_only_extraction(
+    reply_text: str,
+) -> SupplierResponseExtraction | None:
+    match = _PRICE_ONLY_REPLY_PATTERN.fullmatch(reply_text)
+    if match is None:
+        return None
+    amount = _normalized_price_amount(match.group("amount"))
+    if amount is None:
+        return None
+    return SupplierResponseExtraction(
+        status="quoted",
+        cost=amount,
+        currency=match.group("currency").upper(),
+    )
+
+
 def _result_from_correlation(
     correlation,
     reply: InboundMailEnvelope,
@@ -72,6 +134,21 @@ def _resolve_extraction(
             return None, "invalid_response", str(exc)
         return extraction, None, None
 
+    try:
+        safe_text = prepare_privacy_safe_text(
+            reply.body_text
+        ).safe_text
+    except Exception:
+        return (
+            None,
+            "parsing_failed",
+            "Supplier response privacy transform failed.",
+        )
+
+    deterministic = _deterministic_price_only_extraction(str(safe_text))
+    if deterministic is not None:
+        return deterministic, None, None
+
     if parser is None:
         return (
             None,
@@ -80,9 +157,6 @@ def _resolve_extraction(
         )
 
     try:
-        safe_text = prepare_privacy_safe_text(
-            reply.body_text
-        ).safe_text
         parsed = parser.parse(safe_text)
         extraction = SupplierResponseExtraction.model_validate(parsed)
         if extraction.vehicle_available_date is None:
