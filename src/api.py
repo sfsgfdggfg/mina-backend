@@ -85,6 +85,7 @@ from src.core.models import (
     QuoteDraft,
     SupplierQuote,
 )
+from src.core.pricing_policy import PricingFormula
 from src.core.quote_approval import QuoteApproval
 from src.core.quote_approval_service import (
     QuoteApprovalNotFoundError,
@@ -283,6 +284,10 @@ class SupplierRFQResponseRequest(BaseModel):
     recorded_by: Optional[str] = None
 
 
+class ResumeSupplierQuoteRequest(BaseModel):
+    quote_pricing_override: Optional[PricingFormula] = None
+
+
 class CustomerMemoryCreateRequest(BaseModel):
     customer_name: str
     active: bool = True
@@ -295,6 +300,7 @@ class CustomerMemoryCreateRequest(BaseModel):
 
     price_sensitivity: Optional[str] = None
     time_sensitivity: Optional[str] = None
+    pricing_policy: Optional[PricingFormula] = None
 
     default_pickup_city: Optional[str] = None
     default_pickup_area: Optional[str] = None
@@ -321,6 +327,7 @@ class CustomerMemoryUpdateRequest(BaseModel):
 
     price_sensitivity: Optional[str] = None
     time_sensitivity: Optional[str] = None
+    pricing_policy: Optional[PricingFormula] = None
 
     default_pickup_city: Optional[str] = None
     default_pickup_area: Optional[str] = None
@@ -583,6 +590,7 @@ def update_customer_memory_profile(request: CustomerMemoryUpdateRequest):
         default_equipment_type=request.default_equipment_type,
         price_sensitivity=request.price_sensitivity,
         time_sensitivity=request.time_sensitivity,
+        pricing_policy=request.pricing_policy,
         default_pickup_city=request.default_pickup_city,
         default_pickup_area=request.default_pickup_area,
         default_pickup_country=request.default_pickup_country,
@@ -652,6 +660,7 @@ def create_customer_memory_profile(request: CustomerMemoryCreateRequest):
         default_equipment_type=request.default_equipment_type,
         price_sensitivity=request.price_sensitivity,
         time_sensitivity=request.time_sensitivity,
+        pricing_policy=request.pricing_policy,
         default_pickup_city=request.default_pickup_city,
         default_pickup_area=request.default_pickup_area,
         default_pickup_country=request.default_pickup_country,
@@ -1387,7 +1396,10 @@ def attach_supplier_rfq_response_endpoint(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 @app.post("/supplier-rfq-workflows/{workflow_id}/resume-quote")
-def resume_supplier_rfq_quote(workflow_id: str):
+def resume_supplier_rfq_quote(
+    workflow_id: str,
+    request: ResumeSupplierQuoteRequest | None = None,
+):
     try:
         result = resume_supplier_rfq_workflow(
             workflow_id=workflow_id,
@@ -1395,6 +1407,9 @@ def resume_supplier_rfq_quote(workflow_id: str):
             approval_repository=quote_approval_repository,
             quote_case_repository=quote_case_repository,
             operational_data_sources=operational_data_sources,
+            quote_pricing_override=(
+                request.quote_pricing_override if request is not None else None
+            ),
         )
     except SupplierRFQWorkflowNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

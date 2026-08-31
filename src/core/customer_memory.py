@@ -4,6 +4,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from src.core.models import Shipment
+from src.core.pricing_policy import PricingFormula
 from src.core.extraction_confirmation import require_operational_shipment
 from src.core.data_provenance import (
     DataProvenanceBlockedError,
@@ -33,6 +34,7 @@ class CustomerMemoryProfile(BaseModel):
 
     price_sensitivity: Optional[str] = None
     time_sensitivity: Optional[str] = None
+    pricing_policy: Optional[PricingFormula] = None
 
     default_pickup_city: Optional[str] = None
     default_pickup_area: Optional[str] = None

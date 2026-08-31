@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.paths import data_path
+from src.core.pricing_policy import PricingFormula
 
 CUSTOMER_MEMORY_PATH = data_path("customer_memory.json")
 
@@ -354,6 +355,15 @@ def validate_customer_memory_file(
             elif default_equipment_type not in ALLOWED_EQUIPMENT_TYPES:
                 warnings.append(
                     f"{customer}: default_equipment_type '{default_equipment_type}' is not in known equipment list."
+                )
+
+        raw_pricing_policy = item.get("pricing_policy")
+        if raw_pricing_policy is not None:
+            try:
+                PricingFormula.model_validate(raw_pricing_policy)
+            except (ValueError, TypeError) as exc:
+                errors.append(
+                    f"{customer}: pricing_policy is invalid: {exc}"
                 )
 
         for sensitivity_field in ["price_sensitivity", "time_sensitivity"]:

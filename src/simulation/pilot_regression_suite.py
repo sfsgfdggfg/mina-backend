@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass
 from typing import Callable, Iterable, TextIO
+from unittest.mock import patch
 
+from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
+from src.simulation.pricing_policy_fixture import SYNTHETIC_AGENCY_PRICING_POLICY_JSON
 from src.simulation.atomic_transition_regressions import evaluate_atomic_transition_regressions
 from src.simulation.clarification_resolution_regressions import evaluate_clarification_resolution_regressions
 from src.simulation.customer_identity_trust_regressions import evaluate_customer_identity_trust_regressions
@@ -50,6 +54,7 @@ from src.simulation.pilot_readiness_evidence_regressions import evaluate_pilot_r
 from src.simulation.pilot_persistence_regressions import evaluate_pilot_persistence_regressions
 from src.simulation.pilot_scope_regressions import evaluate_pilot_scope_regressions
 from src.simulation.privacy_boundary_regressions import evaluate_privacy_boundary_regressions
+from src.simulation.pricing_policy_regressions import evaluate_pricing_policy_regressions
 from src.simulation.provenance_recovery_regressions import evaluate_provenance_recovery_regressions
 from src.simulation.regulatory_compliance_regressions import evaluate_regulatory_compliance_regressions
 from src.simulation.runtime_preflight_regressions import evaluate_runtime_preflight_regressions
@@ -127,6 +132,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Supplier RFQ lifecycle", evaluate_supplier_rfq_lifecycle_regressions),
     Suite("Initial supplier RFQ draft", evaluate_initial_supplier_rfq_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),
+    Suite("Pricing policy resolution", evaluate_pricing_policy_regressions),
     Suite(
         "Road RFQ commercial safety",
         evaluate_road_rfq_commercial_safety_regressions,
@@ -262,7 +268,16 @@ def run_suites(suites: Iterable[Suite], stream: TextIO = sys.stdout) -> int:
 
     for suite in suites:
         try:
-            failure = _failure_summary(suite.run())
+            with patch.dict(
+                os.environ,
+                {
+                    AGENCY_PRICING_POLICY_ENV: (
+                        SYNTHETIC_AGENCY_PRICING_POLICY_JSON
+                    )
+                },
+                clear=False,
+            ):
+                failure = _failure_summary(suite.run())
         except Exception as exc:  # Keep the gate running, without leaking values.
             failure = f"raised {type(exc).__name__}"
 

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.core.pricing_policy import PricingPolicyResolution
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -35,6 +36,7 @@ class QuoteApprovalSnapshot(BaseModel):
     supplier_excluded_costs: Optional[list[str]] = None
     quote_subject: str
     quote_body: str
+    pricing_policy: Optional[PricingPolicyResolution] = None
 
     @classmethod
     def from_quote(
@@ -59,6 +61,7 @@ class QuoteApprovalSnapshot(BaseModel):
             supplier_excluded_costs=supplier_quote.excluded_costs,
             quote_subject=quote_draft.subject,
             quote_body=quote_draft.body,
+            pricing_policy=customer_quote.pricing_policy,
         )
 
     def matches_quote(
