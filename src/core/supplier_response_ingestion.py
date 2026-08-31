@@ -197,10 +197,23 @@ def _utc_datetime(value: datetime) -> datetime:
 def _identity_time_matches_draft(
     reply: InboundMailEnvelope,
     draft: SupplierRFQDraft,
+    repository: SupplierRFQRepository,
 ) -> bool:
     if reply.received_at is None or draft.sent_at is None:
         return False
-    return _utc_datetime(reply.received_at) >= _utc_datetime(draft.sent_at)
+    threshold = draft.sent_at
+    sent_follow_ups = [
+        follow_up
+        for follow_up in repository.list_follow_up_drafts(draft.rfq_id)
+        if follow_up.status == "awaiting_response"
+        and follow_up.sent_at is not None
+    ]
+    if sent_follow_ups:
+        threshold = max(
+            (follow_up.sent_at for follow_up in sent_follow_ups),
+            key=_utc_datetime,
+        )
+    return _utc_datetime(reply.received_at) >= _utc_datetime(threshold)
 
 
 def _correlate_referenced_draft(
@@ -304,7 +317,7 @@ def correlate_supplier_reply(
     temporally_valid_sender_drafts = [
         draft
         for draft in sender_drafts
-        if _identity_time_matches_draft(reply, draft)
+        if _identity_time_matches_draft(reply, draft, repository)
     ]
     awaiting_drafts = [
         draft

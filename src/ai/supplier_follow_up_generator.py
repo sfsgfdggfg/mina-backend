@@ -27,6 +27,7 @@ def build_supplier_follow_up_draft(
     *,
     draft: SupplierRFQDraft,
     rejection_reasons: list[str],
+    sequence_number: int = 1,
 ) -> OutboundMailRequest | None:
     questions = [
         question
@@ -54,7 +55,10 @@ MINAI Freight OS
 """.strip()
 
     return OutboundMailRequest(
-        operation_id=f"supplier-rfq-clarification:{draft.rfq_id}",
+        operation_id=(
+            f"supplier-rfq-clarification:{draft.rfq_id}:"
+            f"{sequence_number}"
+        ),
         recipients=[draft.recipient_email],
         subject=f"Re: {draft.subject}",
         body_text=body,

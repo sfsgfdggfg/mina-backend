@@ -22,6 +22,7 @@ from src.core.supplier_response_ingestion import (
     SupplierResponseExtraction,
     correlate_supplier_reply,
 )
+from src.core.supplier_commercial_safety import parse_transit_time
 from src.core.supplier_rfq import SupplierRFQResponse
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQNotFoundError,
@@ -49,6 +50,13 @@ class SupplierReplyIngestionRequest(BaseModel):
 _PRICE_ONLY_REPLY_PATTERN = re.compile(
     r"^\s*(?P<amount>[0-9][0-9., ]*)\s*"
     r"(?P<currency>EUR|USD|GBP|TRY)\s*[.!]?\s*$",
+    flags=re.IGNORECASE,
+)
+
+_TRANSIT_ONLY_REPLY_PATTERN = re.compile(
+    r"^\s*\d+(?:\s*[-–—]\s*\d+)?\s*"
+    r"(?:business\s*days?|working\s*days?|iş\s*günü|is\s*gunu|"
+    r"days?|gün|gun|hours?|hrs?|saat|weeks?|hafta)\s*[.!]?\s*$",
     flags=re.IGNORECASE,
 )
 
@@ -106,6 +114,75 @@ def _deterministic_price_only_extraction(
     )
 
 
+def _deterministic_transit_only_extraction(
+    reply_text: str,
+) -> SupplierResponseExtraction | None:
+    normalized = reply_text.strip()
+    if _TRANSIT_ONLY_REPLY_PATTERN.fullmatch(normalized) is None:
+        return None
+    if parse_transit_time(normalized) is None:
+        return None
+    return SupplierResponseExtraction(transit_time=normalized.rstrip(".!"))
+
+
+def _merge_clarification_extraction(
+    *,
+    draft,
+    extraction: SupplierResponseExtraction,
+    repository: SupplierRFQRepository,
+) -> tuple[SupplierResponseExtraction, list[str], datetime | None]:
+    if draft.status != "clarification_required":
+        return extraction, [], None
+    if extraction.status in {"declined", "no_capacity", "needs_clarification"}:
+        return extraction, [], None
+    prior_quotes = [
+        response
+        for response in repository.list_responses(draft.rfq_id)
+        if response.status == "quoted"
+    ]
+    if not prior_quotes:
+        return extraction, [], None
+    prior = max(prior_quotes, key=lambda item: item.received_at)
+    commercial_fields = (
+        "cost",
+        "currency",
+        "transit_time",
+        "validity_date",
+        "vehicle_available_date",
+        "equipment_type",
+        "pricing_basis",
+        "included_costs",
+        "excluded_costs",
+        "notes",
+    )
+    has_follow_up_fact = any(
+        extraction.field_state(field_name) != "not_provided"
+        for field_name in commercial_fields
+    )
+    if extraction.status is None and not has_follow_up_fact:
+        return extraction, [], None
+
+    update = {"status": "quoted"}
+    inherited_fields: list[str] = []
+    for field_name in commercial_fields:
+        state = extraction.field_state(field_name)
+        if state == "provided":
+            update[field_name] = getattr(extraction, field_name)
+        elif state == "uncertain":
+            update[field_name] = None
+        else:
+            prior_value = getattr(prior, field_name)
+            update[field_name] = prior_value
+            if prior_value is not None:
+                inherited_fields.append(field_name)
+    update["uncertain_fields"] = list(extraction.uncertain_fields)
+    return (
+        SupplierResponseExtraction.model_validate(update),
+        inherited_fields,
+        prior.received_at,
+    )
+
+
 def _result_from_correlation(
     correlation,
     reply: InboundMailEnvelope,
@@ -148,6 +225,9 @@ def _resolve_extraction(
     deterministic = _deterministic_price_only_extraction(str(safe_text))
     if deterministic is not None:
         return deterministic, None, None
+    transit_only = _deterministic_transit_only_extraction(str(safe_text))
+    if transit_only is not None:
+        return transit_only, None, None
 
     if parser is None:
         return (
@@ -322,6 +402,14 @@ def ingest_supplier_reply(
             external_message_id=reply.external_message_id,
         )
 
+    extraction, inherited_fields, prior_response_received_at = (
+        _merge_clarification_extraction(
+            draft=draft,
+            extraction=extraction,
+            repository=repository,
+        )
+    )
+
     validation_status, validation_reason = _validate_required_extraction(
         extraction
     )
@@ -352,6 +440,9 @@ def ingest_supplier_reply(
             notes=extraction.notes,
             source=reply.source,
             received_at=reply.received_at or datetime.utcnow(),
+            is_consolidated_follow_up=bool(inherited_fields),
+            inherited_fields=inherited_fields,
+            prior_response_received_at=prior_response_received_at,
         )
     except ValidationError as exc:
         return SupplierReplyIngestionResult(

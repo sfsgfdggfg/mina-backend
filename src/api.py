@@ -112,11 +112,14 @@ from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.core.supplier_rfq import SupplierRFQResponse
 from src.core.supplier_rfq_lifecycle import (
+    SupplierRFQFollowUpNotFoundError,
     SupplierRFQNotFoundError,
     SupplierRFQResponseError,
     SupplierRFQTransitionError,
     approve_supplier_rfq,
+    approve_supplier_rfq_follow_up,
     attach_supplier_rfq_response,
+    record_supplier_rfq_follow_up_manually_sent,
     record_supplier_rfq_manually_sent,
 )
 from src.core.supplier_rfq_repository import (
@@ -1180,6 +1183,106 @@ def get_supplier_rfq(rfq_id: str):
             response.model_dump()
             for response in supplier_rfq_repository.list_responses(rfq_id)
         ],
+        "follow_ups": [
+            item.model_dump()
+            for item in supplier_rfq_repository.list_follow_up_drafts(rfq_id)
+        ],
+    }
+
+
+@app.get("/supplier-rfqs/{rfq_id}/follow-ups")
+def list_supplier_rfq_follow_ups(rfq_id: str):
+    draft = supplier_rfq_repository.get_draft(rfq_id)
+    if draft is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Supplier RFQ not found: {rfq_id}",
+        )
+    return {
+        "rfq_id": rfq_id,
+        "follow_ups": [
+            {
+                **item.model_dump(),
+                "manual_sent_evidence": [
+                    evidence.model_dump()
+                    for evidence in (
+                        supplier_rfq_repository
+                        .list_follow_up_manual_sent_evidence(item.follow_up_id)
+                    )
+                ],
+            }
+            for item in supplier_rfq_repository.list_follow_up_drafts(rfq_id)
+        ],
+    }
+
+
+@app.get("/supplier-rfq-follow-ups/{follow_up_id}")
+def get_supplier_rfq_follow_up(follow_up_id: str):
+    follow_up = supplier_rfq_repository.get_follow_up_draft(follow_up_id)
+    if follow_up is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Supplier RFQ follow-up not found: {follow_up_id}",
+        )
+    return {
+        **follow_up.model_dump(),
+        "manual_sent_evidence": [
+            evidence.model_dump()
+            for evidence in (
+                supplier_rfq_repository
+                .list_follow_up_manual_sent_evidence(follow_up_id)
+            )
+        ],
+    }
+
+
+@app.post("/supplier-rfq-follow-ups/{follow_up_id}/approve")
+def approve_supplier_rfq_follow_up_endpoint(
+    follow_up_id: str,
+    request: SupplierRFQApproveRequest,
+    http_request: Request = None,
+):
+    try:
+        return approve_supplier_rfq_follow_up(
+            repository=supplier_rfq_repository,
+            follow_up_id=follow_up_id,
+            approved_by=_authenticated_operator(
+                http_request,
+                request.approved_by,
+            ),
+        ).model_dump()
+    except SupplierRFQFollowUpNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfq-follow-ups/{follow_up_id}/record-manually-sent")
+def record_supplier_rfq_follow_up_manually_sent_endpoint(
+    follow_up_id: str,
+    request: SupplierRFQManualSentRequest,
+    http_request: Request = None,
+):
+    try:
+        follow_up, evidence = record_supplier_rfq_follow_up_manually_sent(
+            repository=supplier_rfq_repository,
+            follow_up_id=follow_up_id,
+            recorded_by=_authenticated_operator(
+                http_request,
+                request.recorded_by,
+            ),
+        )
+    except SupplierRFQFollowUpNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "supplier_rfq_follow_up": follow_up.model_dump(),
+        "manual_sent_evidence": evidence.model_dump(),
     }
 
 

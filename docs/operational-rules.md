@@ -3300,3 +3300,23 @@ A supplier email without an explicit or subject RFQ reference may use sender
 identity only when its received timestamp is present and is not earlier than the
 RFQ's durable send timestamp. Historical mail must never be opportunistically
 attached to a newly opened RFQ from the same supplier.
+
+## RULE-144 — Ask Only the Missing Supplier Fact and Preserve Same-RFQ Provenance
+
+When a firm road quote is commercially blocked only by a fixable missing supplier
+fact, MINAI keeps the same RFQ and prepares a durable clarification follow-up that
+asks only for the missing or contradictory fact. The follow-up must be human
+approved before it can be marked as manually sent.
+
+A follow-up reply such as `4 gün` may complete a prior `2400 EUR` quote on the same
+RFQ. MINAI must retain the earlier price/currency as inherited supplier evidence,
+record which fields were inherited and link the consolidated response to the prior
+response timestamp. It must not ask the supplier to repeat already trustworthy
+commercial facts merely to satisfy a storage schema.
+
+Each follow-up has its own sequence and manual-send evidence. Repeated workflow
+resumes must reuse an active draft/approved/awaiting-response follow-up instead of
+creating duplicate outbound requests.
+For sender-identity-only correlation while a clarification is awaiting response,
+the active follow-up send timestamp is the minimum accepted inbound time; the
+initial RFQ send timestamp alone is not sufficient.

@@ -4,15 +4,21 @@ from datetime import datetime
 from unittest.mock import patch
 
 from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
+from src.core.mail import InboundMailEnvelope
 from src.core.models import EquipmentDecision, Package, Shipment
 from src.core.quote_approval_repository import InMemoryQuoteApprovalRepository
 from src.core.quote_case_repository import InMemoryQuoteCaseRepository
 from src.core.relative_dates import infer_supplier_vehicle_available_date
 from src.core.supplier_rfq import SupplierRFQResponse, SupplierRFQWorkflow
-from src.core.supplier_rfq_lifecycle import attach_supplier_rfq_response
+from src.core.supplier_rfq_lifecycle import (
+    approve_supplier_rfq_follow_up,
+    attach_supplier_rfq_response,
+    record_supplier_rfq_follow_up_manually_sent,
+)
 from src.core.supplier_rfq_repository import InMemorySupplierRFQRepository
 from src.core.supplier_selection import select_suppliers_for_shipment
 from src.workflow.pipeline import process_shipment
+from src.workflow.supplier_response_ingestion import ingest_supplier_reply
 from src.workflow.supplier_rfq_progression import resume_supplier_rfq_workflow
 
 
@@ -138,41 +144,163 @@ def evaluate_human_operational_flow_regressions() -> dict:
         )
     reopened = repo.get_draft(draft.rfq_id)
     follow_up = clarification.get("supplier_follow_up_draft")
+    follow_up_record = clarification.get("supplier_follow_up_record")
+    stored_follow_ups = repo.list_follow_up_drafts(draft.rfq_id)
     if (
         clarification.get("result_type") != "supplier_response_required"
         or reopened is None
         or reopened.status != "clarification_required"
         or follow_up is None
+        or follow_up_record is None
+        or len(stored_follow_ups) != 1
+        or stored_follow_ups[0].follow_up_id != follow_up_record.follow_up_id
+        or stored_follow_ups[0].status != "draft"
         or draft.reference_token not in follow_up.body_text
         or "transit" not in follow_up.body_text.lower()
     ):
-        failures.append("incomplete quote did not reopen same RFQ with follow-up draft")
-
-    final = SupplierRFQResponse(
-        rfq_id=draft.rfq_id,
-        supplier_name=draft.supplier_name,
-        rfq_priority=draft.priority,
-        status="quoted",
-        cost=2400,
-        currency="EUR",
-        transit_time="4-5 gün",
-        source="manual",
-        received_at=datetime(2026, 8, 28, 10, 30, 0),
-    )
-    try:
-        attach_supplier_rfq_response(repo, final)
-    except Exception as exc:
-        failures.append(f"clarified final response on same RFQ was rejected: {type(exc).__name__}")
+        failures.append("incomplete quote did not persist same-RFQ follow-up draft")
     else:
         with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
-            completed = resume_supplier_rfq_workflow(
+            repeated = resume_supplier_rfq_workflow(
                 workflow_id=workflow.workflow_id,
                 rfq_repository=repo,
                 approval_repository=approvals,
                 quote_case_repository=cases,
             )
-        if completed.get("quote_case") is None or completed.get("supplier_quote") is None:
-            failures.append("clarified supplier response did not progress to quote case")
+        repeated_record = repeated.get("supplier_follow_up_record")
+        if (
+            repeated_record is None
+            or repeated_record.follow_up_id != follow_up_record.follow_up_id
+            or len(repo.list_follow_up_drafts(draft.rfq_id)) != 1
+        ):
+            failures.append("repeated resume duplicated an active supplier follow-up")
+
+        approved_follow_up = approve_supplier_rfq_follow_up(
+            repo,
+            follow_up_record.follow_up_id,
+            approved_by="Synthetic Operator",
+            approved_at=datetime(2026, 8, 28, 10, 10, 0),
+        )
+        sent_follow_up, sent_evidence = (
+            record_supplier_rfq_follow_up_manually_sent(
+                repo,
+                approved_follow_up.follow_up_id,
+                recorded_by="Synthetic Operator",
+                recorded_at=datetime(2026, 8, 28, 10, 15, 0),
+            )
+        )
+        if (
+            sent_follow_up.status != "awaiting_response"
+            or sent_evidence.follow_up_id != sent_follow_up.follow_up_id
+            or len(
+                repo.list_follow_up_manual_sent_evidence(
+                    sent_follow_up.follow_up_id
+                )
+            )
+            != 1
+        ):
+            failures.append("follow-up approval/manual-send evidence was not durable")
+
+        stale_identity_reply = ingest_supplier_reply(
+            reply=InboundMailEnvelope(
+                sender_address=draft.recipient_email,
+                subject="Older supplier message without RFQ reference",
+                body_text="4 gün",
+                external_message_id="stale-before-follow-up-send",
+                provider_name="regression-provider",
+                mailbox_id="ops@example.test",
+                received_at=datetime(2026, 8, 28, 10, 12, 0),
+                source="email",
+            ),
+            repository=repo,
+        )
+        if stale_identity_reply.status != "unresolved_rfq":
+            failures.append(
+                "pre-follow-up supplier message crossed the clarification send boundary"
+            )
+
+        incremental = ingest_supplier_reply(
+            reply=InboundMailEnvelope(
+                sender_address=draft.recipient_email,
+                subject=f"Re: [{draft.reference_token}] Synthetic RFQ",
+                body_text="4 gün",
+                external_message_id="synthetic-transit-only",
+                provider_name="regression-provider",
+                mailbox_id="ops@example.test",
+                received_at=datetime(2026, 8, 28, 10, 30, 0),
+                explicit_rfq_reference=draft.rfq_id,
+                source="email",
+            ),
+            repository=repo,
+        )
+        merged = incremental.response
+        closed_follow_up = repo.get_follow_up_draft(sent_follow_up.follow_up_id)
+        if (
+            incremental.status != "response_attached"
+            or merged is None
+            or merged.cost != 2400
+            or merged.currency != "EUR"
+            or merged.transit_time != "4 gün"
+            or not merged.is_consolidated_follow_up
+            or not {"cost", "currency"}.issubset(set(merged.inherited_fields))
+            or closed_follow_up is None
+            or closed_follow_up.status != "responded"
+        ):
+            failures.append("transit-only follow-up reply did not merge with prior quote")
+        else:
+            with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+                completed = resume_supplier_rfq_workflow(
+                    workflow_id=workflow.workflow_id,
+                    rfq_repository=repo,
+                    approval_repository=approvals,
+                    quote_case_repository=cases,
+                )
+            if (
+                completed.get("quote_case") is None
+                or completed.get("supplier_quote") is None
+            ):
+                failures.append(
+                    "incrementally clarified supplier response did not progress to quote case"
+                )
+
+    # Legacy/recovery state: clarification_required may predate durable follow-up
+    # persistence. Resume must reconstruct exactly one draft from the stored quote.
+    recovery_repo, recovery_workflow, recovery_draft, _ = _setup()
+    attach_supplier_rfq_response(recovery_repo, SupplierRFQResponse(
+        rfq_id=recovery_draft.rfq_id,
+        supplier_name=recovery_draft.supplier_name,
+        rfq_priority=recovery_draft.priority,
+        status="quoted",
+        cost=2400,
+        currency="EUR",
+        source="manual",
+        received_at=datetime(2026, 8, 28, 12, 0, 0),
+    ))
+    recovery_repo.save_drafts([
+        recovery_repo.get_draft(recovery_draft.rfq_id).model_copy(
+            update={"status": "clarification_required"}
+        )
+    ])
+    with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+        recovered = resume_supplier_rfq_workflow(
+            workflow_id=recovery_workflow.workflow_id,
+            rfq_repository=recovery_repo,
+            approval_repository=InMemoryQuoteApprovalRepository(),
+            quote_case_repository=InMemoryQuoteCaseRepository(),
+        )
+    recovered_record = recovered.get("supplier_follow_up_record")
+    if (
+        recovered_record is None
+        or recovered_record.status != "draft"
+        or len(
+            recovery_repo.list_follow_up_drafts(recovery_draft.rfq_id)
+        )
+        != 1
+        or "transit" not in recovered_record.body.lower()
+    ):
+        failures.append(
+            "clarification-required legacy state did not recover a durable follow-up"
+        )
 
     # Indicative road requests can progress with route-level facts only and
     # remain explicitly non-binding through the customer quote draft.

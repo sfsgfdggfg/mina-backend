@@ -9,10 +9,13 @@ from pydantic import BaseModel, Field
 from src.core.mail import MailSendResult
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
+    SupplierRFQFollowUpDraft,
+    SupplierRFQFollowUpManualSentEvidence,
     SupplierRFQManualSentEvidence,
     SupplierRFQResponse,
 )
 from src.core.supplier_rfq_repository import (
+    DuplicateSupplierRFQFollowUpManualSentEvidenceError,
     DuplicateSupplierRFQManualSentEvidenceError,
     DuplicateSupplierRFQResponseError,
     SupplierRFQRepository,
@@ -25,6 +28,10 @@ class SupplierRFQNotFoundError(LookupError):
 
 
 class SupplierRFQTransitionError(ValueError):
+    pass
+
+
+class SupplierRFQFollowUpNotFoundError(LookupError):
     pass
 
 
@@ -317,6 +324,132 @@ def record_supplier_rfq_manually_sent(
     return awaiting, evidence
 
 
+def _get_follow_up(
+    repository: SupplierRFQRepository,
+    follow_up_id: str,
+) -> SupplierRFQFollowUpDraft:
+    follow_up = repository.get_follow_up_draft(follow_up_id)
+    if follow_up is None:
+        raise SupplierRFQFollowUpNotFoundError(
+            f"Supplier RFQ follow-up not found: {follow_up_id}"
+        )
+    return follow_up
+
+
+def approve_supplier_rfq_follow_up(
+    repository: SupplierRFQRepository,
+    follow_up_id: str,
+    *,
+    approved_by: str,
+    approved_at: datetime | None = None,
+) -> SupplierRFQFollowUpDraft:
+    actor = approved_by.strip()
+    if not actor:
+        raise ValueError("Supplier RFQ follow-up approval requires an operator.")
+    with atomic_repository_transaction(repository):
+        current = _get_follow_up(repository, follow_up_id)
+        parent = _get_draft(repository, current.rfq_id)
+        if current.status != "draft":
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ follow-up approval requires draft status; "
+                f"current status is {current.status}."
+            )
+        if parent.status != "clarification_required":
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ follow-up approval requires a clarification-required RFQ; "
+                f"current RFQ status is {parent.status}."
+            )
+        approved = current.model_copy(
+            update={
+                "status": "approved",
+                "approved_by": actor,
+                "approved_at": approved_at or datetime.utcnow(),
+            }
+        )
+        repository.save_follow_up_drafts([approved])
+        return approved
+
+
+def record_supplier_rfq_follow_up_manually_sent(
+    repository: SupplierRFQRepository,
+    follow_up_id: str,
+    *,
+    recorded_by: str,
+    recorded_at: datetime | None = None,
+) -> tuple[
+    SupplierRFQFollowUpDraft,
+    SupplierRFQFollowUpManualSentEvidence,
+]:
+    actor = recorded_by.strip()
+    if not actor:
+        raise ValueError("Supplier RFQ follow-up send evidence requires an operator.")
+    timestamp = recorded_at or datetime.utcnow()
+    with atomic_repository_transaction(repository):
+        current = _get_follow_up(repository, follow_up_id)
+        parent = _get_draft(repository, current.rfq_id)
+        if current.status != "approved":
+            raise SupplierRFQTransitionError(
+                "Manual Supplier RFQ follow-up send requires approved status; "
+                f"current status is {current.status}."
+            )
+        if parent.status != "clarification_required":
+            raise SupplierRFQTransitionError(
+                "Manual Supplier RFQ follow-up send requires a clarification-required RFQ; "
+                f"current RFQ status is {parent.status}."
+            )
+        sent = current.model_copy(
+            update={
+                "status": "awaiting_response",
+                "sent_at": timestamp,
+            }
+        )
+        evidence = SupplierRFQFollowUpManualSentEvidence(
+            follow_up_id=sent.follow_up_id,
+            rfq_id=sent.rfq_id,
+            sequence_number=sent.sequence_number,
+            recorded_by=actor,
+            recorded_at=timestamp,
+        )
+        repository.save_follow_up_drafts([sent])
+        try:
+            repository.save_follow_up_manual_sent_evidence(evidence)
+        except DuplicateSupplierRFQFollowUpManualSentEvidenceError as exc:
+            raise SupplierRFQTransitionError(str(exc)) from exc
+        return sent, evidence
+
+
+def _close_supplier_follow_up_for_response(
+    repository: SupplierRFQRepository,
+    *,
+    rfq_id: str,
+    response: SupplierRFQResponse,
+) -> None:
+    if response.status == "needs_clarification":
+        return
+    active = sorted(
+        (
+            item
+            for item in repository.list_follow_up_drafts(rfq_id)
+            if item.status in {"draft", "approved", "awaiting_response"}
+        ),
+        key=lambda item: item.sequence_number,
+        reverse=True,
+    )
+    if not active:
+        return
+    current = active[0]
+    if current.status == "awaiting_response":
+        updated = current.model_copy(
+            update={
+                "status": "responded",
+                "responded_at": response.received_at,
+            }
+        )
+    else:
+        updated = current.model_copy(update={"status": "cancelled"})
+    repository.save_follow_up_drafts([updated])
+
+
 def attach_supplier_rfq_response(
     repository: SupplierRFQRepository,
     response: SupplierRFQResponse,
@@ -366,5 +499,10 @@ def attach_supplier_rfq_response(
 
         repository.save_responses([response])
         repository.save_drafts([updated])
+        _close_supplier_follow_up_for_response(
+            repository,
+            rfq_id=response.rfq_id,
+            response=response,
+        )
 
         return updated

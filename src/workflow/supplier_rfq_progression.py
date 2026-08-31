@@ -11,6 +11,7 @@ from src.core.customer_memory import enrich_shipment_with_customer_memory
 from src.core.data_provenance import DataProvenanceError
 from src.core.equipment import decide_equipment
 from src.core.missing_info import check_missing_information
+from src.core.mail import OutboundMailRequest
 from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.operational_consistency import check_operational_consistency
@@ -34,6 +35,7 @@ from src.core.supplier_quote_selection import (
 from src.core.supplier_rfq_lifecycle import (
     validate_supplier_rfq_responses,
 )
+from src.core.supplier_rfq import SupplierRFQFollowUpDraft
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.core.sqlite_repositories import atomic_repository_transaction
 from src.core.supplier_selection import select_suppliers_for_shipment
@@ -133,6 +135,9 @@ def resume_supplier_rfq_workflow(
         )
 
     pending_rfq_drafts = list(result.pop("_rfq_drafts_to_save", []))
+    pending_follow_up_drafts = list(
+        result.pop("_follow_up_drafts_to_save", [])
+    )
     pending_rfq_ids = [draft.rfq_id for draft in pending_rfq_drafts]
     persisted_rfq_ids = list(dict.fromkeys([*started.rfq_ids, *pending_rfq_ids]))
 
@@ -179,6 +184,8 @@ def resume_supplier_rfq_workflow(
             )
             if pending_rfq_drafts:
                 rfq_repository.save_drafts(pending_rfq_drafts)
+            if pending_follow_up_drafts:
+                rfq_repository.save_follow_up_drafts(pending_follow_up_drafts)
             result["quote_approval"] = approval_repository.save(
                 result["quote_approval"]
             )
@@ -194,6 +201,8 @@ def resume_supplier_rfq_workflow(
             )
             if pending_rfq_drafts:
                 rfq_repository.save_drafts(pending_rfq_drafts)
+            if pending_follow_up_drafts:
+                rfq_repository.save_follow_up_drafts(pending_follow_up_drafts)
             persisted = rfq_repository.save_workflow(persisted)
     result["supplier_rfq_workflow"] = persisted
     return result
@@ -232,6 +241,43 @@ def _next_supplier_rfq_draft(
 
 def _draft_for_rfq(drafts, rfq_id):
     return next((draft for draft in drafts if draft.rfq_id == rfq_id), None)
+
+
+def _follow_up_mail_request(
+    follow_up: SupplierRFQFollowUpDraft,
+) -> OutboundMailRequest:
+    return OutboundMailRequest(
+        operation_id=follow_up.operation_id,
+        recipients=[follow_up.recipient_email],
+        subject=follow_up.subject,
+        body_text=follow_up.body,
+        purpose="supplier_rfq",
+        correlation_reference=follow_up.reference_token,
+        reference_metadata={
+            "rfq_id": follow_up.rfq_id,
+            "follow_up_id": follow_up.follow_up_id,
+            "action": "supplier_clarification",
+        },
+    )
+
+
+def _active_follow_up(
+    repository: SupplierRFQRepository,
+    rfq_id: str,
+) -> SupplierRFQFollowUpDraft | None:
+    candidates = sorted(
+        repository.list_follow_up_drafts(rfq_id),
+        key=lambda item: item.sequence_number,
+        reverse=True,
+    )
+    return next(
+        (
+            item
+            for item in candidates
+            if item.status in {"draft", "approved", "awaiting_response"}
+        ),
+        None,
+    )
 
 
 def _progress_supplier_rfq_workflow(
@@ -379,6 +425,61 @@ def _progress_supplier_rfq_workflow(
             result_type="pilot_scope_excluded",
             action_recommendation=action_recommendation,
         )
+    active_follow_up_record = next(
+        (
+            follow_up
+            for draft in supplier_rfq_drafts
+            if draft.status == "clarification_required"
+            for follow_up in [
+                _active_follow_up(rfq_repository, draft.rfq_id)
+            ]
+            if follow_up is not None
+        ),
+        None,
+    )
+    if active_follow_up_record is not None:
+        operational_consistency = check_operational_consistency(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            supplier_selection=supplier_selection,
+            supplier_quote=None,
+            operational_data_sources=operational_data_sources,
+        )
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="supplier_response_required",
+        )
+        return _result(
+            workflow=workflow,
+            pilot_scope=pilot_scope,
+            customer_memory=customer_memory,
+            commodity_profile=commodity_profile,
+            missing_info=missing_info,
+            regulatory_compliance=regulatory_compliance,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            supplier_selection=supplier_selection,
+            operational_consistency=operational_consistency,
+            quote_readiness=None,
+            drafts=supplier_rfq_drafts,
+            responses=supplier_rfq_responses,
+            valid_responses=valid_supplier_rfq_responses,
+            validation=supplier_rfq_response_validation,
+            comparisons=[],
+            selection_decision=None,
+            supplier_quote=None,
+            result_type="supplier_response_required",
+            action_recommendation=action_recommendation,
+            supplier_follow_up_draft=(
+                _follow_up_mail_request(active_follow_up_record)
+            ),
+            supplier_follow_up_record=active_follow_up_record,
+        )
+
     supplier_quote_comparisons = build_supplier_quote_comparisons(
         responses=valid_supplier_rfq_responses,
         supplier_selection=supplier_selection,
@@ -434,14 +535,48 @@ def _progress_supplier_rfq_workflow(
             current_draft = _draft_for_rfq(
                 supplier_rfq_drafts, fixable_comparison.rfq_id
             )
-            follow_up = (
-                build_supplier_follow_up_draft(
-                    draft=current_draft,
-                    rejection_reasons=fixable_comparison.commercial_rejection_reasons,
-                )
+            existing_follow_up = (
+                _active_follow_up(rfq_repository, fixable_comparison.rfq_id)
                 if current_draft is not None
                 else None
             )
+            follow_up_record = existing_follow_up
+            follow_up = (
+                _follow_up_mail_request(existing_follow_up)
+                if existing_follow_up is not None
+                else None
+            )
+            if follow_up is None and current_draft is not None:
+                existing_history = rfq_repository.list_follow_up_drafts(
+                    current_draft.rfq_id
+                )
+                sequence_number = (
+                    max(
+                        (item.sequence_number for item in existing_history),
+                        default=0,
+                    )
+                    + 1
+                )
+                generated_follow_up = build_supplier_follow_up_draft(
+                    draft=current_draft,
+                    rejection_reasons=(
+                        fixable_comparison.commercial_rejection_reasons
+                    ),
+                    sequence_number=sequence_number,
+                )
+                if generated_follow_up is not None:
+                    follow_up_record = SupplierRFQFollowUpDraft(
+                        rfq_id=current_draft.rfq_id,
+                        workflow_id=current_draft.workflow_id,
+                        sequence_number=sequence_number,
+                        recipient_email=generated_follow_up.recipients[0],
+                        subject=generated_follow_up.subject,
+                        body=generated_follow_up.body_text,
+                        rejection_reasons=list(
+                            fixable_comparison.commercial_rejection_reasons
+                        ),
+                    )
+                    follow_up = _follow_up_mail_request(follow_up_record)
             if follow_up is not None and current_draft is not None:
                 reopened = current_draft.model_copy(
                     update={"status": "clarification_required"}
@@ -479,8 +614,14 @@ def _progress_supplier_rfq_workflow(
                     result_type="supplier_response_required",
                     action_recommendation=action_recommendation,
                     supplier_follow_up_draft=follow_up,
+                    supplier_follow_up_record=follow_up_record,
                 )
                 result["_rfq_drafts_to_save"] = [reopened]
+                if (
+                    follow_up_record is not None
+                    and existing_follow_up is None
+                ):
+                    result["_follow_up_drafts_to_save"] = [follow_up_record]
                 return result
 
         # A terminal negative or a supplier that cannot meet the deadline should
@@ -708,6 +849,7 @@ def _result(
     result_type,
     action_recommendation,
     supplier_follow_up_draft=None,
+    supplier_follow_up_record=None,
 ) -> dict:
     return {
         "shipment": workflow.shipment,
@@ -737,6 +879,7 @@ def _result(
         "clarification_draft": None,
         "management_review_draft": None,
         "supplier_follow_up_draft": supplier_follow_up_draft,
+        "supplier_follow_up_record": supplier_follow_up_record,
         "result_type": result_type,
         "action_recommendation": action_recommendation,
     }
