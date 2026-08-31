@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from src.core.models import CustomerQuote, QuoteDraft
+from src.core.pricing_policy import build_operator_revision_pricing_policy
 from src.core.quote_approval import (
     QuoteApproval,
     QuoteApprovalSnapshot,
@@ -297,9 +298,19 @@ def revise_quote_case(
                 CustomerQuote.model_validate(
                     {
                         **previous_customer_quote.model_dump(),
-                        "markup_type": "manual",
+                        "markup_type": "manual_sell_price",
                         "markup_value": final_price,
                         "final_price": final_price,
+                        "pricing_policy": build_operator_revision_pricing_policy(
+                            final_price=final_price,
+                            currency=previous_customer_quote.currency,
+                            agency_policy_configured=(
+                                previous_customer_quote.pricing_policy
+                                is not None
+                                and previous_customer_quote.pricing_policy
+                                .agency_policy_configured
+                            ),
+                        ),
                     }
                 )
             )

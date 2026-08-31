@@ -113,8 +113,13 @@ def evaluate_quote_revision_regressions() -> dict:
             failures.append("approved quote remained approved after edit")
         if second.quote_case.customer_quote.final_price != 2250:
             failures.append("manual sales price was not persisted")
-        if second.quote_case.customer_quote.markup_type != "manual":
-            failures.append("manual sales price did not use manual markup mode")
+        if second.quote_case.customer_quote.markup_type != "manual_sell_price":
+            failures.append("manual sales price did not use manual sell-price mode")
+        policy = second.quote_case.customer_quote.pricing_policy
+        if policy is None or policy.policy_source != "operator_revision":
+            failures.append(
+                "manual sales price did not preserve operator pricing provenance"
+            )
         if not any(
             "does not contain the current structured customer price" in warning
             for warning in second.revision.consistency_warnings

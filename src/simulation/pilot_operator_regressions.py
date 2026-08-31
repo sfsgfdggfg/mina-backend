@@ -234,6 +234,23 @@ def evaluate_pilot_operator_regressions() -> dict:
             ("POST", "/supplier-rfq-workflows/workflow-1/resume-quote", None),
         )
     )
+    pricing_override = {
+        "method": "fixed_profit",
+        "value": 300,
+    }
+    client.resume_quote_workflow(
+        "workflow-2", quote_pricing_override=pricing_override
+    )
+    contracts.append(
+        (
+            _last_contract(session),
+            (
+                "POST",
+                "/supplier-rfq-workflows/workflow-2/resume-quote",
+                {"quote_pricing_override": pricing_override},
+            ),
+        )
+    )
     client.list_approvals()
     contracts.append((_last_contract(session), ("GET", "/quote-approvals", None)))
     client.get_approval("approval-1")

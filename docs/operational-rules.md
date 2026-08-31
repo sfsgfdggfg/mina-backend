@@ -3335,3 +3335,26 @@ When multiple response snapshots exist, the latest received response supersedes
 earlier snapshots for comparison and selection while all historical responses
 remain durable evidence. Commercial-safety results must never be shared across
 different response snapshots merely because they have the same RFQ ID.
+
+## RULE-147 — Pricing Policy Resolution Is Mandatory Before Customer Price Creation
+
+For P1-41 and later runtime behavior, the earlier fixed 15% customer-price default
+is superseded. MINAI must resolve pricing in this order:
+
+1. explicit quote override;
+2. pricing policy on the verified customer profile;
+3. configured agency default.
+
+If none resolves, MINAI must stop at `pricing_policy_required`; it must not infer a
+profitability percentage from customer sensitivity, prior test fixtures or any
+other unrelated field.
+
+`cost_markup_percentage` applies a percentage to supplier cost.
+`gross_margin_percentage` targets gross margin on the final sales price.
+`fixed_profit` adds a fixed amount in the quote currency. `manual_sell_price` is
+an exact human/commercial sell price and receives no automatic rounding.
+
+Agency rounding is explicit configuration and may vary by currency. Every created
+customer quote must retain the effective policy source and formula so its approval
+snapshot remains auditable. `price_sensitivity` is descriptive customer memory and
+must never be treated as a numeric pricing rule.

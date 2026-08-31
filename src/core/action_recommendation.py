@@ -150,6 +150,29 @@ def generate_action_recommendation(
             source="supplier_selection_engine",
         )
 
+    if result_type == "pricing_policy_required":
+        return ActionRecommendation(
+            action_type="pricing_policy_required",
+            title="Fiyatlandırma Politikası Gerekli",
+            message=(
+                "Tedarikçi teklifi ticari olarak hazır, ancak müşteri satış "
+                "fiyatını hesaplamak için geçerli bir quote override, doğrulanmış "
+                "müşteri fiyat politikası veya agency default pricing policy yok. "
+                "MINAI gizli bir varsayılan kâr oranı uygulamadan durdu."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "Agency default fiyatlandırma politikasını tanımla veya doğrula.",
+                    "Varsa müşteriye özel pricing policy'yi kontrol et.",
+                    "Bu teklife özel fiyat gerekiyorsa quote override gir.",
+                    "Politika çözülmeden müşteriye satış fiyatı üretme.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="pricing_policy_resolver",
+        )
+
     if result_type == "supplier_response_required":
         return ActionRecommendation(
             action_type="supplier_response_required",

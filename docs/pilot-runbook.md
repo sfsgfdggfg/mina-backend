@@ -1080,3 +1080,46 @@ Separate controlled acceptance is still required for at least:
 - agency/customer/quote-specific production pricing policy resolution;
 - excluded pilot categories such as ADR, temperature-controlled, oversize and
   non-road freight.
+
+## P1-41 Addendum — Explicit Agency Pricing Configuration
+
+The pilot runtime no longer assumes a 15% customer-price markup. A firm or
+indicative customer price requires either a quote override, a verified customer
+pricing policy, or an agency default pricing configuration.
+
+The current pilot adapter accepts the agency setting through
+`MINAI_AGENCY_PRICING_POLICY_JSON`. The value is configuration, not a secret, but
+it should still be controlled as commercial policy. Example schema:
+
+```json
+{
+  "default_formula": {
+    "method": "cost_markup_percentage",
+    "value": 12.5
+  },
+  "default_rounding": {
+    "mode": "none"
+  },
+  "currency_rounding": {
+    "EUR": {
+      "mode": "up",
+      "increment": 10
+    }
+  }
+}
+```
+
+Do not copy the regression suite's synthetic 15% fixture into a live agency
+configuration unless the agency has explicitly adopted that policy.
+
+A one-quote override can be supplied by the authenticated operator command:
+
+```text
+workflow resume-quote <workflow-id> \
+  --pricing-method fixed_profit \
+  --pricing-value 300
+```
+
+Both override arguments are required together. If the policy is missing or
+malformed, the workflow fails closed at `pricing_policy_required` and does not
+create a customer quote case.

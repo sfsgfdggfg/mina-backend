@@ -708,6 +708,17 @@ def evaluate_customer_memory_validation() -> dict:
                 "@invalid-domain",
             ],
         },
+        {
+            "customer_name": "Invalid Pricing Customer",
+            "active": True,
+            "aliases": [],
+            "trusted_sender_addresses": ["pricing@invalid.example"],
+            "trusted_sender_domains": [],
+            "pricing_policy": {
+                "method": "gross_margin_percentage",
+                "value": 100,
+            },
+        },
     ]
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -734,6 +745,7 @@ def evaluate_customer_memory_validation() -> dict:
         "is already trusted by Trust Customer A",
         "trusted sender domain '@invalid-domain' "
         "must be a bare valid domain",
+        "pricing_policy is invalid",
     )
 
     for fragment in expected_fragments:
@@ -998,44 +1010,63 @@ def evaluate_heavy_cargo_weight_logic() -> dict:
 def evaluate_customer_pricing_regression() -> dict:
     from src.core.models import CustomerQuote, SupplierQuote
     from src.core.pricing import calculate_customer_quote
+    from src.core.pricing_policy import (
+        AGENCY_PRICING_POLICY_ENV,
+        PricingFormula,
+        resolve_pricing_policy,
+    )
 
     failures = []
     supplier_quote = SupplierQuote(
         supplier_name="Pricing Boundary Supplier",
-        cost=0,
+        cost=2400,
         currency="EUR",
     )
-    rounding_cases = {
-        2300.00: 2300,
-        2300.01: 2310,
-        2309.99: 2310,
-        2310.00: 2310,
-    }
-
-    for raw_price, expected_price in rounding_cases.items():
-        quote = calculate_customer_quote(
-            supplier_quote,
-            markup_type="manual",
-            markup_value=raw_price,
-        )
-        if quote.final_price != expected_price:
-            failures.append(
-                f"{raw_price} should ceil to {expected_price}, got {quote.final_price}"
-            )
-
-    default_quote = calculate_customer_quote(
-        SupplierQuote(
-            supplier_name="Default Markup Supplier",
-            cost=2000,
-            currency="EUR",
-        )
+    agency_json = (
+        '{"default_formula":{"method":"cost_markup_percentage","value":15},'
+        '"default_rounding":{"mode":"none"},'
+        '"currency_rounding":{"EUR":{"mode":"up","increment":10}}}'
     )
-    if default_quote.final_price != 2300:
-        failures.append("default 15% cost markup should preserve 2300 price")
+    agency_env = {AGENCY_PRICING_POLICY_ENV: agency_json}
 
-    dumped_quote = default_quote.model_dump()
-    if "markup_type" not in dumped_quote or "margin_type" in dumped_quote:
-        failures.append("serialized quote should use markup terminology")
+    resolved = resolve_pricing_policy(currency="EUR", environ=agency_env)
+    markup_quote = calculate_customer_quote(supplier_quote, resolved)
+    if markup_quote.final_price != 2760:
+        failures.append("15% cost markup should produce 2760 EUR")
+    if resolved.policy_source != "agency_default":
+        failures.append("agency default pricing source was not preserved")
+
+    gross_margin = resolve_pricing_policy(
+        currency="EUR",
+        quote_override=PricingFormula(
+            method="gross_margin_percentage", value=15
+        ),
+        environ=agency_env,
+    )
+    gross_margin_quote = calculate_customer_quote(supplier_quote, gross_margin)
+    if gross_margin_quote.final_price != 2830:
+        failures.append("15% gross margin should round 2823.53 EUR up to 2830 EUR")
+
+    fixed_profit = resolve_pricing_policy(
+        currency="EUR",
+        quote_override=PricingFormula(method="fixed_profit", value=300),
+        environ=agency_env,
+    )
+    if calculate_customer_quote(supplier_quote, fixed_profit).final_price != 2700:
+        failures.append("300 EUR fixed profit should produce 2700 EUR")
+
+    manual = resolve_pricing_policy(
+        currency="EUR",
+        quote_override=PricingFormula(method="manual_sell_price", value=2755),
+        environ=agency_env,
+    )
+    manual_quote = calculate_customer_quote(supplier_quote, manual)
+    if manual_quote.final_price != 2755:
+        failures.append("manual sell price must not be rounded by agency policy")
+
+    missing = resolve_pricing_policy(currency="EUR", environ={})
+    if missing.status != "missing" or missing.resolved:
+        failures.append("missing pricing policy did not fail closed")
 
     legacy_quote = CustomerQuote(
         supplier_cost=2000,
@@ -1044,14 +1075,15 @@ def evaluate_customer_pricing_regression() -> dict:
         final_price=2300,
         currency="EUR",
     )
-    if (
-        legacy_quote.markup_type != "percentage"
-        or legacy_quote.margin_value != 15
-    ):
-        failures.append("legacy margin constructor aliases should remain compatible")
+    if legacy_quote.markup_type != "percentage" or legacy_quote.margin_value != 15:
+        failures.append("legacy serialized quote compatibility was lost")
+
+    dumped_quote = markup_quote.model_dump()
+    if "pricing_policy" not in dumped_quote or "margin_type" in dumped_quote:
+        failures.append("serialized quote should preserve pricing policy provenance")
 
     return {
-        "name": "Customer pricing terminology and rounding",
+        "name": "Customer pricing policy and rounding",
         "passed": len(failures) == 0,
         "failures": failures,
     }
@@ -1423,7 +1455,11 @@ def evaluate_action_recommendation_result_contract() -> dict:
 
     failures = []
 
-    for result_type in ("quote_ready", "quote_with_review"):
+    for result_type in (
+        "quote_ready",
+        "quote_with_review",
+        "pricing_policy_required",
+    ):
         action = generate_action_recommendation(
             shipment=Shipment(),
             equipment_decision=EquipmentDecision(),

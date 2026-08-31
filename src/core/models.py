@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Any, Literal, Optional, List
+from src.core.pricing_policy import PricingPolicyResolution
 
 from src.core.clarification_requirements import (
     ClarificationAnswerValue,
@@ -126,6 +127,7 @@ class CustomerQuote(BaseModel):
     markup_value: float
     final_price: float
     currency: str = "EUR"
+    pricing_policy: Optional[PricingPolicyResolution] = None
 
     @model_validator(mode="before")
     @classmethod

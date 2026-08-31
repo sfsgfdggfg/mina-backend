@@ -266,10 +266,20 @@ class PilotOperatorClient:
             "POST", f"/supplier-rfqs/{self._id(rfq_id)}/responses", payload
         )
 
-    def resume_quote_workflow(self, workflow_id: str) -> Any:
+    def resume_quote_workflow(
+        self,
+        workflow_id: str,
+        quote_pricing_override: dict[str, Any] | None = None,
+    ) -> Any:
+        payload = (
+            {"quote_pricing_override": quote_pricing_override}
+            if quote_pricing_override is not None
+            else None
+        )
         return self._request(
             "POST",
             f"/supplier-rfq-workflows/{self._id(workflow_id)}/resume-quote",
+            payload,
         )
 
     def list_approvals(self) -> Any:
@@ -430,7 +440,18 @@ def _build_parser() -> argparse.ArgumentParser:
     workflow = commands.add_parser("workflow").add_subparsers(
         dest="action", required=True
     )
-    workflow.add_parser("resume-quote").add_argument("workflow_id")
+    resume_quote = workflow.add_parser("resume-quote")
+    resume_quote.add_argument("workflow_id")
+    resume_quote.add_argument(
+        "--pricing-method",
+        choices=[
+            "cost_markup_percentage",
+            "gross_margin_percentage",
+            "fixed_profit",
+            "manual_sell_price",
+        ],
+    )
+    resume_quote.add_argument("--pricing-value", type=float)
 
     approval = commands.add_parser("approval").add_subparsers(
         dest="action", required=True
@@ -563,7 +584,22 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             ),
         )
     if args.command == "workflow":
-        return client.resume_quote_workflow(args.workflow_id)
+        if (args.pricing_method is None) != (args.pricing_value is None):
+            raise PilotOpsError(
+                "--pricing-method and --pricing-value must be provided together."
+            )
+        quote_pricing_override = (
+            {
+                "method": args.pricing_method,
+                "value": args.pricing_value,
+            }
+            if args.pricing_method is not None
+            else None
+        )
+        return client.resume_quote_workflow(
+            args.workflow_id,
+            quote_pricing_override=quote_pricing_override,
+        )
     if args.command == "approval":
         if args.action == "list":
             return client.list_approvals()

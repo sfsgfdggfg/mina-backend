@@ -17,6 +17,7 @@ from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.operational_consistency import check_operational_consistency
 from src.core.operational_data import OperationalDataSources
 from src.core.pricing import calculate_customer_quote
+from src.core.pricing_policy import PricingFormula, resolve_pricing_policy
 from src.core.quote_approval import QuoteApproval, QuoteApprovalSnapshot
 from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.quote_case import QuoteCase
@@ -88,6 +89,7 @@ def resume_supplier_rfq_workflow(
     approval_repository: QuoteApprovalRepository,
     quote_case_repository: QuoteCaseRepository,
     operational_data_sources: OperationalDataSources | None = None,
+    quote_pricing_override: PricingFormula | None = None,
 ) -> dict:
     workflow = rfq_repository.get_workflow(workflow_id)
     if workflow is None:
@@ -115,6 +117,7 @@ def resume_supplier_rfq_workflow(
             workflow=started,
             rfq_repository=rfq_repository,
             operational_data_sources=operational_data_sources,
+            quote_pricing_override=quote_pricing_override,
         )
     except DataProvenanceError:
         drafts = [
@@ -285,6 +288,7 @@ def _progress_supplier_rfq_workflow(
     workflow,
     rfq_repository: SupplierRFQRepository,
     operational_data_sources: OperationalDataSources | None = None,
+    quote_pricing_override: PricingFormula | None = None,
 ) -> dict:
 
     shipment = workflow.shipment
@@ -750,7 +754,52 @@ def _progress_supplier_rfq_workflow(
             action_recommendation=action_recommendation,
         )
 
-    customer_quote = calculate_customer_quote(supplier_quote)
+    customer_pricing_policy = (
+        customer_memory.profile.pricing_policy
+        if customer_memory.matched
+        and customer_memory.profile is not None
+        else None
+    )
+    pricing_policy_resolution = resolve_pricing_policy(
+        currency=supplier_quote.currency,
+        customer_pricing_policy=customer_pricing_policy,
+        quote_override=quote_pricing_override,
+    )
+    if not pricing_policy_resolution.resolved:
+        action_recommendation = generate_action_recommendation(
+            shipment=shipment,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            missing_info=missing_info,
+            result_type="pricing_policy_required",
+        )
+        return _result(
+            workflow=workflow,
+            pilot_scope=pilot_scope,
+            customer_memory=customer_memory,
+            commodity_profile=commodity_profile,
+            missing_info=missing_info,
+            regulatory_compliance=regulatory_compliance,
+            equipment_decision=equipment_decision,
+            risk_assessment=risk_assessment,
+            supplier_selection=supplier_selection,
+            operational_consistency=operational_consistency,
+            quote_readiness=quote_readiness,
+            drafts=supplier_rfq_drafts,
+            responses=supplier_rfq_responses,
+            valid_responses=valid_supplier_rfq_responses,
+            validation=supplier_rfq_response_validation,
+            comparisons=supplier_quote_comparisons,
+            selection_decision=supplier_quote_selection_decision,
+            supplier_quote=supplier_quote,
+            result_type="pricing_policy_required",
+            action_recommendation=action_recommendation,
+            pricing_policy_resolution=pricing_policy_resolution,
+        )
+
+    customer_quote = calculate_customer_quote(
+        supplier_quote, pricing_policy_resolution
+    )
     quote_draft = generate_quote_draft(
         shipment=shipment,
         equipment_decision=equipment_decision,
@@ -813,6 +862,7 @@ def _progress_supplier_rfq_workflow(
         supplier_quote=supplier_quote,
         result_type=quote_readiness.result_type,
         action_recommendation=action_recommendation,
+        pricing_policy_resolution=pricing_policy_resolution,
     )
     result.update(
         {
@@ -850,6 +900,7 @@ def _result(
     action_recommendation,
     supplier_follow_up_draft=None,
     supplier_follow_up_record=None,
+    pricing_policy_resolution=None,
 ) -> dict:
     return {
         "shipment": workflow.shipment,
@@ -871,6 +922,7 @@ def _result(
         "supplier_quote_comparisons": comparisons,
         "supplier_quote_selection_decision": selection_decision,
         "supplier_quote": supplier_quote,
+        "pricing_policy_resolution": pricing_policy_resolution,
         "customer_quote": None,
         "quote_draft": None,
         "quote_approval": None,

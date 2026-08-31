@@ -5935,3 +5935,34 @@ trail.
 The supersession rule is applied before price usability. If a later same-RFQ
 response is terminal or requests clarification, MINAI must not resurrect an older
 price merely because the older response was quote-usable.
+
+## DEC-132 — Customer Pricing Must Resolve from Explicit Policy, Never a Hidden MINAI Percentage
+
+**Status:** Accepted
+**Date:** 2026-08-31
+
+### Decision
+
+Production customer pricing no longer has a hardcoded percentage fallback. Before
+MINAI creates a customer quote, it resolves one explicit pricing formula using
+this precedence: quote-specific override, verified customer pricing policy, then
+agency default pricing policy. If none exists, the workflow returns
+`pricing_policy_required` and creates no customer quote case.
+
+Supported formulas are named by their commercial meaning:
+`cost_markup_percentage`, `gross_margin_percentage`, `fixed_profit`, and
+`manual_sell_price`. Cost markup and gross margin are not interchangeable.
+
+Agency pricing configuration also owns rounding behavior. Rounding may be defined
+as an agency default and overridden by currency. A manual sell price is never
+silently rounded by MINAI.
+
+The selected formula, policy source, currency and effective rounding rule are
+persisted with the customer quote and copied into the approval snapshot. A later
+operator price revision is recorded as `manual_sell_price` with
+`operator_revision` provenance and requires fresh approval under the existing
+revision rules.
+
+The controlled regression suite may continue to use an explicit synthetic 15%
+cost-markup fixture. That fixture is test configuration only and is not a runtime
+production default.
