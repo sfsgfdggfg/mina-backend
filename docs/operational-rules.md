@@ -3320,3 +3320,10 @@ creating duplicate outbound requests.
 For sender-identity-only correlation while a clarification is awaiting response,
 the active follow-up send timestamp is the minimum accepted inbound time; the
 initial RFQ send timestamp alone is not sufficient.
+
+## RULE-145 — Follow-Up Approval Access Does Not Weaken the Send Boundary
+
+Authenticated pilot operators may read a durable supplier follow-up, approve it,
+and record durable evidence after a manual external send. The pilot allowlist must
+not expose an automated follow-up send endpoint. A successful approval is not
+evidence that the message was sent.
