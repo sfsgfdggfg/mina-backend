@@ -25,6 +25,13 @@ QuoteProgressionStatus = Literal[
     "provenance_blocked",
     "completed",
 ]
+SupplierRFQFollowUpStatus = Literal[
+    "draft",
+    "approved",
+    "awaiting_response",
+    "responded",
+    "cancelled",
+]
 
 SUPPLIER_RFQ_REFERENCE_PREFIX = "MINAI-RFQ:"
 
@@ -68,6 +75,44 @@ class SupplierRFQDraft(BaseModel):
 
 class SupplierRFQManualSentEvidence(BaseModel):
     rfq_id: str
+    recorded_by: str
+    recorded_at: datetime
+    source: Literal["manual_external_send"] = "manual_external_send"
+
+
+class SupplierRFQFollowUpDraft(BaseModel):
+    follow_up_id: str = Field(default_factory=lambda: str(uuid4()))
+    rfq_id: str
+    workflow_id: str
+    sequence_number: int = Field(ge=1)
+    recipient_email: str
+    subject: str
+    body: str
+    rejection_reasons: list[str] = Field(default_factory=list)
+    status: SupplierRFQFollowUpStatus = "draft"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
+    responded_at: Optional[datetime] = None
+    source: str = "supplier_follow_up_generator"
+
+    @property
+    def operation_id(self) -> str:
+        return (
+            f"supplier-rfq-clarification:{self.rfq_id}:"
+            f"{self.sequence_number}"
+        )
+
+    @property
+    def reference_token(self) -> str:
+        return build_supplier_rfq_reference(self.rfq_id)
+
+
+class SupplierRFQFollowUpManualSentEvidence(BaseModel):
+    follow_up_id: str
+    rfq_id: str
+    sequence_number: int = Field(ge=1)
     recorded_by: str
     recorded_at: datetime
     source: Literal["manual_external_send"] = "manual_external_send"
@@ -156,6 +201,9 @@ class SupplierRFQResponse(BaseModel):
     source: Literal["simulation", "email", "portal", "api", "manual"] = "manual"
     recorded_by: Optional[str] = None
     received_at: datetime = Field(default_factory=datetime.utcnow)
+    is_consolidated_follow_up: bool = False
+    inherited_fields: list[str] = Field(default_factory=list)
+    prior_response_received_at: Optional[datetime] = None
 
     @field_validator("cost", mode="before")
     @classmethod
@@ -205,6 +253,15 @@ class SupplierRFQResponse(BaseModel):
                     "Non-quoted RFQ response must not include currency."
                 )
 
+        if self.is_consolidated_follow_up:
+            if not self.inherited_fields or self.prior_response_received_at is None:
+                raise ValueError(
+                    "Consolidated follow-up response requires inherited-field provenance."
+                )
+        elif self.inherited_fields or self.prior_response_received_at is not None:
+            raise ValueError(
+                "Non-consolidated response must not carry inherited-field provenance."
+            )
         return self
 
     @property

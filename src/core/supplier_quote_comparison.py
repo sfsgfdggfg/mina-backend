@@ -79,7 +79,7 @@ def build_supplier_quote_comparisons(
         {
             draft.rfq_id
             for draft in drafts
-            if draft.status == "responded"
+            if draft.status in {"responded", "clarification_required"}
         }
         if drafts is not None
         else None

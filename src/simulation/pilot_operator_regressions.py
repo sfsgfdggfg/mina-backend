@@ -183,6 +183,35 @@ def evaluate_pilot_operator_regressions() -> dict:
             ("POST", "/supplier-rfqs/rfq-1/record-manually-sent", {}),
         )
     )
+    client.list_rfq_follow_ups("rfq-1")
+    contracts.append(
+        (_last_contract(session), ("GET", "/supplier-rfqs/rfq-1/follow-ups", None))
+    )
+    client.get_rfq_follow_up("follow-up-1")
+    contracts.append(
+        (
+            _last_contract(session),
+            ("GET", "/supplier-rfq-follow-ups/follow-up-1", None),
+        )
+    )
+    client.approve_rfq_follow_up("follow-up-1")
+    contracts.append(
+        (
+            _last_contract(session),
+            ("POST", "/supplier-rfq-follow-ups/follow-up-1/approve", {}),
+        )
+    )
+    client.record_rfq_follow_up_manually_sent("follow-up-1")
+    contracts.append(
+        (
+            _last_contract(session),
+            (
+                "POST",
+                "/supplier-rfq-follow-ups/follow-up-1/record-manually-sent",
+                {},
+            ),
+        )
+    )
     response = {
         "supplier_name": "Supplier One",
         "rfq_priority": 1,
@@ -299,6 +328,7 @@ def evaluate_pilot_operator_regressions() -> dict:
     ]
     forbidden_paths = {
         "/supplier-rfqs/rfq-1/send",
+        "/supplier-rfq-follow-ups/follow-up-1/send",
         "/quotes/prepare-send",
         "/supplier-responses/ingest",
     }
@@ -344,6 +374,8 @@ def evaluate_pilot_operator_regressions() -> dict:
         "/extraction-proposals/proposal-1",
         "/supplier-rfqs",
         "/supplier-rfqs/rfq-1",
+        "/supplier-rfqs/rfq-1/follow-ups",
+        "/supplier-rfq-follow-ups/follow-up-1",
         "/quote-approvals",
         "/quote-approvals/approval-1",
         "/quote-cases",
@@ -436,6 +468,30 @@ def evaluate_pilot_operator_regressions() -> dict:
         },
     ):
         failures.append("case manual-sent CLI mapped to the wrong API contract")
+
+    follow_up_cli_session = _Session([_Response(200, {"status": "approved"})])
+    follow_up_cli_client = _client(follow_up_cli_session)
+    with patch.object(
+        PilotOperatorClient,
+        "from_environment",
+        return_value=follow_up_cli_client,
+    ):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+            io.StringIO()
+        ):
+            follow_up_cli_exit = main([
+                "rfq",
+                "follow-up-approve",
+                "follow-up-cli",
+            ])
+    if follow_up_cli_exit != 0:
+        failures.append("RFQ follow-up approve CLI command failed")
+    elif _last_contract(follow_up_cli_session) != (
+        "POST",
+        "/supplier-rfq-follow-ups/follow-up-cli/approve",
+        {},
+    ):
+        failures.append("RFQ follow-up approve CLI mapped to the wrong API contract")
 
     secret = "never-print-this-bearer-token"
     stdout = io.StringIO()

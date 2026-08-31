@@ -232,6 +232,35 @@ class PilotOperatorClient:
             {},
         )
 
+    def list_rfq_follow_ups(self, rfq_id: str) -> Any:
+        return self._request(
+            "GET",
+            f"/supplier-rfqs/{self._id(rfq_id)}/follow-ups",
+        )
+
+    def get_rfq_follow_up(self, follow_up_id: str) -> Any:
+        return self._request(
+            "GET",
+            f"/supplier-rfq-follow-ups/{self._id(follow_up_id)}",
+        )
+
+    def approve_rfq_follow_up(self, follow_up_id: str) -> Any:
+        return self._request(
+            "POST",
+            f"/supplier-rfq-follow-ups/{self._id(follow_up_id)}/approve",
+            {},
+        )
+
+    def record_rfq_follow_up_manually_sent(self, follow_up_id: str) -> Any:
+        return self._request(
+            "POST",
+            (
+                f"/supplier-rfq-follow-ups/{self._id(follow_up_id)}"
+                "/record-manually-sent"
+            ),
+            {},
+        )
+
     def record_rfq_response(self, rfq_id: str, **payload: Any) -> Any:
         return self._request(
             "POST", f"/supplier-rfqs/{self._id(rfq_id)}/responses", payload
@@ -378,6 +407,10 @@ def _build_parser() -> argparse.ArgumentParser:
     rfq.add_parser("get").add_argument("rfq_id")
     rfq.add_parser("approve").add_argument("rfq_id")
     rfq.add_parser("manual-sent").add_argument("rfq_id")
+    rfq.add_parser("follow-up-list").add_argument("rfq_id")
+    rfq.add_parser("follow-up-get").add_argument("follow_up_id")
+    rfq.add_parser("follow-up-approve").add_argument("follow_up_id")
+    rfq.add_parser("follow-up-manual-sent").add_argument("follow_up_id")
     response = rfq.add_parser("response")
     response.add_argument("rfq_id")
     response.add_argument("--supplier-name", required=True)
@@ -504,6 +537,14 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.approve_rfq(args.rfq_id)
         if args.action == "manual-sent":
             return client.record_rfq_manually_sent(args.rfq_id)
+        if args.action == "follow-up-list":
+            return client.list_rfq_follow_ups(args.rfq_id)
+        if args.action == "follow-up-get":
+            return client.get_rfq_follow_up(args.follow_up_id)
+        if args.action == "follow-up-approve":
+            return client.approve_rfq_follow_up(args.follow_up_id)
+        if args.action == "follow-up-manual-sent":
+            return client.record_rfq_follow_up_manually_sent(args.follow_up_id)
         return client.record_rfq_response(
             args.rfq_id,
             **_compact(

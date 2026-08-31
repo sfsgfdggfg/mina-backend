@@ -5879,3 +5879,28 @@ Supplier-address-only RFQ correlation remains a fallback behind explicit and
 subject RFQ references. The fallback may consider only RFQs whose recorded send
 time is at or before the inbound message's received time. Missing timestamps or
 messages predating an RFQ send must not be attached to that later RFQ.
+
+## DEC-129 — Supplier Clarification Follow-Ups Are Durable, Human-Gated Workflow Objects
+
+**Status:** Accepted
+**Date:** 2026-08-31
+
+### Decision
+
+A supplier clarification generated after an incomplete but usable RFQ response is
+not merely transient mail text. MINAI persists it as a follow-up record linked to
+the same RFQ, with its own follow-up ID, sequence number, rejection reasons,
+recipient, subject, body and lifecycle state.
+
+Supplier follow-ups require explicit human approval before external sending.
+Manual external sends have their own durable evidence and never reuse the initial
+RFQ send evidence. A later supplier response closes the active sent follow-up in
+the audit trail.
+
+When the supplier answers only the fact requested by the clarification, MINAI may
+consolidate that new fact with authoritative commercial fields from the prior
+quoted response on the same RFQ. Inherited fields and the prior response timestamp
+are recorded explicitly; missing facts are not invented.
+
+For sender-identity fallback during an active clarification, the latest sent
+follow-up establishes the temporal lower bound for candidate supplier replies.

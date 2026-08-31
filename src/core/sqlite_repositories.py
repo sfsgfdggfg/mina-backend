@@ -14,11 +14,14 @@ from src.core.quote_approval import QuoteApproval
 from src.core.quote_case import QuoteCase
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
+    SupplierRFQFollowUpDraft,
+    SupplierRFQFollowUpManualSentEvidence,
     SupplierRFQManualSentEvidence,
     SupplierRFQResponse,
     SupplierRFQWorkflow,
 )
 from src.core.supplier_rfq_repository import (
+    DuplicateSupplierRFQFollowUpManualSentEvidenceError,
     DuplicateSupplierRFQManualSentEvidenceError,
     DuplicateSupplierRFQResponseError,
 )
@@ -94,6 +97,10 @@ class SQLiteExtractionProposalRepository:
 class SQLiteSupplierRFQRepository:
     DRAFT_NAMESPACE = "supplier_rfq_drafts"
     MANUAL_SENT_EVIDENCE_NAMESPACE = "supplier_rfq_manual_sent_evidence"
+    FOLLOW_UP_DRAFT_NAMESPACE = "supplier_rfq_follow_up_drafts"
+    FOLLOW_UP_MANUAL_SENT_EVIDENCE_NAMESPACE = (
+        "supplier_rfq_follow_up_manual_sent_evidence"
+    )
     WORKFLOW_NAMESPACE = "supplier_rfq_workflows"
     RESPONSE_NAMESPACE = "supplier_rfq_responses"
     INGESTED_MESSAGE_NAMESPACE = "supplier_ingested_messages"
@@ -149,6 +156,86 @@ class SQLiteSupplierRFQRepository:
         if rfq_id is None:
             return evidence
         return [item for item in evidence if item.rfq_id == rfq_id]
+    def save_follow_up_drafts(
+        self,
+        drafts: Iterable[SupplierRFQFollowUpDraft],
+    ) -> list[SupplierRFQFollowUpDraft]:
+        saved = []
+        for draft in drafts:
+            payload = _model_payload(draft)
+            self.store.upsert(
+                namespace=self.FOLLOW_UP_DRAFT_NAMESPACE,
+                record_key=draft.follow_up_id,
+                payload=payload,
+                event_type="supplier_rfq_follow_up_draft_saved",
+                entity_type="supplier_rfq_follow_up_draft",
+            )
+            saved.append(_model_from_payload(SupplierRFQFollowUpDraft, payload))
+        return saved
+
+    def get_follow_up_draft(
+        self,
+        follow_up_id: str,
+    ) -> SupplierRFQFollowUpDraft | None:
+        payload = self.store.get(
+            namespace=self.FOLLOW_UP_DRAFT_NAMESPACE,
+            record_key=follow_up_id,
+        )
+        return (
+            None
+            if payload is None
+            else _model_from_payload(SupplierRFQFollowUpDraft, payload)
+        )
+
+    def list_follow_up_drafts(
+        self,
+        rfq_id: str | None = None,
+    ) -> list[SupplierRFQFollowUpDraft]:
+        drafts = [
+            _model_from_payload(SupplierRFQFollowUpDraft, payload)
+            for payload in self.store.list_all(
+                namespace=self.FOLLOW_UP_DRAFT_NAMESPACE
+            )
+        ]
+        return drafts if rfq_id is None else [d for d in drafts if d.rfq_id == rfq_id]
+
+    def save_follow_up_manual_sent_evidence(
+        self,
+        evidence: SupplierRFQFollowUpManualSentEvidence,
+    ) -> SupplierRFQFollowUpManualSentEvidence:
+        payload = _model_payload(evidence)
+        if not self.store.insert_once(
+            namespace=self.FOLLOW_UP_MANUAL_SENT_EVIDENCE_NAMESPACE,
+            record_key=evidence.follow_up_id,
+            payload=payload,
+            event_type="supplier_rfq_follow_up_manually_sent",
+            entity_type="supplier_rfq_follow_up",
+        ):
+            raise DuplicateSupplierRFQFollowUpManualSentEvidenceError(
+                "Manual Supplier RFQ follow-up sent evidence already exists."
+            )
+        return _model_from_payload(
+            SupplierRFQFollowUpManualSentEvidence, payload
+        )
+
+    def list_follow_up_manual_sent_evidence(
+        self,
+        follow_up_id: str | None = None,
+    ) -> list[SupplierRFQFollowUpManualSentEvidence]:
+        evidence = [
+            _model_from_payload(
+                SupplierRFQFollowUpManualSentEvidence, payload
+            )
+            for payload in self.store.list_all(
+                namespace=self.FOLLOW_UP_MANUAL_SENT_EVIDENCE_NAMESPACE
+            )
+        ]
+        return (
+            evidence
+            if follow_up_id is None
+            else [e for e in evidence if e.follow_up_id == follow_up_id]
+        )
+
     def save_workflow(self, workflow: SupplierRFQWorkflow) -> SupplierRFQWorkflow:
         payload = _model_payload(workflow)
         self.store.upsert(namespace=self.WORKFLOW_NAMESPACE, record_key=workflow.workflow_id, payload=payload, event_type="supplier_rfq_workflow_saved", entity_type="supplier_rfq_workflow")

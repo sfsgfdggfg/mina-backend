@@ -5,6 +5,8 @@ from typing import Optional, Protocol
 
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
+    SupplierRFQFollowUpDraft,
+    SupplierRFQFollowUpManualSentEvidence,
     SupplierRFQManualSentEvidence,
     SupplierRFQResponse,
     SupplierRFQWorkflow,
@@ -16,6 +18,10 @@ class DuplicateSupplierRFQResponseError(ValueError):
 
 
 class DuplicateSupplierRFQManualSentEvidenceError(ValueError):
+    pass
+
+
+class DuplicateSupplierRFQFollowUpManualSentEvidenceError(ValueError):
     pass
 
 
@@ -51,6 +57,36 @@ class SupplierRFQRepository(Protocol):
         self,
         rfq_id: Optional[str] = None,
     ) -> list[SupplierRFQManualSentEvidence]:
+        ...
+
+    def save_follow_up_drafts(
+        self,
+        drafts: Iterable[SupplierRFQFollowUpDraft],
+    ) -> list[SupplierRFQFollowUpDraft]:
+        ...
+
+    def get_follow_up_draft(
+        self,
+        follow_up_id: str,
+    ) -> Optional[SupplierRFQFollowUpDraft]:
+        ...
+
+    def list_follow_up_drafts(
+        self,
+        rfq_id: Optional[str] = None,
+    ) -> list[SupplierRFQFollowUpDraft]:
+        ...
+
+    def save_follow_up_manual_sent_evidence(
+        self,
+        evidence: SupplierRFQFollowUpManualSentEvidence,
+    ) -> SupplierRFQFollowUpManualSentEvidence:
+        ...
+
+    def list_follow_up_manual_sent_evidence(
+        self,
+        follow_up_id: Optional[str] = None,
+    ) -> list[SupplierRFQFollowUpManualSentEvidence]:
         ...
 
     def save_workflow(
@@ -117,6 +153,9 @@ def _supplier_rfq_response_key(
         response.source,
         response.recorded_by,
         response.received_at,
+        response.is_consolidated_follow_up,
+        tuple(response.inherited_fields),
+        response.prior_response_received_at,
     )
 
 
@@ -128,6 +167,12 @@ class InMemorySupplierRFQRepository:
         self._response_keys: set[tuple] = set()
         self._manual_sent_evidence: dict[
             str, SupplierRFQManualSentEvidence
+        ] = {}
+        self._follow_up_drafts: dict[
+            str, SupplierRFQFollowUpDraft
+        ] = {}
+        self._follow_up_manual_sent_evidence: dict[
+            str, SupplierRFQFollowUpManualSentEvidence
         ] = {}
         self._ingested_message_keys: set[str] = set()
         self._ingested_message_evidence: dict[
@@ -195,6 +240,51 @@ class InMemorySupplierRFQRepository:
         if rfq_id is None:
             return evidence
         return [item for item in evidence if item.rfq_id == rfq_id]
+
+    def save_follow_up_drafts(
+        self,
+        drafts: Iterable[SupplierRFQFollowUpDraft],
+    ) -> list[SupplierRFQFollowUpDraft]:
+        saved = []
+        for draft in drafts:
+            self._follow_up_drafts[draft.follow_up_id] = draft
+            saved.append(draft)
+        return saved
+
+    def get_follow_up_draft(
+        self,
+        follow_up_id: str,
+    ) -> Optional[SupplierRFQFollowUpDraft]:
+        return self._follow_up_drafts.get(follow_up_id)
+
+    def list_follow_up_drafts(
+        self,
+        rfq_id: Optional[str] = None,
+    ) -> list[SupplierRFQFollowUpDraft]:
+        drafts = list(self._follow_up_drafts.values())
+        if rfq_id is None:
+            return drafts
+        return [item for item in drafts if item.rfq_id == rfq_id]
+
+    def save_follow_up_manual_sent_evidence(
+        self,
+        evidence: SupplierRFQFollowUpManualSentEvidence,
+    ) -> SupplierRFQFollowUpManualSentEvidence:
+        if evidence.follow_up_id in self._follow_up_manual_sent_evidence:
+            raise DuplicateSupplierRFQFollowUpManualSentEvidenceError(
+                "Manual Supplier RFQ follow-up sent evidence already exists."
+            )
+        self._follow_up_manual_sent_evidence[evidence.follow_up_id] = evidence
+        return evidence
+
+    def list_follow_up_manual_sent_evidence(
+        self,
+        follow_up_id: Optional[str] = None,
+    ) -> list[SupplierRFQFollowUpManualSentEvidence]:
+        evidence = list(self._follow_up_manual_sent_evidence.values())
+        if follow_up_id is None:
+            return evidence
+        return [item for item in evidence if item.follow_up_id == follow_up_id]
 
     def save_workflow(
         self,

@@ -10,7 +10,13 @@ from src.core.pilot_store import SQLitePilotStore
 from src.core.quote_approval import QuoteApproval, QuoteApprovalSnapshot
 from src.core.quote_case import QuoteCase
 from src.core.sqlite_repositories import SQLiteExtractionProposalRepository, SQLiteQuoteApprovalRepository, SQLiteQuoteCaseRepository, SQLiteSupplierRFQRepository
-from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQResponse, SupplierRFQWorkflow
+from src.core.supplier_rfq import (
+    SupplierRFQDraft,
+    SupplierRFQFollowUpDraft,
+    SupplierRFQFollowUpManualSentEvidence,
+    SupplierRFQResponse,
+    SupplierRFQWorkflow,
+)
 from src.core.supplier_rfq_repository import DuplicateSupplierRFQResponseError
 from src.workflow.extraction_confirmation import (
     confirm_extraction_proposal,
@@ -71,6 +77,25 @@ def evaluate_pilot_persistence_regressions() -> dict:
         response = SupplierRFQResponse(rfq_id=draft.rfq_id, supplier_name=draft.supplier_name, rfq_priority=1, status="quoted", cost=1000, currency="EUR", source="manual")
         rfq1.save_responses([response])
         rfq1.record_ingested_message("mailbox:test-message-1")
+        follow_up = SupplierRFQFollowUpDraft(
+            rfq_id=draft.rfq_id,
+            workflow_id=workflow.workflow_id,
+            sequence_number=1,
+            recipient_email=draft.recipient_email,
+            subject=f"Re: {draft.subject}",
+            body="Please provide transit time.",
+            rejection_reasons=["supplier_transit_missing_or_unparseable"],
+            status="awaiting_response",
+        )
+        follow_up_evidence = SupplierRFQFollowUpManualSentEvidence(
+            follow_up_id=follow_up.follow_up_id,
+            rfq_id=draft.rfq_id,
+            sequence_number=1,
+            recorded_by="synthetic-operator",
+            recorded_at=follow_up.created_at,
+        )
+        rfq1.save_follow_up_drafts([follow_up])
+        rfq1.save_follow_up_manual_sent_evidence(follow_up_evidence)
 
         approval = QuoteApproval(quote_snapshot=QuoteApprovalSnapshot(supplier_name="Synthetic Supplier", supplier_cost=1000, final_price=1150, currency="EUR", quote_subject="Synthetic quote", quote_body="Synthetic quote body"))
         approvals1.save(approval)
@@ -87,6 +112,10 @@ def evaluate_pilot_persistence_regressions() -> dict:
         if rfq2.get_workflow(workflow.workflow_id) is None: failures.append("RFQ workflow did not survive restart")
         if rfq2.get_draft(draft.rfq_id) is None: failures.append("RFQ draft did not survive restart")
         if len(rfq2.list_responses(draft.rfq_id)) != 1: failures.append("RFQ response did not survive restart")
+        if rfq2.get_follow_up_draft(follow_up.follow_up_id) is None:
+            failures.append("Supplier RFQ follow-up draft did not survive restart")
+        if len(rfq2.list_follow_up_manual_sent_evidence(follow_up.follow_up_id)) != 1:
+            failures.append("Supplier RFQ follow-up send evidence did not survive restart")
         if not rfq2.has_ingested_message("mailbox:test-message-1"): failures.append("ingested-message dedup key did not survive restart")
         if approvals2.get(approval.approval_id) is None: failures.append("quote approval did not survive restart")
         if cases2.get(quote_case.case_id) is None: failures.append("quote case did not survive restart")
@@ -97,7 +126,7 @@ def evaluate_pilot_persistence_regressions() -> dict:
         else:
             failures.append("duplicate RFQ response was accepted after restart")
         events = store2.list_events()
-        if len(events) < 7: failures.append("append-only pilot evidence events were not retained")
+        if len(events) < 9: failures.append("append-only pilot evidence events were not retained")
         if not any(event["run_id"] == "run-a" for event in events):
             failures.append("original process run_id was not retained in evidence")
 
