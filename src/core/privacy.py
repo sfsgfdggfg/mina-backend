@@ -229,6 +229,44 @@ def prepare_privacy_safe_text(raw_text: str) -> PrivacyTransformResult:
     )
 
 
+def prepare_privacy_safe_source_bundle(
+    sections: list[tuple[str, str]],
+) -> PrivacyTransformResult:
+    """Privacy-transform independent trusted labels plus untrusted source text."""
+
+    safe_sections: list[str] = []
+    raw_sections: list[str] = []
+    for label, raw_text in sections:
+        if not re.fullmatch(r"[A-Z0-9_ -]{1,64}", label):
+            raise PrivacyBoundaryError("Privacy source label is invalid.")
+        if not isinstance(raw_text, str):
+            raise PrivacyBoundaryError("Privacy source text must be a string.")
+        raw_sections.append(f"--- {label} ---\n{raw_text}")
+        minimized = minimize_text(raw_text)
+        if minimized:
+            safe_sections.append(f"--- {label} ---\n{minimized}")
+
+    if not safe_sections:
+        raise PrivacyBoundaryError(
+            "Privacy transform removed the entire source bundle."
+        )
+
+    raw_bundle = "\n\n".join(raw_sections)
+    safe_bundle = "\n\n".join(safe_sections)
+    raw_body_sha256 = fingerprint_text(raw_bundle)
+    safe_text = PrivacySafeText(
+        safe_bundle,
+        raw_body_sha256=raw_body_sha256,
+        transform_version=PRIVACY_TRANSFORM_VERSION,
+        _token=_PRIVACY_CONSTRUCTION_TOKEN,
+    )
+    return PrivacyTransformResult(
+        safe_text=safe_text,
+        raw_body_sha256=raw_body_sha256,
+        transform_version=PRIVACY_TRANSFORM_VERSION,
+    )
+
+
 def prepare_inbound_mail_for_processing(
     mail: InboundMailEnvelope,
 ) -> tuple[InboundMailEnvelope, PrivacySafeText]:

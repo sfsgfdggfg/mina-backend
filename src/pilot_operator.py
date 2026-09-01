@@ -186,11 +186,15 @@ class PilotOperatorClient:
         self,
         *,
         limit: int = 10,
+        interpret_attachments: bool = False,
     ) -> Any:
         return self._request(
             "POST",
             "/inbound/outlook/pull",
-            {"limit": limit},
+            {
+                "limit": limit,
+                "interpret_attachments": interpret_attachments,
+            },
         )
 
     def get_proposal(self, proposal_id: str) -> Any:
@@ -428,6 +432,14 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=range(1, 51),
         metavar="1-50",
     )
+    outlook_pull.add_argument(
+        "--interpret-attachments",
+        action="store_true",
+        help=(
+            "Explicitly authorize non-authoritative AI interpretation of "
+            "trusted allowlisted attachments for this pull only."
+        ),
+    )
 
     proposal = commands.add_parser("proposal").add_subparsers(
         dest="action", required=True
@@ -573,7 +585,8 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
         )
     if args.command == "outlook":
         return client.pull_outlook(
-            limit=args.limit
+            limit=args.limit,
+            interpret_attachments=args.interpret_attachments,
         )
     if args.command == "proposal":
         if args.action == "get":

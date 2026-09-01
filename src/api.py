@@ -224,6 +224,7 @@ class OutlookPullRequest(BaseModel):
         ge=1,
         le=MAX_PULL_MESSAGES,
     )
+    interpret_attachments: bool = False
 
 
 class ConfirmExtractionRequest(BaseModel):
@@ -1089,6 +1090,9 @@ def pull_outlook_inbound(
                 ),
                 supplier_repository=(
                     supplier_rfq_repository
+                ),
+                interpret_attachments=(
+                    request.interpret_attachments
                 ),
             )
         )

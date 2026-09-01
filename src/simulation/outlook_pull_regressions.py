@@ -294,7 +294,7 @@ def evaluate_outlook_pull_regressions():
             "pull safely surfaces retrieval status without file hash",
         )
 
-        extraction_preference = {"new_calls": 0, "old_calls": 0}
+        extraction_preference = {"new_calls": 0, "old_calls": 0, "interpreter_injected": False}
 
         class _ExtractionPreferenceClient(_GraphClient):
             def retrieve_and_extract_allowlisted_attachments(self, mail):
@@ -316,6 +316,9 @@ def evaluate_outlook_pull_regressions():
             )
 
         def preference_processor(**kwargs):
+            extraction_preference["interpreter_injected"] = callable(
+                kwargs.get("attachment_interpreter")
+            )
             selected = kwargs["attachment_retriever"](kwargs["mail"])
             return {
                 "result_type": "inbound_mail_manual_review_required",
@@ -336,16 +339,17 @@ def evaluate_outlook_pull_regressions():
             shipment_parser=lambda value: value,
             proposal_repository=object(),
             operational_data_sources=object(),
+            interpret_attachments=True,
             token_provider=lambda value: SECRET_TOKEN,
             graph_client_factory=preference_factory,
             inbound_processor=preference_processor,
         )
 
         check(
-            extraction_preference == {"new_calls": 1, "old_calls": 0}
+            extraction_preference == {"new_calls": 1, "old_calls": 0, "interpreter_injected": True}
             and preference_result["results"][0]["attachment_extraction_status"] == "extracted"
             and preference_result["results"][0]["attachment_extracted_character_count"] == 123,
-            "pull prefers P1-56 extraction boundary over P1-55 fallback",
+            "explicit opt-in prefers P1-56 extraction and injects P1-57 interpretation boundary",
         )
 
         rejection_capture = {}
@@ -476,6 +480,7 @@ def evaluate_outlook_pull_regressions():
         )
         and call["json"] == {
             "limit": 7,
+            "interpret_attachments": False,
         },
         "operator client uses authenticated MINAI pull endpoint",
     )
@@ -492,13 +497,16 @@ def evaluate_outlook_pull_regressions():
     class _OperatorFixture:
         def __init__(self):
             self.limit = None
+            self.interpret_attachments = None
 
         def pull_outlook(
             self,
             *,
             limit,
+            interpret_attachments=False,
         ):
             self.limit = limit
+            self.interpret_attachments = interpret_attachments
             return {
                 "pull_status": "complete"
             }
@@ -511,9 +519,21 @@ def evaluate_outlook_pull_regressions():
 
     check(
         fixture.limit == 3
+        and fixture.interpret_attachments is False
         and executed["pull_status"]
         == "complete",
         "operator CLI exposes controlled outlook pull",
+    )
+
+    parsed_interpret = _build_parser().parse_args(
+        ["outlook", "pull", "--limit", "2", "--interpret-attachments"]
+    )
+    interpret_fixture = _OperatorFixture()
+    _execute(interpret_fixture, parsed_interpret)
+    check(
+        interpret_fixture.limit == 2
+        and interpret_fixture.interpret_attachments is True,
+        "attachment interpretation requires explicit operator CLI opt-in",
     )
 
     with TemporaryDirectory() as temp:
@@ -543,7 +563,7 @@ def evaluate_outlook_pull_regressions():
             "src.api."
             "pull_controlled_outlook_inbox",
             return_value=safe_api_result,
-        ):
+        ) as pull_mock:
             endpoint_result = (
                 api.pull_outlook_inbound(
                     api.OutlookPullRequest(
@@ -553,9 +573,25 @@ def evaluate_outlook_pull_regressions():
             )
 
         check(
-            endpoint_result
-            == safe_api_result,
-            "API endpoint delegates to server-side pull",
+            endpoint_result == safe_api_result
+            and pull_mock.call_args.kwargs.get("interpret_attachments") is False,
+            "API endpoint defaults attachment interpretation off",
+        )
+
+        with patch.object(
+            api.MicrosoftAuthConfig,
+            "from_environment",
+            return_value=config,
+        ), patch(
+            "src.api.pull_controlled_outlook_inbox",
+            return_value=safe_api_result,
+        ) as opt_in_mock:
+            api.pull_outlook_inbound(
+                api.OutlookPullRequest(limit=2, interpret_attachments=True)
+            )
+        check(
+            opt_in_mock.call_args.kwargs.get("interpret_attachments") is True,
+            "API forwards explicit attachment interpretation opt-in",
         )
 
         reauth_status = None

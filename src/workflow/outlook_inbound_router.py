@@ -126,6 +126,9 @@ def _process_allowlisted_attachment_mail(
     supplier_repository: SupplierRFQRepository,
     operational_data_sources: OperationalDataSources | None,
     attachment_retriever: Callable[[InboundMailEnvelope], Any] | None,
+    attachment_interpreter: Callable[..., Any] | None,
+    shipment_parser,
+    supplier_parser,
 ) -> dict:
     customer_matches, customer_error = _customer_matches(
         mail=mail,
@@ -208,10 +211,24 @@ def _process_allowlisted_attachment_mail(
     extraction_attempted = bool(
         getattr(retrieval, "extraction_attempted", False)
     )
+    interpretation = None
     if retrieval.status == "verified" and artifacts:
-        result["reason_code"] = "outlook_attachment_content_extracted_not_interpreted"
         extraction_status = "extracted"
         extraction_reason_code = "attachment_safe_extraction_complete"
+        if attachment_interpreter is None:
+            result["reason_code"] = "outlook_attachment_content_extracted_not_interpreted"
+        else:
+            interpretation = attachment_interpreter(
+                mail=mail,
+                artifacts=artifacts,
+                route=trusted_route,
+                shipment_parser=shipment_parser,
+                supplier_parser=supplier_parser,
+            )
+            if interpretation.status == "interpreted":
+                result["reason_code"] = "outlook_attachment_content_interpreted_pending_review"
+            else:
+                result["reason_code"] = "outlook_attachment_interpretation_manual_review"
     elif retrieval.status == "verified":
         result["reason_code"] = "outlook_attachment_content_verified_not_parsed"
         extraction_status = "not_attempted"
@@ -240,6 +257,25 @@ def _process_allowlisted_attachment_mail(
         ),
         "attachment_extraction_artifacts": artifacts,
     })
+    if interpretation is not None:
+        result.update({
+            "attachment_interpretation_status": interpretation.status,
+            "attachment_interpretation_reason_code": interpretation.reason_code,
+            "attachment_interpretation_parser_called": interpretation.parser_called,
+            "attachment_interpretation_privacy_transform_version": (
+                interpretation.privacy_transform_version
+            ),
+            "attachment_interpretation_source_profiles": list(
+                interpretation.source_profiles
+            ),
+            "attachment_interpretation": interpretation,
+        })
+    else:
+        result.update({
+            "attachment_interpretation_status": "not_attempted",
+            "attachment_interpretation_reason_code": "attachment_interpretation_not_attempted",
+            "attachment_interpretation_parser_called": False,
+        })
     return _with_attachment_intake(result, assessment)
 
 
@@ -261,6 +297,7 @@ def process_controlled_outlook_inbound_mail(
     attachment_retriever: (
         Callable[[InboundMailEnvelope], Any] | None
     ) = None,
+    attachment_interpreter: Callable[..., Any] | None = None,
 ) -> dict:
     """Route Outlook mail deterministically before any AI parser."""
 
@@ -288,6 +325,9 @@ def process_controlled_outlook_inbound_mail(
             supplier_repository=supplier_repository,
             operational_data_sources=operational_data_sources,
             attachment_retriever=attachment_retriever,
+            attachment_interpreter=attachment_interpreter,
+            shipment_parser=shipment_parser,
+            supplier_parser=supplier_parser,
         )
 
     supplier_replay = (
