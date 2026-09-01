@@ -9,6 +9,10 @@ from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
 from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.supplier_selection import select_suppliers_for_shipment
+from src.core.supplier_dispatch_policy import (
+    SupplierDispatchPolicy,
+    resolve_supplier_dispatch_policy,
+)
 from src.core.operational_consistency import check_operational_consistency
 from src.core.quote_approval_repository import (
     QuoteApprovalRepository,
@@ -123,6 +127,7 @@ def process_shipment(
     quote_case_repository: QuoteCaseRepository | None = None,
     _persist_rfq_transition: bool = True,
     operational_data_sources: OperationalDataSources | None = None,
+    supplier_dispatch_policy: SupplierDispatchPolicy | None = None,
 ):
     if not isinstance(shipment, Shipment) or isinstance(
         shipment,
@@ -404,15 +409,23 @@ def process_shipment(
         }
 
     # 3. Her şey uygunsa supplier RFQ taslakları hazırlanır.
+    dispatch_policy = (
+        supplier_dispatch_policy
+        if supplier_dispatch_policy is not None
+        else resolve_supplier_dispatch_policy()
+    )
     # RFQ oluşturmak gönderim değildir; insan onayı beklenir.
     supplier_rfq_workflow = SupplierRFQWorkflow(
         shipment=shipment,
         email_text=email_text,
         sender_address=sender_address,
+        dispatch_policy=dispatch_policy,
     )
     initial_supplier_selection = {
         **supplier_selection,
-        "selected_suppliers": supplier_selection["selected_suppliers"][:1],
+        "selected_suppliers": supplier_selection["selected_suppliers"][
+            : dispatch_policy.initial_supplier_count
+        ],
     }
     supplier_rfq_drafts = generate_supplier_rfq_drafts(
         workflow_id=supplier_rfq_workflow.workflow_id,

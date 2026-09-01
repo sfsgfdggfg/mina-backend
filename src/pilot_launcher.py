@@ -12,6 +12,7 @@ from src.core.pilot_access import (
     pilot_mode_enabled,
     validate_pilot_configuration,
 )
+from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
 from src.core.operational_data import (
     OperationalDataSourceConfigurationError,
     operational_data_sources_from_environment,
@@ -105,6 +106,12 @@ def run(environ: Mapping[str, str] | None = None) -> None:
         )
 
     validate_pilot_configuration(env)
+    try:
+        resolve_supplier_dispatch_policy(env)
+    except ValueError as exc:
+        raise PilotAccessConfigurationError(
+            "Controlled pilot supplier dispatch policy is invalid."
+        ) from exc
     try:
         operational_data_sources_from_environment(
             env,

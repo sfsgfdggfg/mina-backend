@@ -7,6 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.core.models import Shipment
+from src.core.supplier_dispatch_policy import SupplierDispatchPolicy
 
 
 SupplierRFQStatus = Literal[
@@ -124,6 +125,9 @@ class SupplierRFQWorkflow(BaseModel):
     email_text: Optional[str] = None
     sender_address: Optional[str] = None
     rfq_ids: list[str] = Field(default_factory=list)
+    dispatch_policy: SupplierDispatchPolicy = Field(
+        default_factory=SupplierDispatchPolicy
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     quote_progression_status: QuoteProgressionStatus = "ready"

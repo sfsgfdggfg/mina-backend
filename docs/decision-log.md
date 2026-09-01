@@ -5966,3 +5966,13 @@ revision rules.
 The controlled regression suite may continue to use an explicit synthetic 15%
 cost-markup fixture. That fixture is test configuration only and is not a runtime
 production default.
+
+## DEC-133 — Supplier Ranking and Supplier Dispatch Are Separate Agency Policies
+
+Supplier eligibility and ranking answer **who is suitable and in what order**. Supplier dispatch answers **how many ranked suppliers receive an RFQ in the current batch**. These concerns must remain separate so an agency can preserve its supplier-ranking logic while choosing a sequential or parallel commercial outreach style.
+
+For P1-42, the supported runtime dispatch modes are `sequential` and `parallel`. Sequential dispatch creates an initial RFQ only for priority 1. Parallel dispatch creates initial RFQ drafts for the first configured 2 or 3 eligible suppliers. Every draft remains behind the existing human approval and send boundaries; parallel draft creation does not authorize automatic sending.
+
+The active dispatch policy is snapshotted on `SupplierRFQWorkflow` when the workflow is created. Later agency configuration changes must not silently change the strategy of an already-open supplier workflow.
+
+Hybrid time-based dispatch is intentionally deferred. A future hybrid policy may combine an initial batch with response-time thresholds and later fallback batches, but it must not be represented as implemented until its timeout and scheduling semantics are explicit and tested.

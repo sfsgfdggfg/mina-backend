@@ -1123,3 +1123,23 @@ workflow resume-quote <workflow-id> \
 Both override arguments are required together. If the policy is missing or
 malformed, the workflow fails closed at `pricing_policy_required` and does not
 create a customer quote case.
+
+## P1-42 Addendum — Supplier Initial Dispatch Policy
+
+P1-42 separates supplier ranking from the number of suppliers contacted in the first RFQ batch. The controlled pilot accepts the optional agency configuration through `MINAI_SUPPLIER_DISPATCH_POLICY_JSON`.
+
+Backward-compatible default when the setting is absent:
+
+```json
+{"mode":"sequential","initial_supplier_count":1}
+```
+
+Example parallel configuration:
+
+```json
+{"mode":"parallel","initial_supplier_count":2}
+```
+
+Supported P1-42 modes are `sequential` and `parallel`. Parallel mode may create RFQ drafts for the first two or three eligible ranked suppliers, but each RFQ still requires the normal human approval and explicit send step. No supplier email is sent merely because a parallel policy is configured.
+
+The policy is copied into the durable supplier RFQ workflow when that workflow is created. Do not describe hybrid timeout dispatch as implemented in P1-42; response-time thresholds and scheduled fallback batches remain a later controlled change intended for the Supplier Dispatch Policy section of the future guide/editor.
