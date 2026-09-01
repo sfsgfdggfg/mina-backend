@@ -17,6 +17,7 @@ from src.core.supplier_rfq_repository import SupplierRFQRepository
 
 
 DEFAULT_ASSIGNMENT_LEASE_SECONDS = 30 * 60
+MY_WORK_EXPIRING_SOON_SECONDS = 5 * 60
 
 
 class OperationalWorkAssignmentConflictError(RuntimeError):
@@ -242,8 +243,123 @@ def release_operational_work(
             raise OperationalWorkAssignmentTransitionError("Operational work item has no active assignment.")
         if current.assigned_to != operator_name:
             raise OperationalWorkAssignmentConflictError("Only the assigned operator may release this work item.")
-        updated = current.model_copy(update={"status": "released", "released_at": timestamp, "released_by": operator_name})
+        updated = current.model_copy(update={
+            "status": "released",
+            "released_at": timestamp,
+            "released_by": operator_name,
+            "release_reason": "operator_release",
+        })
         return assignment_repository.save(updated)
+
+
+def handoff_operational_work(
+    *,
+    work_id: str,
+    operator_name: str,
+    assignment_repository: OperationalWorkAssignmentRepository,
+    attachment_repository: AttachmentInterpretationReviewRepository,
+    proposal_repository: ExtractionProposalRepository,
+    supplier_repository: SupplierRFQRepository,
+    approval_repository: QuoteApprovalRepository,
+    quote_case_repository: QuoteCaseRepository,
+    now: datetime | None = None,
+) -> OperationalWorkAssignment:
+    timestamp = _now(now)
+    with atomic_repository_transaction(*_repo_args(
+        assignment_repository, attachment_repository, proposal_repository,
+        supplier_repository, approval_repository, quote_case_repository,
+    )):
+        item = _current_item(
+            work_id=work_id,
+            attachment_repository=attachment_repository,
+            proposal_repository=proposal_repository,
+            supplier_repository=supplier_repository,
+            approval_repository=approval_repository,
+            quote_case_repository=quote_case_repository,
+            now=timestamp,
+        )
+        current = assignment_repository.get(work_id)
+        if (
+            current is None
+            or current.status == "released"
+            or current.work_state_sha256 != work_state_fingerprint(item)
+        ):
+            raise OperationalWorkAssignmentTransitionError(
+                "Operational work item has no current handoff-eligible assignment."
+            )
+        if current.assigned_to != operator_name:
+            raise OperationalWorkAssignmentConflictError(
+                "Only the assigned operator may hand off this work item."
+            )
+        if assignment_lease_expired(current, now=timestamp):
+            raise OperationalWorkAssignmentTransitionError(
+                "Operational work assignment lease expired; recover it before handoff."
+            )
+        updated = current.model_copy(update={
+            "status": "released",
+            "released_at": timestamp,
+            "released_by": operator_name,
+            "release_reason": "shift_handoff",
+        })
+        return assignment_repository.save(updated)
+
+
+def build_my_operational_work_view(
+    *,
+    operator_name: str,
+    assignment_repository: OperationalWorkAssignmentRepository,
+    attachment_repository: AttachmentInterpretationReviewRepository,
+    proposal_repository: ExtractionProposalRepository,
+    supplier_repository: SupplierRFQRepository,
+    approval_repository: QuoteApprovalRepository,
+    quote_case_repository: QuoteCaseRepository,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    timestamp = _now(now)
+    queue = decorate_operational_work_queue(
+        build_operational_work_queue(
+            attachment_repository=attachment_repository,
+            proposal_repository=proposal_repository,
+            supplier_repository=supplier_repository,
+            approval_repository=approval_repository,
+            quote_case_repository=quote_case_repository,
+            now=timestamp,
+        ),
+        assignment_repository,
+        now=timestamp,
+    )
+    mine: list[dict[str, Any]] = []
+    for source in queue.get("items", []):
+        if (
+            source.get("assigned_to") != operator_name
+            or source.get("assignment_status") not in {"assigned", "acknowledged"}
+            or source.get("lease_status") != "active"
+        ):
+            continue
+        item = dict(source)
+        remaining = int(item.get("lease_seconds_remaining", 0))
+        item["lease_attention"] = (
+            "expiring_soon"
+            if remaining <= MY_WORK_EXPIRING_SOON_SECONDS
+            else "active"
+        )
+        mine.append(item)
+    mine.sort(key=lambda item: (
+        int(item.get("lease_seconds_remaining", 0)),
+        -int(item.get("priority_score", 0)),
+        str(item.get("work_id", "")),
+    ))
+    return {
+        "scope": "authenticated_operator",
+        "active_count": len(mine),
+        "acknowledged_count": sum(
+            1 for item in mine if item.get("assignment_status") == "acknowledged"
+        ),
+        "expiring_soon_count": sum(
+            1 for item in mine if item.get("lease_attention") == "expiring_soon"
+        ),
+        "items": mine,
+    }
 
 
 def assignment_public_payload(assignment: OperationalWorkAssignment | None, *, item: dict[str, Any] | None = None, now: datetime | None = None) -> dict[str, Any]:

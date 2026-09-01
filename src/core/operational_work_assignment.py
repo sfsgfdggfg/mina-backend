@@ -16,6 +16,7 @@ class OperationalWorkAssignment(BaseModel):
     lease_expires_at: datetime | None = None
     released_at: datetime | None = None
     released_by: str | None = Field(default=None, min_length=3, max_length=200)
+    release_reason: Literal["operator_release", "shift_handoff"] | None = None
     generation: int = Field(default=1, ge=1)
     work_state_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 

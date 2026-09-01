@@ -1311,3 +1311,21 @@ python -m src.pilot_operator work takeover <work-id>
 Takeover is permitted only after expiry and only if the same work item/state is still current. It creates a new assignment generation. If the underlying work state changed or disappeared, use the current queue and normal assign path instead. Never use takeover as a shortcut around proposal confirmation, quote approval, attachment preview/apply, supplier lifecycle or outbound send guards.
 
 P1-63 records created before lease support and lacking `lease_expires_at` are treated as expired, not permanently owned. Released records remain audit history. Assignment priority remains unchanged by lease, renewal or takeover.
+
+## P1-65 authenticated My Work and shift handoff
+
+Use the personal read-only view when starting or resuming an operator shift:
+
+```bash
+python -m src.pilot_operator work mine
+```
+
+The view is scoped by the authenticated pilot identity and lists only your current lease-active `assigned` / `acknowledged` work. It sorts shorter remaining leases first. `lease_attention=expiring_soon` means five minutes or less remain; renew only if you are still actively handling that same work state. Expired assignments do not remain in My Work; use the normal queue/detail and P1-64 takeover recovery when appropriate.
+
+When ending a shift or intentionally returning an unfinished active item to the shared queue, use:
+
+```bash
+python -m src.pilot_operator work handoff <work-id>
+```
+
+Handoff records an audited `shift_handoff` release and leaves the item unassigned. It does not select or authorize the next operator and carries no free-form handoff note. The receiving operator must refresh `work queue` / `work get` and claim the item with `work assign`. Handoff never performs the underlying proposal, attachment-review, RFQ, workflow, approval or send action.

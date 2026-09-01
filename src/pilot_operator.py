@@ -203,6 +203,9 @@ class PilotOperatorClient:
     def get_operational_work_queue(self) -> Any:
         return self._request("GET", "/operational-work-queue")
 
+    def get_my_operational_work(self) -> Any:
+        return self._request("GET", "/operational-work-my")
+
     def get_operational_work_item(self, work_id: str) -> Any:
         return self._request(
             "GET", f"/operational-work-items/{self._id(work_id)}"
@@ -226,6 +229,11 @@ class PilotOperatorClient:
     def takeover_operational_work_assignment(self, work_id: str) -> Any:
         return self._request(
             "POST", f"/operational-work-items/{self._id(work_id)}/takeover", {}
+        )
+
+    def handoff_operational_work(self, work_id: str) -> Any:
+        return self._request(
+            "POST", f"/operational-work-items/{self._id(work_id)}/handoff", {}
         )
 
     def release_operational_work(self, work_id: str) -> Any:
@@ -513,11 +521,13 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="action", required=True
     )
     work.add_parser("queue")
+    work.add_parser("mine")
     work.add_parser("get").add_argument("work_id")
     work.add_parser("assign").add_argument("work_id")
     work.add_parser("ack").add_argument("work_id")
     work.add_parser("renew").add_argument("work_id")
     work.add_parser("takeover").add_argument("work_id")
+    work.add_parser("handoff").add_argument("work_id")
     work.add_parser("release").add_argument("work_id")
 
     attachment_review = commands.add_parser("attachment-review").add_subparsers(
@@ -687,6 +697,8 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
     if args.command == "work":
         if args.action == "queue":
             return client.get_operational_work_queue()
+        if args.action == "mine":
+            return client.get_my_operational_work()
         if args.action == "get":
             return client.get_operational_work_item(args.work_id)
         if args.action == "assign":
@@ -697,6 +709,8 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.renew_operational_work_assignment(args.work_id)
         if args.action == "takeover":
             return client.takeover_operational_work_assignment(args.work_id)
+        if args.action == "handoff":
+            return client.handoff_operational_work(args.work_id)
         return client.release_operational_work(args.work_id)
     if args.command == "attachment-review":
         if args.action == "queue":
