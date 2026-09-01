@@ -13,6 +13,7 @@ from src.simulation.pricing_policy_fixture import SYNTHETIC_AGENCY_PRICING_POLIC
 from src.simulation.atomic_transition_regressions import evaluate_atomic_transition_regressions
 from src.simulation.clarification_resolution_regressions import evaluate_clarification_resolution_regressions
 from src.simulation.customer_identity_trust_regressions import evaluate_customer_identity_trust_regressions
+from src.simulation.customer_quote_automated_send_regressions import evaluate_customer_quote_automated_send_regressions
 from src.simulation.data_provenance_regressions import evaluate_data_provenance_regressions
 from src.simulation.data_path_regressions import evaluate_data_path_regressions
 from src.simulation.extraction_confirmation_regressions import evaluate_extraction_confirmation_regressions
@@ -186,6 +187,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
         evaluate_outlook_pull_regressions,
     ),
     Suite("Manual RFQ sent evidence", evaluate_manual_rfq_sent_regressions),
+    Suite("Customer quote automated send evidence", evaluate_customer_quote_automated_send_regressions),
     Suite("Supplier response ingestion", evaluate_supplier_response_ingestion_regressions),
     Suite("Pilot operator client", evaluate_pilot_operator_regressions),
     Suite(

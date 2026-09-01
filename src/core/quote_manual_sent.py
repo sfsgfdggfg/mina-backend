@@ -85,6 +85,14 @@ def record_customer_quote_manually_sent(
             raise CustomerQuoteManualSentTransitionError(
                 "Current customer quote revision already has manual send evidence."
             )
+        if any(
+            item.approval_id == normalized_approval_id
+            and item.revision_number == revision_number
+            for item in quote_case.automated_sent_evidence
+        ):
+            raise CustomerQuoteManualSentTransitionError(
+                "Current customer quote revision already has automated send evidence."
+            )
 
         try:
             build_quote_final_output(

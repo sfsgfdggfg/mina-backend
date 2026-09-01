@@ -5985,3 +5985,14 @@ Hybrid time-based dispatch is intentionally deferred. A future hybrid policy may
 MINAI may send supplier RFQs and approved customer mail through Microsoft Graph only when the controlled Outlook account has delegated `Mail.Send` permission in addition to `Mail.Read`. Merely creating or approving an outbound draft does not authorize delivery.
 
 The runtime Graph sender uses the existing provider-neutral `OutboundMailSender` boundary. A message is recorded as sent only after Microsoft Graph accepts `/me/sendMail` with HTTP 202. The Graph response request identifier is retained as the provider delivery reference. Authentication or provider failures must leave the workflow unsent.
+
+## DEC-135 — Automated Customer Quote Sending Requires Durable Provider Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+An approved customer quote may be delivered automatically through the configured outbound mail provider only through a case-aware delivery service that preserves the current approval and revision boundaries. A successful provider call is not enough by itself; MINAI must persist delivery evidence on the quote case so the send remains auditable after restart.
+
+Automated customer quote evidence records the case ID, approval ID, revision number, recipient, provider name, provider delivery reference and provider-confirmed send timestamp. Evidence may be created only when the provider-neutral delivery result is `sent` and includes the required provider metadata.
+
+Manual and automated send evidence are mutually exclusive for the same approval/revision. A second send attempt for an already-sent revision must be rejected before the provider is called. Provider failure must leave the quote case without automated sent evidence.

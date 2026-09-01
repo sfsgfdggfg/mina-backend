@@ -3377,3 +3377,11 @@ Agency-configurable hybrid timeout/fallback behavior requires a separate explici
 Adding Microsoft delegated `Mail.Send` capability must not collapse approval and sending into one implicit action. Supplier RFQ approval remains a separate state transition from external delivery.
 
 When an operator explicitly authorizes sending, MINAI may call Microsoft Graph for the exact approved, unsent message. The workflow may advance to a sent/awaiting-response state only after Graph returns HTTP 202. Any authentication failure, missing permission, provider exception, redirect, or non-202 response must fail safely without durable sent evidence.
+
+## RULE-150 — Customer Quote Automated Send Evidence Must Be Provider-Confirmed and Idempotent
+
+For an approved customer quote revision, automated delivery must use the exact current approval snapshot and recipient supplied for the send operation. Before calling the provider, MINAI must reject stale approval IDs and any revision that already has manual or automated sent evidence.
+
+Durable automated sent evidence may be appended only when the outbound provider returns `status = sent` with a provider name, provider delivery reference and sent timestamp. Failed, rejected or unavailable-provider results must not create sent evidence.
+
+The controlled pilot route for automated customer quote delivery remains an explicit send action. Quote creation and approval do not imply delivery. The same approval/revision must never be sent twice through the automated route, and a manual-sent record must not be added after automated delivery evidence already exists.

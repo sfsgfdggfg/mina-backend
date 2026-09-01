@@ -33,6 +33,17 @@ class CustomerQuoteManualSentEvidence(BaseModel):
     source: Literal["manual_external_send"] = "manual_external_send"
 
 
+class CustomerQuoteAutomatedSentEvidence(BaseModel):
+    case_id: str
+    approval_id: str
+    revision_number: int = Field(ge=0)
+    recipient_email: str
+    provider_name: str
+    provider_message_id: str
+    sent_at: datetime
+    source: Literal["automated_provider_send"] = "automated_provider_send"
+
+
 class QuoteCase(BaseModel):
     case_id: str = Field(
         default_factory=lambda: str(uuid4())
@@ -60,6 +71,9 @@ class QuoteCase(BaseModel):
     )
     manual_sent_evidence: list[
         CustomerQuoteManualSentEvidence
+    ] = Field(default_factory=list)
+    automated_sent_evidence: list[
+        CustomerQuoteAutomatedSentEvidence
     ] = Field(default_factory=list)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
