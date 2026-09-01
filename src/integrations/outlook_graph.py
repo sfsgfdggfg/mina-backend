@@ -4,12 +4,18 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import requests
 from pydantic import ValidationError
 
-from src.core.mail import InboundMailEnvelope, MailSendResult, OutboundMailRequest
+from src.core.mail import (
+    MAX_ATTACHMENT_MANIFEST_ITEMS,
+    InboundAttachmentMetadata,
+    InboundMailEnvelope,
+    MailSendResult,
+    OutboundMailRequest,
+)
 from src.integrations.microsoft_auth import MicrosoftAuthConfig, acquire_silent_access_token
 
 
@@ -17,6 +23,7 @@ GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0"
 GRAPH_PROVIDER_NAME = "microsoft_graph"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 MAX_PULL_MESSAGES = 50
+_ATTACHMENT_SELECT_FIELDS = "name,contentType,size,isInline"
 
 _GRAPH_SELECT_FIELDS = (
     "id,subject,body,from,toRecipients,"
@@ -153,10 +160,44 @@ def _blank_text_body_rejection(
     )
 
 
+def _normalize_graph_attachment_metadata(
+    raw_attachment: Any,
+) -> InboundAttachmentMetadata:
+    if not isinstance(raw_attachment, dict):
+        raise OutlookGraphReadError("graph_attachment_metadata_invalid")
+
+    name = _required_text(
+        raw_attachment.get("name"),
+        code="graph_attachment_name_missing",
+    )
+    content_type = _optional_text(
+        raw_attachment.get("contentType"),
+        code="graph_attachment_content_type_invalid",
+    )
+    size = raw_attachment.get("size")
+    if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+        raise OutlookGraphReadError("graph_attachment_size_invalid")
+    is_inline = raw_attachment.get("isInline")
+    if not isinstance(is_inline, bool):
+        raise OutlookGraphReadError("graph_attachment_inline_state_invalid")
+
+    try:
+        return InboundAttachmentMetadata(
+            name=name,
+            content_type=content_type,
+            size_bytes=size,
+            is_inline=is_inline,
+        )
+    except (ValidationError, ValueError) as exc:
+        raise OutlookGraphReadError("graph_attachment_metadata_invalid") from exc
+
+
 def normalize_graph_message(
     raw_message: dict[str, Any],
     *,
     mailbox_id: str,
+    attachment_manifest: list[InboundAttachmentMetadata] | None = None,
+    attachment_manifest_truncated: bool = False,
 ) -> InboundMailEnvelope:
     if not isinstance(raw_message, dict):
         raise OutlookGraphMessageError(
@@ -257,6 +298,8 @@ def normalize_graph_message(
             body_text=body_text,
             received_at=received_at,
             has_attachments=has_attachments,
+            attachment_manifest=(attachment_manifest or []),
+            attachment_manifest_truncated=attachment_manifest_truncated,
             source="email",
         )
     except (ValidationError, ValueError) as exc:
@@ -392,6 +435,34 @@ class OutlookGraphReadClient:
 
         return payload
 
+    def _attachment_manifest_for_message(
+        self,
+        message_id: str,
+    ) -> tuple[list[InboundAttachmentMetadata], bool]:
+        encoded_message_id = quote(message_id, safe="")
+        url = (
+            f"{GRAPH_API_BASE_URL}/me/messages/"
+            f"{encoded_message_id}/attachments"
+        )
+        payload = self._get_json(
+            url,
+            params={
+                "$select": _ATTACHMENT_SELECT_FIELDS,
+                "$top": MAX_ATTACHMENT_MANIFEST_ITEMS,
+            },
+        )
+        raw_items = payload.get("value")
+        if not isinstance(raw_items, list):
+            raise OutlookGraphReadError("microsoft_graph_attachments_missing")
+        if len(raw_items) > MAX_ATTACHMENT_MANIFEST_ITEMS:
+            raise OutlookGraphReadError("graph_attachment_manifest_oversized")
+        manifest = [
+            _normalize_graph_attachment_metadata(item)
+            for item in raw_items
+        ]
+        truncated = _validated_next_link(payload.get("@odata.nextLink")) is not None
+        return manifest, truncated
+
     def list_inbox_messages(
         self,
         *,
@@ -455,10 +526,26 @@ class OutlookGraphReadClient:
                     )
                     continue
 
+                attachment_manifest: list[InboundAttachmentMetadata] = []
+                attachment_manifest_truncated = False
+                if raw_item.get("hasAttachments") is True:
+                    message_id = _required_text(
+                        raw_item.get("id"),
+                        code="graph_message_id_missing",
+                    )
+                    (
+                        attachment_manifest,
+                        attachment_manifest_truncated,
+                    ) = self._attachment_manifest_for_message(message_id)
+
                 messages.append(
                     normalize_graph_message(
                         raw_item,
                         mailbox_id=self.mailbox_id,
+                        attachment_manifest=attachment_manifest,
+                        attachment_manifest_truncated=(
+                            attachment_manifest_truncated
+                        ),
                     )
                 )
 

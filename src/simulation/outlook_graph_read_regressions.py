@@ -129,7 +129,21 @@ def evaluate_outlook_graph_read_regressions() -> dict:
                         _graph_message()
                     ]
                 },
-            )
+            ),
+            _FakeResponse(
+                200,
+                {
+                    "value": [
+                        {
+                            "id": "secret-attachment-id",
+                            "name": "rate-sheet.pdf",
+                            "contentType": "application/pdf",
+                            "size": 12345,
+                            "isInline": False,
+                        }
+                    ]
+                },
+            ),
         ]
     )
 
@@ -180,6 +194,16 @@ def evaluate_outlook_graph_read_regressions() -> dict:
         "required Graph fields selected",
     )
 
+    attachment_request = fake.requests[1]
+    attachment_select = (attachment_request["params"] or {}).get("$select", "")
+    check(
+        attachment_request["method"] == "GET"
+        and attachment_request["url"].endswith("/me/messages/AAMkAbC123/attachments")
+        and "contentBytes" not in attachment_select
+        and "id" not in attachment_select,
+        "attachment metadata fetched without content or attachment id",
+    )
+
     check(
         mail.provider_name == "microsoft_graph"
         and mail.mailbox_id
@@ -190,8 +214,14 @@ def evaluate_outlook_graph_read_regressions() -> dict:
         == "ops@customer.example"
         and mail.body_text
         == "Please quote Adana to Hamburg."
-        and mail.has_attachments is True,
-        "provider message normalized",
+        and mail.has_attachments is True
+        and len(mail.attachment_manifest) == 1
+        and mail.attachment_manifest[0].name == "rate-sheet.pdf"
+        and mail.attachment_manifest[0].content_type == "application/pdf"
+        and mail.attachment_manifest[0].size_bytes == 12345
+        and mail.attachment_manifest_truncated is False
+        and "secret-attachment-id" not in mail.model_dump_json(),
+        "provider message and safe attachment manifest normalized",
     )
 
     blank_message = _graph_message(
@@ -207,7 +237,8 @@ def evaluate_outlook_graph_read_regressions() -> dict:
                     "value": [
                         blank_message,
                         _graph_message(
-                            message_id="valid-after-blank"
+                            message_id="valid-after-blank",
+                            has_attachments=False,
                         ),
                     ]
                 },

@@ -6050,3 +6050,12 @@ This applies especially to `status`: a prior quoted response plus a valid follow
 Short supplier clarification replies that contain only transit information may be resolved deterministically even when phrased as a natural sentence, for example `Transit süremiz 5–6 gündür.` or `Transit time is 5-6 days.`. These replies must not be sent to the AI parser when the full message is an anchored transit-only expression.
 
 The deterministic path must extract only the transit value itself and must remain narrow enough that replies containing price, capacity, equipment, validity or other commercial facts do not bypass structured parsing.
+
+## DEC-142 — Outlook Attachment Metadata Precedes Attachment Content Processing
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+Before MINAI may interpret Outlook attachment content, the controlled Graph adapter must first establish a provider-neutral attachment manifest containing only bounded metadata: normalized filename, MIME type, byte size and inline state. Attachment IDs, content bytes and provider download references are not part of the inbound envelope.
+
+P1-51 does not authorize attachment content download or parsing. Messages with attachments continue to stop before customer or supplier AI parsing. The manifest exists only to make later attachment allowlisting, size limits and manual-review decisions explicit and auditable.
