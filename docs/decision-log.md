@@ -6099,3 +6099,15 @@ P1-55 may retrieve raw content only for an attachment set already classified `me
 After route trust, the Graph integration may make a second attachment-metadata request that includes provider attachment IDs solely as transient in-process locators. The fresh metadata must remain allowlisted and exactly match the original provider-neutral manifest before any `/$value` request is made. Provider attachment IDs must not enter the inbound envelope, durable state, operator summary or verification receipt.
 
 Raw content retrieval is bounded to the existing 10 MiB per-file policy, refuses redirects, requires raw downloaded bytes not to exceed the Graph metadata size and produces only a provider-neutral SHA-256 verification receipt. PDF content must satisfy PDF header/EOF checks; XLSX must be a valid macro-free OOXML ZIP container with required workbook structure; CSV is limited to a UTF-8 text profile because CSV has no universal binary magic signature. P1-55 does not parse business meaning and does not send attachment content to AI. Verified content still returns manual review until a later parsing boundary is approved.
+
+
+## DEC-147 — Verified Attachments May Be Extracted Only Into Bounded Provider-Neutral Artifacts
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-56 permits deterministic content extraction only after P1-55 has completed trusted-route attachment retrieval and content verification. Raw attachment bytes remain transient inside the Graph integration boundary. Extraction must run before the mutable content buffer is cleared, and only bounded provider-neutral text/table artifacts may cross that boundary.
+
+PDF extraction uses the locked `pypdf` runtime and is limited to 50 pages and 100,000 extracted characters per file. Encrypted PDFs, PDFs with no extractable text, parser failures or limit breaches require manual review. XLSX extraction reads only bounded OOXML worksheet/shared-string XML, never evaluates formulas, and limits a file to 10 worksheets, 200 rows per worksheet, 50 columns, 5,000 non-empty cells and 100,000 extracted characters. Formula-bearing workbooks require manual review. CSV extraction is UTF-8 only, detects a narrow delimiter set, and is limited to 1,000 rows, 50 columns, 5,000 non-empty cells and 100,000 characters.
+
+Extraction artifacts are ephemeral and excluded from default retrieval-result serialization. The controlled operator/API summary may expose only safe aggregate extraction status and counts, never extracted attachment text/table values. P1-56 does not interpret business meaning, does not send attachment content to customer or supplier AI parsers, does not persist extracted content and does not authorize mailbox writes or outbound mail. Successfully extracted attachment mail remains manual-review-only pending a separately approved interpretation boundary.

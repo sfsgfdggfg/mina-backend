@@ -1150,3 +1150,12 @@ The policy is copied into the durable supplier RFQ workflow when that workflow i
 P1-55 is a read-only verification boundary, not an attachment parsing feature. A live smoke is valid only when an attachment is already `metadata_allowlisted`. MINAI must first resolve a single trusted customer or supplier route; untrusted or ambiguous attachment messages must show no content download.
 
 For a trusted allowlisted attachment, expect `attachment_retrieval_status=verified`, `attachment_content_download_performed=true`, a nonzero `attachment_verified_count`, `mailbox_write_performed=false` and `automated_send_performed=false`. The top-level result must remain `inbound_mail_manual_review_required`; no customer or supplier AI parser is authorized by P1-55. Operator output must not contain raw attachment content, provider attachment IDs or SHA-256 file fingerprints.
+
+
+## P1-56 safe attachment extraction smoke
+
+P1-56 extends the trusted-route P1-55 retrieval boundary with deterministic, bounded extraction. It does not authorize attachment interpretation by AI. The controlled pilot runtime now requires the exact locked `pypdf` version in `requirements-lock.txt`; run `python -m src.runtime_preflight` after installing the lock before deployment.
+
+For a trusted PDF/XLSX/CSV attachment that passes P1-54 and P1-55, expect `attachment_extraction_status=extracted`, `attachment_extracted_count` greater than zero and bounded aggregate character/table counts. The top-level result must remain `inbound_mail_manual_review_required` with `reason_code=outlook_attachment_content_extracted_not_interpreted`. The operator summary must not contain extracted PDF text, spreadsheet/CSV cell values, provider attachment IDs, raw attachment bytes or file hashes.
+
+Encrypted/no-text PDFs, formula-bearing XLSX files, malformed content or any extraction limit breach must fail closed to manual review. Untrusted/ambiguous routes must still show no attachment content retrieval and therefore no extraction. P1-56 adds no mailbox writes, no automated send and no customer/supplier AI attachment parsing.

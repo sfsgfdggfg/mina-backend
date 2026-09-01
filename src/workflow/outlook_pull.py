@@ -110,6 +110,21 @@ def _safe_result_summary(
         "attachment_verified_count": result.get(
             "attachment_verified_count"
         ),
+        "attachment_extraction_status": result.get(
+            "attachment_extraction_status"
+        ),
+        "attachment_extraction_reason_code": result.get(
+            "attachment_extraction_reason_code"
+        ),
+        "attachment_extracted_count": result.get(
+            "attachment_extracted_count"
+        ),
+        "attachment_extracted_character_count": result.get(
+            "attachment_extracted_character_count"
+        ),
+        "attachment_extracted_table_count": result.get(
+            "attachment_extracted_table_count"
+        ),
     }
 
     return {
@@ -201,10 +216,17 @@ def pull_controlled_outlook_inbox(
                 supplier_repository=(
                     supplier_repository
                 ),
-                attachment_retriever=getattr(
-                    graph_client,
-                    "retrieve_allowlisted_attachments",
-                    None,
+                attachment_retriever=(
+                    getattr(
+                        graph_client,
+                        "retrieve_and_extract_allowlisted_attachments",
+                        None,
+                    )
+                    or getattr(
+                        graph_client,
+                        "retrieve_allowlisted_attachments",
+                        None,
+                    )
                 ),
             )
 

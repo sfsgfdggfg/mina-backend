@@ -3455,3 +3455,12 @@ Attachment raw bytes may be requested only when P1-54 reports `metadata_allowlis
 The Graph attachment ID is permitted only as a transient local locator inside the retrieval method. A fresh metadata read must match the original safe manifest before `/$value` is called. Content reads must use GET only, refuse redirects, remain within 10 MiB per file, not exceed the announced metadata size, match the raw response MIME and be verified as PDF, macro-free XLSX or UTF-8 CSV content before a SHA-256 receipt is returned. No provider attachment ID or raw content may be persisted or exposed.
 
 Attachment content buffers are transient and must be discarded after verification; the controlled implementation overwrites its mutable accumulation buffer before returning. P1-55 must not invoke customer or supplier AI parsers, must not perform mailbox writes and must leave even successfully verified attachment mail in manual review pending a separately approved content-parsing boundary.
+
+
+## RULE-162 — Safe Attachment Extraction Must Be Bounded, Non-Evaluating and Non-AI
+
+Attachment extraction is permitted only for bytes already verified by P1-55 under one deterministic trusted customer or supplier route. The extractor must verify the content digest/profile received from the verification step before parsing and must fail closed rather than truncate when extraction bounds are exceeded.
+
+PDF extraction is text-only, bounded to 50 pages and 100,000 characters, and rejects encrypted or non-text-extractable documents. XLSX extraction may read worksheet/shared-string XML only within explicit XML, sheet, row, column, cell and character limits; formulas must never be evaluated and formula-bearing workbooks are manual-review-only. CSV extraction is UTF-8 only and bounded by row, column, cell and character limits. Extraction must not execute embedded code, macros, formulas, external links or active content.
+
+Raw bytes and provider attachment IDs must remain transient and must not be persisted or exposed. Extracted artifacts may exist only in-memory for the controlled workflow boundary and are excluded from default serialization; operator output may contain only safe aggregate extraction status/counts. P1-56 must not invoke customer or supplier AI parsers, must not interpret commercial meaning, must not create or update supplier/customer quote state, and must not perform mailbox writes or automated sends.

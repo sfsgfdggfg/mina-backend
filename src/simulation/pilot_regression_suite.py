@@ -34,6 +34,15 @@ from src.simulation.outlook_attachment_retrieval_regressions import (
 from src.simulation.outlook_attachment_route_retrieval_regressions import (
     evaluate_outlook_attachment_route_retrieval_regressions,
 )
+from src.simulation.attachment_safe_extraction_regressions import (
+    evaluate_attachment_safe_extraction_regressions,
+)
+from src.simulation.outlook_attachment_extraction_regressions import (
+    evaluate_outlook_attachment_extraction_regressions,
+)
+from src.simulation.outlook_attachment_route_extraction_regressions import (
+    evaluate_outlook_attachment_route_extraction_regressions,
+)
 from src.simulation.outlook_graph_send_regressions import evaluate_outlook_graph_send_regressions
 from src.simulation.outlook_inbound_gate_regressions import evaluate_outlook_inbound_gate_regressions
 from src.simulation.outlook_inbound_router_regressions import evaluate_outlook_inbound_router_regressions
@@ -179,6 +188,18 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Trusted-route attachment retrieval gate",
         evaluate_outlook_attachment_route_retrieval_regressions,
+    ),
+    Suite(
+        "Safe attachment extraction",
+        evaluate_attachment_safe_extraction_regressions,
+    ),
+    Suite(
+        "Controlled Outlook attachment extraction",
+        evaluate_outlook_attachment_extraction_regressions,
+    ),
+    Suite(
+        "Trusted-route attachment extraction gate",
+        evaluate_outlook_attachment_route_extraction_regressions,
     ),
     Suite(
         "Controlled Outlook Graph sending",

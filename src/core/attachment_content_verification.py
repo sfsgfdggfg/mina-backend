@@ -8,6 +8,7 @@ from zipfile import BadZipFile, ZipFile
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.core.attachment_safe_extraction import SafeAttachmentExtractionArtifact
 from src.core.mail import InboundAttachmentMetadata
 
 
@@ -45,6 +46,8 @@ class AttachmentRetrievalResult(BaseModel):
     attachment_count: int = Field(ge=0)
     total_size_bytes: int = Field(ge=0)
     verified_receipts: list[VerifiedAttachmentReceipt] = Field(default_factory=list)
+    extracted_artifacts: list[SafeAttachmentExtractionArtifact] = Field(default_factory=list, exclude=True)
+    extraction_attempted: bool = False
     content_download_performed: bool = False
 
 
@@ -54,6 +57,7 @@ def manual_retrieval_result(
     attachment_count: int,
     total_size_bytes: int,
     content_download_performed: bool,
+    extraction_attempted: bool = False,
 ) -> AttachmentRetrievalResult:
     return AttachmentRetrievalResult(
         status="manual_review",
@@ -61,6 +65,8 @@ def manual_retrieval_result(
         attachment_count=attachment_count,
         total_size_bytes=total_size_bytes,
         verified_receipts=[],
+        extracted_artifacts=[],
+        extraction_attempted=extraction_attempted,
         content_download_performed=content_download_performed,
     )
 

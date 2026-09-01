@@ -14,6 +14,7 @@ REQUIRED_RUNTIME_PACKAGES: dict[str, str] = {
     "openai": "2.53.0",
     "msal": "1.37.0",
     "pydantic": "2.13.4",
+    "pypdf": "6.16.2",
     "python-dotenv": "1.2.2",
     "requests": "2.34.2",
     "uvicorn": "0.52.1",
