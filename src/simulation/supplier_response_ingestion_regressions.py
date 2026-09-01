@@ -350,6 +350,55 @@ def evaluate_supplier_response_ingestion_regressions() -> dict:
             "trusted final supplier response did not complete clarification flow"
         )
 
+    uncertainty_repository, uncertainty_draft = _repository_with_rfq(
+        rfq_id="rfq-clarification-status-uncertain",
+        status="awaiting_response",
+    )
+    prior_response = SupplierRFQResponse(
+        rfq_id=uncertainty_draft.rfq_id,
+        supplier_name=uncertainty_draft.supplier_name,
+        rfq_priority=uncertainty_draft.priority,
+        status="quoted",
+        cost=2300.0,
+        currency="EUR",
+        equipment_type="Tenteli",
+        source="manual",
+        received_at=datetime(2026, 9, 1, 12, 37, 56),
+    )
+    uncertainty_repository.save_responses([prior_response])
+    uncertainty_repository.save_drafts([
+        uncertainty_draft.model_copy(update={"status": "clarification_required"})
+    ])
+    uncertainty_follow_up = ingest_supplier_reply(
+        reply=_reply(
+            uncertainty_draft.rfq_id,
+            message_id="clarification-status-uncertain-final",
+        ),
+        repository=uncertainty_repository,
+        extracted_response={
+            "transit_time": "5-6 days",
+            "uncertain_fields": ["status"],
+        },
+    )
+    uncertainty_responses = uncertainty_repository.list_responses(
+        uncertainty_draft.rfq_id
+    )
+    consolidated = uncertainty_responses[-1] if uncertainty_responses else None
+    if (
+        uncertainty_follow_up.status != "response_attached"
+        or consolidated is None
+        or consolidated.status != "quoted"
+        or consolidated.cost != 2300.0
+        or consolidated.currency != "EUR"
+        or consolidated.transit_time != "5-6 days"
+        or not consolidated.is_consolidated_follow_up
+        or "cost" not in consolidated.inherited_fields
+        or "currency" not in consolidated.inherited_fields
+    ):
+        failures.append(
+            "clarification merge retained uncertainty for an inherited resolved status"
+        )
+
     missing_price_repository, missing_price_draft = _repository_with_rfq(
         rfq_id="rfq-missing-price",
         status="awaiting_response",

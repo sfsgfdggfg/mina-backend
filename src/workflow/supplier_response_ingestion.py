@@ -175,7 +175,11 @@ def _merge_clarification_extraction(
             update[field_name] = prior_value
             if prior_value is not None:
                 inherited_fields.append(field_name)
-    update["uncertain_fields"] = list(extraction.uncertain_fields)
+    update["uncertain_fields"] = [
+        field_name
+        for field_name in extraction.uncertain_fields
+        if update.get(field_name) is None
+    ]
     return (
         SupplierResponseExtraction.model_validate(update),
         inherited_fields,

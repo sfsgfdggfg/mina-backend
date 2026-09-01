@@ -3409,3 +3409,9 @@ The pilot operator CLI inherits these HTTP semantics. A duplicate, invalid-state
 A clarification follow-up must remain unsent until its own approval is recorded. The controlled `follow-up-send` action may call the provider only while the follow-up is `approved`, the parent RFQ is `clarification_required`, and no manual or automated send evidence already exists.
 
 Only provider `sent` with complete provider metadata may advance the follow-up to `awaiting_response` and create durable automated evidence. Duplicate, stale, manually-sent or otherwise ineligible follow-ups must be rejected before provider delivery; provider failure must leave the approved follow-up unchanged and must not create sent evidence.
+
+## RULE-155 — Resolved Clarification Fields Cannot Remain Uncertain
+
+During supplier clarification consolidation, MINAI must remove any field from `uncertain_fields` once the merged extraction assigns that field a non-null resolved value. Uncertainty may be preserved only for fields that remain unresolved after the merge.
+
+A clarification parser's uncertainty cannot override deterministic lifecycle context that safely resolves a field, such as a previously quoted supplier response combined with a valid follow-up transit value. The consolidated response must pass the same strict extraction model validation before it is persisted.

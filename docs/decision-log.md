@@ -6032,3 +6032,12 @@ This keeps the HTTP contract aligned with operator automation: `pilot_operator r
 A Supplier RFQ clarification follow-up may be delivered through the configured outbound provider only after the follow-up has its own explicit human approval and the parent RFQ remains in `clarification_required`. Automated follow-up delivery is an explicit operator action and does not authorize background clarification traffic.
 
 Provider-confirmed follow-up delivery must persist durable evidence containing the follow-up ID, parent RFQ ID, sequence number, recipient, provider name, provider delivery reference and provider-confirmed timestamp. The follow-up may advance to `awaiting_response` only after that provider confirmation. Manual and automated follow-up send evidence are mutually exclusive.
+
+## DEC-140 — Clarification Consolidation Must Clear Resolved Uncertainty
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+When a clarification follow-up resolves a field by deterministic inheritance or consolidation, the resulting SupplierResponseExtraction must not retain that field in `uncertain_fields`. A field may remain uncertain only while its merged value remains absent.
+
+This applies especially to `status`: a prior quoted response plus a valid follow-up commercial fact may resolve the consolidated response to `quoted` even when the follow-up parser itself was uncertain about status. The resolved value and uncertainty metadata must remain internally consistent before validation.
