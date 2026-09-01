@@ -3494,3 +3494,13 @@ Only pending attachment interpretation reviews may appear in the P1-60 operation
 A stale or missing Supplier RFQ must be visible as urgent work rather than silently disappearing, but queue priority never grants apply authority. Operators must still inspect review detail, generate the exact P1-59 field preview and satisfy preview-token, authentication and lifecycle guards before apply.
 
 Queue responses must remain privacy-minimal and must not contain attachment/customer source content, subject, trusted customer name, interpreted candidate values, operator corrections, preview tokens, provider IDs, attachment hashes or source fingerprints. Priority reason codes and aggregate counts are informational only.
+
+## RULE-167 — The Unified Operational Inbox Is Routing Metadata, Not Action Authority
+
+The P1-61 operational work queue must be GET-only, deterministic, non-AI, non-persistent and mutation-free. A queue read must never confirm an extraction, approve/reject a quote, approve/send a Supplier RFQ follow-up, apply/reject an attachment review, write the mailbox or send outbound mail.
+
+`next_action` values are informational routing hints only. Operators must inspect the referenced resource and use its existing authenticated endpoint/CLI action; all existing preview-token, confirmation, stale-state, approval and send guards remain authoritative. A detected supplier clarification gap may be surfaced urgently but must not cause automatic follow-up creation or state repair.
+
+Only strict ISO dates may influence deadline priority. Queue output must remain privacy-minimal and must not include names, addresses, subjects, message/source content, commercial amounts/currency, correction payloads, preview tokens, provider identifiers, attachment hashes or source fingerprints.
+
+If current durable evidence contradicts the proposed next action, the unified inbox must replace that action with an inspection hint and raise blocker priority. In particular, send evidence must prevent the inbox from suggesting another supplier follow-up send, multiple active follow-ups for one RFQ must be treated as inconsistent, and an orphan/stale/already-sent pending quote approval must not be presented as decision-ready.

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -13,65 +12,14 @@ from src.core.attachment_interpretation_review_service import (
     supplier_rfq_review_snapshot_sha256,
 )
 from src.core.supplier_rfq_repository import SupplierRFQRepository
-
-_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_PRIORITY_RANK = {"critical": 0, "high": 1, "normal": 2, "low": 3}
-
-
-def _aware_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
-
-
-def _strict_date(value: Any) -> date | None:
-    if not isinstance(value, str) or _ISO_DATE.fullmatch(value.strip()) is None:
-        return None
-    try:
-        return date.fromisoformat(value.strip())
-    except ValueError:
-        return None
-
-
-def _age_score(age_hours: int) -> tuple[int, str | None]:
-    if age_hours >= 48:
-        return 30, "review_age_48h_plus"
-    if age_hours >= 24:
-        return 20, "review_age_24h_plus"
-    if age_hours >= 12:
-        return 10, "review_age_12h_plus"
-    if age_hours >= 4:
-        return 5, "review_age_4h_plus"
-    return 0, None
-
-
-def _deadline_score(days: int, *, kind: str) -> tuple[int, str]:
-    weights = {
-        "required_delivery": (40, 35, 25, 12),
-        "cargo_ready": (25, 20, 15, 8),
-        "quote_validity": (35, 30, 20, 10),
-        "vehicle_available": (20, 18, 12, 5),
-    }
-    overdue, today, soon, week = weights[kind]
-    if days < 0:
-        return overdue, f"{kind}_overdue"
-    if days == 0:
-        return today, f"{kind}_today"
-    if days <= 2:
-        return soon, f"{kind}_within_2d"
-    if days <= 7:
-        return week, f"{kind}_within_7d"
-    return 0, f"{kind}_future"
-
-
-def _priority_band(score: int) -> str:
-    if score >= 70:
-        return "critical"
-    if score >= 45:
-        return "high"
-    if score >= 20:
-        return "normal"
-    return "low"
+from src.core.operational_priority import (
+    PRIORITY_RANK,
+    age_score,
+    aware_utc,
+    deadline_score,
+    priority_band,
+    strict_iso_date,
+)
 
 
 def _candidate_dates(review: AttachmentInterpretationReview) -> list[tuple[str, date]]:
@@ -89,7 +37,7 @@ def _candidate_dates(review: AttachmentInterpretationReview) -> list[tuple[str, 
     else:
         raw = ()
     for kind, value in raw:
-        parsed = _strict_date(value)
+        parsed = strict_iso_date(value)
         if parsed is not None:
             pairs.append((kind, parsed))
     return pairs
@@ -101,13 +49,13 @@ def build_attachment_review_queue_item(
     supplier_repository: SupplierRFQRepository,
     now: datetime,
 ) -> dict[str, Any]:
-    current = _aware_utc(now)
-    created = _aware_utc(review.created_at)
+    current = aware_utc(now)
+    created = aware_utc(review.created_at)
     age_hours = max(0, int((current - created).total_seconds() // 3600))
     score = 10
     reasons: list[str] = []
 
-    age_points, age_reason = _age_score(age_hours)
+    age_points, age_reason = age_score(age_hours, reason_prefix="review_age")
     score += age_points
     if age_reason:
         reasons.append(age_reason)
@@ -142,7 +90,7 @@ def build_attachment_review_queue_item(
     nearest_days = None
     for kind, deadline in _candidate_dates(review):
         days = (deadline - current.date()).days
-        points, reason = _deadline_score(days, kind=kind)
+        points, reason = deadline_score(days, kind=kind)
         score += points
         if points:
             reasons.append(reason)
@@ -150,7 +98,7 @@ def build_attachment_review_queue_item(
             nearest_kind, nearest_days = kind, days
 
     score = min(100, score)
-    band = _priority_band(score)
+    band = priority_band(score)
     return {
         "review_id": review.review_id,
         "route": review.route,
@@ -175,7 +123,7 @@ def build_attachment_review_queue(
     supplier_repository: SupplierRFQRepository,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    current = _aware_utc(now or datetime.now(timezone.utc))
+    current = aware_utc(now or datetime.now(timezone.utc))
     items = [
         build_attachment_review_queue_item(
             review,
@@ -187,10 +135,10 @@ def build_attachment_review_queue(
     ]
     items.sort(
         key=lambda item: (
-            _PRIORITY_RANK[item["priority_band"]],
+            PRIORITY_RANK[item["priority_band"]],
             -item["priority_score"],
             item["days_until_nearest_deadline"] if item["days_until_nearest_deadline"] is not None else 10**9,
-            _aware_utc(item["created_at"]),
+            aware_utc(item["created_at"]),
             item["review_id"],
         )
     )

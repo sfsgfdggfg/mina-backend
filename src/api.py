@@ -137,6 +137,7 @@ from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
 )
 from src.core.attachment_review_queue import build_attachment_review_queue
+from src.core.operational_work_queue import build_operational_work_queue
 from src.core.attachment_interpretation_review_service import (
     AttachmentReviewConflictError,
     AttachmentReviewNotFoundError,
@@ -1163,6 +1164,17 @@ def list_attachment_review_queue():
     return build_attachment_review_queue(
         repository=attachment_review_repository,
         supplier_repository=supplier_rfq_repository,
+    )
+
+
+@app.get("/operational-work-queue")
+def list_operational_work_queue():
+    return build_operational_work_queue(
+        attachment_repository=attachment_review_repository,
+        proposal_repository=extraction_proposal_repository,
+        supplier_repository=supplier_rfq_repository,
+        approval_repository=quote_approval_repository,
+        quote_case_repository=quote_case_repository,
     )
 
 

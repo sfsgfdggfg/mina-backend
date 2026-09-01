@@ -6155,3 +6155,18 @@ P1-60 adds a read-only operational queue for pending attachment interpretation r
 Each pending review starts at score 10. Review age adds 5/10/20/30 points at 4/12/24/48 hours. The P1-59 baseline preview adds up to 30 points for a non-apply-ready blocker, 15 points per critical-attention field up to 45, and 5 points per warning up to 20. A missing or stale supplier RFQ snapshot adds 60 points; an RFQ that is no longer review-applicable adds 40. Customer required-delivery/cargo-ready dates and supplier quote-validity/vehicle-availability dates add bounded urgency points only when the source value is an exact `YYYY-MM-DD` date. Free-form dates are never guessed.
 
 Scores are capped at 100 and map to `critical >= 70`, `high >= 45`, `normal >= 20`, otherwise `low`. Ordering is priority band, score descending, nearest known deadline, oldest review, then review ID. Queue output is privacy-minimal: it may expose review ID, route, RFQ ID, age, aggregate attention/blocker/warning counts, priority reason codes and relative deadline distance, but not subject, customer identity, candidate field values, corrections, preview tokens, source fingerprints, attachment hashes, provider IDs or raw/extracted attachment content.
+
+## DEC-152 — Human Work May Be Unified for Prioritization Without Unifying Workflow Authority
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-61 introduces one read-only operational work queue across human-gated attachment review, customer extraction confirmation, supplier clarification follow-up and quote approval. The queue may also surface a `clarification_required` Supplier RFQ that has no active follow-up as a high-urgency operational gap. It does not replace or merge the underlying attachment-review, extraction-confirmation, Supplier RFQ or quote-approval state machines.
+
+Only work requiring a current human action is eligible. Pending attachment reviews, proposed customer extractions, supplier follow-up drafts/approved follow-ups, clarification gaps and pending quote approvals may appear. Resolved decisions and supplier follow-ups already awaiting an external response are excluded. Priority is recomputed on every read from durable current state; it is not persisted and does not call AI.
+
+Cross-work priority uses a common human-action baseline plus bounded current-state signals: age, safety/commercial attention, exact ISO `YYYY-MM-DD` deadlines and lifecycle consistency. Free-form dates are never guessed. Existing P1-60 attachment-review scoring remains backward-compatible and is incorporated as one source signal.
+
+The unified queue is privacy-minimal. It may expose internal resource IDs, work type, route/status, next-action code, age, aggregate warning/blocker/attention counts, priority reason codes and relative deadline distance. It must not expose customer/supplier identity, email addresses, message subject/body, interpreted candidate values, quote price/cost/currency, supplier clarification text, preview tokens, attachment/source hashes, provider IDs or raw/extracted content.
+
+P1-61 also treats inconsistent durable state as blocked work rather than an action accelerator. A supplier follow-up with prior send evidence while still `draft`/`approved`, or multiple active follow-ups for the same RFQ, is routed to inspection instead of approval/send. A pending quote approval with no unique QuoteCase, stale case approval state, or prior customer-quote sent evidence is likewise routed to inspection rather than approval/rejection acceleration.
