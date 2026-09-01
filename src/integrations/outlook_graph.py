@@ -181,11 +181,19 @@ def _normalize_graph_attachment_metadata(
     if not isinstance(is_inline, bool):
         raise OutlookGraphReadError("graph_attachment_inline_state_invalid")
 
+    graph_type = raw_attachment.get("@odata.type")
+    kind = {
+        "#microsoft.graph.fileAttachment": "file",
+        "#microsoft.graph.itemAttachment": "item",
+        "#microsoft.graph.referenceAttachment": "reference",
+    }.get(graph_type, "unknown")
+
     try:
         return InboundAttachmentMetadata(
             name=name,
             content_type=content_type,
             size_bytes=size,
+            kind=kind,
             is_inline=is_inline,
         )
     except (ValidationError, ValueError) as exc:

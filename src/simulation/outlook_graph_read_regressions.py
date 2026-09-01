@@ -136,6 +136,7 @@ def evaluate_outlook_graph_read_regressions() -> dict:
                     "value": [
                         {
                             "id": "secret-attachment-id",
+                            "@odata.type": "#microsoft.graph.fileAttachment",
                             "name": "rate-sheet.pdf",
                             "contentType": "application/pdf",
                             "size": 12345,
@@ -219,6 +220,7 @@ def evaluate_outlook_graph_read_regressions() -> dict:
         and mail.attachment_manifest[0].name == "rate-sheet.pdf"
         and mail.attachment_manifest[0].content_type == "application/pdf"
         and mail.attachment_manifest[0].size_bytes == 12345
+        and mail.attachment_manifest[0].kind == "file"
         and mail.attachment_manifest_truncated is False
         and "secret-attachment-id" not in mail.model_dump_json(),
         "provider message and safe attachment manifest normalized",
@@ -301,6 +303,7 @@ def evaluate_outlook_graph_read_regressions() -> dict:
                 {
                     "value": [
                         {
+                            "@odata.type": "#microsoft.graph.fileAttachment",
                             "name": "attachment-only.pdf",
                             "contentType": "application/pdf",
                             "size": 75221,
@@ -326,6 +329,7 @@ def evaluate_outlook_graph_read_regressions() -> dict:
         and len(attachment_only_batch[0].attachment_manifest) == 1
         and attachment_only_batch[0].attachment_manifest[0].name
         == "attachment-only.pdf"
+        and attachment_only_batch[0].attachment_manifest[0].kind == "file"
         and not attachment_only_client.last_message_rejections,
         "attachment-only message preserves safe manifest",
     )

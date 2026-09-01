@@ -240,6 +240,49 @@ def evaluate_outlook_pull_regressions():
             "pull returns minimal safe proposal summary",
         )
 
+
+        attachment_capture = {}
+
+        def attachment_factory(*, access_token, mailbox_id):
+            return _GraphClient(
+                access_token=access_token,
+                mailbox_id=mailbox_id,
+                messages=[_mail("attachment-summary-1")],
+                capture=attachment_capture,
+            )
+
+        def attachment_processor(**kwargs):
+            return {
+                "result_type": "inbound_mail_manual_review_required",
+                "ingestion_status": "blocked",
+                "reason_code": "outlook_attachments_not_supported",
+                "inbound_route": "manual_review",
+                "attachment_intake_status": "metadata_allowlisted",
+                "attachment_intake_reason_code": "attachment_metadata_allowlisted",
+                "attachment_count": 2,
+                "attachment_total_size_bytes": 8192,
+            }
+
+        attachment_summary = pull_controlled_outlook_inbox(
+            config=config,
+            limit=1,
+            shipment_parser=lambda value: value,
+            proposal_repository=object(),
+            operational_data_sources=object(),
+            token_provider=lambda value: SECRET_TOKEN,
+            graph_client_factory=attachment_factory,
+            inbound_processor=attachment_processor,
+        )
+
+        check(
+            attachment_summary["manual_review_count"] == 1
+            and attachment_summary["results"][0]["attachment_intake_status"]
+            == "metadata_allowlisted"
+            and attachment_summary["results"][0]["attachment_count"] == 2
+            and attachment_summary["results"][0]["attachment_total_size_bytes"] == 8192,
+            "pull safely surfaces attachment policy summary",
+        )
+
         rejection_capture = {}
 
         def rejection_factory(

@@ -3439,3 +3439,10 @@ For attachment-only Outlook mail, MINAI must collect only the approved bounded a
 Outlook body normalization for non-empty text must remain stable when attachment-only handling changes. Leading and trailing provider whitespace must not become part of a previously normalized message body or change durable route-history fingerprints.
 
 Empty text may be admitted into the provider-neutral envelope only for a message that explicitly reports attachments, and that message must still stop at the attachment manual-review gate before AI parsing.
+
+
+## RULE-160 — Attachment Metadata Eligibility Does Not Authorize Download
+
+MINAI may classify attachment metadata as `metadata_allowlisted` only when every attachment is a non-inline Graph file attachment, the extension/MIME pairing is allowlisted for PDF, XLSX or CSV, no file exceeds 10 MiB, the combined attachment size does not exceed 20 MiB, the attachment count does not exceed 5, and the manifest is complete.
+
+Any unknown/item/reference attachment kind, missing or mismatched MIME value, unsupported or macro-enabled extension, inline attachment, truncated/missing manifest or limit breach must result in manual review. P1-54 must not request attachment content bytes, must not persist provider attachment IDs, and must not send attachment content to customer or supplier AI parsers. `metadata_allowlisted` is only a future content-retrieval candidate classification, not permission to download or parse the file.

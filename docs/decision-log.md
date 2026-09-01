@@ -6077,3 +6077,13 @@ This exception does not relax the general inbound body contract: blank-body mess
 Allowing attachment-only Outlook messages to reach the safe attachment manifest path must not change normalization for ordinary non-empty message bodies. Non-empty Graph text bodies continue to use the established trimmed representation so durable route fingerprints and idempotency remain stable across releases.
 
 An attachment-only message may use an empty provider-neutral body only when `has_attachments=true`; that exception must not alter existing non-empty message identity.
+
+
+## DEC-145 — Attachment Intake Starts With a Metadata-Only Allowlist
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-54 classifies inbound Outlook attachments using metadata only; it does not authorize attachment content retrieval. A metadata candidate must be a non-inline Microsoft Graph `fileAttachment` whose extension/MIME pair is allowlisted as PDF, XLSX or CSV. Unknown, item or reference attachment kinds remain manual-review-only.
+
+The initial limits are 10 MiB per file, 20 MiB total per message and at most 5 automatically eligible files. Missing or mismatched MIME metadata, unsupported extensions including macro-enabled Office formats, manifest truncation, inline files or any limit breach require manual review. Even an allowlisted metadata result remains blocked at the existing attachment gate until a separate controlled content-retrieval boundary is approved.

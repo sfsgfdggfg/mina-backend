@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from src.core.attachment_intake_policy import (
+    assess_attachment_intake,
+)
 from src.core.customer_memory import (
     load_customer_memory,
     sender_matches_profile,
@@ -129,7 +132,8 @@ def process_controlled_outlook_inbound_mail(
         )
 
     if mail.has_attachments:
-        return _blocked_result(
+        assessment = assess_attachment_intake(mail)
+        result = _blocked_result(
             result_type=(
                 "inbound_mail_manual_review_required"
             ),
@@ -137,6 +141,13 @@ def process_controlled_outlook_inbound_mail(
                 "outlook_attachments_not_supported"
             ),
         )
+        result.update({
+            "attachment_intake_status": assessment.status,
+            "attachment_intake_reason_code": assessment.reason_code,
+            "attachment_count": assessment.attachment_count,
+            "attachment_total_size_bytes": assessment.total_size_bytes,
+        })
+        return result
 
     supplier_replay = (
         supplier_message_is_exact_replay(

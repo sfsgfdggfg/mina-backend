@@ -86,6 +86,18 @@ def _safe_result_summary(
             "correlation_method"
         ),
         "proposal_id": proposal_id,
+        "attachment_intake_status": result.get(
+            "attachment_intake_status"
+        ),
+        "attachment_intake_reason_code": result.get(
+            "attachment_intake_reason_code"
+        ),
+        "attachment_count": result.get(
+            "attachment_count"
+        ),
+        "attachment_total_size_bytes": result.get(
+            "attachment_total_size_bytes"
+        ),
     }
 
     return {
