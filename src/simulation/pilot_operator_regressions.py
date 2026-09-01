@@ -144,6 +144,11 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append((_last_contract(session), ("GET", "/attachment-review-queue", None)))
     client.get_operational_work_queue()
     contracts.append((_last_contract(session), ("GET", "/operational-work-queue", None)))
+    client.get_operational_work_item("customer_extraction_confirmation:proposal-1")
+    contracts.append((
+        _last_contract(session),
+        ("GET", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1", None),
+    ))
     client.list_attachment_reviews()
     contracts.append((_last_contract(session), ("GET", "/attachment-reviews", None)))
     client.get_attachment_review("review-1")
@@ -456,6 +461,7 @@ def evaluate_pilot_operator_regressions() -> dict:
 
     recovery_paths = {
         "/operational-work-queue",
+        "/operational-work-items/customer_extraction_confirmation%3Aproposal-1",
         "/attachment-review-queue",
         "/attachment-reviews",
         "/attachment-reviews/review-1",
@@ -570,6 +576,18 @@ def evaluate_pilot_operator_regressions() -> dict:
         "GET", "/operational-work-queue", None,
     ):
         failures.append("operational work queue CLI mapped to the wrong API contract")
+
+    work_get_cli_session = _Session([_Response(200, {"work_item": {"work_id": "quote_approval:approval-1"}})])
+    work_get_cli_client = _client(work_get_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=work_get_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            work_get_cli_exit = main(["work", "get", "quote_approval:approval-1"])
+    if work_get_cli_exit != 0:
+        failures.append("operational work detail CLI command failed")
+    elif _last_contract(work_get_cli_session) != (
+        "GET", "/operational-work-items/quote_approval%3Aapproval-1", None,
+    ):
+        failures.append("operational work detail CLI mapped to the wrong API contract")
 
     queue_cli_session = _Session([_Response(200, {"pending_count": 0, "items": []})])
     queue_cli_client = _client(queue_cli_session)

@@ -203,6 +203,11 @@ class PilotOperatorClient:
     def get_operational_work_queue(self) -> Any:
         return self._request("GET", "/operational-work-queue")
 
+    def get_operational_work_item(self, work_id: str) -> Any:
+        return self._request(
+            "GET", f"/operational-work-items/{self._id(work_id)}"
+        )
+
     def list_attachment_reviews(self) -> Any:
         return self._request("GET", "/attachment-reviews")
 
@@ -483,6 +488,7 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="action", required=True
     )
     work.add_parser("queue")
+    work.add_parser("get").add_argument("work_id")
 
     attachment_review = commands.add_parser("attachment-review").add_subparsers(
         dest="action", required=True
@@ -649,7 +655,9 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             interpret_attachments=args.interpret_attachments,
         )
     if args.command == "work":
-        return client.get_operational_work_queue()
+        if args.action == "queue":
+            return client.get_operational_work_queue()
+        return client.get_operational_work_item(args.work_id)
     if args.command == "attachment-review":
         if args.action == "queue":
             return client.list_attachment_review_queue()
