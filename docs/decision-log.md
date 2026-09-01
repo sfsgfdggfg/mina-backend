@@ -6023,3 +6023,12 @@ A provider-confirmed supplier RFQ send must persist durable automated-send evide
 The controlled supplier RFQ send endpoint must not return a successful HTTP response when no provider delivery occurred. A pre-provider lifecycle rejection is a conflict, and a provider failure or unavailable provider is an operational service failure. Only a provider-confirmed `sent` result may return HTTP success.
 
 This keeps the HTTP contract aligned with operator automation: `pilot_operator rfq send` must exit nonzero whenever the requested RFQ was not sent. A safe rejection remains non-destructive, but it is not a successful send operation.
+
+## DEC-139 — Supplier Clarification Follow-Ups Use the Same Controlled Provider Send Contract
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+A Supplier RFQ clarification follow-up may be delivered through the configured outbound provider only after the follow-up has its own explicit human approval and the parent RFQ remains in `clarification_required`. Automated follow-up delivery is an explicit operator action and does not authorize background clarification traffic.
+
+Provider-confirmed follow-up delivery must persist durable evidence containing the follow-up ID, parent RFQ ID, sequence number, recipient, provider name, provider delivery reference and provider-confirmed timestamp. The follow-up may advance to `awaiting_response` only after that provider confirmation. Manual and automated follow-up send evidence are mutually exclusive.

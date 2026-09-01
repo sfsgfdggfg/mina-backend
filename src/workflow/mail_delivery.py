@@ -20,14 +20,18 @@ from src.core.regulatory_compliance import RegulatoryComplianceAssessment
 from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
     SupplierRFQDraft,
+    SupplierRFQFollowUpAutomatedSentEvidence,
+    SupplierRFQFollowUpDraft,
 )
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQNotFoundError,
     SupplierRFQTransitionError,
     send_supplier_rfq,
+    send_supplier_rfq_follow_up,
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQAutomatedSentEvidenceError,
+    DuplicateSupplierRFQFollowUpAutomatedSentEvidenceError,
     SupplierRFQRepository,
 )
 from src.core.sqlite_repositories import atomic_repository_transaction
@@ -39,6 +43,14 @@ class SupplierRFQMailDeliveryResult(BaseModel):
     delivery: MailSendResult
     automated_sent_evidence: Optional[SupplierRFQAutomatedSentEvidence] = None
     source: str = "supplier_rfq_mail_delivery"
+
+
+class SupplierRFQFollowUpMailDeliveryResult(BaseModel):
+    supplier_rfq_follow_up: SupplierRFQFollowUpDraft
+    mail_request: Optional[OutboundMailRequest] = None
+    delivery: MailSendResult
+    automated_sent_evidence: Optional[SupplierRFQFollowUpAutomatedSentEvidence] = None
+    source: str = "supplier_rfq_follow_up_mail_delivery"
 
 
 class CustomerQuoteMailDeliveryResult(BaseModel):
@@ -221,6 +233,122 @@ def send_supplier_rfq_via_mail(
         supplier_rfq=awaiting,
         mail_request=request,
         delivery=delivery,
+        automated_sent_evidence=evidence,
+    )
+
+
+def build_supplier_rfq_follow_up_mail_request(
+    follow_up: SupplierRFQFollowUpDraft,
+) -> OutboundMailRequest:
+    return OutboundMailRequest(
+        operation_id=follow_up.operation_id,
+        recipients=[follow_up.recipient_email],
+        subject=follow_up.subject,
+        body_text=follow_up.body,
+        purpose="supplier_rfq",
+        correlation_reference=follow_up.reference_token,
+        reference_metadata={
+            "rfq_id": follow_up.rfq_id,
+            "follow_up_id": follow_up.follow_up_id,
+            "sequence_number": str(follow_up.sequence_number),
+            "workflow_id": follow_up.workflow_id,
+        },
+    )
+
+
+def send_supplier_rfq_follow_up_via_mail(
+    *,
+    repository: SupplierRFQRepository,
+    follow_up_id: str,
+    sender: OutboundMailSender | None,
+) -> SupplierRFQFollowUpMailDeliveryResult:
+    follow_up = repository.get_follow_up_draft(follow_up_id)
+    if follow_up is None:
+        raise SupplierRFQNotFoundError(
+            f"Supplier RFQ follow-up not found: {follow_up_id}"
+        )
+    operation_id = follow_up.operation_id
+    parent = repository.get_draft(follow_up.rfq_id)
+    if follow_up.status != "approved":
+        return SupplierRFQFollowUpMailDeliveryResult(
+            supplier_rfq_follow_up=follow_up,
+            delivery=_controlled_result(
+                operation_id=operation_id, status="rejected_before_provider",
+                reason=("Supplier RFQ follow-up must be approved and unsent before delivery; "
+                        f"current status is {follow_up.status}."),
+            ),
+        )
+    if parent is None or parent.status != "clarification_required":
+        return SupplierRFQFollowUpMailDeliveryResult(
+            supplier_rfq_follow_up=follow_up,
+            delivery=_controlled_result(
+                operation_id=operation_id, status="rejected_before_provider",
+                reason="Supplier RFQ follow-up requires a clarification-required parent RFQ.",
+            ),
+        )
+    if repository.list_follow_up_manual_sent_evidence(follow_up_id):
+        return SupplierRFQFollowUpMailDeliveryResult(
+            supplier_rfq_follow_up=follow_up,
+            delivery=_controlled_result(
+                operation_id=operation_id, status="rejected_before_provider",
+                reason="Supplier RFQ follow-up already has manual send evidence.",
+            ),
+        )
+    if repository.list_follow_up_automated_sent_evidence(follow_up_id):
+        return SupplierRFQFollowUpMailDeliveryResult(
+            supplier_rfq_follow_up=follow_up,
+            delivery=_controlled_result(
+                operation_id=operation_id, status="rejected_before_provider",
+                reason="Supplier RFQ follow-up already has automated send evidence.",
+            ),
+        )
+    request = build_supplier_rfq_follow_up_mail_request(follow_up)
+    delivery = dispatch_outbound_mail(request, sender)
+    if delivery.status != "sent":
+        return SupplierRFQFollowUpMailDeliveryResult(
+            supplier_rfq_follow_up=follow_up, mail_request=request, delivery=delivery
+        )
+    if delivery.provider_name is None or delivery.provider_message_id is None or delivery.sent_at is None:
+        return SupplierRFQFollowUpMailDeliveryResult(
+            supplier_rfq_follow_up=follow_up, mail_request=request,
+            delivery=_controlled_result(
+                operation_id=operation_id, status="failed",
+                reason="Sent Supplier RFQ follow-up result is missing durable provider metadata.",
+            ),
+        )
+    evidence = SupplierRFQFollowUpAutomatedSentEvidence(
+        follow_up_id=follow_up.follow_up_id, rfq_id=follow_up.rfq_id,
+        sequence_number=follow_up.sequence_number, recipient_email=follow_up.recipient_email,
+        provider_name=delivery.provider_name, provider_message_id=delivery.provider_message_id,
+        sent_at=delivery.sent_at,
+    )
+    with atomic_repository_transaction(repository):
+        current = repository.get_follow_up_draft(follow_up_id)
+        if current is None:
+            raise SupplierRFQNotFoundError(
+                f"Supplier RFQ follow-up not found: {follow_up_id}"
+            )
+        if current != follow_up:
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ follow-up changed after provider delivery; automated evidence was not attached to stale state."
+            )
+        if repository.list_follow_up_manual_sent_evidence(follow_up_id):
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ follow-up received manual send evidence after provider delivery."
+            )
+        if repository.list_follow_up_automated_sent_evidence(follow_up_id):
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ follow-up already has automated send evidence."
+            )
+        sent = send_supplier_rfq_follow_up(
+            repository=repository, follow_up_id=follow_up_id, send_result=delivery
+        )
+        try:
+            evidence = repository.save_follow_up_automated_sent_evidence(evidence)
+        except DuplicateSupplierRFQFollowUpAutomatedSentEvidenceError as exc:
+            raise SupplierRFQTransitionError(str(exc)) from exc
+    return SupplierRFQFollowUpMailDeliveryResult(
+        supplier_rfq_follow_up=sent, mail_request=request, delivery=delivery,
         automated_sent_evidence=evidence,
     )
 

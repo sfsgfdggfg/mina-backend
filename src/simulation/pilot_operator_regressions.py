@@ -205,6 +205,13 @@ def evaluate_pilot_operator_regressions() -> dict:
             ("POST", "/supplier-rfq-follow-ups/follow-up-1/approve", {}),
         )
     )
+    client.send_rfq_follow_up("follow-up-1")
+    contracts.append(
+        (
+            _last_contract(session),
+            ("POST", "/supplier-rfq-follow-ups/follow-up-1/send", {}),
+        )
+    )
     client.record_rfq_follow_up_manually_sent("follow-up-1")
     contracts.append(
         (
@@ -348,7 +355,6 @@ def evaluate_pilot_operator_regressions() -> dict:
         for call in session.calls
     ]
     forbidden_paths = {
-        "/supplier-rfq-follow-ups/follow-up-1/send",
         "/quotes/prepare-send",
         "/supplier-responses/ingest",
     }
@@ -361,6 +367,8 @@ def evaluate_pilot_operator_regressions() -> dict:
     }
     if "send_rfq" not in public_methods:
         failures.append("operator client does not expose controlled supplier RFQ send")
+    if "send_rfq_follow_up" not in public_methods:
+        failures.append("operator client does not expose controlled supplier follow-up send")
     if {"send_quote", "prepare_quote_send"}.intersection(public_methods):
         failures.append("operator client exposes a legacy automated send method")
 
@@ -533,6 +541,38 @@ def evaluate_pilot_operator_regressions() -> dict:
         {},
     ):
         failures.append("RFQ follow-up approve CLI mapped to the wrong API contract")
+
+    follow_up_send_cli_session = _Session([_Response(200, {"delivery": {"status": "sent"}})])
+    follow_up_send_cli_client = _client(follow_up_send_cli_session)
+    with patch.object(
+        PilotOperatorClient,
+        "from_environment",
+        return_value=follow_up_send_cli_client,
+    ):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            follow_up_send_cli_exit = main([
+                "rfq", "follow-up-send", "follow-up-cli"
+            ])
+    if follow_up_send_cli_exit != 0:
+        failures.append("RFQ follow-up send CLI command failed")
+    elif _last_contract(follow_up_send_cli_session) != (
+        "POST", "/supplier-rfq-follow-ups/follow-up-cli/send", {}
+    ):
+        failures.append("RFQ follow-up send CLI mapped to the wrong API contract")
+
+    blocked_follow_up_send_session = _Session([_Response(409, {"detail": "stale"})])
+    blocked_follow_up_send_client = _client(blocked_follow_up_send_session)
+    with patch.object(
+        PilotOperatorClient,
+        "from_environment",
+        return_value=blocked_follow_up_send_client,
+    ):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            blocked_follow_up_send_exit = main([
+                "rfq", "follow-up-send", "follow-up-cli"
+            ])
+    if blocked_follow_up_send_exit != 2:
+        failures.append("blocked RFQ follow-up send CLI did not exit nonzero")
 
     secret = "never-print-this-bearer-token"
     stdout = io.StringIO()

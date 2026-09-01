@@ -15,6 +15,7 @@ from src.core.quote_case import QuoteCase
 from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
     SupplierRFQDraft,
+    SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpDraft,
     SupplierRFQFollowUpManualSentEvidence,
     SupplierRFQManualSentEvidence,
@@ -23,6 +24,7 @@ from src.core.supplier_rfq import (
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQAutomatedSentEvidenceError,
+    DuplicateSupplierRFQFollowUpAutomatedSentEvidenceError,
     DuplicateSupplierRFQFollowUpManualSentEvidenceError,
     DuplicateSupplierRFQManualSentEvidenceError,
     DuplicateSupplierRFQResponseError,
@@ -101,6 +103,9 @@ class SQLiteSupplierRFQRepository:
     AUTOMATED_SENT_EVIDENCE_NAMESPACE = "supplier_rfq_automated_sent_evidence"
     MANUAL_SENT_EVIDENCE_NAMESPACE = "supplier_rfq_manual_sent_evidence"
     FOLLOW_UP_DRAFT_NAMESPACE = "supplier_rfq_follow_up_drafts"
+    FOLLOW_UP_AUTOMATED_SENT_EVIDENCE_NAMESPACE = (
+        "supplier_rfq_follow_up_automated_sent_evidence"
+    )
     FOLLOW_UP_MANUAL_SENT_EVIDENCE_NAMESPACE = (
         "supplier_rfq_follow_up_manual_sent_evidence"
     )
@@ -232,6 +237,43 @@ class SQLiteSupplierRFQRepository:
             )
         ]
         return drafts if rfq_id is None else [d for d in drafts if d.rfq_id == rfq_id]
+
+    def save_follow_up_automated_sent_evidence(
+        self,
+        evidence: SupplierRFQFollowUpAutomatedSentEvidence,
+    ) -> SupplierRFQFollowUpAutomatedSentEvidence:
+        payload = _model_payload(evidence)
+        if not self.store.insert_once(
+            namespace=self.FOLLOW_UP_AUTOMATED_SENT_EVIDENCE_NAMESPACE,
+            record_key=evidence.follow_up_id,
+            payload=payload,
+            event_type="supplier_rfq_follow_up_automated_sent",
+            entity_type="supplier_rfq_follow_up",
+        ):
+            raise DuplicateSupplierRFQFollowUpAutomatedSentEvidenceError(
+                "Automated Supplier RFQ follow-up sent evidence already exists."
+            )
+        return _model_from_payload(
+            SupplierRFQFollowUpAutomatedSentEvidence, payload
+        )
+
+    def list_follow_up_automated_sent_evidence(
+        self,
+        follow_up_id: str | None = None,
+    ) -> list[SupplierRFQFollowUpAutomatedSentEvidence]:
+        evidence = [
+            _model_from_payload(
+                SupplierRFQFollowUpAutomatedSentEvidence, payload
+            )
+            for payload in self.store.list_all(
+                namespace=self.FOLLOW_UP_AUTOMATED_SENT_EVIDENCE_NAMESPACE
+            )
+        ]
+        return (
+            evidence
+            if follow_up_id is None
+            else [e for e in evidence if e.follow_up_id == follow_up_id]
+        )
 
     def save_follow_up_manual_sent_evidence(
         self,

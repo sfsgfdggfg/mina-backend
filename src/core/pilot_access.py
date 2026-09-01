@@ -44,6 +44,7 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("GET", re.compile(r"^/supplier-rfqs/[^/]+/follow-ups$")),
     ("GET", re.compile(r"^/supplier-rfq-follow-ups/[^/]+$")),
     ("POST", re.compile(r"^/supplier-rfq-follow-ups/[^/]+/approve$")),
+    ("POST", re.compile(r"^/supplier-rfq-follow-ups/[^/]+/send$")),
     ("POST", re.compile(r"^/supplier-rfq-follow-ups/[^/]+/record-manually-sent$")),
     ("POST", re.compile(r"^/supplier-rfq-workflows/[^/]+/resume-quote$")),
     ("GET", re.compile(r"^/quote-approvals$")),
