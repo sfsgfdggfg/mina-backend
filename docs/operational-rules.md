@@ -3520,3 +3520,11 @@ Operational work assignment must be durable, named-operator, current-state-bound
 Assignment must not alter queue priority, workflow status, proposal/RFQ/approval/review state, mailbox state or outbound behavior. Existing confirm, approve, reject, apply, resume and send guards remain authoritative whether a work item is unassigned, assigned to the caller, assigned to another operator or acknowledged.
 
 A work-state change must invalidate the prior assignment for coordination purposes rather than carrying ownership forward silently. Internal work-state fingerprints must not be exposed in queue/detail/assignment responses. Queue/detail may expose the named internal operator and safe assignment timestamps so operators can avoid duplicate handling. Resolved work must not be assignable through a stale work ID.
+
+## RULE-170 — Assignment Lease Expiry Requires Explicit Recovery and Never Transfers Workflow Authority
+
+Every new operational work assignment has a 30-minute coordination lease. Only the authenticated current assignee may acknowledge or renew an active lease. First acknowledgement refreshes the lease; subsequent extension must use explicit `work renew`. No background process may silently renew assignment ownership.
+
+An unexpired assignment cannot be taken over by another operator. Once the lease expires, normal assign/acknowledge/renew must fail closed and recovery must use explicit `work takeover`. Takeover is allowed only for the same still-current work-state fingerprint and must atomically create a new assignment generation. Concurrent takeover attempts must produce at most one winner.
+
+An expired or legacy lease does not make the underlying work safe to approve, confirm, send, apply, reject or resume. All existing workflow guards remain authoritative. Assignment expiry/takeover must not change queue priority, mutate the underlying workflow resource or expose the internal work-state fingerprint.

@@ -242,7 +242,7 @@ def build_operational_work_item_detail(
 
     reason_codes = list(item.get("priority_reasons", []))
     assignment = (
-        assignment_public_payload(assignment_repository.get(work_id), item=item)
+        assignment_public_payload(assignment_repository.get(work_id), item=item, now=now)
         if assignment_repository is not None
         else {"assignment_status": "unassigned"}
     )

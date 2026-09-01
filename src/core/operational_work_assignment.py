@@ -12,6 +12,8 @@ class OperationalWorkAssignment(BaseModel):
     status: Literal["assigned", "acknowledged", "released"] = "assigned"
     assigned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     acknowledged_at: datetime | None = None
+    last_renewed_at: datetime | None = None
+    lease_expires_at: datetime | None = None
     released_at: datetime | None = None
     released_by: str | None = Field(default=None, min_length=3, max_length=200)
     generation: int = Field(default=1, ge=1)

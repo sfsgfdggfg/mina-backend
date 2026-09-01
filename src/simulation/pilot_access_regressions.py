@@ -153,6 +153,8 @@ def evaluate_pilot_access_regressions() -> dict:
         ("GET", "/operational-work-items/customer_extraction_confirmation:proposal-1"),
         ("POST", "/operational-work-items/customer_extraction_confirmation:proposal-1/assign-to-me"),
         ("POST", "/operational-work-items/customer_extraction_confirmation:proposal-1/acknowledge"),
+        ("POST", "/operational-work-items/customer_extraction_confirmation:proposal-1/renew"),
+        ("POST", "/operational-work-items/customer_extraction_confirmation:proposal-1/takeover"),
         ("POST", "/operational-work-items/customer_extraction_confirmation:proposal-1/release"),
         ("GET", "/attachment-reviews"),
         ("GET", "/attachment-reviews/ar1"),

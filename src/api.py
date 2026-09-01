@@ -147,6 +147,8 @@ from src.core.operational_work_assignment_service import (
     assign_operational_work_to_me,
     decorate_operational_work_queue,
     release_operational_work,
+    renew_operational_work_assignment,
+    takeover_operational_work_assignment,
 )
 from src.core.operational_work_detail import (
     OperationalWorkItemNotFoundError,
@@ -1248,6 +1250,30 @@ def assign_operational_work_endpoint(work_id: str, http_request: Request):
 def acknowledge_operational_work_endpoint(work_id: str, http_request: Request):
     try:
         result = acknowledge_operational_work(
+            operator_name=_authenticated_operator(http_request),
+            **_work_assignment_args(work_id),
+        )
+    except (OperationalWorkAssignmentNotFoundError, OperationalWorkAssignmentConflictError, OperationalWorkAssignmentTransitionError) as exc:
+        _assignment_error(exc)
+    return result.model_dump(exclude={"work_state_sha256"})
+
+
+@app.post("/operational-work-items/{work_id}/renew")
+def renew_operational_work_endpoint(work_id: str, http_request: Request):
+    try:
+        result = renew_operational_work_assignment(
+            operator_name=_authenticated_operator(http_request),
+            **_work_assignment_args(work_id),
+        )
+    except (OperationalWorkAssignmentNotFoundError, OperationalWorkAssignmentConflictError, OperationalWorkAssignmentTransitionError) as exc:
+        _assignment_error(exc)
+    return result.model_dump(exclude={"work_state_sha256"})
+
+
+@app.post("/operational-work-items/{work_id}/takeover")
+def takeover_operational_work_endpoint(work_id: str, http_request: Request):
+    try:
+        result = takeover_operational_work_assignment(
             operator_name=_authenticated_operator(http_request),
             **_work_assignment_args(work_id),
         )

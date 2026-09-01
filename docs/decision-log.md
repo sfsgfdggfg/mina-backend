@@ -6194,3 +6194,16 @@ P1-63 adds durable assignment and acknowledgement metadata to current P1-61/P1-6
 Assignments are bound to a provider-neutral safe fingerprint of the current work state (work/resource type, status, next-action, created time and aggregate blocker/warning/attention counts). The fingerprint is stored only as internal coordination evidence and is never returned by API/CLI. If the work state changes, the old assignment is treated as stale and does not carry ownership into the new state; a fresh assignment generation may be created.
 
 Queue priority and underlying workflow authority are unchanged by assignment. Active queue/detail output may show assignment status, named operator, assignment/acknowledgement timestamps and generation. Released or stale assignments are not active authority; event history remains durable under normal pilot retention.
+
+## DEC-155 — Operational Work Assignment Uses a Bounded Lease and Explicit Takeover
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-64 bounds every new operational work assignment with a 30-minute coordination lease. Assignment and lease are advisory operator-coordination metadata only; they do not grant, extend or replace confirm, approve, send, apply, reject, resume, provenance or lifecycle authority.
+
+A first acknowledgement refreshes the lease once because it marks the operator actively beginning review. Later lease extension is explicit through `work renew` and is allowed only to the authenticated current assignee while the current work-state fingerprint still matches and the lease is not expired. There is no background heartbeat or silent renewal.
+
+After expiry, normal assign, acknowledge and renew fail closed. Recovery requires explicit `work takeover`, which is permitted only while the work item still exists, the prior assignment matches the same current work state and the lease is expired. Takeover starts a new assignment generation and is serialized under the same SQLite transaction boundary so concurrent takeover attempts have exactly one winner.
+
+Legacy active P1-63 assignment records that do not contain a lease expiry are treated as expired rather than indefinitely owned. Released legacy records remain durable audit history. Queue/detail may expose safe lease status, expiry/remaining-time metadata and takeover availability, but never the internal work-state fingerprint. Lease state does not change work priority.

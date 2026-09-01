@@ -218,6 +218,16 @@ class PilotOperatorClient:
             "POST", f"/operational-work-items/{self._id(work_id)}/acknowledge", {}
         )
 
+    def renew_operational_work_assignment(self, work_id: str) -> Any:
+        return self._request(
+            "POST", f"/operational-work-items/{self._id(work_id)}/renew", {}
+        )
+
+    def takeover_operational_work_assignment(self, work_id: str) -> Any:
+        return self._request(
+            "POST", f"/operational-work-items/{self._id(work_id)}/takeover", {}
+        )
+
     def release_operational_work(self, work_id: str) -> Any:
         return self._request(
             "POST", f"/operational-work-items/{self._id(work_id)}/release", {}
@@ -506,6 +516,8 @@ def _build_parser() -> argparse.ArgumentParser:
     work.add_parser("get").add_argument("work_id")
     work.add_parser("assign").add_argument("work_id")
     work.add_parser("ack").add_argument("work_id")
+    work.add_parser("renew").add_argument("work_id")
+    work.add_parser("takeover").add_argument("work_id")
     work.add_parser("release").add_argument("work_id")
 
     attachment_review = commands.add_parser("attachment-review").add_subparsers(
@@ -681,6 +693,10 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.assign_operational_work_to_me(args.work_id)
         if args.action == "ack":
             return client.acknowledge_operational_work(args.work_id)
+        if args.action == "renew":
+            return client.renew_operational_work_assignment(args.work_id)
+        if args.action == "takeover":
+            return client.takeover_operational_work_assignment(args.work_id)
         return client.release_operational_work(args.work_id)
     if args.command == "attachment-review":
         if args.action == "queue":
