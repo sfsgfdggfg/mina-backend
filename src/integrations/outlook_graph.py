@@ -248,8 +248,8 @@ def normalize_graph_message(
         raise OutlookGraphMessageError(
             "graph_message_body_missing"
         )
-    body_text = raw_body_text
-    if not body_text.strip() and not has_attachments:
+    body_text = raw_body_text.strip()
+    if not body_text and not has_attachments:
         raise OutlookGraphMessageError(
             "graph_message_body_missing"
         )

@@ -3433,3 +3433,9 @@ Attachment metadata is routing context only. Until a separate controlled content
 The provider-neutral inbound envelope may contain a blank `body_text` only when `has_attachments=true`. A blank body without attachments remains invalid and must be rejected as before.
 
 For attachment-only Outlook mail, MINAI must collect only the approved bounded attachment metadata and then stop at the existing attachment manual-review gate before any customer or supplier AI parser is invoked. This exception must not authorize attachment content download, parsing or automated mailbox writes.
+
+## RULE-159 — Attachment-Only Support Must Preserve Existing Message Fingerprints
+
+Outlook body normalization for non-empty text must remain stable when attachment-only handling changes. Leading and trailing provider whitespace must not become part of a previously normalized message body or change durable route-history fingerprints.
+
+Empty text may be admitted into the provider-neutral envelope only for a message that explicitly reports attachments, and that message must still stop at the attachment manual-review gate before AI parsing.

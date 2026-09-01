@@ -6068,3 +6068,12 @@ P1-51 does not authorize attachment content download or parsing. Messages with a
 An Outlook message whose text body is blank may still be a valid attachment-bearing inbound message. When `hasAttachments=true`, the controlled Graph adapter must collect the bounded metadata-only attachment manifest before applying the attachment manual-review gate instead of classifying the message only as an empty-body rejection.
 
 This exception does not relax the general inbound body contract: blank-body messages without attachments remain invalid. Attachment-only messages remain blocked before customer or supplier AI parsing, and attachment content bytes, provider attachment IDs and download references remain outside the provider-neutral envelope.
+
+## DEC-144 — Outlook Non-Empty Body Normalization Must Remain Stable
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+Allowing attachment-only Outlook messages to reach the safe attachment manifest path must not change normalization for ordinary non-empty message bodies. Non-empty Graph text bodies continue to use the established trimmed representation so durable route fingerprints and idempotency remain stable across releases.
+
+An attachment-only message may use an empty provider-neutral body only when `has_attachments=true`; that exception must not alter existing non-empty message identity.
