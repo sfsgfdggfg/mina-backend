@@ -3512,3 +3512,11 @@ An operational work detail read must not mutate any repository or external syste
 Blocker reason codes must be distinguished from general urgency reasons. Suggested operator commands must be structured argv metadata for existing controlled CLI actions and must never bypass or weaken their lifecycle guards. If current state is inconsistent, recovery must prefer inspection over approve/send/apply actions.
 
 Work detail must not include names, addresses, email subject/body, candidate/source text, commercial amount/currency, clarification text, preview tokens, provider IDs, attachment hashes or source fingerprints. Unknown field names and safe state/count metadata may be shown when needed for recovery.
+
+## RULE-169 — Work Assignment Is Advisory Coordination and Must Never Become an Authorization Gate
+
+Operational work assignment must be durable, named-operator, current-state-bound coordination metadata only. `assign-to-me` must use the authenticated pilot identity and must serialize concurrent claims so that two operators cannot both successfully claim the same current work state. Only the current assignee may acknowledge or release an active assignment; same-operator retries are idempotent.
+
+Assignment must not alter queue priority, workflow status, proposal/RFQ/approval/review state, mailbox state or outbound behavior. Existing confirm, approve, reject, apply, resume and send guards remain authoritative whether a work item is unassigned, assigned to the caller, assigned to another operator or acknowledged.
+
+A work-state change must invalidate the prior assignment for coordination purposes rather than carrying ownership forward silently. Internal work-state fingerprints must not be exposed in queue/detail/assignment responses. Queue/detail may expose the named internal operator and safe assignment timestamps so operators can avoid duplicate handling. Resolved work must not be assignable through a stale work ID.

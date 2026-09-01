@@ -6181,3 +6181,16 @@ P1-62 adds an authenticated read-only detail view for a current P1-61 operationa
 The detail may expose internal work/resource IDs, current safe status flags, blocker/priority reason codes, unknown field names/counts, lifecycle consistency booleans and structured operator-command argv. It must not expose customer/supplier identities, email addresses, subject/body content, interpreted candidate values, commercial amounts/currency, supplier clarification text, preview tokens, attachment/source hashes or provider identifiers.
 
 Recovery commands reference only existing controlled operator surfaces. They are navigation/advice, not authorization. A later confirm/approve/send/apply/reject/resume call must still satisfy the authoritative workflow's authentication, preview-token, stale-state, approval, provenance and send guards at execution time.
+
+## DEC-154 — Operational Work Assignment Coordinates Operators Without Granting Workflow Authority
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-63 adds durable assignment and acknowledgement metadata to current P1-61/P1-62 operational work items. Assignment exists only to reduce duplicate human effort. It does not confirm customer extraction, approve/reject quotes, approve/send supplier follow-ups, apply/reject attachment reviews, resume workflows, write mailboxes or send outbound mail.
+
+`assign-to-me` derives the assignee exclusively from the authenticated pilot operator identity. Claim is serialized through the shared SQLite transaction boundary; for the same current work state only one named operator may hold an active assignment. Repeating assign/acknowledge by the same operator is idempotent. Another operator receives a lifecycle conflict until the current assignee releases the item or the work state changes.
+
+Assignments are bound to a provider-neutral safe fingerprint of the current work state (work/resource type, status, next-action, created time and aggregate blocker/warning/attention counts). The fingerprint is stored only as internal coordination evidence and is never returned by API/CLI. If the work state changes, the old assignment is treated as stale and does not carry ownership into the new state; a fresh assignment generation may be created.
+
+Queue priority and underlying workflow authority are unchanged by assignment. Active queue/detail output may show assignment status, named operator, assignment/acknowledgement timestamps and generation. Released or stale assignments are not active authority; event history remains durable under normal pilot retention.

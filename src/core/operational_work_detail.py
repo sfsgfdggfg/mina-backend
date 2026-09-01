@@ -6,6 +6,8 @@ from typing import Any
 from src.core.attachment_interpretation_review_repository import AttachmentInterpretationReviewRepository
 from src.core.extraction_confirmation_repository import ExtractionProposalRepository
 from src.core.operational_work_queue import build_operational_work_queue
+from src.core.operational_work_assignment_repository import OperationalWorkAssignmentRepository
+from src.core.operational_work_assignment_service import assignment_public_payload
 from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
@@ -210,6 +212,7 @@ def build_operational_work_item_detail(
     supplier_repository: SupplierRFQRepository,
     approval_repository: QuoteApprovalRepository,
     quote_case_repository: QuoteCaseRepository,
+    assignment_repository: OperationalWorkAssignmentRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     queue = build_operational_work_queue(
@@ -238,8 +241,14 @@ def build_operational_work_item_detail(
         detail, commands = ({"state_checks": {}, "recovery_mode": "inspect_state"}, [])
 
     reason_codes = list(item.get("priority_reasons", []))
+    assignment = (
+        assignment_public_payload(assignment_repository.get(work_id), item=item)
+        if assignment_repository is not None
+        else {"assignment_status": "unassigned"}
+    )
     return {
         "work_item": _safe_common(item),
+        "assignment": assignment,
         "why_waiting": reason_codes,
         "blocking_reasons": [code for code in reason_codes if code in _BLOCKER_REASON_CODES],
         "diagnostics": detail,

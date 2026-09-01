@@ -1268,3 +1268,24 @@ python -m src.pilot_operator work get <work-id>
 The detail explains `why_waiting`, separates `blocking_reasons`, exposes privacy-minimal state checks and returns structured `operator_commands` using existing controlled CLI actions. The command argv is guidance only; it does not execute anything and does not grant authority.
 
 If a work item has disappeared since the queue read, `work get` returns not found. Refresh the queue instead of acting on a stale ID. Inconsistent supplier follow-up or quote-approval state returns inspection-only recovery. A supplier clarification gap may recommend the existing `workflow resume-quote` path only while the RFQ is still clarification-required, no active follow-up exists and the workflow is present.
+
+## P1-63 operational work assignment and acknowledgement
+
+Assignment is optional coordination metadata for the unified operational inbox; it is not permission to perform the underlying action. Start from the current queue/detail, then claim an item only when you intend to handle it:
+
+```bash
+python -m src.pilot_operator work queue
+python -m src.pilot_operator work get <work-id>
+python -m src.pilot_operator work assign <work-id>
+python -m src.pilot_operator work ack <work-id>
+```
+
+`work assign` records the authenticated token owner. If another operator already owns the same current work state, the command returns a lifecycle conflict; refresh `work queue`/`work get` rather than duplicating work. `work ack` records that the assigned operator has actively acknowledged the task. Assignment and acknowledgement do not change priority or execute any recovery command.
+
+When you stop handling an active item without completing its underlying workflow, release it:
+
+```bash
+python -m src.pilot_operator work release <work-id>
+```
+
+Only the current assignee may acknowledge or release. If the underlying work state changes, the old assignment becomes stale automatically and a fresh claim is required for the new state. A resolved/stale work ID cannot be newly assigned. Continue to use the existing `proposal`, `attachment-review`, `rfq`, `workflow`, `approval` and `case` commands; their existing lifecycle/authentication/preview/send guards remain authoritative and do not depend on assignment ownership.
