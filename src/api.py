@@ -152,6 +152,7 @@ from src.core.operational_work_assignment_service import (
     renew_operational_work_assignment,
     takeover_operational_work_assignment,
 )
+from src.core.operational_shift_summary import build_operational_shift_summary
 from src.core.operational_work_detail import (
     OperationalWorkItemNotFoundError,
     build_operational_work_item_detail,
@@ -1203,6 +1204,19 @@ def list_operational_work_queue():
 @app.get("/operational-work-my")
 def list_my_operational_work(http_request: Request):
     return build_my_operational_work_view(
+        operator_name=_authenticated_operator(http_request),
+        assignment_repository=operational_work_assignment_repository,
+        attachment_repository=attachment_review_repository,
+        proposal_repository=extraction_proposal_repository,
+        supplier_repository=supplier_rfq_repository,
+        approval_repository=quote_approval_repository,
+        quote_case_repository=quote_case_repository,
+    )
+
+
+@app.get("/operational-work-shift-summary")
+def get_operational_work_shift_summary(http_request: Request):
+    return build_operational_shift_summary(
         operator_name=_authenticated_operator(http_request),
         assignment_repository=operational_work_assignment_repository,
         attachment_repository=attachment_review_repository,

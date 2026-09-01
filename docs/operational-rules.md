@@ -3534,3 +3534,9 @@ An expired or legacy lease does not make the underlying work safe to approve, co
 `work mine` may show only lease-active current assignments owned by the authenticated operator. It must not accept an operator identity selector, must exclude expired/released/stale assignments, and must not expose the internal work-state fingerprint or any data beyond the existing privacy-minimal operational queue contract. Lease-expiry attention is coordination metadata only and must not change work priority.
 
 `work handoff` must be assignee-only, current-state-bound and active-lease-only. It releases the assignment with a system-controlled shift-handoff reason; it must not name or auto-assign a successor, carry free-form sensitive notes, or invoke any underlying confirm/approve/send/apply/reject/resume mutation. The receiving operator must claim the still-current work separately through normal assignment. Expired ownership must use the existing P1-64 recovery path rather than handoff.
+
+## RULE-172 — Shift Summaries Are Read-Only Coordination Readouts and Must Not Reconstruct Sensitive History
+
+A shift summary may read current unified work state, the authenticated operator's active assignment state and append-only assignment event history only to produce bounded coordination metadata. It must never mutate an assignment or underlying workflow as a side effect of reading the summary.
+
+Handoff history must be scoped to the authenticated operator, limited to the fixed recent window/cap, and projected into safe fields rather than returning raw event payloads. Internal work-state fingerprints, party identity, message content, prices/currency, provider IDs and attachment/source hashes are prohibited from the summary. Critical unassigned work may be highlighted, but summary presence or priority never grants claim or workflow action authority.

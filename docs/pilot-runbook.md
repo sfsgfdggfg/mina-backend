@@ -1329,3 +1329,15 @@ python -m src.pilot_operator work handoff <work-id>
 ```
 
 Handoff records an audited `shift_handoff` release and leaves the item unassigned. It does not select or authorize the next operator and carries no free-form handoff note. The receiving operator must refresh `work queue` / `work get` and claim the item with `work assign`. Handoff never performs the underlying proposal, attachment-review, RFQ, workflow, approval or send action.
+
+## P1-66 shift summary and handoff readout
+
+Use the authenticated shift summary near the end/start of a shift or before deciding what coordination work needs attention:
+
+```bash
+python -m src.pilot_operator work shift-summary
+```
+
+The summary combines four privacy-minimal views: your current lease-active My Work items, your `expiring_soon` count, your own recent shift handoffs from the last 12 hours (maximum 20), and currently critical unassigned work. A handoff may show whether the same work state is now unassigned, claimed, expired, changed or no longer active.
+
+The command is GET-only. It never renews a lease, assigns work, performs a handoff, takes over expired work or executes any proposal/RFQ/approval/attachment action. Use `work mine`, `work get`, `work assign`, `work renew`, `work takeover`, `work handoff` and the underlying controlled workflow commands separately as appropriate. Do not treat a shift-summary item as authorization for the underlying action.
