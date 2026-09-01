@@ -208,6 +208,21 @@ class PilotOperatorClient:
             "GET", f"/operational-work-items/{self._id(work_id)}"
         )
 
+    def assign_operational_work_to_me(self, work_id: str) -> Any:
+        return self._request(
+            "POST", f"/operational-work-items/{self._id(work_id)}/assign-to-me", {}
+        )
+
+    def acknowledge_operational_work(self, work_id: str) -> Any:
+        return self._request(
+            "POST", f"/operational-work-items/{self._id(work_id)}/acknowledge", {}
+        )
+
+    def release_operational_work(self, work_id: str) -> Any:
+        return self._request(
+            "POST", f"/operational-work-items/{self._id(work_id)}/release", {}
+        )
+
     def list_attachment_reviews(self) -> Any:
         return self._request("GET", "/attachment-reviews")
 
@@ -489,6 +504,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     work.add_parser("queue")
     work.add_parser("get").add_argument("work_id")
+    work.add_parser("assign").add_argument("work_id")
+    work.add_parser("ack").add_argument("work_id")
+    work.add_parser("release").add_argument("work_id")
 
     attachment_review = commands.add_parser("attachment-review").add_subparsers(
         dest="action", required=True
@@ -657,7 +675,13 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
     if args.command == "work":
         if args.action == "queue":
             return client.get_operational_work_queue()
-        return client.get_operational_work_item(args.work_id)
+        if args.action == "get":
+            return client.get_operational_work_item(args.work_id)
+        if args.action == "assign":
+            return client.assign_operational_work_to_me(args.work_id)
+        if args.action == "ack":
+            return client.acknowledge_operational_work(args.work_id)
+        return client.release_operational_work(args.work_id)
     if args.command == "attachment-review":
         if args.action == "queue":
             return client.list_attachment_review_queue()

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.attachment_interpretation_review import AttachmentInterpretationReview
+from src.core.operational_work_assignment import OperationalWorkAssignment
 from src.core.pilot_store import SQLitePilotStore
 from src.core.quote_approval import QuoteApproval
 from src.core.quote_case import QuoteCase
@@ -73,6 +74,34 @@ def _model_from_payload(model_type: type[ModelT], payload: Any) -> ModelT:
 def _stable_payload_key(payload: Any) -> str:
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+class SQLiteOperationalWorkAssignmentRepository:
+    NAMESPACE = "operational_work_assignments"
+
+    def __init__(self, store: SQLitePilotStore) -> None:
+        self.store = store
+
+    def save(self, assignment: OperationalWorkAssignment) -> OperationalWorkAssignment:
+        payload = _model_payload(assignment)
+        self.store.upsert(
+            namespace=self.NAMESPACE,
+            record_key=assignment.work_id,
+            payload=payload,
+            event_type="operational_work_assignment_saved",
+            entity_type="operational_work_assignment",
+        )
+        return _model_from_payload(OperationalWorkAssignment, payload)
+
+    def get(self, work_id: str) -> OperationalWorkAssignment | None:
+        payload = self.store.get(namespace=self.NAMESPACE, record_key=work_id)
+        return None if payload is None else _model_from_payload(OperationalWorkAssignment, payload)
+
+    def list_all(self) -> list[OperationalWorkAssignment]:
+        return [
+            _model_from_payload(OperationalWorkAssignment, payload)
+            for payload in self.store.list_all(namespace=self.NAMESPACE)
+        ]
+
 
 class SQLiteAttachmentInterpretationReviewRepository:
     NAMESPACE = "attachment_interpretation_reviews"

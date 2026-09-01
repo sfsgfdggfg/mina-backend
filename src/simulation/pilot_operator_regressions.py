@@ -149,6 +149,21 @@ def evaluate_pilot_operator_regressions() -> dict:
         _last_contract(session),
         ("GET", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1", None),
     ))
+    client.assign_operational_work_to_me("customer_extraction_confirmation:proposal-1")
+    contracts.append((
+        _last_contract(session),
+        ("POST", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1/assign-to-me", {}),
+    ))
+    client.acknowledge_operational_work("customer_extraction_confirmation:proposal-1")
+    contracts.append((
+        _last_contract(session),
+        ("POST", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1/acknowledge", {}),
+    ))
+    client.release_operational_work("customer_extraction_confirmation:proposal-1")
+    contracts.append((
+        _last_contract(session),
+        ("POST", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1/release", {}),
+    ))
     client.list_attachment_reviews()
     contracts.append((_last_contract(session), ("GET", "/attachment-reviews", None)))
     client.get_attachment_review("review-1")
@@ -588,6 +603,19 @@ def evaluate_pilot_operator_regressions() -> dict:
         "GET", "/operational-work-items/quote_approval%3Aapproval-1", None,
     ):
         failures.append("operational work detail CLI mapped to the wrong API contract")
+
+    for action, suffix in (("assign", "assign-to-me"), ("ack", "acknowledge"), ("release", "release")):
+        work_mutation_session = _Session([_Response(200, {"status": "assigned"})])
+        work_mutation_client = _client(work_mutation_session)
+        with patch.object(PilotOperatorClient, "from_environment", return_value=work_mutation_client):
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                work_mutation_exit = main(["work", action, "quote_approval:approval-1"])
+        if work_mutation_exit != 0:
+            failures.append(f"operational work {action} CLI command failed")
+        elif _last_contract(work_mutation_session) != (
+            "POST", f"/operational-work-items/quote_approval%3Aapproval-1/{suffix}", {},
+        ):
+            failures.append(f"operational work {action} CLI mapped to the wrong API contract")
 
     queue_cli_session = _Session([_Response(200, {"pending_count": 0, "items": []})])
     queue_cli_client = _client(queue_cli_session)

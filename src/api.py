@@ -75,6 +75,7 @@ from src.core.pilot_access import (
 from src.core.operational_data import operational_data_sources_from_environment
 from src.core.sqlite_repositories import (
     SQLiteAttachmentInterpretationReviewRepository,
+    SQLiteOperationalWorkAssignmentRepository,
     SQLiteExtractionProposalRepository,
     SQLiteQuoteApprovalRepository,
     SQLiteQuoteCaseRepository,
@@ -138,6 +139,15 @@ from src.core.supplier_rfq_repository import (
 )
 from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.operational_work_queue import build_operational_work_queue
+from src.core.operational_work_assignment_service import (
+    OperationalWorkAssignmentConflictError,
+    OperationalWorkAssignmentNotFoundError,
+    OperationalWorkAssignmentTransitionError,
+    acknowledge_operational_work,
+    assign_operational_work_to_me,
+    decorate_operational_work_queue,
+    release_operational_work,
+)
 from src.core.operational_work_detail import (
     OperationalWorkItemNotFoundError,
     build_operational_work_item_detail,
@@ -216,6 +226,7 @@ quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
+operational_work_assignment_repository = SQLiteOperationalWorkAssignmentRepository(pilot_store)
 try:
     outbound_mail_sender: OutboundMailSender | None = outlook_graph_sender_from_environment()
 except MicrosoftAuthConfigurationError:
@@ -1173,12 +1184,15 @@ def list_attachment_review_queue():
 
 @app.get("/operational-work-queue")
 def list_operational_work_queue():
-    return build_operational_work_queue(
+    queue = build_operational_work_queue(
         attachment_repository=attachment_review_repository,
         proposal_repository=extraction_proposal_repository,
         supplier_repository=supplier_rfq_repository,
         approval_repository=quote_approval_repository,
         quote_case_repository=quote_case_repository,
+    )
+    return decorate_operational_work_queue(
+        queue, operational_work_assignment_repository
     )
 
 
@@ -1192,9 +1206,67 @@ def get_operational_work_item(work_id: str):
             supplier_repository=supplier_rfq_repository,
             approval_repository=quote_approval_repository,
             quote_case_repository=quote_case_repository,
+            assignment_repository=operational_work_assignment_repository,
         )
     except OperationalWorkItemNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _work_assignment_args(work_id: str) -> dict[str, Any]:
+    return {
+        "work_id": work_id,
+        "assignment_repository": operational_work_assignment_repository,
+        "attachment_repository": attachment_review_repository,
+        "proposal_repository": extraction_proposal_repository,
+        "supplier_repository": supplier_rfq_repository,
+        "approval_repository": quote_approval_repository,
+        "quote_case_repository": quote_case_repository,
+    }
+
+
+def _assignment_error(exc: Exception):
+    if isinstance(exc, OperationalWorkAssignmentNotFoundError):
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if isinstance(exc, (OperationalWorkAssignmentConflictError, OperationalWorkAssignmentTransitionError)):
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    raise exc
+
+
+@app.post("/operational-work-items/{work_id}/assign-to-me")
+def assign_operational_work_endpoint(work_id: str, http_request: Request):
+    try:
+        result = assign_operational_work_to_me(
+            operator_name=_authenticated_operator(http_request),
+            **_work_assignment_args(work_id),
+        )
+    except (OperationalWorkAssignmentNotFoundError, OperationalWorkAssignmentConflictError, OperationalWorkAssignmentTransitionError) as exc:
+        _assignment_error(exc)
+    return result.model_dump(exclude={"work_state_sha256"})
+
+
+@app.post("/operational-work-items/{work_id}/acknowledge")
+def acknowledge_operational_work_endpoint(work_id: str, http_request: Request):
+    try:
+        result = acknowledge_operational_work(
+            operator_name=_authenticated_operator(http_request),
+            **_work_assignment_args(work_id),
+        )
+    except (OperationalWorkAssignmentNotFoundError, OperationalWorkAssignmentConflictError, OperationalWorkAssignmentTransitionError) as exc:
+        _assignment_error(exc)
+    return result.model_dump(exclude={"work_state_sha256"})
+
+
+@app.post("/operational-work-items/{work_id}/release")
+def release_operational_work_endpoint(work_id: str, http_request: Request):
+    try:
+        result = release_operational_work(
+            work_id=work_id,
+            operator_name=_authenticated_operator(http_request),
+            assignment_repository=operational_work_assignment_repository,
+        )
+    except (OperationalWorkAssignmentConflictError, OperationalWorkAssignmentTransitionError) as exc:
+        _assignment_error(exc)
+    return result.model_dump(exclude={"work_state_sha256"})
 
 
 @app.get("/attachment-reviews")
