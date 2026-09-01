@@ -55,7 +55,7 @@ def evaluate_pilot_rehearsal_regressions() -> dict:
         "durable final manual handoff": "final manual handoff did not survive restart",
         "ADR scope": "ADR did not fail closed",
         "reefer scope": "reefer did not fail closed",
-        "automated send unavailable": "automated outbound route was available",
+        "controlled outbound surface": "controlled outbound route policy was incorrect",
         "no OPENAI_API_KEY": "rehearsal required an OpenAI key",
         "temporary cleanup": "temporary artifacts survived",
     }

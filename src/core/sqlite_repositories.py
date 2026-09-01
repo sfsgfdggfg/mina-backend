@@ -13,6 +13,7 @@ from src.core.pilot_store import SQLitePilotStore
 from src.core.quote_approval import QuoteApproval
 from src.core.quote_case import QuoteCase
 from src.core.supplier_rfq import (
+    SupplierRFQAutomatedSentEvidence,
     SupplierRFQDraft,
     SupplierRFQFollowUpDraft,
     SupplierRFQFollowUpManualSentEvidence,
@@ -21,6 +22,7 @@ from src.core.supplier_rfq import (
     SupplierRFQWorkflow,
 )
 from src.core.supplier_rfq_repository import (
+    DuplicateSupplierRFQAutomatedSentEvidenceError,
     DuplicateSupplierRFQFollowUpManualSentEvidenceError,
     DuplicateSupplierRFQManualSentEvidenceError,
     DuplicateSupplierRFQResponseError,
@@ -96,6 +98,7 @@ class SQLiteExtractionProposalRepository:
 
 class SQLiteSupplierRFQRepository:
     DRAFT_NAMESPACE = "supplier_rfq_drafts"
+    AUTOMATED_SENT_EVIDENCE_NAMESPACE = "supplier_rfq_automated_sent_evidence"
     MANUAL_SENT_EVIDENCE_NAMESPACE = "supplier_rfq_manual_sent_evidence"
     FOLLOW_UP_DRAFT_NAMESPACE = "supplier_rfq_follow_up_drafts"
     FOLLOW_UP_MANUAL_SENT_EVIDENCE_NAMESPACE = (
@@ -127,6 +130,37 @@ class SQLiteSupplierRFQRepository:
         return None if payload is None else _model_from_payload(SupplierRFQDraft, payload)
     def list_drafts(self) -> list[SupplierRFQDraft]:
         return [_model_from_payload(SupplierRFQDraft, p) for p in self.store.list_all(namespace=self.DRAFT_NAMESPACE)]
+    def save_automated_sent_evidence(
+        self,
+        evidence: SupplierRFQAutomatedSentEvidence,
+    ) -> SupplierRFQAutomatedSentEvidence:
+        payload = _model_payload(evidence)
+        if not self.store.insert_once(
+            namespace=self.AUTOMATED_SENT_EVIDENCE_NAMESPACE,
+            record_key=evidence.rfq_id,
+            payload=payload,
+            event_type="supplier_rfq_automated_sent",
+            entity_type="supplier_rfq",
+        ):
+            raise DuplicateSupplierRFQAutomatedSentEvidenceError(
+                "Automated Supplier RFQ sent evidence already exists."
+            )
+        return _model_from_payload(SupplierRFQAutomatedSentEvidence, payload)
+
+    def list_automated_sent_evidence(
+        self,
+        rfq_id: str | None = None,
+    ) -> list[SupplierRFQAutomatedSentEvidence]:
+        evidence = [
+            _model_from_payload(SupplierRFQAutomatedSentEvidence, payload)
+            for payload in self.store.list_all(
+                namespace=self.AUTOMATED_SENT_EVIDENCE_NAMESPACE
+            )
+        ]
+        if rfq_id is None:
+            return evidence
+        return [item for item in evidence if item.rfq_id == rfq_id]
+
     def save_manual_sent_evidence(
         self,
         evidence: SupplierRFQManualSentEvidence,

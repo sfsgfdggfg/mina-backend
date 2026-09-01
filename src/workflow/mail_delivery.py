@@ -17,18 +17,27 @@ from src.core.quote_send_service import (
     prepare_quote_for_sending,
 )
 from src.core.regulatory_compliance import RegulatoryComplianceAssessment
-from src.core.supplier_rfq import SupplierRFQDraft
+from src.core.supplier_rfq import (
+    SupplierRFQAutomatedSentEvidence,
+    SupplierRFQDraft,
+)
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQNotFoundError,
+    SupplierRFQTransitionError,
     send_supplier_rfq,
 )
-from src.core.supplier_rfq_repository import SupplierRFQRepository
+from src.core.supplier_rfq_repository import (
+    DuplicateSupplierRFQAutomatedSentEvidenceError,
+    SupplierRFQRepository,
+)
+from src.core.sqlite_repositories import atomic_repository_transaction
 
 
 class SupplierRFQMailDeliveryResult(BaseModel):
     supplier_rfq: SupplierRFQDraft
     mail_request: Optional[OutboundMailRequest] = None
     delivery: MailSendResult
+    automated_sent_evidence: Optional[SupplierRFQAutomatedSentEvidence] = None
     source: str = "supplier_rfq_mail_delivery"
 
 
@@ -133,6 +142,24 @@ def send_supplier_rfq_via_mail(
                 reason="Supplier RFQ has no recipient email.",
             ),
         )
+    if repository.list_manual_sent_evidence(rfq_id):
+        return SupplierRFQMailDeliveryResult(
+            supplier_rfq=draft,
+            delivery=_controlled_result(
+                operation_id=operation_id,
+                status="rejected_before_provider",
+                reason="Supplier RFQ already has manual send evidence.",
+            ),
+        )
+    if repository.list_automated_sent_evidence(rfq_id):
+        return SupplierRFQMailDeliveryResult(
+            supplier_rfq=draft,
+            delivery=_controlled_result(
+                operation_id=operation_id,
+                status="rejected_before_provider",
+                reason="Supplier RFQ already has automated send evidence.",
+            ),
+        )
 
     request = build_supplier_rfq_mail_request(draft)
     delivery = dispatch_outbound_mail(request, sender)
@@ -142,16 +169,59 @@ def send_supplier_rfq_via_mail(
             mail_request=request,
             delivery=delivery,
         )
+    if (
+        delivery.provider_name is None
+        or delivery.provider_message_id is None
+        or delivery.sent_at is None
+    ):
+        return SupplierRFQMailDeliveryResult(
+            supplier_rfq=draft,
+            mail_request=request,
+            delivery=_controlled_result(
+                operation_id=operation_id,
+                status="failed",
+                reason="Sent Supplier RFQ result is missing durable provider metadata.",
+            ),
+        )
 
-    awaiting = send_supplier_rfq(
-        repository=repository,
+    evidence = SupplierRFQAutomatedSentEvidence(
         rfq_id=rfq_id,
-        send_result=delivery,
+        recipient_email=draft.recipient_email or "",
+        provider_name=delivery.provider_name,
+        provider_message_id=delivery.provider_message_id,
+        sent_at=delivery.sent_at,
     )
+    with atomic_repository_transaction(repository):
+        current = repository.get_draft(rfq_id)
+        if current is None:
+            raise SupplierRFQNotFoundError(f"Supplier RFQ not found: {rfq_id}")
+        if current != draft:
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ changed after provider delivery; automated evidence was not attached to stale state."
+            )
+        if repository.list_manual_sent_evidence(rfq_id):
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ received manual send evidence after provider delivery."
+            )
+        if repository.list_automated_sent_evidence(rfq_id):
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ already has automated send evidence."
+            )
+        awaiting = send_supplier_rfq(
+            repository=repository,
+            rfq_id=rfq_id,
+            send_result=delivery,
+        )
+        try:
+            evidence = repository.save_automated_sent_evidence(evidence)
+        except DuplicateSupplierRFQAutomatedSentEvidenceError as exc:
+            raise SupplierRFQTransitionError(str(exc)) from exc
+
     return SupplierRFQMailDeliveryResult(
         supplier_rfq=awaiting,
         mail_request=request,
         delivery=delivery,
+        automated_sent_evidence=evidence,
     )
 
 

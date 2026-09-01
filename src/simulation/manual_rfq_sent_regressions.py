@@ -274,8 +274,8 @@ def evaluate_manual_rfq_sent_regressions() -> dict:
     route = "/supplier-rfqs/rfq-1/record-manually-sent"
     if not route_allowed("POST", route):
         failures.append("manual-send API route is not pilot-allowed")
-    if route_allowed("POST", "/supplier-rfqs/rfq-1/send"):
-        failures.append("automated send route became pilot-allowed")
+    if not route_allowed("POST", "/supplier-rfqs/rfq-1/send"):
+        failures.append("controlled automated supplier send route is not pilot-allowed")
     for authorization in (None, "Bearer invalid"):
         decision = authorize_pilot_request(
             method="POST",

@@ -83,6 +83,7 @@ from src.simulation.safety_truth_regressions import evaluate_safety_truth_regres
 from src.simulation.replay_receipt_regressions import evaluate_replay_receipt_regressions
 from src.simulation.authorized_sanitized_replay_regressions import evaluate_authorized_sanitized_replay_regressions
 from src.simulation.supplier_response_ingestion_regressions import evaluate_supplier_response_ingestion_regressions
+from src.simulation.supplier_rfq_automated_send_regressions import evaluate_supplier_rfq_automated_send_regressions
 from src.simulation.supplier_rfq_lifecycle_regressions import evaluate_supplier_rfq_lifecycle_regressions
 from src.simulation.transition_concurrency_regressions import (
     evaluate_transition_concurrency_regressions,
@@ -136,6 +137,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
         evaluate_transition_concurrency_regressions,
     ),
     Suite("Supplier RFQ lifecycle", evaluate_supplier_rfq_lifecycle_regressions),
+    Suite("Supplier RFQ automated send surface", evaluate_supplier_rfq_automated_send_regressions),
     Suite("Initial supplier RFQ draft", evaluate_initial_supplier_rfq_regressions),
     Suite("Supplier dispatch policy", evaluate_supplier_dispatch_policy_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),

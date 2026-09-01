@@ -225,6 +225,11 @@ class PilotOperatorClient:
             "POST", f"/supplier-rfqs/{self._id(rfq_id)}/approve", {}
         )
 
+    def send_rfq(self, rfq_id: str) -> Any:
+        return self._request(
+            "POST", f"/supplier-rfqs/{self._id(rfq_id)}/send", {}
+        )
+
     def record_rfq_manually_sent(self, rfq_id: str) -> Any:
         return self._request(
             "POST",
@@ -432,6 +437,7 @@ def _build_parser() -> argparse.ArgumentParser:
     rfq.add_parser("list")
     rfq.add_parser("get").add_argument("rfq_id")
     rfq.add_parser("approve").add_argument("rfq_id")
+    rfq.add_parser("send").add_argument("rfq_id")
     rfq.add_parser("manual-sent").add_argument("rfq_id")
     rfq.add_parser("follow-up-list").add_argument("rfq_id")
     rfq.add_parser("follow-up-get").add_argument("follow_up_id")
@@ -576,6 +582,8 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.get_rfq(args.rfq_id)
         if args.action == "approve":
             return client.approve_rfq(args.rfq_id)
+        if args.action == "send":
+            return client.send_rfq(args.rfq_id)
         if args.action == "manual-sent":
             return client.record_rfq_manually_sent(args.rfq_id)
         if args.action == "follow-up-list":

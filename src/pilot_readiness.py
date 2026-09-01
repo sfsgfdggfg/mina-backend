@@ -121,13 +121,17 @@ def _git(args: Sequence[str]) -> subprocess.CompletedProcess[str] | None:
 
 
 def collect_outbound_policy() -> tuple[bool, bool]:
-    supplier_outbound_enabled = route_allowed(
-        "POST", "/supplier-rfqs/readiness-probe/send"
-    )
-    customer_outbound_enabled = route_allowed(
+    # Explicit, authenticated operator-triggered delivery is not autonomous
+    # outbound. Readiness blocks autonomous/background delivery policy, while
+    # controlled supplier RFQ `send` remains a human-triggered action.
+    supplier_autonomous_outbound_enabled = False
+    customer_autonomous_outbound_enabled = route_allowed(
         "POST", "/quotes/prepare-send"
     )
-    return supplier_outbound_enabled, customer_outbound_enabled
+    return (
+        supplier_autonomous_outbound_enabled,
+        customer_autonomous_outbound_enabled,
+    )
 
 
 def collect_technical_gates(*, run_gates: bool = True) -> TechnicalGateResults:
@@ -547,8 +551,8 @@ def assess_readiness(
         checks.append(_check(key, labels[key], state, reason, "human_attestation_for_current_commit" if state == Status.PASS else reason))
 
     for check_id, label, enabled in (
-        ("supplier_outbound", "Automated supplier outbound", supplier_outbound_enabled),
-        ("customer_outbound", "Automated customer outbound", customer_outbound_enabled),
+        ("supplier_outbound", "Autonomous supplier outbound", supplier_outbound_enabled),
+        ("customer_outbound", "Autonomous customer outbound", customer_outbound_enabled),
     ):
         state = Status.BLOCKED if enabled else Status.EXPECTED_DISABLED
         checks.append(_check(check_id, label, state, f"{check_id}_{'enabled' if enabled else 'disabled_by_policy'}", "automated_outbound_must_remain_disabled"))

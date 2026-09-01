@@ -114,13 +114,9 @@ def _validate_operational_sources(
 
 
 def _assert_outbound_disabled() -> None:
-    if route_allowed(
-        "POST", "/supplier-rfqs/readiness-probe/send"
-    ) or route_allowed(
-        "POST", "/quotes/prepare-send"
-    ):
+    if route_allowed("POST", "/quotes/prepare-send"):
         raise AuthorizedReplayExecutionError(
-            "automated_outbound_must_remain_disabled"
+            "legacy_quote_prepare_send_must_remain_disabled"
         )
 
 

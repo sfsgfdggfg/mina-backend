@@ -176,6 +176,10 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append(
         (_last_contract(session), ("POST", "/supplier-rfqs/rfq-1/approve", {}))
     )
+    client.send_rfq("rfq-1")
+    contracts.append(
+        (_last_contract(session), ("POST", "/supplier-rfqs/rfq-1/send", {}))
+    )
     client.record_rfq_manually_sent("rfq-1")
     contracts.append(
         (
@@ -344,7 +348,6 @@ def evaluate_pilot_operator_regressions() -> dict:
         for call in session.calls
     ]
     forbidden_paths = {
-        "/supplier-rfqs/rfq-1/send",
         "/supplier-rfq-follow-ups/follow-up-1/send",
         "/quotes/prepare-send",
         "/supplier-responses/ingest",
@@ -356,8 +359,10 @@ def evaluate_pilot_operator_regressions() -> dict:
         for name in dir(PilotOperatorClient)
         if not name.startswith("_")
     }
-    if {"send_rfq", "send_quote", "prepare_quote_send"}.intersection(public_methods):
-        failures.append("operator client exposes an automated send method")
+    if "send_rfq" not in public_methods:
+        failures.append("operator client does not expose controlled supplier RFQ send")
+    if {"send_quote", "prepare_quote_send"}.intersection(public_methods):
+        failures.append("operator client exposes a legacy automated send method")
 
     expected_error_text = {
         401: "Authentication failed",

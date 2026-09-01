@@ -74,6 +74,15 @@ class SupplierRFQDraft(BaseModel):
         return build_supplier_rfq_reference(self.rfq_id)
 
 
+class SupplierRFQAutomatedSentEvidence(BaseModel):
+    rfq_id: str
+    recipient_email: str
+    provider_name: str
+    provider_message_id: str
+    sent_at: datetime
+    source: Literal["automated_provider_send"] = "automated_provider_send"
+
+
 class SupplierRFQManualSentEvidence(BaseModel):
     rfq_id: str
     recorded_by: str
