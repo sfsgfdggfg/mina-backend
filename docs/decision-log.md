@@ -6135,3 +6135,12 @@ A customer attachment review may be applied only by an authenticated operator. A
 A supplier attachment review may be applied only if the exact Supplier RFQ snapshot captured at review creation is still unchanged. Apply validates optional operator corrections, creates the traceable `SupplierRFQResponse`, records attachment-aware inbound evidence and advances the RFQ lifecycle through the existing supplier response transition. If the RFQ changes before apply, the review remains pending and no response is created.
 
 The review can instead be rejected with an authenticated operator identity and reason. Rejection creates no customer proposal, supplier response, mailbox write or outbound send. Review fingerprints and attachment hashes are durable audit evidence but are not exposed by operator list/detail payloads.
+
+## DEC-150 — Attachment Review Apply Requires an Exact Field Preview
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-59 adds a read-only field-level preview between a pending P1-58 attachment review and its pilot apply mutation. The preview uses the same route-specific correction validators as apply, classifies customer safety fields and supplier commercial fields, identifies locked fields, shows normalized before/after values, and reports blockers/warnings without changing review, proposal, RFQ, response, mailbox or outbound state.
+
+The preview returns a deterministic token bound to the review ID, durable source fingerprint, current review status, submitted corrections and normalized candidate. The authenticated pilot apply endpoint requires that exact token and recomputes the preview before mutation. A missing, stale or mismatched preview token fails closed. The token is not authentication and does not replace the named operator, pilot network or lifecycle checks.

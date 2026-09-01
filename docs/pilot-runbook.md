@@ -1210,3 +1210,20 @@ python -m src.pilot_operator attachment-review reject <review_id> --reason "Need
 ```
 
 Applied/rejected reviews are terminal. All P1-58 paths retain `mailbox_write_performed=false` and `automated_send_performed=false` for Outlook pull; review apply/reject themselves contain no outbound mail operation.
+
+## P1-59 field-level attachment review preview
+
+Before applying a pending attachment review, inspect its authenticated detail and generate a preview with the intended corrections. The preview is mutation-free and returns field categories, original/preview values, changed fields, attention reasons, blockers/warnings, aggregate counts and a `preview_token`.
+
+```bash
+python -m src.pilot_operator attachment-review get <review-id>
+python -m src.pilot_operator attachment-review preview <review-id> --corrections '{"is_high_value":false}'
+```
+
+Apply requires the exact preview token returned for those corrections:
+
+```bash
+python -m src.pilot_operator attachment-review apply <review-id> --corrections '{"is_high_value":false}' --preview-token <token>
+```
+
+If review state or corrections differ, apply must fail closed. Preview does not create a customer proposal, supplier response, mailbox write or outbound send. For customer reviews, safety-critical unknown/changed fields require explicit operator attention but the later extraction-confirmation gate remains authoritative. For supplier reviews, non-applyable quote state or unresolved critical commercial fields appears as a blocker before mutation.

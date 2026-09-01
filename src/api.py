@@ -142,6 +142,8 @@ from src.core.attachment_interpretation_review_service import (
     AttachmentReviewTransitionError,
     apply_attachment_interpretation_review,
     attachment_review_public_payload,
+    build_attachment_review_preview,
+    require_matching_attachment_review_preview,
     reject_attachment_interpretation_review,
 )
 
@@ -242,9 +244,14 @@ class ConfirmExtractionRequest(BaseModel):
     corrections: dict[str, Any] = Field(default_factory=dict)
 
 
+class PreviewAttachmentReviewRequest(BaseModel):
+    corrections: dict[str, Any] = Field(default_factory=dict)
+
+
 class ApplyAttachmentReviewRequest(BaseModel):
     operator_identity: Optional[str] = None
     corrections: dict[str, Any] = Field(default_factory=dict)
+    preview_token: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class RejectAttachmentReviewRequest(BaseModel):
@@ -1165,7 +1172,19 @@ def get_attachment_review(review_id: str):
     review = attachment_review_repository.get(review_id)
     if review is None:
         raise HTTPException(status_code=404, detail=f"Attachment review not found: {review_id}")
-    return attachment_review_public_payload(review, include_candidate=True)
+    payload = attachment_review_public_payload(review, include_candidate=True)
+    payload["field_review"] = build_attachment_review_preview(review, {})
+    return payload
+
+
+@app.post("/attachment-reviews/{review_id}/preview")
+def preview_attachment_review_endpoint(
+    review_id: str, request: PreviewAttachmentReviewRequest
+):
+    review = attachment_review_repository.get(review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail=f"Attachment review not found: {review_id}")
+    return build_attachment_review_preview(review, request.corrections)
 
 
 @app.post("/attachment-reviews/{review_id}/apply")
@@ -1175,6 +1194,16 @@ def apply_attachment_review_endpoint(
     http_request: Request = None,
 ):
     try:
+        current_review = attachment_review_repository.get(review_id)
+        if current_review is None:
+            raise AttachmentReviewNotFoundError(
+                f"Attachment interpretation review not found: {review_id}"
+            )
+        require_matching_attachment_review_preview(
+            current_review,
+            corrections=request.corrections,
+            preview_token=request.preview_token,
+        )
         review = apply_attachment_interpretation_review(
             repository=attachment_review_repository,
             review_id=review_id,
