@@ -3504,3 +3504,11 @@ The P1-61 operational work queue must be GET-only, deterministic, non-AI, non-pe
 Only strict ISO dates may influence deadline priority. Queue output must remain privacy-minimal and must not include names, addresses, subjects, message/source content, commercial amounts/currency, correction payloads, preview tokens, provider identifiers, attachment hashes or source fingerprints.
 
 If current durable evidence contradicts the proposed next action, the unified inbox must replace that action with an inspection hint and raise blocker priority. In particular, send evidence must prevent the inbox from suggesting another supplier follow-up send, multiple active follow-ups for one RFQ must be treated as inconsistent, and an orphan/stale/already-sent pending quote approval must not be presented as decision-ready.
+
+## RULE-168 — Recovery Guidance Must Be Current, Privacy-Minimal and Non-Executable by Itself
+
+An operational work detail read must not mutate any repository or external system. It must rebuild the current unified work queue and return detail only while the requested work ID is still active. Stale or resolved work IDs must return not found.
+
+Blocker reason codes must be distinguished from general urgency reasons. Suggested operator commands must be structured argv metadata for existing controlled CLI actions and must never bypass or weaken their lifecycle guards. If current state is inconsistent, recovery must prefer inspection over approve/send/apply actions.
+
+Work detail must not include names, addresses, email subject/body, candidate/source text, commercial amount/currency, clarification text, preview tokens, provider IDs, attachment hashes or source fingerprints. Unknown field names and safe state/count metadata may be shown when needed for recovery.

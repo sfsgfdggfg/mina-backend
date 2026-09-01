@@ -6170,3 +6170,14 @@ Cross-work priority uses a common human-action baseline plus bounded current-sta
 The unified queue is privacy-minimal. It may expose internal resource IDs, work type, route/status, next-action code, age, aggregate warning/blocker/attention counts, priority reason codes and relative deadline distance. It must not expose customer/supplier identity, email addresses, message subject/body, interpreted candidate values, quote price/cost/currency, supplier clarification text, preview tokens, attachment/source hashes, provider IDs or raw/extracted content.
 
 P1-61 also treats inconsistent durable state as blocked work rather than an action accelerator. A supplier follow-up with prior send evidence while still `draft`/`approved`, or multiple active follow-ups for the same RFQ, is routed to inspection instead of approval/send. A pending quote approval with no unique QuoteCase, stale case approval state, or prior customer-quote sent evidence is likewise routed to inspection rather than approval/rejection acceleration.
+
+## DEC-153 — Operational Work Detail Provides Recovery Guidance Without Action Authority
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-62 adds an authenticated read-only detail view for a current P1-61 operational work item. Detail is resolved from the current durable repositories on every read; if the work item is no longer active, the detail request fails closed as not found rather than presenting stale recovery guidance.
+
+The detail may expose internal work/resource IDs, current safe status flags, blocker/priority reason codes, unknown field names/counts, lifecycle consistency booleans and structured operator-command argv. It must not expose customer/supplier identities, email addresses, subject/body content, interpreted candidate values, commercial amounts/currency, supplier clarification text, preview tokens, attachment/source hashes or provider identifiers.
+
+Recovery commands reference only existing controlled operator surfaces. They are navigation/advice, not authorization. A later confirm/approve/send/apply/reject/resume call must still satisfy the authoritative workflow's authentication, preview-token, stale-state, approval, provenance and send guards at execution time.

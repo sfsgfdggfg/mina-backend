@@ -138,6 +138,10 @@ from src.core.supplier_rfq_repository import (
 )
 from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.operational_work_queue import build_operational_work_queue
+from src.core.operational_work_detail import (
+    OperationalWorkItemNotFoundError,
+    build_operational_work_item_detail,
+)
 from src.core.attachment_interpretation_review_service import (
     AttachmentReviewConflictError,
     AttachmentReviewNotFoundError,
@@ -1176,6 +1180,21 @@ def list_operational_work_queue():
         approval_repository=quote_approval_repository,
         quote_case_repository=quote_case_repository,
     )
+
+
+@app.get("/operational-work-items/{work_id}")
+def get_operational_work_item(work_id: str):
+    try:
+        return build_operational_work_item_detail(
+            work_id=work_id,
+            attachment_repository=attachment_review_repository,
+            proposal_repository=extraction_proposal_repository,
+            supplier_repository=supplier_rfq_repository,
+            approval_repository=quote_approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
+    except OperationalWorkItemNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/attachment-reviews")

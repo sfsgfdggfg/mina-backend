@@ -1255,3 +1255,16 @@ Use each item's `resource_type`, `resource_id` and `next_action` only to navigat
 Priority is recalculated on read from age, current safety/commercial attention, lifecycle consistency and strict ISO operational dates. Free-form dates are not interpreted. The queue is mutation-free and must not expose party identity, subject/body text, candidate values, prices/currency, clarification text, preview tokens or attachment/source fingerprints.
 
 If `next_action` is an inspection action such as `inspect_supplier_follow_up` or `inspect_quote_approval_state`, do not proceed directly to send/approve. Inspect the referenced resource with its existing GET command first; the inbox detected a durable state inconsistency that must be resolved through the underlying workflow, not through queue mutation.
+
+## P1-62 operational work item detail and recovery
+
+Start with the unified inbox, then inspect one current work item by its `work_id`:
+
+```bash
+python -m src.pilot_operator work queue
+python -m src.pilot_operator work get <work-id>
+```
+
+The detail explains `why_waiting`, separates `blocking_reasons`, exposes privacy-minimal state checks and returns structured `operator_commands` using existing controlled CLI actions. The command argv is guidance only; it does not execute anything and does not grant authority.
+
+If a work item has disappeared since the queue read, `work get` returns not found. Refresh the queue instead of acting on a stale ID. Inconsistent supplier follow-up or quote-approval state returns inspection-only recovery. A supplier clarification gap may recommend the existing `workflow resume-quote` path only while the RFQ is still clarification-required, no active follow-up exists and the workflow is present.
