@@ -228,6 +228,7 @@ class SupplierRFQResponse(BaseModel):
     is_consolidated_follow_up: bool = False
     inherited_fields: list[str] = Field(default_factory=list)
     prior_response_received_at: Optional[datetime] = None
+    source_attachment_review_id: Optional[str] = None
 
     @field_validator("cost", mode="before")
     @classmethod

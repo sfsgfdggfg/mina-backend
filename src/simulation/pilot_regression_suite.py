@@ -49,6 +49,12 @@ from src.simulation.attachment_safe_interpretation_regressions import (
 from src.simulation.outlook_attachment_route_interpretation_regressions import (
     evaluate_outlook_attachment_route_interpretation_regressions,
 )
+from src.simulation.attachment_interpretation_review_regressions import (
+    evaluate_attachment_interpretation_review_regressions,
+)
+from src.simulation.outlook_attachment_review_gate_regressions import (
+    evaluate_outlook_attachment_review_gate_regressions,
+)
 from src.simulation.outlook_graph_send_regressions import evaluate_outlook_graph_send_regressions
 from src.simulation.outlook_inbound_gate_regressions import evaluate_outlook_inbound_gate_regressions
 from src.simulation.outlook_inbound_router_regressions import evaluate_outlook_inbound_router_regressions
@@ -214,6 +220,14 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Trusted-route attachment interpretation gate",
         evaluate_outlook_attachment_route_interpretation_regressions,
+    ),
+    Suite(
+        "Attachment interpretation review lifecycle",
+        evaluate_attachment_interpretation_review_regressions,
+    ),
+    Suite(
+        "Outlook attachment review gate",
+        evaluate_outlook_attachment_review_gate_regressions,
     ),
     Suite(
         "Controlled Outlook Graph sending",

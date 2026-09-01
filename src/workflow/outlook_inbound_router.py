@@ -6,6 +6,11 @@ from typing import Any
 from src.core.attachment_intake_policy import (
     assess_attachment_intake,
 )
+from src.core.attachment_interpretation_review_service import (
+    AttachmentReviewConflictError,
+    AttachmentReviewTransitionError,
+    create_attachment_interpretation_review,
+)
 from src.core.customer_memory import (
     load_customer_memory,
     sender_matches_profile,
@@ -127,6 +132,7 @@ def _process_allowlisted_attachment_mail(
     operational_data_sources: OperationalDataSources | None,
     attachment_retriever: Callable[[InboundMailEnvelope], Any] | None,
     attachment_interpreter: Callable[..., Any] | None,
+    attachment_review_repository,
     shipment_parser,
     supplier_parser,
 ) -> dict:
@@ -258,6 +264,26 @@ def _process_allowlisted_attachment_mail(
         "attachment_extraction_artifacts": artifacts,
     })
     if interpretation is not None:
+        review = None
+        if interpretation.status == "interpreted" and attachment_review_repository is not None:
+            try:
+                review = create_attachment_interpretation_review(
+                    mail=mail,
+                    retrieval=retrieval,
+                    interpretation=interpretation,
+                    repository=attachment_review_repository,
+                    supplier_repository=supplier_repository,
+                    trusted_customer_name=(
+                        customer_matches[0].customer_name
+                        if trusted_route == "customer" and customer_matches
+                        else None
+                    ),
+                    rfq_id=(supplier_correlation.rfq_id if trusted_route == "supplier" else None),
+                    correlation_method=(supplier_correlation.method if trusted_route == "supplier" else None),
+                )
+                result["reason_code"] = "outlook_attachment_interpretation_review_required"
+            except (AttachmentReviewConflictError, AttachmentReviewTransitionError):
+                result["reason_code"] = "outlook_attachment_interpretation_review_creation_failed"
         result.update({
             "attachment_interpretation_status": interpretation.status,
             "attachment_interpretation_reason_code": interpretation.reason_code,
@@ -269,6 +295,8 @@ def _process_allowlisted_attachment_mail(
                 interpretation.source_profiles
             ),
             "attachment_interpretation": interpretation,
+            "attachment_review_id": (review.review_id if review is not None else None),
+            "attachment_review_status": (review.status if review is not None else None),
         })
     else:
         result.update({
@@ -298,6 +326,7 @@ def process_controlled_outlook_inbound_mail(
         Callable[[InboundMailEnvelope], Any] | None
     ) = None,
     attachment_interpreter: Callable[..., Any] | None = None,
+    attachment_review_repository=None,
 ) -> dict:
     """Route Outlook mail deterministically before any AI parser."""
 
@@ -326,6 +355,7 @@ def process_controlled_outlook_inbound_mail(
             operational_data_sources=operational_data_sources,
             attachment_retriever=attachment_retriever,
             attachment_interpreter=attachment_interpreter,
+            attachment_review_repository=attachment_review_repository,
             shipment_parser=shipment_parser,
             supplier_parser=supplier_parser,
         )

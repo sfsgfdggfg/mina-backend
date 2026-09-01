@@ -294,7 +294,13 @@ def evaluate_outlook_pull_regressions():
             "pull safely surfaces retrieval status without file hash",
         )
 
-        extraction_preference = {"new_calls": 0, "old_calls": 0, "interpreter_injected": False}
+        review_repo_sentinel = object()
+        extraction_preference = {
+            "new_calls": 0,
+            "old_calls": 0,
+            "interpreter_injected": False,
+            "review_repo_injected": False,
+        }
 
         class _ExtractionPreferenceClient(_GraphClient):
             def retrieve_and_extract_allowlisted_attachments(self, mail):
@@ -319,6 +325,9 @@ def evaluate_outlook_pull_regressions():
             extraction_preference["interpreter_injected"] = callable(
                 kwargs.get("attachment_interpreter")
             )
+            extraction_preference["review_repo_injected"] = (
+                kwargs.get("attachment_review_repository") is review_repo_sentinel
+            )
             selected = kwargs["attachment_retriever"](kwargs["mail"])
             return {
                 "result_type": "inbound_mail_manual_review_required",
@@ -330,6 +339,8 @@ def evaluate_outlook_pull_regressions():
                 "attachment_extracted_count": 1,
                 "attachment_extracted_character_count": 123,
                 "attachment_extracted_table_count": 0,
+                "attachment_review_id": "review-safe-1",
+                "attachment_review_status": "pending",
                 "selected_boundary": selected,
             }
 
@@ -339,6 +350,7 @@ def evaluate_outlook_pull_regressions():
             shipment_parser=lambda value: value,
             proposal_repository=object(),
             operational_data_sources=object(),
+            attachment_review_repository=review_repo_sentinel,
             interpret_attachments=True,
             token_provider=lambda value: SECRET_TOKEN,
             graph_client_factory=preference_factory,
@@ -346,10 +358,18 @@ def evaluate_outlook_pull_regressions():
         )
 
         check(
-            extraction_preference == {"new_calls": 1, "old_calls": 0, "interpreter_injected": True}
+            extraction_preference == {
+                "new_calls": 1,
+                "old_calls": 0,
+                "interpreter_injected": True,
+                "review_repo_injected": True,
+            }
             and preference_result["results"][0]["attachment_extraction_status"] == "extracted"
-            and preference_result["results"][0]["attachment_extracted_character_count"] == 123,
-            "explicit opt-in prefers P1-56 extraction and injects P1-57 interpretation boundary",
+            and preference_result["results"][0]["attachment_extracted_character_count"] == 123
+            and preference_result["results"][0]["attachment_review_id"] == "review-safe-1"
+            and preference_result["results"][0]["attachment_review_status"] == "pending"
+            and preference_result["attachment_review_count"] == 1,
+            "explicit opt-in injects P1-57 interpretation and P1-58 durable review boundaries",
         )
 
         rejection_capture = {}
@@ -574,8 +594,10 @@ def evaluate_outlook_pull_regressions():
 
         check(
             endpoint_result == safe_api_result
-            and pull_mock.call_args.kwargs.get("interpret_attachments") is False,
-            "API endpoint defaults attachment interpretation off",
+            and pull_mock.call_args.kwargs.get("interpret_attachments") is False
+            and pull_mock.call_args.kwargs.get("attachment_review_repository")
+            is api.attachment_review_repository,
+            "API endpoint defaults interpretation off while retaining durable review wiring",
         )
 
         with patch.object(
@@ -590,8 +612,10 @@ def evaluate_outlook_pull_regressions():
                 api.OutlookPullRequest(limit=2, interpret_attachments=True)
             )
         check(
-            opt_in_mock.call_args.kwargs.get("interpret_attachments") is True,
-            "API forwards explicit attachment interpretation opt-in",
+            opt_in_mock.call_args.kwargs.get("interpret_attachments") is True
+            and opt_in_mock.call_args.kwargs.get("attachment_review_repository")
+            is api.attachment_review_repository,
+            "API forwards explicit interpretation with the durable review repository",
         )
 
         reauth_status = None
