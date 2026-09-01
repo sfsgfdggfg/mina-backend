@@ -7,6 +7,9 @@ from src.core.quote_approval import QuoteApproval
 from src.core.quote_approval_repository import (
     QuoteApprovalRepository,
 )
+from src.core.quote_case import QuoteCase
+from src.core.quote_case_repository import QuoteCaseRepository
+from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.sqlite_repositories import atomic_repository_transaction
 
 
@@ -32,13 +35,51 @@ def _load_approval(
     return approval
 
 
+def _sync_quote_cases_for_approval(
+    *,
+    quote_case_repository: QuoteCaseRepository | None,
+    approval: QuoteApproval,
+) -> None:
+    if quote_case_repository is None:
+        return
+
+    for quote_case in quote_case_repository.list_all():
+        snapshot = quote_case.quote_approval
+        if snapshot is None or snapshot.approval_id != approval.approval_id:
+            continue
+
+        updates = {
+            "quote_approval": approval,
+            "updated_at": datetime.utcnow(),
+        }
+        if (
+            quote_case.supplier_quote is not None
+            and quote_case.customer_quote is not None
+            and quote_case.quote_draft is not None
+        ):
+            updates["quote_send_safety"] = evaluate_quote_send_safety(
+                approval=approval,
+                supplier_quote=quote_case.supplier_quote,
+                customer_quote=quote_case.customer_quote,
+                quote_draft=quote_case.quote_draft,
+                regulatory_compliance=quote_case.regulatory_compliance,
+            )
+
+        quote_case_repository.save(
+            QuoteCase.model_validate(
+                quote_case.model_copy(update=updates).model_dump()
+            )
+        )
+
+
 def approve_quote(
     repository: QuoteApprovalRepository,
     approval_id: str,
     approved_by: str,
     approved_at: Optional[datetime] = None,
+    quote_case_repository: QuoteCaseRepository | None = None,
 ) -> QuoteApproval:
-    with atomic_repository_transaction(repository):
+    with atomic_repository_transaction(repository, quote_case_repository):
         approval = _load_approval(repository, approval_id)
 
         if approval.approval_status != "pending":
@@ -61,7 +102,12 @@ def approve_quote(
         )
 
         updated = QuoteApproval.model_validate(updated.model_dump())
-        return repository.save(updated)
+        updated = repository.save(updated)
+        _sync_quote_cases_for_approval(
+            quote_case_repository=quote_case_repository,
+            approval=updated,
+        )
+        return updated
 
 
 def reject_quote(
@@ -70,8 +116,9 @@ def reject_quote(
     rejection_reason: str,
     rejected_by: str,
     rejected_at: Optional[datetime] = None,
+    quote_case_repository: QuoteCaseRepository | None = None,
 ) -> QuoteApproval:
-    with atomic_repository_transaction(repository):
+    with atomic_repository_transaction(repository, quote_case_repository):
         approval = _load_approval(repository, approval_id)
 
         if approval.approval_status != "pending":
@@ -104,7 +151,12 @@ def reject_quote(
         )
 
         updated = QuoteApproval.model_validate(updated.model_dump())
-        return repository.save(updated)
+        updated = repository.save(updated)
+        _sync_quote_cases_for_approval(
+            quote_case_repository=quote_case_repository,
+            approval=updated,
+        )
+        return updated
 
 
 def invalidate_quote_approval(
@@ -112,8 +164,9 @@ def invalidate_quote_approval(
     approval_id: str,
     invalidated_by: str,
     invalidated_at: Optional[datetime] = None,
+    quote_case_repository: QuoteCaseRepository | None = None,
 ) -> QuoteApproval:
-    with atomic_repository_transaction(repository):
+    with atomic_repository_transaction(repository, quote_case_repository):
         approval = _load_approval(repository, approval_id)
 
         if approval.approval_status not in {
@@ -143,4 +196,9 @@ def invalidate_quote_approval(
         )
 
         updated = QuoteApproval.model_validate(updated.model_dump())
-        return repository.save(updated)
+        updated = repository.save(updated)
+        _sync_quote_cases_for_approval(
+            quote_case_repository=quote_case_repository,
+            approval=updated,
+        )
+        return updated

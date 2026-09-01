@@ -5996,3 +5996,12 @@ An approved customer quote may be delivered automatically through the configured
 Automated customer quote evidence records the case ID, approval ID, revision number, recipient, provider name, provider delivery reference and provider-confirmed send timestamp. Evidence may be created only when the provider-neutral delivery result is `sent` and includes the required provider metadata.
 
 Manual and automated send evidence are mutually exclusive for the same approval/revision. A second send attempt for an already-sent revision must be rejected before the provider is called. Provider failure must leave the quote case without automated sent evidence.
+
+## DEC-136 — Quote Approval State Must Be Durable on the Quote Case
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+A quote approval transition is authoritative in the approval repository, but any QuoteCase that embeds that approval must also persist the same current approval state. API-time enrichment may remain as a defensive read path, but it must not be the only mechanism preventing stale approval snapshots.
+
+For controlled production approval, rejection and invalidation transitions, the approval repository and related quote-case repository must be updated in one atomic repository transaction when they share the pilot SQLite store. The durable QuoteCase must also persist the send-safety decision derived from the new approval state.

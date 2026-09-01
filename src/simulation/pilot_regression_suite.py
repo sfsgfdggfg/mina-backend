@@ -67,6 +67,9 @@ from src.simulation.reliability_hardening_regressions import (
 from src.simulation.quote_revision_regressions import (
     evaluate_quote_revision_regressions,
 )
+from src.simulation.quote_approval_case_sync_regressions import (
+    evaluate_quote_approval_case_sync_regressions,
+)
 from src.simulation.quote_final_output_regressions import (
     evaluate_quote_final_output_regressions,
 )
@@ -188,6 +191,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     ),
     Suite("Manual RFQ sent evidence", evaluate_manual_rfq_sent_regressions),
     Suite("Customer quote automated send evidence", evaluate_customer_quote_automated_send_regressions),
+    Suite("Durable quote approval case sync", evaluate_quote_approval_case_sync_regressions),
     Suite("Supplier response ingestion", evaluate_supplier_response_ingestion_regressions),
     Suite("Pilot operator client", evaluate_pilot_operator_regressions),
     Suite(
