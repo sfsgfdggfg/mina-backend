@@ -105,6 +105,11 @@ from src.core.quote_final_output import (
     QuoteFinalOutputTransitionError,
     build_quote_final_output,
 )
+from src.core.quote_automated_sent import (
+    CustomerQuoteAutomatedSentNotFoundError,
+    CustomerQuoteAutomatedSentTransitionError,
+    send_customer_quote_and_record,
+)
 from src.core.quote_manual_sent import (
     CustomerQuoteManualSentNotFoundError,
     CustomerQuoteManualSentTransitionError,
@@ -246,6 +251,11 @@ class QuoteCaseManualSentRequest(BaseModel):
     expected_approval_id: str
     recipient_email: str
     sent_by: Optional[str] = None
+
+
+class QuoteCaseAutomatedSendRequest(BaseModel):
+    expected_approval_id: str
+    recipient_email: str
 
 
 class QuoteApprovalApproveRequest(BaseModel):
@@ -790,6 +800,29 @@ def record_quote_case_manually_sent(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    return result.model_dump()
+
+
+@app.post("/quote-cases/{case_id}/send")
+def send_quote_case_endpoint(
+    case_id: str,
+    request: QuoteCaseAutomatedSendRequest,
+):
+    try:
+        result = send_customer_quote_and_record(
+            quote_case_repository=quote_case_repository,
+            approval_repository=quote_approval_repository,
+            case_id=case_id,
+            expected_approval_id=request.expected_approval_id,
+            recipient_email=request.recipient_email,
+            sender=outbound_mail_sender,
+        )
+    except CustomerQuoteAutomatedSentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CustomerQuoteAutomatedSentTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result.model_dump()
 
 

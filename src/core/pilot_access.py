@@ -54,6 +54,7 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("GET", re.compile(r"^/quote-cases/[^/]+$")),
     ("GET", re.compile(r"^/quote-cases/[^/]+/final-output$")),
     ("POST", re.compile(r"^/quote-cases/[^/]+/record-manually-sent$")),
+    ("POST", re.compile(r"^/quote-cases/[^/]+/send$")),
     ("POST", re.compile(r"^/quote-cases/[^/]+/revise$")),
 )
 
