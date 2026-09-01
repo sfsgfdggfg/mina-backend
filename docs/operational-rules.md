@@ -3358,3 +3358,16 @@ Agency rounding is explicit configuration and may vary by currency. Every create
 customer quote must retain the effective policy source and formula so its approval
 snapshot remains auditable. `price_sensitivity` is descriptive customer memory and
 must never be treated as a numeric pricing rule.
+
+## RULE-148 — Initial Supplier RFQ Batch Must Follow an Explicit Dispatch Policy
+
+The supplier shortlist may contain up to the permitted supplier maximum without implying that all suppliers are contacted immediately. Initial RFQ draft creation must follow the workflow's snapshotted supplier dispatch policy.
+
+- `sequential` requires `initial_supplier_count = 1`.
+- `parallel` requires `initial_supplier_count` between 2 and 3.
+- Missing agency dispatch configuration preserves the backward-compatible `sequential / 1` behavior.
+- Invalid agency dispatch configuration must fail at controlled-pilot startup rather than silently selecting an unintended outreach strategy.
+- Creating two or three parallel RFQ drafts does not bypass human approval and does not send any supplier email automatically.
+- While any already-created RFQ remains active (`draft`, `approved`, `sent`, `awaiting_response`, or clarification), terminal failure from another supplier must not expand beyond the intended active batch.
+
+Agency-configurable hybrid timeout/fallback behavior requires a separate explicit rule before runtime activation.

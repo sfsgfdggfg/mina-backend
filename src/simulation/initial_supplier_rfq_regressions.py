@@ -6,6 +6,7 @@ import os
 from unittest.mock import patch
 
 from src.core.models import Package, Shipment
+from src.core.supplier_dispatch_policy import SupplierDispatchPolicy
 from src.workflow.pipeline import process_shipment
 
 
@@ -78,6 +79,45 @@ def evaluate_initial_supplier_rfq_regressions() -> dict:
             failures.append("initial RFQ draft did not belong to priority-1 supplier")
         if workflow is None or workflow.rfq_ids != [draft.rfq_id for draft in drafts]:
             failures.append("workflow RFQ ids did not contain exactly the initial draft id")
+        elif workflow.dispatch_policy.mode != "sequential":
+            failures.append("default workflow did not snapshot sequential dispatch policy")
+
+        with patch(
+            "src.workflow.pipeline.select_suppliers_for_shipment",
+            return_value=_selection(3),
+        ):
+            parallel_result = process_shipment(
+                _shipment(),
+                supplier_dispatch_policy=SupplierDispatchPolicy(
+                    mode="parallel",
+                    initial_supplier_count=2,
+                ),
+            )
+        parallel_drafts = parallel_result["supplier_rfq_drafts"]
+        if [draft.priority for draft in parallel_drafts] != [1, 2]:
+            failures.append("parallel-2 did not create the first two RFQ drafts")
+        parallel_workflow = parallel_result["supplier_rfq_workflow"]
+        if (
+            parallel_workflow is None
+            or parallel_workflow.dispatch_policy.mode != "parallel"
+            or parallel_workflow.dispatch_policy.initial_supplier_count != 2
+            or parallel_workflow.rfq_ids != [draft.rfq_id for draft in parallel_drafts]
+        ):
+            failures.append("parallel dispatch policy was not snapshotted on workflow")
+
+        with patch(
+            "src.workflow.pipeline.select_suppliers_for_shipment",
+            return_value=_selection(3),
+        ):
+            parallel_three_result = process_shipment(
+                _shipment(),
+                supplier_dispatch_policy=SupplierDispatchPolicy(
+                    mode="parallel",
+                    initial_supplier_count=3,
+                ),
+            )
+        if [draft.priority for draft in parallel_three_result["supplier_rfq_drafts"]] != [1, 2, 3]:
+            failures.append("parallel-3 did not create all three RFQ drafts")
 
         with patch(
             "src.workflow.pipeline.select_suppliers_for_shipment",
