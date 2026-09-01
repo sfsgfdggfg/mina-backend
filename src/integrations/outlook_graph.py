@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from uuid import uuid4
 from typing import Any
 from urllib.parse import urlsplit
 
 import requests
 from pydantic import ValidationError
 
-from src.core.mail import InboundMailEnvelope
+from src.core.mail import InboundMailEnvelope, MailSendResult, OutboundMailRequest
+from src.integrations.microsoft_auth import MicrosoftAuthConfig, acquire_silent_access_token
 
 
 GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0"
@@ -470,3 +473,73 @@ class OutlookGraphReadClient:
             params = None
 
         return messages
+
+
+class OutlookGraphSendClient:
+    def __init__(self, *, config: MicrosoftAuthConfig, timeout: float = DEFAULT_TIMEOUT_SECONDS, session: Any | None = None) -> None:
+        self.config = config
+        self.timeout = timeout
+        self.session = session or requests.Session()
+        try:
+            self.session.trust_env = False
+        except AttributeError:
+            pass
+
+    def send(self, request: OutboundMailRequest) -> MailSendResult:
+        token = acquire_silent_access_token(self.config)
+        client_request_id = str(uuid4())
+        payload = {
+            "message": {
+                "subject": request.subject,
+                "body": {"contentType": "Text", "content": request.body_text},
+                "toRecipients": [
+                    {"emailAddress": {"address": address}}
+                    for address in request.recipients
+                ],
+            },
+            "saveToSentItems": True,
+        }
+        try:
+            response = self.session.request(
+                "POST",
+                f"{GRAPH_API_BASE_URL}/me/sendMail",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "client-request-id": client_request_id,
+                    "return-client-request-id": "true",
+                },
+                json=payload,
+                timeout=self.timeout,
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            return MailSendResult(
+                operation_id=request.operation_id,
+                status="failed",
+                reason="Microsoft Graph mail send was unavailable.",
+                provider_name=GRAPH_PROVIDER_NAME,
+            )
+        status_code = int(getattr(response, "status_code", 0))
+        if status_code != 202:
+            return MailSendResult(
+                operation_id=request.operation_id,
+                status="failed",
+                reason=f"Microsoft Graph mail send returned HTTP {status_code}.",
+                provider_name=GRAPH_PROVIDER_NAME,
+            )
+        headers = getattr(response, "headers", {}) or {}
+        provider_reference = str(headers.get("request-id") or headers.get("client-request-id") or client_request_id).strip()
+        return MailSendResult(
+            operation_id=request.operation_id,
+            status="sent",
+            reason="Microsoft Graph accepted the message for delivery.",
+            provider_name=GRAPH_PROVIDER_NAME,
+            provider_message_id=provider_reference,
+            sent_at=datetime.now(timezone.utc),
+        )
+
+
+def outlook_graph_sender_from_environment() -> OutlookGraphSendClient:
+    return OutlookGraphSendClient(config=MicrosoftAuthConfig.from_environment())

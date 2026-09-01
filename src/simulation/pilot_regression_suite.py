@@ -23,6 +23,7 @@ from src.simulation.explicit_road_inference_regressions import evaluate_explicit
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
 from src.simulation.microsoft_auth_regressions import evaluate_microsoft_auth_regressions
 from src.simulation.outlook_graph_read_regressions import evaluate_outlook_graph_read_regressions
+from src.simulation.outlook_graph_send_regressions import evaluate_outlook_graph_send_regressions
 from src.simulation.outlook_inbound_gate_regressions import evaluate_outlook_inbound_gate_regressions
 from src.simulation.outlook_inbound_router_regressions import evaluate_outlook_inbound_router_regressions
 from src.simulation.outlook_supplier_pull_regressions import evaluate_outlook_supplier_pull_regressions
@@ -147,6 +148,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Read-only Outlook Graph ingestion",
         evaluate_outlook_graph_read_regressions,
+    ),
+    Suite(
+        "Controlled Outlook Graph sending",
+        evaluate_outlook_graph_send_regressions,
     ),
     Suite(
         "Controlled Outlook inbound gate",

@@ -5976,3 +5976,12 @@ For P1-42, the supported runtime dispatch modes are `sequential` and `parallel`.
 The active dispatch policy is snapshotted on `SupplierRFQWorkflow` when the workflow is created. Later agency configuration changes must not silently change the strategy of an already-open supplier workflow.
 
 Hybrid time-based dispatch is intentionally deferred. A future hybrid policy may combine an initial batch with response-time thresholds and later fallback batches, but it must not be represented as implemented until its timeout and scheduling semantics are explicit and tested.
+
+## DEC-134 — Outlook Sending Requires Explicit Delegated Mail.Send and Real Provider Acceptance
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+MINAI may send supplier RFQs and approved customer mail through Microsoft Graph only when the controlled Outlook account has delegated `Mail.Send` permission in addition to `Mail.Read`. Merely creating or approving an outbound draft does not authorize delivery.
+
+The runtime Graph sender uses the existing provider-neutral `OutboundMailSender` boundary. A message is recorded as sent only after Microsoft Graph accepts `/me/sendMail` with HTTP 202. The Graph response request identifier is retained as the provider delivery reference. Authentication or provider failures must leave the workflow unsent.
