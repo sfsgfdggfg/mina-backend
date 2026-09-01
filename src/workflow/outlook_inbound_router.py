@@ -204,15 +204,41 @@ def _process_allowlisted_attachment_mail(
         return _with_attachment_intake(result, assessment)
 
     retrieval = attachment_retriever(mail)
-    if retrieval.status == "verified":
+    artifacts = list(getattr(retrieval, "extracted_artifacts", ()))
+    extraction_attempted = bool(
+        getattr(retrieval, "extraction_attempted", False)
+    )
+    if retrieval.status == "verified" and artifacts:
+        result["reason_code"] = "outlook_attachment_content_extracted_not_interpreted"
+        extraction_status = "extracted"
+        extraction_reason_code = "attachment_safe_extraction_complete"
+    elif retrieval.status == "verified":
         result["reason_code"] = "outlook_attachment_content_verified_not_parsed"
+        extraction_status = "not_attempted"
+        extraction_reason_code = "attachment_safe_extraction_not_attempted"
     else:
         result["reason_code"] = "outlook_attachment_retrieval_manual_review"
+        extraction_status = "manual_review" if extraction_attempted else "not_attempted"
+        extraction_reason_code = (
+            retrieval.reason_code
+            if extraction_attempted
+            else "attachment_safe_extraction_not_attempted"
+        )
     result.update({
         "attachment_retrieval_status": retrieval.status,
         "attachment_retrieval_reason_code": retrieval.reason_code,
         "attachment_content_download_performed": retrieval.content_download_performed,
         "attachment_verified_count": len(retrieval.verified_receipts),
+        "attachment_extraction_status": extraction_status,
+        "attachment_extraction_reason_code": extraction_reason_code,
+        "attachment_extracted_count": len(artifacts),
+        "attachment_extracted_character_count": sum(
+            artifact.character_count for artifact in artifacts
+        ),
+        "attachment_extracted_table_count": sum(
+            artifact.table_count for artifact in artifacts
+        ),
+        "attachment_extraction_artifacts": artifacts,
     })
     return _with_attachment_intake(result, assessment)
 

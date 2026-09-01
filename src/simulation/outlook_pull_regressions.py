@@ -294,6 +294,60 @@ def evaluate_outlook_pull_regressions():
             "pull safely surfaces retrieval status without file hash",
         )
 
+        extraction_preference = {"new_calls": 0, "old_calls": 0}
+
+        class _ExtractionPreferenceClient(_GraphClient):
+            def retrieve_and_extract_allowlisted_attachments(self, mail):
+                extraction_preference["new_calls"] += 1
+                return "new-extraction-boundary"
+
+            def retrieve_allowlisted_attachments(self, mail):
+                extraction_preference["old_calls"] += 1
+                raise AssertionError("P1-55 fallback must not win when P1-56 is available")
+
+        preference_capture = {}
+
+        def preference_factory(*, access_token, mailbox_id):
+            return _ExtractionPreferenceClient(
+                access_token=access_token,
+                mailbox_id=mailbox_id,
+                messages=[_mail("extraction-preference-1")],
+                capture=preference_capture,
+            )
+
+        def preference_processor(**kwargs):
+            selected = kwargs["attachment_retriever"](kwargs["mail"])
+            return {
+                "result_type": "inbound_mail_manual_review_required",
+                "ingestion_status": "blocked",
+                "reason_code": "outlook_attachment_content_extracted_not_interpreted",
+                "inbound_route": "customer",
+                "attachment_extraction_status": "extracted",
+                "attachment_extraction_reason_code": "attachment_safe_extraction_complete",
+                "attachment_extracted_count": 1,
+                "attachment_extracted_character_count": 123,
+                "attachment_extracted_table_count": 0,
+                "selected_boundary": selected,
+            }
+
+        preference_result = pull_controlled_outlook_inbox(
+            config=config,
+            limit=1,
+            shipment_parser=lambda value: value,
+            proposal_repository=object(),
+            operational_data_sources=object(),
+            token_provider=lambda value: SECRET_TOKEN,
+            graph_client_factory=preference_factory,
+            inbound_processor=preference_processor,
+        )
+
+        check(
+            extraction_preference == {"new_calls": 1, "old_calls": 0}
+            and preference_result["results"][0]["attachment_extraction_status"] == "extracted"
+            and preference_result["results"][0]["attachment_extracted_character_count"] == 123,
+            "pull prefers P1-56 extraction boundary over P1-55 fallback",
+        )
+
         rejection_capture = {}
 
         def rejection_factory(

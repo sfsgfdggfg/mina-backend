@@ -10,6 +10,10 @@ from urllib.parse import quote, urlsplit
 import requests
 from pydantic import ValidationError
 
+from src.core.attachment_safe_extraction import (
+    AttachmentSafeExtractionError,
+    extract_verified_attachment,
+)
 from src.core.attachment_content_verification import (
     AttachmentContentVerificationError,
     AttachmentRetrievalResult,
@@ -553,11 +557,13 @@ class OutlookGraphReadClient:
             item.is_inline,
         )
 
-    def retrieve_allowlisted_attachments(
+    def _retrieve_allowlisted_attachments(
         self,
         mail: InboundMailEnvelope,
+        *,
+        extract: bool,
     ) -> AttachmentRetrievalResult:
-        """Retrieve and verify allowlisted file bytes transiently after route trust."""
+        """Retrieve verified bytes transiently; optionally extract before cleanup."""
 
         assessment = assess_attachment_intake(mail)
         if assessment.status != "metadata_allowlisted":
@@ -627,6 +633,7 @@ class OutlookGraphReadClient:
                 raise OutlookGraphReadError("graph_attachment_manifest_changed")
 
             receipts = []
+            artifacts = []
             content_download_performed = False
             for raw_item, metadata in zip(raw_items, fresh_manifest, strict=True):
                 try:
@@ -652,9 +659,17 @@ class OutlookGraphReadClient:
                 )
                 content_download_performed = True
                 try:
-                    receipts.append(
-                        verify_attachment_content(metadata, content)
-                    )
+                    receipt = verify_attachment_content(metadata, content)
+                    receipts.append(receipt)
+                    if extract:
+                        artifacts.append(
+                            extract_verified_attachment(
+                                metadata,
+                                content,
+                                expected_sha256_hex=receipt.sha256_hex,
+                                expected_profile=receipt.content_profile,
+                            )
+                        )
                 finally:
                     for index in range(len(content)):
                         content[index] = 0
@@ -668,9 +683,15 @@ class OutlookGraphReadClient:
                     receipt.size_bytes for receipt in receipts
                 ),
                 verified_receipts=receipts,
+                extracted_artifacts=artifacts,
+                extraction_attempted=extract,
                 content_download_performed=content_download_performed,
             )
-        except (OutlookGraphReadError, AttachmentContentVerificationError) as exc:
+        except (
+            OutlookGraphReadError,
+            AttachmentContentVerificationError,
+            AttachmentSafeExtractionError,
+        ) as exc:
             return manual_retrieval_result(
                 reason_code=getattr(exc, "code", "attachment_content_verification_failed"),
                 attachment_count=assessment.attachment_count,
@@ -678,7 +699,29 @@ class OutlookGraphReadClient:
                 content_download_performed=locals().get(
                     "content_download_performed", False
                 ),
+                extraction_attempted=(
+                    extract
+                    and locals().get("content_download_performed", False)
+                ),
             )
+
+    def retrieve_allowlisted_attachments(
+        self,
+        mail: InboundMailEnvelope,
+    ) -> AttachmentRetrievalResult:
+        return self._retrieve_allowlisted_attachments(
+            mail,
+            extract=False,
+        )
+
+    def retrieve_and_extract_allowlisted_attachments(
+        self,
+        mail: InboundMailEnvelope,
+    ) -> AttachmentRetrievalResult:
+        return self._retrieve_allowlisted_attachments(
+            mail,
+            extract=True,
+        )
 
     def _attachment_manifest_for_message(
         self,
