@@ -6059,3 +6059,12 @@ The deterministic path must extract only the transit value itself and must remai
 Before MINAI may interpret Outlook attachment content, the controlled Graph adapter must first establish a provider-neutral attachment manifest containing only bounded metadata: normalized filename, MIME type, byte size and inline state. Attachment IDs, content bytes and provider download references are not part of the inbound envelope.
 
 P1-51 does not authorize attachment content download or parsing. Messages with attachments continue to stop before customer or supplier AI parsing. The manifest exists only to make later attachment allowlisting, size limits and manual-review decisions explicit and auditable.
+
+## DEC-143 — Attachment-Only Outlook Messages Must Preserve the Safe Manifest
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+An Outlook message whose text body is blank may still be a valid attachment-bearing inbound message. When `hasAttachments=true`, the controlled Graph adapter must collect the bounded metadata-only attachment manifest before applying the attachment manual-review gate instead of classifying the message only as an empty-body rejection.
+
+This exception does not relax the general inbound body contract: blank-body messages without attachments remain invalid. Attachment-only messages remain blocked before customer or supplier AI parsing, and attachment content bytes, provider attachment IDs and download references remain outside the provider-neutral envelope.

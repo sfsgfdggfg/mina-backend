@@ -59,12 +59,7 @@ class InboundAttachmentMetadata(BaseModel):
 
 
 
-def validate_inbound_mail_body(value: str) -> str:
-    if not value.strip():
-        raise ValueError(
-            "Inbound mail body must not be empty."
-        )
-
+def _validate_inbound_mail_body_size(value: str) -> str:
     body_size = len(value.encode("utf-8"))
 
     if body_size > MAX_INBOUND_MAIL_BODY_BYTES:
@@ -74,6 +69,15 @@ def validate_inbound_mail_body(value: str) -> str:
         )
 
     return value
+
+
+def validate_inbound_mail_body(value: str) -> str:
+    if not value.strip():
+        raise ValueError(
+            "Inbound mail body must not be empty."
+        )
+
+    return _validate_inbound_mail_body_size(value)
 
 
 def _normalize_address(value: str) -> str:
@@ -109,6 +113,10 @@ class InboundMailEnvelope(BaseModel):
 
     @model_validator(mode="after")
     def validate_attachment_manifest_consistency(self):
+        if not self.body_text.strip() and not self.has_attachments:
+            raise ValueError(
+                "Inbound mail body must not be empty."
+            )
         if (self.attachment_manifest or self.attachment_manifest_truncated) and not self.has_attachments:
             raise ValueError(
                 "Attachment manifest requires has_attachments=true."
@@ -118,7 +126,7 @@ class InboundMailEnvelope(BaseModel):
     @field_validator("body_text")
     @classmethod
     def validate_body_text(cls, value: str) -> str:
-        return validate_inbound_mail_body(value)
+        return _validate_inbound_mail_body_size(value)
 
     @field_validator("sender_address")
     @classmethod
