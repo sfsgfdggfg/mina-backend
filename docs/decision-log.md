@@ -6041,3 +6041,12 @@ Provider-confirmed follow-up delivery must persist durable evidence containing t
 When a clarification follow-up resolves a field by deterministic inheritance or consolidation, the resulting SupplierResponseExtraction must not retain that field in `uncertain_fields`. A field may remain uncertain only while its merged value remains absent.
 
 This applies especially to `status`: a prior quoted response plus a valid follow-up commercial fact may resolve the consolidated response to `quoted` even when the follow-up parser itself was uncertain about status. The resolved value and uncertainty metadata must remain internally consistent before validation.
+
+## DEC-141 — Natural Transit-Only Supplier Replies Use Deterministic Extraction
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+Short supplier clarification replies that contain only transit information may be resolved deterministically even when phrased as a natural sentence, for example `Transit süremiz 5–6 gündür.` or `Transit time is 5-6 days.`. These replies must not be sent to the AI parser when the full message is an anchored transit-only expression.
+
+The deterministic path must extract only the transit value itself and must remain narrow enough that replies containing price, capacity, equipment, validity or other commercial facts do not bypass structured parsing.

@@ -54,9 +54,12 @@ _PRICE_ONLY_REPLY_PATTERN = re.compile(
 )
 
 _TRANSIT_ONLY_REPLY_PATTERN = re.compile(
-    r"^\s*\d+(?:\s*[-–—]\s*\d+)?\s*"
+    r"^\s*(?:(?:transit\s+(?:süremiz|suresi(?:miz)?|süresi(?:miz)?|time))"
+    r"(?:\s*(?:is|:|=))?\s*)?"
+    r"(?P<transit>\d+(?:\s*[-–—]\s*\d+)?\s*"
     r"(?:business\s*days?|working\s*days?|iş\s*günü|is\s*gunu|"
-    r"days?|gün|gun|hours?|hrs?|saat|weeks?|hafta)\s*[.!]?\s*$",
+    r"days?|gün|gun|hours?|hrs?|saat|weeks?|hafta))"
+    r"(?:\s*(?:dir|dır|dur|dür|tir|tır|tur|tür))?\s*[.!]?\s*$",
     flags=re.IGNORECASE,
 )
 
@@ -118,11 +121,13 @@ def _deterministic_transit_only_extraction(
     reply_text: str,
 ) -> SupplierResponseExtraction | None:
     normalized = reply_text.strip()
-    if _TRANSIT_ONLY_REPLY_PATTERN.fullmatch(normalized) is None:
+    match = _TRANSIT_ONLY_REPLY_PATTERN.fullmatch(normalized)
+    if match is None:
         return None
-    if parse_transit_time(normalized) is None:
+    transit_text = match.group("transit").strip()
+    if parse_transit_time(transit_text) is None:
         return None
-    return SupplierResponseExtraction(transit_time=normalized.rstrip(".!"))
+    return SupplierResponseExtraction(transit_time=transit_text)
 
 
 def _merge_clarification_extraction(

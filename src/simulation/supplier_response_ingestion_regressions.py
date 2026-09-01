@@ -399,6 +399,50 @@ def evaluate_supplier_response_ingestion_regressions() -> dict:
             "clarification merge retained uncertainty for an inherited resolved status"
         )
 
+    natural_transit_repository, natural_transit_draft = _repository_with_rfq(
+        rfq_id="rfq-natural-transit-follow-up",
+        status="awaiting_response",
+    )
+    natural_prior = SupplierRFQResponse(
+        rfq_id=natural_transit_draft.rfq_id,
+        supplier_name=natural_transit_draft.supplier_name,
+        rfq_priority=natural_transit_draft.priority,
+        status="quoted",
+        cost=2300.0,
+        currency="EUR",
+        equipment_type="Tenteli",
+        source="manual",
+        received_at=datetime(2026, 9, 1, 12, 37, 56),
+    )
+    natural_transit_repository.save_responses([natural_prior])
+    natural_transit_repository.save_drafts([
+        natural_transit_draft.model_copy(update={"status": "clarification_required"})
+    ])
+    natural_transit_follow_up = ingest_supplier_reply(
+        reply=_reply(
+            natural_transit_draft.rfq_id,
+            message_id="natural-transit-follow-up",
+            body_text="Transit süremiz 5–6 gündür.",
+        ),
+        repository=natural_transit_repository,
+    )
+    natural_responses = natural_transit_repository.list_responses(
+        natural_transit_draft.rfq_id
+    )
+    natural_consolidated = natural_responses[-1] if natural_responses else None
+    if (
+        natural_transit_follow_up.status != "response_attached"
+        or natural_consolidated is None
+        or natural_consolidated.status != "quoted"
+        or natural_consolidated.cost != 2300.0
+        or natural_consolidated.currency != "EUR"
+        or natural_consolidated.transit_time != "5–6 gün"
+        or not natural_consolidated.is_consolidated_follow_up
+    ):
+        failures.append(
+            "natural-language transit-only clarification did not consolidate deterministically"
+        )
+
     missing_price_repository, missing_price_draft = _repository_with_rfq(
         rfq_id="rfq-missing-price",
         status="awaiting_response",

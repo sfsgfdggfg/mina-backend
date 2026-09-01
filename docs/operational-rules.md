@@ -3415,3 +3415,9 @@ Only provider `sent` with complete provider metadata may advance the follow-up t
 During supplier clarification consolidation, MINAI must remove any field from `uncertain_fields` once the merged extraction assigns that field a non-null resolved value. Uncertainty may be preserved only for fields that remain unresolved after the merge.
 
 A clarification parser's uncertainty cannot override deterministic lifecycle context that safely resolves a field, such as a previously quoted supplier response combined with a valid follow-up transit value. The consolidated response must pass the same strict extraction model validation before it is persisted.
+
+## RULE-156 — Transit-Only Clarification Replies Must Prefer Narrow Deterministic Parsing
+
+When a supplier clarification response contains only a transit duration, including common natural-language wrappers such as `Transit süremiz ...` or `Transit time is ...`, MINAI must parse the transit value deterministically before invoking the AI supplier-response parser.
+
+The pattern must be fully anchored to a transit-only message. If additional commercial content is present, the deterministic shortcut must not apply. The resulting transit fact may then be consolidated with the prior quoted response under the normal clarification provenance rules.
