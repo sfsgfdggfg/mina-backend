@@ -6111,3 +6111,14 @@ P1-56 permits deterministic content extraction only after P1-55 has completed tr
 PDF extraction uses the locked `pypdf` runtime and is limited to 50 pages and 100,000 extracted characters per file. Encrypted PDFs, PDFs with no extractable text, parser failures or limit breaches require manual review. XLSX extraction reads only bounded OOXML worksheet/shared-string XML, never evaluates formulas, and limits a file to 10 worksheets, 200 rows per worksheet, 50 columns, 5,000 non-empty cells and 100,000 extracted characters. Formula-bearing workbooks require manual review. CSV extraction is UTF-8 only, detects a narrow delimiter set, and is limited to 1,000 rows, 50 columns, 5,000 non-empty cells and 100,000 characters.
 
 Extraction artifacts are ephemeral and excluded from default retrieval-result serialization. The controlled operator/API summary may expose only safe aggregate extraction status and counts, never extracted attachment text/table values. P1-56 does not interpret business meaning, does not send attachment content to customer or supplier AI parsers, does not persist extracted content and does not authorize mailbox writes or outbound mail. Successfully extracted attachment mail remains manual-review-only pending a separately approved interpretation boundary.
+
+## DEC-148 — Attachment Interpretation Is Non-Authoritative Pending Review
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-57 may send P1-56 extracted attachment content to a route-specific AI parser only after P1-54 metadata allowlisting, P1-55 trusted-route verification/content validation and P1-56 bounded extraction have all succeeded. The email subject, body and each extracted attachment section must pass the approved privacy transform before AI interpretation. Attachment filenames, provider IDs, raw bytes and verification hashes are not included in the parser bundle.
+
+The total pre-privacy interpretation bundle is limited to 120,000 characters and is never silently truncated. Oversize or privacy-transform failure returns manual review without invoking a parser. Customer interpretation may produce a ShipmentProposalSnapshot and supplier interpretation may produce a SupplierResponseExtraction, but P1-57 does not persist either interpretation, create a customer extraction-confirmation record, attach a supplier RFQ response or alter any RFQ lifecycle state. Applying interpreted attachment facts requires a separate controlled human-review boundary.
+
+P1-57 interpretation is explicit per operator pull, not enabled merely by deploying the feature. The normal Outlook pull keeps attachment interpretation disabled. Only a pull request carrying `interpret_attachments=true` (the operator CLI `--interpret-attachments` flag) may inject the interpretation boundary for that bounded pull.

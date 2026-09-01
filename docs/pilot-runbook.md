@@ -1159,3 +1159,19 @@ P1-56 extends the trusted-route P1-55 retrieval boundary with deterministic, bou
 For a trusted PDF/XLSX/CSV attachment that passes P1-54 and P1-55, expect `attachment_extraction_status=extracted`, `attachment_extracted_count` greater than zero and bounded aggregate character/table counts. The top-level result must remain `inbound_mail_manual_review_required` with `reason_code=outlook_attachment_content_extracted_not_interpreted`. The operator summary must not contain extracted PDF text, spreadsheet/CSV cell values, provider attachment IDs, raw attachment bytes or file hashes.
 
 Encrypted/no-text PDFs, formula-bearing XLSX files, malformed content or any extraction limit breach must fail closed to manual review. Untrusted/ambiguous routes must still show no attachment content retrieval and therefore no extraction. P1-56 adds no mailbox writes, no automated send and no customer/supplier AI attachment parsing.
+
+## P1-57 controlled attachment interpretation boundary
+
+P1-57 adds a non-authoritative AI interpretation step after successful P1-56 extraction. It does not authorize automatic application of attachment facts. A trusted attachment must still pass metadata allowlisting, route verification, transient content validation and bounded extraction before interpretation is considered.
+
+The interpretation input is built from system-labeled email subject/body and extracted attachment sections. Each source section passes the approved privacy minimization before the route-specific parser sees it. The combined input is bounded to 120,000 characters before privacy processing; overflow fails closed without truncation. Customer interpretation returns only an internal ShipmentProposalSnapshot candidate. Supplier interpretation returns only an internal SupplierResponseExtraction candidate. P1-57 does not save a customer proposal, attach a supplier response, advance RFQ state, write the mailbox or send any email.
+
+For operator pull, expect `attachment_interpretation_status=interpreted`, `attachment_interpretation_parser_called=true` and a safe interpretation reason when a controlled interpretation succeeds. The top-level message remains `inbound_mail_manual_review_required`. Operator output must not contain extracted attachment content, interpreted structured payloads, attachment provider IDs or file hashes. A live AI smoke must use an explicitly approved, controlled non-sensitive attachment (or separate explicit approval for the specific attachment content); prior extraction-only test files are not automatically authorized for AI interpretation.
+
+P1-57 is OFF by default. Use the explicit one-pull opt-in only for approved test/operational content:
+
+```bash
+python -m src.pilot_operator outlook pull --limit 10 --interpret-attachments
+```
+
+Omitting `--interpret-attachments` keeps the pull at the P1-56 extraction-only boundary and must report `attachment_interpretation_requested=false` at the pull level.

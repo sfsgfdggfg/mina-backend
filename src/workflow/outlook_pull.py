@@ -12,6 +12,9 @@ from src.ai.supplier_response_parser import (
 from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
+from src.core.attachment_safe_interpretation import (
+    interpret_extracted_attachment_mail,
+)
 from src.core.operational_data import (
     OperationalDataSources,
 )
@@ -125,6 +128,21 @@ def _safe_result_summary(
         "attachment_extracted_table_count": result.get(
             "attachment_extracted_table_count"
         ),
+        "attachment_interpretation_status": result.get(
+            "attachment_interpretation_status"
+        ),
+        "attachment_interpretation_reason_code": result.get(
+            "attachment_interpretation_reason_code"
+        ),
+        "attachment_interpretation_parser_called": result.get(
+            "attachment_interpretation_parser_called"
+        ),
+        "attachment_interpretation_privacy_transform_version": result.get(
+            "attachment_interpretation_privacy_transform_version"
+        ),
+        "attachment_interpretation_source_profiles": result.get(
+            "attachment_interpretation_source_profiles"
+        ),
     }
 
     return {
@@ -162,6 +180,7 @@ def pull_controlled_outlook_inbox(
     ),
     supplier_parser=None,
     supplier_repository=None,
+    interpret_attachments: bool = False,
     token_provider: Callable[
         [MicrosoftAuthConfig],
         str,
@@ -227,6 +246,11 @@ def pull_controlled_outlook_inbox(
                         "retrieve_allowlisted_attachments",
                         None,
                     )
+                ),
+                attachment_interpreter=(
+                    interpret_extracted_attachment_mail
+                    if interpret_attachments
+                    else None
                 ),
             )
 
@@ -334,5 +358,6 @@ def pull_controlled_outlook_inbox(
         ),
         "mailbox_write_performed": False,
         "automated_send_performed": False,
+        "attachment_interpretation_requested": interpret_attachments,
         "results": summaries,
     }
