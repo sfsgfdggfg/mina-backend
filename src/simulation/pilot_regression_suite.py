@@ -52,6 +52,9 @@ from src.simulation.outlook_attachment_route_interpretation_regressions import (
 from src.simulation.attachment_review_field_ux_regressions import (
     evaluate_attachment_review_field_ux_regressions,
 )
+from src.simulation.attachment_review_queue_regressions import (
+    evaluate_attachment_review_queue_regressions,
+)
 from src.simulation.attachment_interpretation_review_regressions import (
     evaluate_attachment_interpretation_review_regressions,
 )
@@ -235,6 +238,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Attachment review field-level UX",
         evaluate_attachment_review_field_ux_regressions,
+    ),
+    Suite(
+        "Attachment review operational queue",
+        evaluate_attachment_review_queue_regressions,
     ),
     Suite(
         "Controlled Outlook Graph sending",

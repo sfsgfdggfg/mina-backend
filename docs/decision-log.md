@@ -6144,3 +6144,14 @@ The review can instead be rejected with an authenticated operator identity and r
 P1-59 adds a read-only field-level preview between a pending P1-58 attachment review and its pilot apply mutation. The preview uses the same route-specific correction validators as apply, classifies customer safety fields and supplier commercial fields, identifies locked fields, shows normalized before/after values, and reports blockers/warnings without changing review, proposal, RFQ, response, mailbox or outbound state.
 
 The preview returns a deterministic token bound to the review ID, durable source fingerprint, current review status, submitted corrections and normalized candidate. The authenticated pilot apply endpoint requires that exact token and recomputes the preview before mutation. A missing, stale or mismatched preview token fails closed. The token is not authentication and does not replace the named operator, pilot network or lifecycle checks.
+
+## DEC-151 — Pending Attachment Reviews Use a Deterministic Read-Only Operational Queue
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-60 adds a read-only operational queue for pending attachment interpretation reviews. Queue priority is recomputed from current durable review/RFQ state on every read; priority labels and scores are not persisted and no AI model is used for ordering. Applied and rejected reviews are excluded.
+
+Each pending review starts at score 10. Review age adds 5/10/20/30 points at 4/12/24/48 hours. The P1-59 baseline preview adds up to 30 points for a non-apply-ready blocker, 15 points per critical-attention field up to 45, and 5 points per warning up to 20. A missing or stale supplier RFQ snapshot adds 60 points; an RFQ that is no longer review-applicable adds 40. Customer required-delivery/cargo-ready dates and supplier quote-validity/vehicle-availability dates add bounded urgency points only when the source value is an exact `YYYY-MM-DD` date. Free-form dates are never guessed.
+
+Scores are capped at 100 and map to `critical >= 70`, `high >= 45`, `normal >= 20`, otherwise `low`. Ordering is priority band, score descending, nearest known deadline, oldest review, then review ID. Queue output is privacy-minimal: it may expose review ID, route, RFQ ID, age, aggregate attention/blocker/warning counts, priority reason codes and relative deadline distance, but not subject, customer identity, candidate field values, corrections, preview tokens, source fingerprints, attachment hashes, provider IDs or raw/extracted attachment content.
