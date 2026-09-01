@@ -124,7 +124,6 @@ def evaluate_pilot_access_regressions() -> dict:
     disabled_routes = (
         ("GET", "/run-test-suite"),
         ("POST", "/supplier-rfqs/abc/simulate-response"),
-        ("POST", "/supplier-rfqs/abc/send"),
         ("POST", "/supplier-rfq-follow-ups/f1/send"),
         ("POST", "/supplier-responses/ingest"),
         ("POST", "/customer-memory/import/apply"),

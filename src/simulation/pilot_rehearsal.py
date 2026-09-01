@@ -284,7 +284,7 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
     result.require("body identity conflicts with authenticated identity",
                    CLAIMED_OPERATOR != authenticated_operator)
     trusted_request = _request(authenticated_operator)
-    supplier_send_blocked = not authorize_pilot_request(
+    supplier_send_allowed = authorize_pilot_request(
         method="POST", path="/supplier-rfqs/example/send", client_host="127.0.0.1",
         authorization=f"Bearer {TOKEN}", environ=env,
     ).allowed
@@ -292,7 +292,10 @@ def _run(root: Path, result: RehearsalResult, *, injected_failure: str | None) -
         method="POST", path="/quotes/prepare-send", client_host="127.0.0.1",
         authorization=f"Bearer {TOKEN}", environ=env,
     ).allowed
-    result.require("automated send unavailable", supplier_send_blocked and customer_send_blocked)
+    result.require(
+        "controlled outbound surface",
+        supplier_send_allowed and customer_send_blocked,
+    )
 
     with patch.dict(os.environ, env, clear=False):
         from src import api

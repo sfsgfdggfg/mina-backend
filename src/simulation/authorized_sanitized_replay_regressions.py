@@ -206,12 +206,12 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         except AuthorizedReplayExecutionError as exc:
             outbound_blocked = (
                 exc.code
-                == "automated_outbound_must_remain_disabled"
+                == "legacy_quote_prepare_send_must_remain_disabled"
             )
         else:
             outbound_blocked = False
         require(
-            "enabled outbound policy blocks authorized replay",
+            "legacy quote prepare-send policy blocks authorized replay",
             outbound_blocked,
         )
 

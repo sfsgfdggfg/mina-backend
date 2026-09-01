@@ -1232,6 +1232,14 @@ def get_supplier_rfq(rfq_id: str):
             response.model_dump()
             for response in supplier_rfq_repository.list_responses(rfq_id)
         ],
+        "automated_sent_evidence": [
+            evidence.model_dump()
+            for evidence in supplier_rfq_repository.list_automated_sent_evidence(rfq_id)
+        ],
+        "manual_sent_evidence": [
+            evidence.model_dump()
+            for evidence in supplier_rfq_repository.list_manual_sent_evidence(rfq_id)
+        ],
         "follow_ups": [
             item.model_dump()
             for item in supplier_rfq_repository.list_follow_up_drafts(rfq_id)
@@ -1368,6 +1376,10 @@ def send_supplier_rfq_endpoint(rfq_id: str):
         ).model_dump()
     except SupplierRFQNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/supplier-rfqs/{rfq_id}/record-manually-sent")

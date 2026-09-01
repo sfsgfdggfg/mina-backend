@@ -6005,3 +6005,12 @@ Manual and automated send evidence are mutually exclusive for the same approval/
 A quote approval transition is authoritative in the approval repository, but any QuoteCase that embeds that approval must also persist the same current approval state. API-time enrichment may remain as a defensive read path, but it must not be the only mechanism preventing stale approval snapshots.
 
 For controlled production approval, rejection and invalidation transitions, the approval repository and related quote-case repository must be updated in one atomic repository transaction when they share the pilot SQLite store. The durable QuoteCase must also persist the send-safety decision derived from the new approval state.
+
+## DEC-137 — Controlled Supplier RFQ Sending Is an Explicit Operator Action
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+The controlled pilot may expose supplier RFQ delivery through `POST /supplier-rfqs/{rfq_id}/send` and the matching `pilot_operator rfq send` command. This surface does not authorize background dispatch: the operator must explicitly invoke the send action for the exact RFQ after its separate human approval transition.
+
+A provider-confirmed supplier RFQ send must persist durable automated-send evidence containing the RFQ ID, recipient, provider name, provider delivery reference and provider-confirmed timestamp. Provider failure or incomplete provider metadata must leave the RFQ approved and unsent. A repeated send for an already-sent RFQ must be rejected before a second provider call.

@@ -3391,3 +3391,9 @@ The controlled pilot route for automated customer quote delivery remains an expl
 When a current quote approval is approved, rejected or invalidated, every persisted QuoteCase referencing that approval ID must be updated with the current approval object. If the quote case contains the supplier quote, customer quote and quote draft, its `quote_send_safety` must be recomputed and persisted from the new approval state.
 
 The controlled API must pass the quote-case repository into approval transitions so approval and case updates share one atomic SQLite transaction. A stale embedded approval may never be treated as an independent authorization source; final output and automated send continue to verify the authoritative current approval repository.
+
+## RULE-152 — Supplier RFQ Automated Delivery Must Be Approved, Explicit and Auditable
+
+Controlled supplier RFQ delivery is permitted only as an authenticated explicit operator action against an RFQ currently in `approved` state with a recipient address. Approval and delivery remain separate operations.
+
+The RFQ may advance to `awaiting_response` only after the outbound provider reports `sent` with provider name, provider delivery reference and send timestamp. MINAI must persist those fields as durable automated-send evidence. Provider failure, missing provider metadata, an already-sent RFQ, or existing sent evidence must not cause another provider send or a false lifecycle advance. Manual and automated send evidence remain alternative delivery paths for one RFQ.
