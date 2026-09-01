@@ -28,6 +28,35 @@ MailSendStatus = Literal[
 ]
 
 MAX_INBOUND_MAIL_BODY_BYTES = 256 * 1024
+MAX_ATTACHMENT_MANIFEST_ITEMS = 25
+
+
+class InboundAttachmentMetadata(BaseModel):
+    """Non-content attachment metadata safe for inbound routing decisions."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=512)
+    content_type: Optional[str] = Field(default=None, max_length=255)
+    size_bytes: int = Field(ge=0)
+    is_inline: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Attachment name must not be empty.")
+        return normalized
+
+    @field_validator("content_type")
+    @classmethod
+    def normalize_content_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        return normalized or None
+
 
 
 def validate_inbound_mail_body(value: str) -> str:
@@ -74,7 +103,17 @@ class InboundMailEnvelope(BaseModel):
     in_reply_to_message_id: Optional[str] = None
     explicit_rfq_reference: Optional[str] = None
     has_attachments: bool = False
+    attachment_manifest: list[InboundAttachmentMetadata] = Field(default_factory=list, max_length=MAX_ATTACHMENT_MANIFEST_ITEMS)
+    attachment_manifest_truncated: bool = False
     source: InboundMailChannel = "manual"
+
+    @model_validator(mode="after")
+    def validate_attachment_manifest_consistency(self):
+        if (self.attachment_manifest or self.attachment_manifest_truncated) and not self.has_attachments:
+            raise ValueError(
+                "Attachment manifest requires has_attachments=true."
+            )
+        return self
 
     @field_validator("body_text")
     @classmethod

@@ -3421,3 +3421,9 @@ A clarification parser's uncertainty cannot override deterministic lifecycle con
 When a supplier clarification response contains only a transit duration, including common natural-language wrappers such as `Transit süremiz ...` or `Transit time is ...`, MINAI must parse the transit value deterministically before invoking the AI supplier-response parser.
 
 The pattern must be fully anchored to a transit-only message. If additional commercial content is present, the deterministic shortcut must not apply. The resulting transit fact may then be consolidated with the prior quoted response under the normal clarification provenance rules.
+
+## RULE-157 — Attachment Manifest Collection Must Not Read Attachment Content
+
+For an Outlook message with `hasAttachments=true`, MINAI may issue a read-only Graph request for bounded attachment metadata. That request must not select or persist attachment content bytes or attachment provider IDs in the provider-neutral inbound envelope.
+
+Attachment metadata is routing context only. Until a separate controlled content policy is approved, any message with attachments remains blocked before customer or supplier AI parsing. A manifest or truncation marker is invalid unless `has_attachments=true`.
