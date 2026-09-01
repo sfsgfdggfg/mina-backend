@@ -255,6 +255,22 @@ def evaluate_outlook_graph_read_regressions() -> dict:
         limit=2
     )
 
+    whitespace_message = _graph_message(
+        message_id="whitespace-normalization"
+    )
+    whitespace_message["body"]["content"] = (
+        "  Please quote Adana to Hamburg.  \r\n"
+    )
+    whitespace_mail = normalize_graph_message(
+        whitespace_message,
+        mailbox_id="operations@example.invalid",
+    )
+    check(
+        whitespace_mail.body_text
+        == "Please quote Adana to Hamburg.",
+        "non-empty Graph body normalization remains stable",
+    )
+
     check(
         len(blank_batch) == 1
         and blank_batch[0].external_message_id
