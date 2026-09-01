@@ -364,6 +364,25 @@ def evaluate_pilot_operator_regressions() -> dict:
     if {"send_quote", "prepare_quote_send"}.intersection(public_methods):
         failures.append("operator client exposes a legacy automated send method")
 
+    blocked_session = _Session([_Response(status_code=409, payload={"detail": "already sent"})])
+    blocked_client = _client(blocked_session)
+    try:
+        blocked_client.send_rfq("rfq-blocked")
+    except OperatorAPIError:
+        pass
+    else:
+        failures.append("operator supplier send treated HTTP 409 as success")
+
+    blocked_stderr = io.StringIO()
+    with patch.object(
+        PilotOperatorClient,
+        "from_environment",
+        return_value=blocked_client,
+    ), contextlib.redirect_stderr(blocked_stderr):
+        blocked_exit = main(["rfq", "send", "rfq-blocked"])
+    if blocked_exit != 2:
+        failures.append("blocked supplier send CLI did not exit nonzero")
+
     expected_error_text = {
         401: "Authentication failed",
         403: "Access denied",

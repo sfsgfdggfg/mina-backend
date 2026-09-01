@@ -1369,11 +1369,22 @@ def approve_supplier_rfq_endpoint(
 @app.post("/supplier-rfqs/{rfq_id}/send")
 def send_supplier_rfq_endpoint(rfq_id: str):
     try:
-        return send_supplier_rfq_via_mail(
+        result = send_supplier_rfq_via_mail(
             repository=supplier_rfq_repository,
             rfq_id=rfq_id,
             sender=outbound_mail_sender,
-        ).model_dump()
+        )
+        if result.delivery.status == "rejected_before_provider":
+            raise HTTPException(
+                status_code=409,
+                detail=result.delivery.reason,
+            )
+        if result.delivery.status != "sent":
+            raise HTTPException(
+                status_code=503,
+                detail=result.delivery.reason,
+            )
+        return result.model_dump()
     except SupplierRFQNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except SupplierRFQTransitionError as exc:

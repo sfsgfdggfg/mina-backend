@@ -6014,3 +6014,12 @@ For controlled production approval, rejection and invalidation transitions, the 
 The controlled pilot may expose supplier RFQ delivery through `POST /supplier-rfqs/{rfq_id}/send` and the matching `pilot_operator rfq send` command. This surface does not authorize background dispatch: the operator must explicitly invoke the send action for the exact RFQ after its separate human approval transition.
 
 A provider-confirmed supplier RFQ send must persist durable automated-send evidence containing the RFQ ID, recipient, provider name, provider delivery reference and provider-confirmed timestamp. Provider failure or incomplete provider metadata must leave the RFQ approved and unsent. A repeated send for an already-sent RFQ must be rejected before a second provider call.
+
+## DEC-138 — Supplier Send HTTP Success Means Provider-Confirmed Delivery
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+The controlled supplier RFQ send endpoint must not return a successful HTTP response when no provider delivery occurred. A pre-provider lifecycle rejection is a conflict, and a provider failure or unavailable provider is an operational service failure. Only a provider-confirmed `sent` result may return HTTP success.
+
+This keeps the HTTP contract aligned with operator automation: `pilot_operator rfq send` must exit nonzero whenever the requested RFQ was not sent. A safe rejection remains non-destructive, but it is not a successful send operation.
