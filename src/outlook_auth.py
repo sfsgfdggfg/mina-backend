@@ -37,8 +37,7 @@ def main() -> int:
         "Outlook authorization cached securely."
     )
     print(
-        "Permission is read-only Mail.Read; "
-        "this does not enable mail sending."
+        "Permissions cached: Mail.Read and Mail.Send."
     )
     return 0
 

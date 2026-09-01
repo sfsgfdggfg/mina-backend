@@ -3371,3 +3371,9 @@ The supplier shortlist may contain up to the permitted supplier maximum without 
 - While any already-created RFQ remains active (`draft`, `approved`, `sent`, `awaiting_response`, or clarification), terminal failure from another supplier must not expand beyond the intended active batch.
 
 Agency-configurable hybrid timeout/fallback behavior requires a separate explicit rule before runtime activation.
+
+## RULE-149 — Outlook Provider Sending Must Preserve the Human Send Gate
+
+Adding Microsoft delegated `Mail.Send` capability must not collapse approval and sending into one implicit action. Supplier RFQ approval remains a separate state transition from external delivery.
+
+When an operator explicitly authorizes sending, MINAI may call Microsoft Graph for the exact approved, unsent message. The workflow may advance to a sent/awaiting-response state only after Graph returns HTTP 202. Any authentication failure, missing permission, provider exception, redirect, or non-202 response must fail safely without durable sent evidence.

@@ -54,6 +54,7 @@ from src.integrations.outlook_graph import (
     MAX_PULL_MESSAGES,
     OutlookGraphMessageError,
     OutlookGraphReadError,
+    outlook_graph_sender_from_environment,
 )
 from src.workflow.extraction_confirmation import (
     ExtractionConfirmationTransitionError,
@@ -189,7 +190,10 @@ quote_approval_repository = SQLiteQuoteApprovalRepository(pilot_store)
 quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
-outbound_mail_sender: OutboundMailSender | None = None
+try:
+    outbound_mail_sender: OutboundMailSender | None = outlook_graph_sender_from_environment()
+except MicrosoftAuthConfigurationError:
+    outbound_mail_sender = None
 
 
 class ProcessEmailRequest(BaseModel):

@@ -26,6 +26,7 @@ CONSUMERS_TENANT = "consumers"
 
 OUTLOOK_SCOPES = (
     "Mail.Read",
+    "Mail.Send",
 )
 
 

@@ -77,7 +77,7 @@ class _FakeApplication:
         self,
         scopes,
     ):
-        if scopes != ["Mail.Read"]:
+        if scopes != ["Mail.Read", "Mail.Send"]:
             raise AssertionError(
                 "Unexpected delegated scopes."
             )
@@ -112,7 +112,7 @@ class _FakeApplication:
         *,
         account,
     ):
-        if scopes != ["Mail.Read"]:
+        if scopes != ["Mail.Read", "Mail.Send"]:
             raise AssertionError(
                 "Unexpected delegated scopes."
             )
