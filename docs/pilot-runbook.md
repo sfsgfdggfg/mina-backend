@@ -1143,3 +1143,10 @@ Example parallel configuration:
 Supported P1-42 modes are `sequential` and `parallel`. Parallel mode may create RFQ drafts for the first two or three eligible ranked suppliers, but each RFQ still requires the normal human approval and explicit send step. No supplier email is sent merely because a parallel policy is configured.
 
 The policy is copied into the durable supplier RFQ workflow when that workflow is created. Do not describe hybrid timeout dispatch as implemented in P1-42; response-time thresholds and scheduled fallback batches remain a later controlled change intended for the Supplier Dispatch Policy section of the future guide/editor.
+
+
+## P1-55 controlled attachment retrieval smoke
+
+P1-55 is a read-only verification boundary, not an attachment parsing feature. A live smoke is valid only when an attachment is already `metadata_allowlisted`. MINAI must first resolve a single trusted customer or supplier route; untrusted or ambiguous attachment messages must show no content download.
+
+For a trusted allowlisted attachment, expect `attachment_retrieval_status=verified`, `attachment_content_download_performed=true`, a nonzero `attachment_verified_count`, `mailbox_write_performed=false` and `automated_send_performed=false`. The top-level result must remain `inbound_mail_manual_review_required`; no customer or supplier AI parser is authorized by P1-55. Operator output must not contain raw attachment content, provider attachment IDs or SHA-256 file fingerprints.

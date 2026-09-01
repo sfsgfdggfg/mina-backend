@@ -98,6 +98,18 @@ def _safe_result_summary(
         "attachment_total_size_bytes": result.get(
             "attachment_total_size_bytes"
         ),
+        "attachment_retrieval_status": result.get(
+            "attachment_retrieval_status"
+        ),
+        "attachment_retrieval_reason_code": result.get(
+            "attachment_retrieval_reason_code"
+        ),
+        "attachment_content_download_performed": result.get(
+            "attachment_content_download_performed"
+        ),
+        "attachment_verified_count": result.get(
+            "attachment_verified_count"
+        ),
     }
 
     return {
@@ -189,6 +201,11 @@ def pull_controlled_outlook_inbox(
                 supplier_repository=(
                     supplier_repository
                 ),
+                attachment_retriever=getattr(
+                    graph_client,
+                    "retrieve_allowlisted_attachments",
+                    None,
+                ),
             )
 
         except (
@@ -264,8 +281,11 @@ def pull_controlled_outlook_inbox(
     manual_review_count = sum(
         1
         for item in summaries
-        if item.get("inbound_route")
-        == "manual_review"
+        if (
+            item.get("inbound_route") == "manual_review"
+            or item.get("result_type")
+            == "inbound_mail_manual_review_required"
+        )
     )
 
     return {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -9,6 +10,16 @@ from urllib.parse import quote, urlsplit
 import requests
 from pydantic import ValidationError
 
+from src.core.attachment_content_verification import (
+    AttachmentContentVerificationError,
+    AttachmentRetrievalResult,
+    manual_retrieval_result,
+    verify_attachment_content,
+)
+from src.core.attachment_intake_policy import (
+    MAX_ATTACHMENT_FILE_BYTES,
+    assess_attachment_intake,
+)
 from src.core.mail import (
     MAX_ATTACHMENT_MANIFEST_ITEMS,
     InboundAttachmentMetadata,
@@ -24,6 +35,7 @@ GRAPH_PROVIDER_NAME = "microsoft_graph"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 MAX_PULL_MESSAGES = 50
 _ATTACHMENT_SELECT_FIELDS = "name,contentType,size,isInline"
+_ATTACHMENT_RETRIEVAL_SELECT_FIELDS = "id,name,contentType,size,isInline"
 
 _GRAPH_SELECT_FIELDS = (
     "id,subject,body,from,toRecipients,"
@@ -448,6 +460,225 @@ class OutlookGraphReadClient:
             )
 
         return payload
+
+    def _get_bounded_binary(
+        self,
+        url: str,
+        *,
+        max_bytes: int,
+        expected_content_type: str,
+    ) -> bytearray:
+        headers = self._headers()
+        headers["Accept"] = "application/octet-stream"
+        try:
+            response = self.session.request(
+                "GET",
+                url,
+                headers=headers,
+                params=None,
+                timeout=self.timeout,
+                allow_redirects=False,
+                stream=True,
+            )
+        except requests.RequestException as exc:
+            raise OutlookGraphReadError(
+                "microsoft_graph_unavailable"
+            ) from exc
+
+        try:
+            status_code = int(getattr(response, "status_code", 0))
+            if 300 <= status_code < 400:
+                raise OutlookGraphReadError("microsoft_graph_redirect_refused")
+            if status_code < 200 or status_code >= 300:
+                raise OutlookGraphReadError(
+                    f"microsoft_graph_http_{status_code}"
+                )
+
+            response_headers = getattr(response, "headers", {}) or {}
+            response_content_type = response_headers.get("Content-Type")
+            if not isinstance(response_content_type, str):
+                raise OutlookGraphReadError(
+                    "graph_attachment_response_mime_missing"
+                )
+            normalized_response_mime = (
+                response_content_type.split(";", 1)[0].strip().lower()
+            )
+            if normalized_response_mime != expected_content_type:
+                raise OutlookGraphReadError(
+                    "graph_attachment_response_mime_mismatch"
+                )
+
+            content_length = response_headers.get("Content-Length")
+            if content_length is not None:
+                try:
+                    announced = int(content_length)
+                except (TypeError, ValueError) as exc:
+                    raise OutlookGraphReadError(
+                        "graph_attachment_content_length_invalid"
+                    ) from exc
+                if announced < 0 or announced > max_bytes:
+                    raise OutlookGraphReadError(
+                        "graph_attachment_content_exceeds_limit"
+                    )
+
+            content = bytearray()
+            iterator = getattr(response, "iter_content", None)
+            if not callable(iterator):
+                raise OutlookGraphReadError(
+                    "graph_attachment_stream_unavailable"
+                )
+            for chunk in iterator(chunk_size=64 * 1024):
+                if not chunk:
+                    continue
+                if len(content) + len(chunk) > max_bytes:
+                    for index in range(len(content)):
+                        content[index] = 0
+                    raise OutlookGraphReadError(
+                        "graph_attachment_content_exceeds_limit"
+                    )
+                content.extend(chunk)
+            return content
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+
+    @staticmethod
+    def _metadata_key(item: InboundAttachmentMetadata) -> tuple:
+        return (
+            item.name,
+            item.content_type,
+            item.size_bytes,
+            item.kind,
+            item.is_inline,
+        )
+
+    def retrieve_allowlisted_attachments(
+        self,
+        mail: InboundMailEnvelope,
+    ) -> AttachmentRetrievalResult:
+        """Retrieve and verify allowlisted file bytes transiently after route trust."""
+
+        assessment = assess_attachment_intake(mail)
+        if assessment.status != "metadata_allowlisted":
+            return manual_retrieval_result(
+                reason_code=assessment.reason_code,
+                attachment_count=assessment.attachment_count,
+                total_size_bytes=assessment.total_size_bytes,
+                content_download_performed=False,
+            )
+        if (
+            mail.provider_name != GRAPH_PROVIDER_NAME
+            or mail.mailbox_id != self.mailbox_id
+            or mail.external_message_id is None
+        ):
+            return manual_retrieval_result(
+                reason_code="attachment_retrieval_provider_context_invalid",
+                attachment_count=assessment.attachment_count,
+                total_size_bytes=assessment.total_size_bytes,
+                content_download_performed=False,
+            )
+
+        encoded_message_id = quote(mail.external_message_id, safe="")
+        list_url = (
+            f"{GRAPH_API_BASE_URL}/me/messages/"
+            f"{encoded_message_id}/attachments"
+        )
+        try:
+            payload = self._get_json(
+                list_url,
+                params={
+                    "$select": _ATTACHMENT_RETRIEVAL_SELECT_FIELDS,
+                    "$top": MAX_ATTACHMENT_MANIFEST_ITEMS,
+                },
+            )
+            raw_items = payload.get("value")
+            if not isinstance(raw_items, list):
+                raise OutlookGraphReadError("microsoft_graph_attachments_missing")
+            if (
+                len(raw_items) > MAX_ATTACHMENT_MANIFEST_ITEMS
+                or _validated_next_link(payload.get("@odata.nextLink")) is not None
+            ):
+                raise OutlookGraphReadError("graph_attachment_manifest_oversized")
+
+            fresh_manifest = [
+                _normalize_graph_attachment_metadata(item)
+                for item in raw_items
+            ]
+            fresh_mail = mail.model_copy(
+                update={
+                    "attachment_manifest": fresh_manifest,
+                    "attachment_manifest_truncated": False,
+                }
+            )
+            fresh_assessment = assess_attachment_intake(fresh_mail)
+            original_keys = Counter(
+                self._metadata_key(item)
+                for item in mail.attachment_manifest
+            )
+            fresh_keys = Counter(
+                self._metadata_key(item)
+                for item in fresh_manifest
+            )
+            if (
+                fresh_assessment.status != "metadata_allowlisted"
+                or fresh_keys != original_keys
+            ):
+                raise OutlookGraphReadError("graph_attachment_manifest_changed")
+
+            receipts = []
+            content_download_performed = False
+            for raw_item, metadata in zip(raw_items, fresh_manifest, strict=True):
+                try:
+                    attachment_id = _required_text(
+                        raw_item.get("id"),
+                        code="graph_attachment_id_missing",
+                    )
+                except OutlookGraphMessageError as exc:
+                    raise OutlookGraphReadError(exc.code) from exc
+
+                encoded_attachment_id = quote(attachment_id, safe="")
+                content_url = (
+                    f"{GRAPH_API_BASE_URL}/me/messages/"
+                    f"{encoded_message_id}/attachments/"
+                    f"{encoded_attachment_id}/$value"
+                )
+                content = self._get_bounded_binary(
+                    content_url,
+                    max_bytes=MAX_ATTACHMENT_FILE_BYTES,
+                    expected_content_type=(
+                        metadata.content_type or ""
+                    ),
+                )
+                content_download_performed = True
+                try:
+                    receipts.append(
+                        verify_attachment_content(metadata, content)
+                    )
+                finally:
+                    for index in range(len(content)):
+                        content[index] = 0
+                    del content
+
+            return AttachmentRetrievalResult(
+                status="verified",
+                reason_code="attachment_content_verified",
+                attachment_count=len(receipts),
+                total_size_bytes=sum(
+                    receipt.size_bytes for receipt in receipts
+                ),
+                verified_receipts=receipts,
+                content_download_performed=content_download_performed,
+            )
+        except (OutlookGraphReadError, AttachmentContentVerificationError) as exc:
+            return manual_retrieval_result(
+                reason_code=getattr(exc, "code", "attachment_content_verification_failed"),
+                attachment_count=assessment.attachment_count,
+                total_size_bytes=assessment.total_size_bytes,
+                content_download_performed=locals().get(
+                    "content_download_performed", False
+                ),
+            )
 
     def _attachment_manifest_for_message(
         self,

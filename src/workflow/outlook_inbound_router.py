@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from src.core.attachment_intake_policy import (
     assess_attachment_intake,
@@ -105,6 +106,117 @@ def _customer_matches(
     return matches, None
 
 
+def _with_attachment_intake(
+    result: dict,
+    assessment,
+) -> dict:
+    result.update({
+        "attachment_intake_status": assessment.status,
+        "attachment_intake_reason_code": assessment.reason_code,
+        "attachment_count": assessment.attachment_count,
+        "attachment_total_size_bytes": assessment.total_size_bytes,
+    })
+    return result
+
+
+def _process_allowlisted_attachment_mail(
+    *,
+    mail: InboundMailEnvelope,
+    assessment,
+    supplier_repository: SupplierRFQRepository,
+    operational_data_sources: OperationalDataSources | None,
+    attachment_retriever: Callable[[InboundMailEnvelope], Any] | None,
+) -> dict:
+    customer_matches, customer_error = _customer_matches(
+        mail=mail,
+        operational_data_sources=operational_data_sources,
+    )
+    if customer_error is not None:
+        return _with_attachment_intake(
+            _blocked_result(
+                result_type="data_provenance_blocked",
+                reason_code=customer_error,
+            ),
+            assessment,
+        )
+
+    supplier_correlation = correlate_supplier_reply(
+        mail,
+        supplier_repository,
+    )
+    customer_count = len(customer_matches or [])
+    supplier_matched = supplier_correlation.status == "matched"
+
+    if customer_count > 1:
+        return _with_attachment_intake(
+            _blocked_result(
+                result_type="inbound_sender_verification_required",
+                reason_code="sender_matches_multiple_pilot_customers",
+            ),
+            assessment,
+        )
+    if customer_count == 1 and supplier_matched:
+        return _with_attachment_intake(
+            _blocked_result(
+                result_type="inbound_mail_manual_review_required",
+                reason_code="sender_matches_customer_and_supplier",
+            ),
+            assessment,
+        )
+    if supplier_correlation.status == "ambiguous_rfq":
+        return _with_attachment_intake(
+            _blocked_result(
+                result_type="inbound_mail_manual_review_required",
+                reason_code="supplier_rfq_correlation_ambiguous",
+            ),
+            assessment,
+        )
+
+    if supplier_matched:
+        trusted_route = "supplier"
+    elif customer_count == 1:
+        trusted_route = "customer"
+    else:
+        return _with_attachment_intake(
+            _blocked_result(
+                result_type="inbound_sender_verification_required",
+                reason_code="sender_not_in_verified_inbound_scope",
+            ),
+            assessment,
+        )
+
+    result = _blocked_result(
+        result_type="inbound_mail_manual_review_required",
+        reason_code="outlook_attachment_retrieval_not_available",
+    )
+    result["inbound_route"] = trusted_route
+    if supplier_matched:
+        result["rfq_id"] = supplier_correlation.rfq_id
+        result["correlation_method"] = supplier_correlation.method
+
+    if attachment_retriever is None:
+        result.update({
+            "attachment_retrieval_status": "manual_review",
+            "attachment_retrieval_reason_code": "attachment_retrieval_not_available",
+            "attachment_content_download_performed": False,
+            "attachment_verified_count": 0,
+        })
+        return _with_attachment_intake(result, assessment)
+
+    retrieval = attachment_retriever(mail)
+    if retrieval.status == "verified":
+        result["reason_code"] = "outlook_attachment_content_verified_not_parsed"
+    else:
+        result["reason_code"] = "outlook_attachment_retrieval_manual_review"
+    result.update({
+        "attachment_retrieval_status": retrieval.status,
+        "attachment_retrieval_reason_code": retrieval.reason_code,
+        "attachment_content_download_performed": retrieval.content_download_performed,
+        "attachment_verified_count": len(retrieval.verified_receipts),
+    })
+    return _with_attachment_intake(result, assessment)
+
+
 def process_controlled_outlook_inbound_mail(
     *,
     mail: InboundMailEnvelope,
@@ -120,6 +232,9 @@ def process_controlled_outlook_inbound_mail(
     operational_data_sources: (
         OperationalDataSources | None
     ),
+    attachment_retriever: (
+        Callable[[InboundMailEnvelope], Any] | None
+    ) = None,
 ) -> dict:
     """Route Outlook mail deterministically before any AI parser."""
 
@@ -133,21 +248,21 @@ def process_controlled_outlook_inbound_mail(
 
     if mail.has_attachments:
         assessment = assess_attachment_intake(mail)
-        result = _blocked_result(
-            result_type=(
-                "inbound_mail_manual_review_required"
-            ),
-            reason_code=(
-                "outlook_attachments_not_supported"
-            ),
+        if assessment.status != "metadata_allowlisted":
+            return _with_attachment_intake(
+                _blocked_result(
+                    result_type="inbound_mail_manual_review_required",
+                    reason_code="outlook_attachments_not_supported",
+                ),
+                assessment,
+            )
+        return _process_allowlisted_attachment_mail(
+            mail=mail,
+            assessment=assessment,
+            supplier_repository=supplier_repository,
+            operational_data_sources=operational_data_sources,
+            attachment_retriever=attachment_retriever,
         )
-        result.update({
-            "attachment_intake_status": assessment.status,
-            "attachment_intake_reason_code": assessment.reason_code,
-            "attachment_count": assessment.attachment_count,
-            "attachment_total_size_bytes": assessment.total_size_bytes,
-        })
-        return result
 
     supplier_replay = (
         supplier_message_is_exact_replay(

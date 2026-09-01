@@ -6087,3 +6087,15 @@ An attachment-only message may use an empty provider-neutral body only when `has
 P1-54 classifies inbound Outlook attachments using metadata only; it does not authorize attachment content retrieval. A metadata candidate must be a non-inline Microsoft Graph `fileAttachment` whose extension/MIME pair is allowlisted as PDF, XLSX or CSV. Unknown, item or reference attachment kinds remain manual-review-only.
 
 The initial limits are 10 MiB per file, 20 MiB total per message and at most 5 automatically eligible files. Missing or mismatched MIME metadata, unsupported extensions including macro-enabled Office formats, manifest truncation, inline files or any limit breach require manual review. Even an allowlisted metadata result remains blocked at the existing attachment gate until a separate controlled content-retrieval boundary is approved.
+
+
+## DEC-146 — Attachment Content Retrieval Requires a Verified Inbound Route
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-55 may retrieve raw content only for an attachment set already classified `metadata_allowlisted` by P1-54 and only after deterministic inbound routing identifies exactly one trusted customer or supplier route. Unknown senders, ambiguous customer identity, ambiguous supplier RFQ correlation, customer/supplier overlap, unavailable provenance or metadata-policy failures must not trigger an attachment content request.
+
+After route trust, the Graph integration may make a second attachment-metadata request that includes provider attachment IDs solely as transient in-process locators. The fresh metadata must remain allowlisted and exactly match the original provider-neutral manifest before any `/$value` request is made. Provider attachment IDs must not enter the inbound envelope, durable state, operator summary or verification receipt.
+
+Raw content retrieval is bounded to the existing 10 MiB per-file policy, refuses redirects, requires raw downloaded bytes not to exceed the Graph metadata size and produces only a provider-neutral SHA-256 verification receipt. PDF content must satisfy PDF header/EOF checks; XLSX must be a valid macro-free OOXML ZIP container with required workbook structure; CSV is limited to a UTF-8 text profile because CSV has no universal binary magic signature. P1-55 does not parse business meaning and does not send attachment content to AI. Verified content still returns manual review until a later parsing boundary is approved.
