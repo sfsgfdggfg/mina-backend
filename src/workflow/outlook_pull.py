@@ -143,6 +143,8 @@ def _safe_result_summary(
         "attachment_interpretation_source_profiles": result.get(
             "attachment_interpretation_source_profiles"
         ),
+        "attachment_review_id": result.get("attachment_review_id"),
+        "attachment_review_status": result.get("attachment_review_status"),
     }
 
     return {
@@ -180,6 +182,7 @@ def pull_controlled_outlook_inbox(
     ),
     supplier_parser=None,
     supplier_repository=None,
+    attachment_review_repository=None,
     interpret_attachments: bool = False,
     token_provider: Callable[
         [MicrosoftAuthConfig],
@@ -249,6 +252,11 @@ def pull_controlled_outlook_inbox(
                 ),
                 attachment_interpreter=(
                     interpret_extracted_attachment_mail
+                    if interpret_attachments
+                    else None
+                ),
+                attachment_review_repository=(
+                    attachment_review_repository
                     if interpret_attachments
                     else None
                 ),
@@ -333,6 +341,9 @@ def pull_controlled_outlook_inbox(
             == "inbound_mail_manual_review_required"
         )
     )
+    attachment_review_count = sum(
+        1 for item in summaries if item.get("attachment_review_id")
+    )
 
     return {
         "provider": GRAPH_PROVIDER_NAME,
@@ -351,6 +362,7 @@ def pull_controlled_outlook_inbox(
         "manual_review_count": (
             manual_review_count
         ),
+        "attachment_review_count": attachment_review_count,
         "pull_status": (
             "partial_parser_unavailable"
             if parser_unavailable

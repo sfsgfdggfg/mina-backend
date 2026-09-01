@@ -1175,3 +1175,38 @@ python -m src.pilot_operator outlook pull --limit 10 --interpret-attachments
 ```
 
 Omitting `--interpret-attachments` keeps the pull at the P1-56 extraction-only boundary and must report `attachment_interpretation_requested=false` at the pull level.
+
+## P1-58 attachment interpretation review and apply
+
+P1-58 turns a successful opt-in P1-57 interpretation into a durable review case. Run the existing explicit interpretation pull:
+
+```bash
+python -m src.pilot_operator outlook pull --limit 10 --interpret-attachments
+```
+
+A successfully reviewed attachment candidate should remain `inbound_mail_manual_review_required` and return an `attachment_review_id`, `attachment_review_status=pending`, and a nonzero pull-level `attachment_review_count`. The pull summary must not contain the interpreted candidate, attachment hashes or extracted source content.
+
+List and inspect pending reviews through the authenticated operator surface:
+
+```bash
+python -m src.pilot_operator attachment-review list
+python -m src.pilot_operator attachment-review get <review_id>
+```
+
+Apply only after inspecting the candidate. Optional corrections use the same JSON object pattern as other controlled operator corrections:
+
+```bash
+python -m src.pilot_operator attachment-review apply <review_id> --corrections '{}'
+```
+
+For a customer review, apply creates a traceable but still-unconfirmed extraction proposal. Continue with the normal `proposal get`, `proposal confirm`, and only then `proposal resume` steps. P1-58 apply itself must not enter the operational pipeline.
+
+For a supplier review, apply is allowed only while the Supplier RFQ still matches the exact review-time snapshot. A stale RFQ must return a lifecycle conflict and leave the review pending. A successful supplier apply creates the RFQ response and uses the normal supplier response lifecycle transition; it does not send any email.
+
+Reject an interpretation that should not be applied:
+
+```bash
+python -m src.pilot_operator attachment-review reject <review_id> --reason "Needs manual verification"
+```
+
+Applied/rejected reviews are terminal. All P1-58 paths retain `mailbox_write_performed=false` and `automated_send_performed=false` for Outlook pull; review apply/reject themselves contain no outbound mail operation.

@@ -9,6 +9,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from src.core.extraction_confirmation import ShipmentExtractionProposal
+from src.core.attachment_interpretation_review import AttachmentInterpretationReview
 from src.core.pilot_store import SQLitePilotStore
 from src.core.quote_approval import QuoteApproval
 from src.core.quote_case import QuoteCase
@@ -72,6 +73,30 @@ def _model_from_payload(model_type: type[ModelT], payload: Any) -> ModelT:
 def _stable_payload_key(payload: Any) -> str:
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+class SQLiteAttachmentInterpretationReviewRepository:
+    NAMESPACE = "attachment_interpretation_reviews"
+    def __init__(self, store: SQLitePilotStore) -> None:
+        self.store = store
+    def save(self, review: AttachmentInterpretationReview) -> AttachmentInterpretationReview:
+        payload = _model_payload(review)
+        self.store.upsert(namespace=self.NAMESPACE, record_key=review.review_id, payload=payload, event_type="attachment_interpretation_review_saved", entity_type="attachment_interpretation_review")
+        return _model_from_payload(AttachmentInterpretationReview, payload)
+    def get(self, review_id: str) -> AttachmentInterpretationReview | None:
+        payload = self.store.get(namespace=self.NAMESPACE, record_key=review_id)
+        return None if payload is None else _model_from_payload(AttachmentInterpretationReview, payload)
+    def list_all(self) -> list[AttachmentInterpretationReview]:
+        return [_model_from_payload(AttachmentInterpretationReview, p) for p in self.store.list_all(namespace=self.NAMESPACE)]
+    def find_by_source_fingerprint(self, fingerprint: str) -> AttachmentInterpretationReview | None:
+        for review in self.list_all():
+            if review.source_fingerprint_sha256 == fingerprint:
+                return review
+        return None
+    def find_by_message_key(self, message_key: str) -> AttachmentInterpretationReview | None:
+        for review in self.list_all():
+            if review.source_message_key == message_key:
+                return review
+        return None
 
 class SQLiteExtractionProposalRepository:
     NAMESPACE = "extraction_proposals"
@@ -351,6 +376,8 @@ class SQLiteSupplierRFQRepository:
         *,
         body_sha256: str | None = None,
         sender_address: str | None = None,
+        attachment_source_sha256: str | None = None,
+        attachment_review_id: str | None = None,
     ) -> None:
         payload = {
             "message_key": message_key,
@@ -363,6 +390,10 @@ class SQLiteSupplierRFQRepository:
             payload["sender_address"] = (
                 sender_address
             )
+        if attachment_source_sha256 is not None:
+            payload["attachment_source_sha256"] = attachment_source_sha256
+        if attachment_review_id is not None:
+            payload["attachment_review_id"] = attachment_review_id
 
         self.store.insert_once(
             namespace=self.INGESTED_MESSAGE_NAMESPACE,

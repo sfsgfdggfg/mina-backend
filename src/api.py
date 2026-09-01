@@ -74,6 +74,7 @@ from src.core.pilot_access import (
 )
 from src.core.operational_data import operational_data_sources_from_environment
 from src.core.sqlite_repositories import (
+    SQLiteAttachmentInterpretationReviewRepository,
     SQLiteExtractionProposalRepository,
     SQLiteQuoteApprovalRepository,
     SQLiteQuoteCaseRepository,
@@ -134,6 +135,14 @@ from src.core.supplier_rfq_lifecycle import (
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
+)
+from src.core.attachment_interpretation_review_service import (
+    AttachmentReviewConflictError,
+    AttachmentReviewNotFoundError,
+    AttachmentReviewTransitionError,
+    apply_attachment_interpretation_review,
+    attachment_review_public_payload,
+    reject_attachment_interpretation_review,
 )
 
 
@@ -198,6 +207,7 @@ quote_approval_repository = SQLiteQuoteApprovalRepository(pilot_store)
 quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
+attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
 try:
     outbound_mail_sender: OutboundMailSender | None = outlook_graph_sender_from_environment()
 except MicrosoftAuthConfigurationError:
@@ -230,6 +240,16 @@ class OutlookPullRequest(BaseModel):
 class ConfirmExtractionRequest(BaseModel):
     operator_identity: Optional[str] = None
     corrections: dict[str, Any] = Field(default_factory=dict)
+
+
+class ApplyAttachmentReviewRequest(BaseModel):
+    operator_identity: Optional[str] = None
+    corrections: dict[str, Any] = Field(default_factory=dict)
+
+
+class RejectAttachmentReviewRequest(BaseModel):
+    operator_identity: Optional[str] = None
+    rejection_reason: str
 
 
 class PrepareQuoteSendRequest(BaseModel):
@@ -1091,6 +1111,9 @@ def pull_outlook_inbound(
                 supplier_repository=(
                     supplier_rfq_repository
                 ),
+                attachment_review_repository=(
+                    attachment_review_repository
+                ),
                 interpret_attachments=(
                     request.interpret_attachments
                 ),
@@ -1125,6 +1148,70 @@ def pull_outlook_inbound(
         ) from exc
 
     return result
+
+
+@app.get("/attachment-reviews")
+def list_attachment_reviews():
+    return {
+        "reviews": [
+            attachment_review_public_payload(review, include_candidate=False)
+            for review in attachment_review_repository.list_all()
+        ]
+    }
+
+
+@app.get("/attachment-reviews/{review_id}")
+def get_attachment_review(review_id: str):
+    review = attachment_review_repository.get(review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail=f"Attachment review not found: {review_id}")
+    return attachment_review_public_payload(review, include_candidate=True)
+
+
+@app.post("/attachment-reviews/{review_id}/apply")
+def apply_attachment_review_endpoint(
+    review_id: str,
+    request: ApplyAttachmentReviewRequest,
+    http_request: Request = None,
+):
+    try:
+        review = apply_attachment_interpretation_review(
+            repository=attachment_review_repository,
+            review_id=review_id,
+            operator_identity=_authenticated_operator(http_request, request.operator_identity),
+            corrections=request.corrections,
+            proposal_repository=extraction_proposal_repository,
+            supplier_repository=supplier_rfq_repository,
+        )
+    except AttachmentReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (AttachmentReviewTransitionError, AttachmentReviewConflictError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return attachment_review_public_payload(review, include_candidate=True)
+
+
+@app.post("/attachment-reviews/{review_id}/reject")
+def reject_attachment_review_endpoint(
+    review_id: str,
+    request: RejectAttachmentReviewRequest,
+    http_request: Request = None,
+):
+    try:
+        review = reject_attachment_interpretation_review(
+            repository=attachment_review_repository,
+            review_id=review_id,
+            operator_identity=_authenticated_operator(http_request, request.operator_identity),
+            rejection_reason=request.rejection_reason,
+        )
+    except AttachmentReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AttachmentReviewTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return attachment_review_public_payload(review, include_candidate=True)
 
 
 @app.post("/process-email")

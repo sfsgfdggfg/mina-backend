@@ -6122,3 +6122,16 @@ P1-57 may send P1-56 extracted attachment content to a route-specific AI parser 
 The total pre-privacy interpretation bundle is limited to 120,000 characters and is never silently truncated. Oversize or privacy-transform failure returns manual review without invoking a parser. Customer interpretation may produce a ShipmentProposalSnapshot and supplier interpretation may produce a SupplierResponseExtraction, but P1-57 does not persist either interpretation, create a customer extraction-confirmation record, attach a supplier RFQ response or alter any RFQ lifecycle state. Applying interpreted attachment facts requires a separate controlled human-review boundary.
 
 P1-57 interpretation is explicit per operator pull, not enabled merely by deploying the feature. The normal Outlook pull keeps attachment interpretation disabled. Only a pull request carrying `interpret_attachments=true` (the operator CLI `--interpret-attachments` flag) may inject the interpretation boundary for that bounded pull.
+
+## DEC-149 — Attachment Interpretation Requires a Durable Human Review Before Apply
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-58 introduces a durable `AttachmentInterpretationReview` only after the P1-57 interpretation succeeds. Creating the review is not approval and has no downstream workflow authority. The review stores the privacy-safe interpreted candidate plus provider-neutral attachment verification evidence, including content profile, bounded size and SHA-256 source fingerprints. Provider attachment IDs and raw attachment bytes remain excluded.
+
+A customer attachment review may be applied only by an authenticated operator. Apply creates a normal, still-unconfirmed `ShipmentExtractionProposal` linked back to the review; the existing extraction-confirmation and resume gates remain mandatory before operational processing. Trusted customer identity is fixed from the verified sender profile and cannot be replaced by the AI candidate during P1-58 review.
+
+A supplier attachment review may be applied only if the exact Supplier RFQ snapshot captured at review creation is still unchanged. Apply validates optional operator corrections, creates the traceable `SupplierRFQResponse`, records attachment-aware inbound evidence and advances the RFQ lifecycle through the existing supplier response transition. If the RFQ changes before apply, the review remains pending and no response is created.
+
+The review can instead be rejected with an authenticated operator identity and reason. Rejection creates no customer proposal, supplier response, mailbox write or outbound send. Review fingerprints and attachment hashes are durable audit evidence but are not exposed by operator list/detail payloads.

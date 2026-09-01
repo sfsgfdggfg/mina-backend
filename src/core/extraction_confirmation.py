@@ -62,6 +62,7 @@ class ShipmentExtractionProposal(BaseModel):
     proposal_id: str = Field(default_factory=lambda: str(uuid4()))
     inbound_mail: InboundMailEnvelope
     proposed_shipment: ShipmentProposalSnapshot
+    source_attachment_review_id: Optional[str] = None
     extraction_status: ExtractionStatus = "proposed"
 
     confirmed_shipment: Optional[Shipment] = None

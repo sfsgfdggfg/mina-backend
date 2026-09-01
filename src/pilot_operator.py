@@ -197,6 +197,28 @@ class PilotOperatorClient:
             },
         )
 
+    def list_attachment_reviews(self) -> Any:
+        return self._request("GET", "/attachment-reviews")
+
+    def get_attachment_review(self, review_id: str) -> Any:
+        return self._request("GET", f"/attachment-reviews/{self._id(review_id)}")
+
+    def apply_attachment_review(
+        self, review_id: str, corrections: dict[str, Any] | None = None
+    ) -> Any:
+        return self._request(
+            "POST",
+            f"/attachment-reviews/{self._id(review_id)}/apply",
+            {"corrections": corrections or {}},
+        )
+
+    def reject_attachment_review(self, review_id: str, reason: str) -> Any:
+        return self._request(
+            "POST",
+            f"/attachment-reviews/{self._id(review_id)}/reject",
+            {"rejection_reason": reason},
+        )
+
     def get_proposal(self, proposal_id: str) -> Any:
         return self._request(
             "GET", f"/extraction-proposals/{self._id(proposal_id)}"
@@ -441,6 +463,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    attachment_review = commands.add_parser("attachment-review").add_subparsers(
+        dest="action", required=True
+    )
+    attachment_review.add_parser("list")
+    attachment_review.add_parser("get").add_argument("review_id")
+    review_apply = attachment_review.add_parser("apply")
+    review_apply.add_argument("review_id")
+    review_apply.add_argument("--corrections", default="{}")
+    review_reject = attachment_review.add_parser("reject")
+    review_reject.add_argument("review_id")
+    review_reject.add_argument("--reason", required=True)
+
     proposal = commands.add_parser("proposal").add_subparsers(
         dest="action", required=True
     )
@@ -588,6 +622,16 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             limit=args.limit,
             interpret_attachments=args.interpret_attachments,
         )
+    if args.command == "attachment-review":
+        if args.action == "list":
+            return client.list_attachment_reviews()
+        if args.action == "get":
+            return client.get_attachment_review(args.review_id)
+        if args.action == "apply":
+            return client.apply_attachment_review(
+                args.review_id, _load_corrections(args.corrections)
+            )
+        return client.reject_attachment_review(args.review_id, args.reason)
     if args.command == "proposal":
         if args.action == "get":
             return client.get_proposal(args.proposal_id)

@@ -176,6 +176,8 @@ class SupplierRFQRepository(Protocol):
         *,
         body_sha256: Optional[str] = None,
         sender_address: Optional[str] = None,
+        attachment_source_sha256: Optional[str] = None,
+        attachment_review_id: Optional[str] = None,
     ) -> None:
         ...
 
@@ -210,6 +212,7 @@ def _supplier_rfq_response_key(
         response.is_consolidated_follow_up,
         tuple(response.inherited_fields),
         response.prior_response_received_at,
+        response.source_attachment_review_id,
     )
 
 
@@ -434,6 +437,8 @@ class InMemorySupplierRFQRepository:
         *,
         body_sha256: Optional[str] = None,
         sender_address: Optional[str] = None,
+        attachment_source_sha256: Optional[str] = None,
+        attachment_review_id: Optional[str] = None,
     ) -> None:
         self._ingested_message_keys.add(message_key)
 
@@ -448,6 +453,10 @@ class InMemorySupplierRFQRepository:
             payload["sender_address"] = (
                 sender_address
             )
+        if attachment_source_sha256 is not None:
+            payload["attachment_source_sha256"] = attachment_source_sha256
+        if attachment_review_id is not None:
+            payload["attachment_review_id"] = attachment_review_id
 
         self._ingested_message_evidence.setdefault(
             message_key,

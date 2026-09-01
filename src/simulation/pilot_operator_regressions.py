@@ -140,6 +140,26 @@ def evaluate_pilot_operator_regressions() -> dict:
             ),
         )
     )
+    client.list_attachment_reviews()
+    contracts.append((_last_contract(session), ("GET", "/attachment-reviews", None)))
+    client.get_attachment_review("review-1")
+    contracts.append(
+        (_last_contract(session), ("GET", "/attachment-reviews/review-1", None))
+    )
+    client.apply_attachment_review("review-1", {"is_high_value": False})
+    contracts.append(
+        (
+            _last_contract(session),
+            ("POST", "/attachment-reviews/review-1/apply", {"corrections": {"is_high_value": False}}),
+        )
+    )
+    client.reject_attachment_review("review-2", "Needs manual verification")
+    contracts.append(
+        (
+            _last_contract(session),
+            ("POST", "/attachment-reviews/review-2/reject", {"rejection_reason": "Needs manual verification"}),
+        )
+    )
     client.get_proposal("proposal-1")
     contracts.append(
         (_last_contract(session), ("GET", "/extraction-proposals/proposal-1", None))
@@ -420,6 +440,8 @@ def evaluate_pilot_operator_regressions() -> dict:
         failures.append("redirect response was accepted")
 
     recovery_paths = {
+        "/attachment-reviews",
+        "/attachment-reviews/review-1",
         "/extraction-proposals/proposal-1",
         "/supplier-rfqs",
         "/supplier-rfqs/rfq-1",
@@ -517,6 +539,22 @@ def evaluate_pilot_operator_regressions() -> dict:
         },
     ):
         failures.append("case manual-sent CLI mapped to the wrong API contract")
+
+    review_cli_session = _Session([_Response(200, {"status": "applied"})])
+    review_cli_client = _client(review_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=review_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            review_cli_exit = main([
+                "attachment-review", "apply", "review-cli",
+                "--corrections", '{"is_high_value": false}',
+            ])
+    if review_cli_exit != 0:
+        failures.append("attachment review apply CLI command failed")
+    elif _last_contract(review_cli_session) != (
+        "POST", "/attachment-reviews/review-cli/apply",
+        {"corrections": {"is_high_value": False}},
+    ):
+        failures.append("attachment review apply CLI mapped to the wrong API contract")
 
     follow_up_cli_session = _Session([_Response(200, {"status": "approved"})])
     follow_up_cli_client = _client(follow_up_cli_session)
