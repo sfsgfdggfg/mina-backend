@@ -3397,3 +3397,9 @@ The controlled API must pass the quote-case repository into approval transitions
 Controlled supplier RFQ delivery is permitted only as an authenticated explicit operator action against an RFQ currently in `approved` state with a recipient address. Approval and delivery remain separate operations.
 
 The RFQ may advance to `awaiting_response` only after the outbound provider reports `sent` with provider name, provider delivery reference and send timestamp. MINAI must persist those fields as durable automated-send evidence. Provider failure, missing provider metadata, an already-sent RFQ, or existing sent evidence must not cause another provider send or a false lifecycle advance. Manual and automated send evidence remain alternative delivery paths for one RFQ.
+
+## RULE-153 — Supplier Send CLI Must Fail Nonzero When Delivery Does Not Occur
+
+For `POST /supplier-rfqs/{rfq_id}/send`, `rejected_before_provider` must map to HTTP 409 and provider failure/unavailability must map to HTTP 503. Only `delivery.status = sent` may return a 2xx success response.
+
+The pilot operator CLI inherits these HTTP semantics. A duplicate, invalid-state, provider-failed or provider-unavailable supplier send must exit nonzero and must not be interpreted by scripts or operators as a successful delivery. Safe rejection must preserve the current RFQ state and existing durable send evidence.

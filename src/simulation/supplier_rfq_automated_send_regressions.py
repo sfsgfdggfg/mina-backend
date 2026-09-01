@@ -104,6 +104,22 @@ def evaluate_supplier_rfq_automated_send_regressions() -> dict:
         if len(sender.calls) != 1 or len(repo.list_automated_sent_evidence(draft.rfq_id)) != 1:
             failures.append("duplicate supplier send reached provider or duplicated evidence")
 
+        original_repo = controlled_api.supplier_rfq_repository
+        original_sender = controlled_api.outbound_mail_sender
+        try:
+            controlled_api.supplier_rfq_repository = repo
+            controlled_api.outbound_mail_sender = sender
+            try:
+                controlled_api.send_supplier_rfq_endpoint(draft.rfq_id)
+            except controlled_api.HTTPException as exc:
+                if exc.status_code != 409:
+                    failures.append("duplicate supplier send API did not return lifecycle conflict")
+            else:
+                failures.append("duplicate supplier send API returned success")
+        finally:
+            controlled_api.supplier_rfq_repository = original_repo
+            controlled_api.outbound_mail_sender = original_sender
+
     with TemporaryDirectory(prefix="minai-supplier-auto-fail-") as temp_dir:
         repo = _repo(Path(temp_dir), "supplier-auto-fail")
         draft = _approved_draft("rfq-provider-fail")
@@ -118,6 +134,22 @@ def evaluate_supplier_rfq_automated_send_regressions() -> dict:
             failures.append("provider failure advanced supplier RFQ lifecycle")
         if repo.list_automated_sent_evidence(draft.rfq_id):
             failures.append("provider failure created supplier automated evidence")
+
+        original_repo = controlled_api.supplier_rfq_repository
+        original_sender = controlled_api.outbound_mail_sender
+        try:
+            controlled_api.supplier_rfq_repository = repo
+            controlled_api.outbound_mail_sender = _Sender("failed")
+            try:
+                controlled_api.send_supplier_rfq_endpoint(draft.rfq_id)
+            except controlled_api.HTTPException as exc:
+                if exc.status_code != 503:
+                    failures.append("provider failure API did not return service unavailable")
+            else:
+                failures.append("provider failure API returned success")
+        finally:
+            controlled_api.supplier_rfq_repository = original_repo
+            controlled_api.outbound_mail_sender = original_sender
 
     with TemporaryDirectory(prefix="minai-supplier-auto-metadata-") as temp_dir:
         repo = _repo(Path(temp_dir), "supplier-auto-metadata")
