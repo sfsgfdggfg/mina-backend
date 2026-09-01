@@ -14,6 +14,7 @@ from src.core.extraction_confirmation_repository import (
     InMemoryExtractionProposalRepository,
 )
 from src.core.mail import (
+    InboundAttachmentMetadata,
     InboundMailEnvelope,
     MailSendResult,
 )
@@ -114,6 +115,7 @@ def _mail(
     message_id,
     subject="Freight inquiry",
     has_attachments=False,
+    attachment_manifest=None,
 ):
     return InboundMailEnvelope(
         external_message_id=message_id,
@@ -134,6 +136,7 @@ def _mail(
             tzinfo=timezone.utc,
         ),
         has_attachments=has_attachments,
+        attachment_manifest=list(attachment_manifest or []),
         source="email",
     )
 
@@ -570,6 +573,14 @@ def evaluate_outlook_inbound_router_regressions():
                     sender=CUSTOMER_EMAIL,
                     message_id="attachment-1",
                     has_attachments=True,
+                    attachment_manifest=[
+                        InboundAttachmentMetadata(
+                            name="quote.pdf",
+                            content_type="application/pdf",
+                            size_bytes=4096,
+                            kind="file",
+                        )
+                    ],
                 ),
                 shipment_parser=(
                     attachment_customer_parser
@@ -596,6 +607,10 @@ def evaluate_outlook_inbound_router_regressions():
         == (
             "outlook_attachments_not_supported"
         )
+        and attachment.get("attachment_intake_status")
+        == "metadata_allowlisted"
+        and attachment.get("attachment_intake_reason_code")
+        == "attachment_metadata_allowlisted"
         and not attachment_parser.calls
         and not attachment_customer_calls,
         "attachments block before routing or AI",

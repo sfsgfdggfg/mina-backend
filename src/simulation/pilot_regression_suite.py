@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
 from src.simulation.pricing_policy_fixture import SYNTHETIC_AGENCY_PRICING_POLICY_JSON
+from src.simulation.attachment_intake_policy_regressions import evaluate_attachment_intake_policy_regressions
 from src.simulation.atomic_transition_regressions import evaluate_atomic_transition_regressions
 from src.simulation.clarification_resolution_regressions import evaluate_clarification_resolution_regressions
 from src.simulation.customer_identity_trust_regressions import evaluate_customer_identity_trust_regressions
@@ -149,6 +150,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
         evaluate_road_rfq_commercial_safety_regressions,
     ),
     Suite("Mail adapter boundary", evaluate_mail_adapter_regressions),
+    Suite("Attachment intake metadata policy", evaluate_attachment_intake_policy_regressions),
     Suite(
         "Microsoft delegated Outlook authentication",
         evaluate_microsoft_auth_regressions,

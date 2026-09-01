@@ -16,7 +16,10 @@ from src.core.extraction_confirmation import (
 from src.core.extraction_confirmation_repository import (
     InMemoryExtractionProposalRepository,
 )
-from src.core.mail import InboundMailEnvelope
+from src.core.mail import (
+    InboundAttachmentMetadata,
+    InboundMailEnvelope,
+)
 from src.core.models import Package, Shipment
 from src.core.operational_data import (
     OperationalDataSources,
@@ -78,6 +81,7 @@ def _mail(
     sender: str = "ops@pilot.example",
     has_attachments: bool = False,
     body_text: str | None = None,
+    attachment_manifest=None,
 ) -> InboundMailEnvelope:
     return InboundMailEnvelope(
         external_message_id=message_id,
@@ -106,6 +110,7 @@ def _mail(
             tzinfo=timezone.utc,
         ),
         has_attachments=has_attachments,
+        attachment_manifest=list(attachment_manifest or []),
         source="email",
     )
 
@@ -275,6 +280,14 @@ def evaluate_outlook_inbound_gate_regressions():
                 mail=_mail(
                     message_id="attachment-1",
                     has_attachments=True,
+                    attachment_manifest=[
+                        InboundAttachmentMetadata(
+                            name="quote.pdf",
+                            content_type="application/pdf",
+                            size_bytes=4096,
+                            kind="file",
+                        )
+                    ],
                 ),
                 shipment_parser=parser,
                 proposal_repository=repository,
@@ -287,6 +300,10 @@ def evaluate_outlook_inbound_gate_regressions():
         == "inbound_mail_manual_review_required"
         and attachment_result["reason_code"]
         == "outlook_attachments_not_supported"
+        and attachment_result["attachment_intake_status"]
+        == "metadata_allowlisted"
+        and attachment_result["attachment_intake_reason_code"]
+        == "attachment_metadata_allowlisted"
         and len(parsed_bodies)
         == attachment_calls,
         "attachment blocks before parser",
@@ -298,6 +315,14 @@ def evaluate_outlook_inbound_gate_regressions():
                 message_id="attachment-only-1",
                 has_attachments=True,
                 body_text="",
+                attachment_manifest=[
+                        InboundAttachmentMetadata(
+                            name="quote.pdf",
+                            content_type="application/pdf",
+                            size_bytes=4096,
+                            kind="file",
+                        )
+                    ],
             ),
             shipment_parser=parser,
             proposal_repository=repository,
@@ -309,6 +334,8 @@ def evaluate_outlook_inbound_gate_regressions():
         == "inbound_mail_manual_review_required"
         and attachment_only_result["reason_code"]
         == "outlook_attachments_not_supported"
+        and attachment_only_result["attachment_intake_status"]
+        == "metadata_allowlisted"
         and len(parsed_bodies) == attachment_calls,
         "attachment-only mail blocks before parser",
     )

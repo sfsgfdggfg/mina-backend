@@ -30,6 +30,13 @@ MailSendStatus = Literal[
 MAX_INBOUND_MAIL_BODY_BYTES = 256 * 1024
 MAX_ATTACHMENT_MANIFEST_ITEMS = 25
 
+AttachmentKind = Literal[
+    "file",
+    "item",
+    "reference",
+    "unknown",
+]
+
 
 class InboundAttachmentMetadata(BaseModel):
     """Non-content attachment metadata safe for inbound routing decisions."""
@@ -39,6 +46,7 @@ class InboundAttachmentMetadata(BaseModel):
     name: str = Field(min_length=1, max_length=512)
     content_type: Optional[str] = Field(default=None, max_length=255)
     size_bytes: int = Field(ge=0)
+    kind: AttachmentKind = "unknown"
     is_inline: bool = False
 
     @field_validator("name")
