@@ -32,6 +32,7 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("GET", re.compile(r"^/runtime/release$")),
     ("POST", re.compile(r"^/process-email$")),
     ("POST", re.compile(r"^/inbound/outlook/pull$")),
+    ("GET", re.compile(r"^/attachment-review-queue$")),
     ("GET", re.compile(r"^/attachment-reviews$")),
     ("GET", re.compile(r"^/attachment-reviews/[^/]+$")),
     ("POST", re.compile(r"^/attachment-reviews/[^/]+/preview$")),

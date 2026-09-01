@@ -1227,3 +1227,15 @@ python -m src.pilot_operator attachment-review apply <review-id> --corrections '
 ```
 
 If review state or corrections differ, apply must fail closed. Preview does not create a customer proposal, supplier response, mailbox write or outbound send. For customer reviews, safety-critical unknown/changed fields require explicit operator attention but the later extraction-confirmation gate remains authoritative. For supplier reviews, non-applyable quote state or unresolved critical commercial fields appears as a blocker before mutation.
+
+## P1-60 attachment review operational queue
+
+Use the authenticated read-only queue to decide which pending attachment review should be inspected first:
+
+```bash
+python -m src.pilot_operator attachment-review queue
+```
+
+The queue returns only pending review IDs plus route, age, priority band/score, reason codes, aggregate attention/blocker/warning counts and relative nearest-deadline information. It does not expose customer identity, subject, candidate values, preview tokens or attachment/source fingerprints.
+
+Priority is deterministic and recalculated on every read. `critical` items include combinations of unresolved safety/commercial attention, near/past exact ISO dates, or stale/missing Supplier RFQ snapshots. Free-form date text is not interpreted for priority. A high queue priority does not authorize apply: continue with `attachment-review get`, `attachment-review preview`, and only then `attachment-review apply` using the matching P1-59 preview token.

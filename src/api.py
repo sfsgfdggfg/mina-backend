@@ -136,6 +136,7 @@ from src.core.supplier_rfq_lifecycle import (
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
 )
+from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.attachment_interpretation_review_service import (
     AttachmentReviewConflictError,
     AttachmentReviewNotFoundError,
@@ -1155,6 +1156,14 @@ def pull_outlook_inbound(
         ) from exc
 
     return result
+
+
+@app.get("/attachment-review-queue")
+def list_attachment_review_queue():
+    return build_attachment_review_queue(
+        repository=attachment_review_repository,
+        supplier_repository=supplier_rfq_repository,
+    )
 
 
 @app.get("/attachment-reviews")

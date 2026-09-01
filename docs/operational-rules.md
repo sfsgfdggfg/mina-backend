@@ -3486,3 +3486,11 @@ A pending review may be rejected, but an applied or rejected review cannot be ap
 A pilot attachment-review apply must correspond exactly to a prior field-level preview of the same corrections and current review state. Preview is read-only. Customer safety fields (`is_adr`, `is_temperature_controlled`, `is_high_value` and their conditional details) and supplier commercial-critical fields (`status`, `cost`, `currency`) must be visibly classified; trusted/system-managed fields must be marked non-editable.
 
 The apply endpoint must reject a missing or mismatched preview token and must retain all P1-58 stale-state, operator-authentication and transaction guards. Preview tokens must not expose source fingerprints, attachment hashes, provider IDs or raw attachment content, and they must never be treated as bearer credentials or reusable authorization outside the matching review/correction state.
+
+## RULE-166 — Review Queue Priority Must Be Explainable, Current and Non-Authoritative
+
+Only pending attachment interpretation reviews may appear in the P1-60 operational queue. Priority must be derived deterministically from current review age, P1-59 baseline blocker/attention signals, exact ISO operational dates and current Supplier RFQ snapshot state. The queue must not infer dates from free-form text, call AI, persist a priority decision or mutate review/proposal/RFQ/response/mailbox/outbound state.
+
+A stale or missing Supplier RFQ must be visible as urgent work rather than silently disappearing, but queue priority never grants apply authority. Operators must still inspect review detail, generate the exact P1-59 field preview and satisfy preview-token, authentication and lifecycle guards before apply.
+
+Queue responses must remain privacy-minimal and must not contain attachment/customer source content, subject, trusted customer name, interpreted candidate values, operator corrections, preview tokens, provider IDs, attachment hashes or source fingerprints. Priority reason codes and aggregate counts are informational only.

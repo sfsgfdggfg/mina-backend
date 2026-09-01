@@ -46,7 +46,8 @@ def _stable_hash(payload: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _rfq_fingerprint(draft: SupplierRFQDraft) -> str:
+def supplier_rfq_review_snapshot_sha256(draft: SupplierRFQDraft) -> str:
+    """Provider-neutral stable fingerprint for attachment-review RFQ staleness checks."""
     return _stable_hash(draft.model_dump(mode="json"))
 
 
@@ -148,7 +149,7 @@ def create_attachment_interpretation_review(
             raise AttachmentReviewTransitionError("Supplier RFQ is no longer review-applicable.")
         if not mail.sender_address or draft.recipient_email != mail.sender_address:
             raise AttachmentReviewConflictError("Supplier identity changed before review creation.")
-        expected_rfq_hash = _rfq_fingerprint(draft)
+        expected_rfq_hash = supplier_rfq_review_snapshot_sha256(draft)
 
     fingerprint = _review_source_fingerprint(
         mail=mail, evidence=evidence, interpretation=interpretation, candidate=candidate,
@@ -484,7 +485,7 @@ def apply_attachment_interpretation_review(
             draft = supplier_repository.get_draft(review.rfq_id)
             if draft is None:
                 raise AttachmentReviewConflictError("Supplier RFQ no longer exists.")
-            if _rfq_fingerprint(draft) != review.expected_rfq_snapshot_sha256:
+            if supplier_rfq_review_snapshot_sha256(draft) != review.expected_rfq_snapshot_sha256:
                 raise AttachmentReviewConflictError("Supplier RFQ changed after attachment review creation.")
             if not review.inbound_mail.sender_address or draft.recipient_email != review.inbound_mail.sender_address:
                 raise AttachmentReviewConflictError("Supplier identity changed after attachment review creation.")

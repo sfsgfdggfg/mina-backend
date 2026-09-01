@@ -148,6 +148,7 @@ def evaluate_pilot_access_regressions() -> dict:
     expected_routes = (
         ("GET", "/runtime/release"),
         ("POST", "/process-email"),
+        ("GET", "/attachment-review-queue"),
         ("GET", "/attachment-reviews"),
         ("GET", "/attachment-reviews/ar1"),
         ("POST", "/attachment-reviews/ar1/preview"),

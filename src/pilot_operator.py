@@ -197,6 +197,9 @@ class PilotOperatorClient:
             },
         )
 
+    def list_attachment_review_queue(self) -> Any:
+        return self._request("GET", "/attachment-review-queue")
+
     def list_attachment_reviews(self) -> Any:
         return self._request("GET", "/attachment-reviews")
 
@@ -476,6 +479,7 @@ def _build_parser() -> argparse.ArgumentParser:
     attachment_review = commands.add_parser("attachment-review").add_subparsers(
         dest="action", required=True
     )
+    attachment_review.add_parser("queue")
     attachment_review.add_parser("list")
     attachment_review.add_parser("get").add_argument("review_id")
     review_preview = attachment_review.add_parser("preview")
@@ -637,6 +641,8 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             interpret_attachments=args.interpret_attachments,
         )
     if args.command == "attachment-review":
+        if args.action == "queue":
+            return client.list_attachment_review_queue()
         if args.action == "list":
             return client.list_attachment_reviews()
         if args.action == "get":
