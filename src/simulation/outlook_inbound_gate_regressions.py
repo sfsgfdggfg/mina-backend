@@ -77,6 +77,7 @@ def _mail(
     message_id: str,
     sender: str = "ops@pilot.example",
     has_attachments: bool = False,
+    body_text: str | None = None,
 ) -> InboundMailEnvelope:
     return InboundMailEnvelope(
         external_message_id=message_id,
@@ -89,8 +90,12 @@ def _mail(
         ],
         subject="Freight inquiry",
         body_text=(
-            "Please quote Adana to Hamburg.\n"
-            "Contact john@example.com"
+            body_text
+            if body_text is not None
+            else (
+                "Please quote Adana to Hamburg.\n"
+                "Contact john@example.com"
+            )
         ),
         received_at=datetime(
             2026,
@@ -285,6 +290,27 @@ def evaluate_outlook_inbound_gate_regressions():
         and len(parsed_bodies)
         == attachment_calls,
         "attachment blocks before parser",
+    )
+
+    attachment_only_result = (
+        process_controlled_outlook_customer_mail(
+            mail=_mail(
+                message_id="attachment-only-1",
+                has_attachments=True,
+                body_text="",
+            ),
+            shipment_parser=parser,
+            proposal_repository=repository,
+            operational_data_sources=_sources(),
+        )
+    )
+    check(
+        attachment_only_result["result_type"]
+        == "inbound_mail_manual_review_required"
+        and attachment_only_result["reason_code"]
+        == "outlook_attachments_not_supported"
+        and len(parsed_bodies) == attachment_calls,
+        "attachment-only mail blocks before parser",
     )
 
     untrusted_calls = len(parsed_bodies)

@@ -225,7 +225,8 @@ def evaluate_outlook_graph_read_regressions() -> dict:
     )
 
     blank_message = _graph_message(
-        message_id="blank-body-message"
+        message_id="blank-body-message",
+        has_attachments=False,
     )
     blank_message["body"]["content"] = " \r\n"
 
@@ -267,6 +268,50 @@ def evaluate_outlook_graph_read_regressions() -> dict:
         and blank_client.last_message_rejections[0].reason_code
         == "graph_empty_message_body",
         "blank text body isolated without blocking batch",
+    )
+
+    attachment_only = _graph_message(
+        message_id="attachment-only-message"
+    )
+    attachment_only["body"]["content"] = ""
+    attachment_only_session = _FakeSession(
+        [
+            _FakeResponse(
+                200,
+                {"value": [attachment_only]},
+            ),
+            _FakeResponse(
+                200,
+                {
+                    "value": [
+                        {
+                            "name": "attachment-only.pdf",
+                            "contentType": "application/pdf",
+                            "size": 75221,
+                            "isInline": False,
+                        }
+                    ]
+                },
+            ),
+        ]
+    )
+    attachment_only_client = OutlookGraphReadClient(
+        access_token="private-token",
+        mailbox_id="operations@example.invalid",
+        session=attachment_only_session,
+    )
+    attachment_only_batch = (
+        attachment_only_client.list_inbox_messages(limit=1)
+    )
+    check(
+        len(attachment_only_batch) == 1
+        and attachment_only_batch[0].body_text == ""
+        and attachment_only_batch[0].has_attachments is True
+        and len(attachment_only_batch[0].attachment_manifest) == 1
+        and attachment_only_batch[0].attachment_manifest[0].name
+        == "attachment-only.pdf"
+        and not attachment_only_client.last_message_rejections,
+        "attachment-only message preserves safe manifest",
     )
 
     check(

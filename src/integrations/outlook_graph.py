@@ -243,10 +243,16 @@ def normalize_graph_message(
             "graph_non_text_body_rejected"
         )
 
-    body_text = _required_text(
-        body.get("content"),
-        code="graph_message_body_missing",
-    )
+    raw_body_text = body.get("content")
+    if not isinstance(raw_body_text, str):
+        raise OutlookGraphMessageError(
+            "graph_message_body_missing"
+        )
+    body_text = raw_body_text
+    if not body_text.strip() and not has_attachments:
+        raise OutlookGraphMessageError(
+            "graph_message_body_missing"
+        )
 
     sender_address, sender_name = (
         _graph_email_address(
@@ -520,7 +526,10 @@ class OutlookGraphReadClient:
                 rejection = _blank_text_body_rejection(
                     raw_item
                 )
-                if rejection is not None:
+                if (
+                    rejection is not None
+                    and raw_item.get("hasAttachments") is not True
+                ):
                     self.last_message_rejections.append(
                         rejection
                     )

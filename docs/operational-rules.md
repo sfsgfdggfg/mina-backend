@@ -3427,3 +3427,9 @@ The pattern must be fully anchored to a transit-only message. If additional comm
 For an Outlook message with `hasAttachments=true`, MINAI may issue a read-only Graph request for bounded attachment metadata. That request must not select or persist attachment content bytes or attachment provider IDs in the provider-neutral inbound envelope.
 
 Attachment metadata is routing context only. Until a separate controlled content policy is approved, any message with attachments remains blocked before customer or supplier AI parsing. A manifest or truncation marker is invalid unless `has_attachments=true`.
+
+## RULE-158 — Blank Body Is Allowed Only for Attachment-Gated Inbound Mail
+
+The provider-neutral inbound envelope may contain a blank `body_text` only when `has_attachments=true`. A blank body without attachments remains invalid and must be rejected as before.
+
+For attachment-only Outlook mail, MINAI must collect only the approved bounded attachment metadata and then stop at the existing attachment manual-review gate before any customer or supplier AI parser is invoked. This exception must not authorize attachment content download, parsing or automated mailbox writes.
