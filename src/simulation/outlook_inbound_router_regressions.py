@@ -605,15 +605,18 @@ def evaluate_outlook_inbound_router_regressions():
             "reason_code"
         )
         == (
-            "outlook_attachments_not_supported"
+            "outlook_attachment_retrieval_not_available"
         )
+        and attachment.get("inbound_route") == "customer"
         and attachment.get("attachment_intake_status")
         == "metadata_allowlisted"
+        and attachment.get("attachment_retrieval_status")
+        == "manual_review"
         and attachment.get("attachment_intake_reason_code")
         == "attachment_metadata_allowlisted"
         and not attachment_parser.calls
         and not attachment_customer_calls,
-        "attachments block before routing or AI",
+        "allowlisted attachments require controlled retriever before AI",
     )
 
     invalid_provider_parser = (

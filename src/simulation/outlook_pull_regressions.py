@@ -261,6 +261,13 @@ def evaluate_outlook_pull_regressions():
                 "attachment_intake_reason_code": "attachment_metadata_allowlisted",
                 "attachment_count": 2,
                 "attachment_total_size_bytes": 8192,
+                "attachment_retrieval_status": "verified",
+                "attachment_retrieval_reason_code": "attachment_content_verified",
+                "attachment_content_download_performed": True,
+                "attachment_verified_count": 2,
+                "attachment_verification_receipts": [
+                    {"sha256_hex": "secret-file-fingerprint"}
+                ],
             }
 
         attachment_summary = pull_controlled_outlook_inbox(
@@ -279,8 +286,12 @@ def evaluate_outlook_pull_regressions():
             and attachment_summary["results"][0]["attachment_intake_status"]
             == "metadata_allowlisted"
             and attachment_summary["results"][0]["attachment_count"] == 2
-            and attachment_summary["results"][0]["attachment_total_size_bytes"] == 8192,
-            "pull safely surfaces attachment policy summary",
+            and attachment_summary["results"][0]["attachment_total_size_bytes"] == 8192
+            and attachment_summary["results"][0]["attachment_retrieval_status"] == "verified"
+            and attachment_summary["results"][0]["attachment_verified_count"] == 2
+            and attachment_summary["results"][0]["attachment_content_download_performed"] is True
+            and "secret-file-fingerprint" not in repr(attachment_summary),
+            "pull safely surfaces retrieval status without file hash",
         )
 
         rejection_capture = {}

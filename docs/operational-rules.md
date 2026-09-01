@@ -3446,3 +3446,12 @@ Empty text may be admitted into the provider-neutral envelope only for a message
 MINAI may classify attachment metadata as `metadata_allowlisted` only when every attachment is a non-inline Graph file attachment, the extension/MIME pairing is allowlisted for PDF, XLSX or CSV, no file exceeds 10 MiB, the combined attachment size does not exceed 20 MiB, the attachment count does not exceed 5, and the manifest is complete.
 
 Any unknown/item/reference attachment kind, missing or mismatched MIME value, unsupported or macro-enabled extension, inline attachment, truncated/missing manifest or limit breach must result in manual review. P1-54 must not request attachment content bytes, must not persist provider attachment IDs, and must not send attachment content to customer or supplier AI parsers. `metadata_allowlisted` is only a future content-retrieval candidate classification, not permission to download or parse the file.
+
+
+## RULE-161 — Attachment Bytes Must Stay Behind the Trusted-Route Retrieval Boundary
+
+Attachment raw bytes may be requested only when P1-54 reports `metadata_allowlisted` and deterministic routing has resolved exactly one trusted customer or supplier path. A sender or RFQ ambiguity, customer/supplier identity overlap, missing/unverified customer provenance, unsupported metadata, manifest drift or absent retrieval capability must fail closed without an attachment-content GET.
+
+The Graph attachment ID is permitted only as a transient local locator inside the retrieval method. A fresh metadata read must match the original safe manifest before `/$value` is called. Content reads must use GET only, refuse redirects, remain within 10 MiB per file, not exceed the announced metadata size, match the raw response MIME and be verified as PDF, macro-free XLSX or UTF-8 CSV content before a SHA-256 receipt is returned. No provider attachment ID or raw content may be persisted or exposed.
+
+Attachment content buffers are transient and must be discarded after verification; the controlled implementation overwrites its mutable accumulation buffer before returning. P1-55 must not invoke customer or supplier AI parsers, must not perform mailbox writes and must leave even successfully verified attachment mail in manual review pending a separately approved content-parsing boundary.
