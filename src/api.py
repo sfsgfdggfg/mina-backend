@@ -935,6 +935,7 @@ def approve_quote_approval(
                 http_request,
                 request.approved_by,
             ),
+            quote_case_repository=quote_case_repository,
         )
     except QuoteApprovalNotFoundError as exc:
         raise HTTPException(
@@ -967,6 +968,7 @@ def reject_quote_approval(
             approval_id=approval_id,
             rejection_reason=request.rejection_reason,
             rejected_by=_authenticated_operator(http_request),
+            quote_case_repository=quote_case_repository,
         )
     except QuoteApprovalNotFoundError as exc:
         raise HTTPException(
@@ -997,6 +999,7 @@ def invalidate_quote_approval_endpoint(
             repository=quote_approval_repository,
             approval_id=approval_id,
             invalidated_by=_authenticated_operator(http_request),
+            quote_case_repository=quote_case_repository,
         )
     except QuoteApprovalNotFoundError as exc:
         raise HTTPException(

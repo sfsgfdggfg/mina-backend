@@ -3385,3 +3385,9 @@ For an approved customer quote revision, automated delivery must use the exact c
 Durable automated sent evidence may be appended only when the outbound provider returns `status = sent` with a provider name, provider delivery reference and sent timestamp. Failed, rejected or unavailable-provider results must not create sent evidence.
 
 The controlled pilot route for automated customer quote delivery remains an explicit send action. Quote creation and approval do not imply delivery. The same approval/revision must never be sent twice through the automated route, and a manual-sent record must not be added after automated delivery evidence already exists.
+
+## RULE-151 — Approval Mutations Must Synchronize Durable Quote-Case State
+
+When a current quote approval is approved, rejected or invalidated, every persisted QuoteCase referencing that approval ID must be updated with the current approval object. If the quote case contains the supplier quote, customer quote and quote draft, its `quote_send_safety` must be recomputed and persisted from the new approval state.
+
+The controlled API must pass the quote-case repository into approval transitions so approval and case updates share one atomic SQLite transaction. A stale embedded approval may never be treated as an independent authorization source; final output and automated send continue to verify the authoritative current approval repository.
