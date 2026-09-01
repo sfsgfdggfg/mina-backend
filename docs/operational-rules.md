@@ -3528,3 +3528,9 @@ Every new operational work assignment has a 30-minute coordination lease. Only t
 An unexpired assignment cannot be taken over by another operator. Once the lease expires, normal assign/acknowledge/renew must fail closed and recovery must use explicit `work takeover`. Takeover is allowed only for the same still-current work-state fingerprint and must atomically create a new assignment generation. Concurrent takeover attempts must produce at most one winner.
 
 An expired or legacy lease does not make the underlying work safe to approve, confirm, send, apply, reject or resume. All existing workflow guards remain authoritative. Assignment expiry/takeover must not change queue priority, mutate the underlying workflow resource or expose the internal work-state fingerprint.
+
+## RULE-171 — Personal Work Views and Shift Handoff Must Not Transfer Workflow Authority
+
+`work mine` may show only lease-active current assignments owned by the authenticated operator. It must not accept an operator identity selector, must exclude expired/released/stale assignments, and must not expose the internal work-state fingerprint or any data beyond the existing privacy-minimal operational queue contract. Lease-expiry attention is coordination metadata only and must not change work priority.
+
+`work handoff` must be assignee-only, current-state-bound and active-lease-only. It releases the assignment with a system-controlled shift-handoff reason; it must not name or auto-assign a successor, carry free-form sensitive notes, or invoke any underlying confirm/approve/send/apply/reject/resume mutation. The receiving operator must claim the still-current work separately through normal assignment. Expired ownership must use the existing P1-64 recovery path rather than handoff.

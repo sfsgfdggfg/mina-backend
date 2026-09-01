@@ -144,6 +144,8 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append((_last_contract(session), ("GET", "/attachment-review-queue", None)))
     client.get_operational_work_queue()
     contracts.append((_last_contract(session), ("GET", "/operational-work-queue", None)))
+    client.get_my_operational_work()
+    contracts.append((_last_contract(session), ("GET", "/operational-work-my", None)))
     client.get_operational_work_item("customer_extraction_confirmation:proposal-1")
     contracts.append((
         _last_contract(session),
@@ -168,6 +170,11 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append((
         _last_contract(session),
         ("POST", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1/takeover", {}),
+    ))
+    client.handoff_operational_work("customer_extraction_confirmation:proposal-1")
+    contracts.append((
+        _last_contract(session),
+        ("POST", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1/handoff", {}),
     ))
     client.release_operational_work("customer_extraction_confirmation:proposal-1")
     contracts.append((
@@ -486,6 +493,7 @@ def evaluate_pilot_operator_regressions() -> dict:
 
     recovery_paths = {
         "/operational-work-queue",
+        "/operational-work-my",
         "/operational-work-items/customer_extraction_confirmation%3Aproposal-1",
         "/attachment-review-queue",
         "/attachment-reviews",
@@ -602,6 +610,18 @@ def evaluate_pilot_operator_regressions() -> dict:
     ):
         failures.append("operational work queue CLI mapped to the wrong API contract")
 
+    work_mine_cli_session = _Session([_Response(200, {"active_count": 0, "items": []})])
+    work_mine_cli_client = _client(work_mine_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=work_mine_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            work_mine_cli_exit = main(["work", "mine"])
+    if work_mine_cli_exit != 0:
+        failures.append("operational my-work CLI command failed")
+    elif _last_contract(work_mine_cli_session) != (
+        "GET", "/operational-work-my", None,
+    ):
+        failures.append("operational my-work CLI mapped to the wrong API contract")
+
     work_get_cli_session = _Session([_Response(200, {"work_item": {"work_id": "quote_approval:approval-1"}})])
     work_get_cli_client = _client(work_get_cli_session)
     with patch.object(PilotOperatorClient, "from_environment", return_value=work_get_cli_client):
@@ -614,7 +634,7 @@ def evaluate_pilot_operator_regressions() -> dict:
     ):
         failures.append("operational work detail CLI mapped to the wrong API contract")
 
-    for action, suffix in (("assign", "assign-to-me"), ("ack", "acknowledge"), ("renew", "renew"), ("takeover", "takeover"), ("release", "release")):
+    for action, suffix in (("assign", "assign-to-me"), ("ack", "acknowledge"), ("renew", "renew"), ("takeover", "takeover"), ("handoff", "handoff"), ("release", "release")):
         work_mutation_session = _Session([_Response(200, {"status": "assigned"})])
         work_mutation_client = _client(work_mutation_session)
         with patch.object(PilotOperatorClient, "from_environment", return_value=work_mutation_client):

@@ -145,7 +145,9 @@ from src.core.operational_work_assignment_service import (
     OperationalWorkAssignmentTransitionError,
     acknowledge_operational_work,
     assign_operational_work_to_me,
+    build_my_operational_work_view,
     decorate_operational_work_queue,
+    handoff_operational_work,
     release_operational_work,
     renew_operational_work_assignment,
     takeover_operational_work_assignment,
@@ -1198,6 +1200,19 @@ def list_operational_work_queue():
     )
 
 
+@app.get("/operational-work-my")
+def list_my_operational_work(http_request: Request):
+    return build_my_operational_work_view(
+        operator_name=_authenticated_operator(http_request),
+        assignment_repository=operational_work_assignment_repository,
+        attachment_repository=attachment_review_repository,
+        proposal_repository=extraction_proposal_repository,
+        supplier_repository=supplier_rfq_repository,
+        approval_repository=quote_approval_repository,
+        quote_case_repository=quote_case_repository,
+    )
+
+
 @app.get("/operational-work-items/{work_id}")
 def get_operational_work_item(work_id: str):
     try:
@@ -1278,6 +1293,22 @@ def takeover_operational_work_endpoint(work_id: str, http_request: Request):
             **_work_assignment_args(work_id),
         )
     except (OperationalWorkAssignmentNotFoundError, OperationalWorkAssignmentConflictError, OperationalWorkAssignmentTransitionError) as exc:
+        _assignment_error(exc)
+    return result.model_dump(exclude={"work_state_sha256"})
+
+
+@app.post("/operational-work-items/{work_id}/handoff")
+def handoff_operational_work_endpoint(work_id: str, http_request: Request):
+    try:
+        result = handoff_operational_work(
+            operator_name=_authenticated_operator(http_request),
+            **_work_assignment_args(work_id),
+        )
+    except (
+        OperationalWorkAssignmentNotFoundError,
+        OperationalWorkAssignmentConflictError,
+        OperationalWorkAssignmentTransitionError,
+    ) as exc:
         _assignment_error(exc)
     return result.model_dump(exclude={"work_state_sha256"})
 

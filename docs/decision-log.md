@@ -6207,3 +6207,14 @@ A first acknowledgement refreshes the lease once because it marks the operator a
 After expiry, normal assign, acknowledge and renew fail closed. Recovery requires explicit `work takeover`, which is permitted only while the work item still exists, the prior assignment matches the same current work state and the lease is expired. Takeover starts a new assignment generation and is serialized under the same SQLite transaction boundary so concurrent takeover attempts have exactly one winner.
 
 Legacy active P1-63 assignment records that do not contain a lease expiry are treated as expired rather than indefinitely owned. Released legacy records remain durable audit history. Queue/detail may expose safe lease status, expiry/remaining-time metadata and takeover availability, but never the internal work-state fingerprint. Lease state does not change work priority.
+
+## DEC-156 — My Work Is Authenticated Self-Scoping and Shift Handoff Releases Ownership
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-65 adds an authenticated `My Work` view over current operational assignments. The server derives the operator exclusively from the pilot authentication context; clients cannot request another operator's personal queue. Only current work items whose assignment is lease-active and in `assigned` or `acknowledged` state for that operator appear. Expired, released, stale-state and other-operator assignments are excluded.
+
+My Work reuses the privacy-minimal P1-61 queue surface and does not expose additional customer, supplier, message, commercial, attachment or fingerprint data. Items are ordered by remaining lease time first and then existing priority; assignments with five minutes or less remaining are marked `expiring_soon`. This lease attention does not modify the underlying priority score or action authority.
+
+P1-65 also adds explicit shift handoff. Handoff is permitted only to the authenticated current assignee while the same work state and lease remain active. It atomically records the assignment as released with system-controlled `release_reason=shift_handoff`. It does not accept a target operator or free-form handoff note and does not auto-assign a successor. The next operator must refresh the queue and use normal `work assign`, creating a fresh assignment generation.
