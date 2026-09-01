@@ -1289,3 +1289,25 @@ python -m src.pilot_operator work release <work-id>
 ```
 
 Only the current assignee may acknowledge or release. If the underlying work state changes, the old assignment becomes stale automatically and a fresh claim is required for the new state. A resolved/stale work ID cannot be newly assigned. Continue to use the existing `proposal`, `attachment-review`, `rfq`, `workflow`, `approval` and `case` commands; their existing lifecycle/authentication/preview/send guards remain authoritative and do not depend on assignment ownership.
+
+## P1-64 operational work assignment lease and stale-operator recovery
+
+P1-63 assignments are now bounded coordination leases. A new assignment lasts 30 minutes. A first acknowledgement refreshes that lease; thereafter renew it explicitly only while you are still actively handling the same current work state:
+
+```bash
+python -m src.pilot_operator work assign <work-id>
+python -m src.pilot_operator work ack <work-id>
+python -m src.pilot_operator work renew <work-id>
+```
+
+`work renew` is accepted only from the authenticated current assignee and only before lease expiry. There is no automatic heartbeat. Queue/detail show privacy-minimal lease status and remaining/expiry information; lease metadata never replaces the underlying workflow checks.
+
+If the lease expires, refresh `work queue` / `work get`. Normal assign, ack and renew will remain blocked for that expired current assignment. Recover explicitly:
+
+```bash
+python -m src.pilot_operator work takeover <work-id>
+```
+
+Takeover is permitted only after expiry and only if the same work item/state is still current. It creates a new assignment generation. If the underlying work state changed or disappeared, use the current queue and normal assign path instead. Never use takeover as a shortcut around proposal confirmation, quote approval, attachment preview/apply, supplier lifecycle or outbound send guards.
+
+P1-63 records created before lease support and lacking `lease_expires_at` are treated as expired, not permanently owned. Released records remain audit history. Assignment priority remains unchanged by lease, renewal or takeover.

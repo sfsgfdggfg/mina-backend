@@ -159,6 +159,16 @@ def evaluate_pilot_operator_regressions() -> dict:
         _last_contract(session),
         ("POST", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1/acknowledge", {}),
     ))
+    client.renew_operational_work_assignment("customer_extraction_confirmation:proposal-1")
+    contracts.append((
+        _last_contract(session),
+        ("POST", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1/renew", {}),
+    ))
+    client.takeover_operational_work_assignment("customer_extraction_confirmation:proposal-1")
+    contracts.append((
+        _last_contract(session),
+        ("POST", "/operational-work-items/customer_extraction_confirmation%3Aproposal-1/takeover", {}),
+    ))
     client.release_operational_work("customer_extraction_confirmation:proposal-1")
     contracts.append((
         _last_contract(session),
@@ -604,7 +614,7 @@ def evaluate_pilot_operator_regressions() -> dict:
     ):
         failures.append("operational work detail CLI mapped to the wrong API contract")
 
-    for action, suffix in (("assign", "assign-to-me"), ("ack", "acknowledge"), ("release", "release")):
+    for action, suffix in (("assign", "assign-to-me"), ("ack", "acknowledge"), ("renew", "renew"), ("takeover", "takeover"), ("release", "release")):
         work_mutation_session = _Session([_Response(200, {"status": "assigned"})])
         work_mutation_client = _client(work_mutation_session)
         with patch.object(PilotOperatorClient, "from_environment", return_value=work_mutation_client):

@@ -61,6 +61,9 @@ from src.simulation.operational_work_queue_regressions import (
 from src.simulation.operational_work_detail_regressions import (
     evaluate_operational_work_detail_regressions,
 )
+from src.simulation.operational_work_assignment_lease_regressions import (
+    evaluate_operational_work_assignment_lease_regressions,
+)
 from src.simulation.operational_work_assignment_regressions import (
     evaluate_operational_work_assignment_regressions,
 )
@@ -259,6 +262,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Operational work item detail and recovery",
         evaluate_operational_work_detail_regressions,
+    ),
+    Suite(
+        "Operational work assignment lease and stale-operator recovery",
+        evaluate_operational_work_assignment_lease_regressions,
     ),
     Suite(
         "Operational work assignment and acknowledgement",
