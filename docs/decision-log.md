@@ -6218,3 +6218,14 @@ P1-65 adds an authenticated `My Work` view over current operational assignments.
 My Work reuses the privacy-minimal P1-61 queue surface and does not expose additional customer, supplier, message, commercial, attachment or fingerprint data. Items are ordered by remaining lease time first and then existing priority; assignments with five minutes or less remaining are marked `expiring_soon`. This lease attention does not modify the underlying priority score or action authority.
 
 P1-65 also adds explicit shift handoff. Handoff is permitted only to the authenticated current assignee while the same work state and lease remain active. It atomically records the assignment as released with system-controlled `release_reason=shift_handoff`. It does not accept a target operator or free-form handoff note and does not auto-assign a successor. The next operator must refresh the queue and use normal `work assign`, creating a fresh assignment generation.
+
+## DEC-157 — Shift Summary Reads Current Work and Append-Only Handoff History Without Creating New Authority
+
+**Status:** Accepted
+**Date:** 2026-09-01
+
+P1-66 adds an authenticated, read-only shift summary for one pilot operator. The summary combines the operator's current lease-active P1-65 My Work view, lease-expiry attention, that operator's recent `shift_handoff` assignment events, and current critical unassigned work from the unified operational queue. It does not assign, renew, hand off, take over, confirm, approve, send, apply, reject or resume anything.
+
+Recent handoffs are read from the existing append-only operational assignment event history rather than inferred from the current assignment snapshot. The read window is fixed at 12 hours and capped at 20 handoff records. Successor claims may replace the current assignment state but must not erase the prior handoff readout. Raw event payloads and internal work-state fingerprints are never returned.
+
+The summary is scoped to the authenticated pilot operator. It may expose safe work IDs/types, current priority/routing metadata, lease attention, handoff time/generation and a coarse current disposition (`available_unassigned`, `claimed`, `expired_assignment`, `state_changed`, or `resolved_or_inactive`). It must not expose party identity, email/message content, commercial amounts/currency, provider identifiers, attachment/source hashes or internal fingerprints. Existing workflow guards remain authoritative.

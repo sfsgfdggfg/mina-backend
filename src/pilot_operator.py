@@ -206,6 +206,9 @@ class PilotOperatorClient:
     def get_my_operational_work(self) -> Any:
         return self._request("GET", "/operational-work-my")
 
+    def get_operational_shift_summary(self) -> Any:
+        return self._request("GET", "/operational-work-shift-summary")
+
     def get_operational_work_item(self, work_id: str) -> Any:
         return self._request(
             "GET", f"/operational-work-items/{self._id(work_id)}"
@@ -522,6 +525,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     work.add_parser("queue")
     work.add_parser("mine")
+    work.add_parser("shift-summary")
     work.add_parser("get").add_argument("work_id")
     work.add_parser("assign").add_argument("work_id")
     work.add_parser("ack").add_argument("work_id")
@@ -699,6 +703,8 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.get_operational_work_queue()
         if args.action == "mine":
             return client.get_my_operational_work()
+        if args.action == "shift-summary":
+            return client.get_operational_shift_summary()
         if args.action == "get":
             return client.get_operational_work_item(args.work_id)
         if args.action == "assign":

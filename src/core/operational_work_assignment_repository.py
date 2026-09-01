@@ -9,15 +9,18 @@ class OperationalWorkAssignmentRepository(Protocol):
     def save(self, assignment: OperationalWorkAssignment) -> OperationalWorkAssignment: ...
     def get(self, work_id: str) -> OperationalWorkAssignment | None: ...
     def list_all(self) -> list[OperationalWorkAssignment]: ...
+    def list_history(self) -> list[OperationalWorkAssignment]: ...
 
 
 class InMemoryOperationalWorkAssignmentRepository:
     def __init__(self) -> None:
         self._assignments: dict[str, OperationalWorkAssignment] = {}
+        self._history: list[OperationalWorkAssignment] = []
 
     def save(self, assignment: OperationalWorkAssignment) -> OperationalWorkAssignment:
         stored = assignment.model_copy(deep=True)
         self._assignments[assignment.work_id] = stored
+        self._history.append(stored.model_copy(deep=True))
         return stored.model_copy(deep=True)
 
     def get(self, work_id: str) -> OperationalWorkAssignment | None:
@@ -26,3 +29,6 @@ class InMemoryOperationalWorkAssignmentRepository:
 
     def list_all(self) -> list[OperationalWorkAssignment]:
         return [item.model_copy(deep=True) for item in self._assignments.values()]
+
+    def list_history(self) -> list[OperationalWorkAssignment]:
+        return [item.model_copy(deep=True) for item in self._history]

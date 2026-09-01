@@ -102,6 +102,13 @@ class SQLiteOperationalWorkAssignmentRepository:
             for payload in self.store.list_all(namespace=self.NAMESPACE)
         ]
 
+    def list_history(self) -> list[OperationalWorkAssignment]:
+        return [
+            _model_from_payload(OperationalWorkAssignment, event["payload"])
+            for event in self.store.list_events(entity_type="operational_work_assignment")
+            if event["event_type"] == "operational_work_assignment_saved"
+        ]
+
 
 class SQLiteAttachmentInterpretationReviewRepository:
     NAMESPACE = "attachment_interpretation_reviews"
