@@ -119,6 +119,17 @@ class SupplierRFQFollowUpDraft(BaseModel):
         return build_supplier_rfq_reference(self.rfq_id)
 
 
+class SupplierRFQFollowUpAutomatedSentEvidence(BaseModel):
+    follow_up_id: str
+    rfq_id: str
+    sequence_number: int = Field(ge=1)
+    recipient_email: str
+    provider_name: str
+    provider_message_id: str
+    sent_at: datetime
+    source: Literal["automated_provider_send"] = "automated_provider_send"
+
+
 class SupplierRFQFollowUpManualSentEvidence(BaseModel):
     follow_up_id: str
     rfq_id: str

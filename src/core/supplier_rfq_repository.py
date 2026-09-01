@@ -6,6 +6,7 @@ from typing import Optional, Protocol
 from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
     SupplierRFQDraft,
+    SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpDraft,
     SupplierRFQFollowUpManualSentEvidence,
     SupplierRFQManualSentEvidence,
@@ -23,6 +24,10 @@ class DuplicateSupplierRFQAutomatedSentEvidenceError(ValueError):
 
 
 class DuplicateSupplierRFQManualSentEvidenceError(ValueError):
+    pass
+
+
+class DuplicateSupplierRFQFollowUpAutomatedSentEvidenceError(ValueError):
     pass
 
 
@@ -93,6 +98,38 @@ class SupplierRFQRepository(Protocol):
         rfq_id: Optional[str] = None,
     ) -> list[SupplierRFQFollowUpDraft]:
         ...
+
+    def save_follow_up_automated_sent_evidence(
+        self,
+        evidence: SupplierRFQFollowUpAutomatedSentEvidence,
+    ) -> SupplierRFQFollowUpAutomatedSentEvidence:
+        ...
+
+    def list_follow_up_automated_sent_evidence(
+        self,
+        follow_up_id: Optional[str] = None,
+    ) -> list[SupplierRFQFollowUpAutomatedSentEvidence]:
+        ...
+
+    def save_follow_up_automated_sent_evidence(
+        self,
+        evidence: SupplierRFQFollowUpAutomatedSentEvidence,
+    ) -> SupplierRFQFollowUpAutomatedSentEvidence:
+        if evidence.follow_up_id in self._follow_up_automated_sent_evidence:
+            raise DuplicateSupplierRFQFollowUpAutomatedSentEvidenceError(
+                "Automated Supplier RFQ follow-up sent evidence already exists."
+            )
+        self._follow_up_automated_sent_evidence[evidence.follow_up_id] = evidence
+        return evidence
+
+    def list_follow_up_automated_sent_evidence(
+        self,
+        follow_up_id: Optional[str] = None,
+    ) -> list[SupplierRFQFollowUpAutomatedSentEvidence]:
+        evidence = list(self._follow_up_automated_sent_evidence.values())
+        if follow_up_id is None:
+            return evidence
+        return [item for item in evidence if item.follow_up_id == follow_up_id]
 
     def save_follow_up_manual_sent_evidence(
         self,
@@ -190,6 +227,9 @@ class InMemorySupplierRFQRepository:
         ] = {}
         self._follow_up_drafts: dict[
             str, SupplierRFQFollowUpDraft
+        ] = {}
+        self._follow_up_automated_sent_evidence: dict[
+            str, SupplierRFQFollowUpAutomatedSentEvidence
         ] = {}
         self._follow_up_manual_sent_evidence: dict[
             str, SupplierRFQFollowUpManualSentEvidence
@@ -305,6 +345,26 @@ class InMemorySupplierRFQRepository:
         if rfq_id is None:
             return drafts
         return [item for item in drafts if item.rfq_id == rfq_id]
+
+    def save_follow_up_automated_sent_evidence(
+        self,
+        evidence: SupplierRFQFollowUpAutomatedSentEvidence,
+    ) -> SupplierRFQFollowUpAutomatedSentEvidence:
+        if evidence.follow_up_id in self._follow_up_automated_sent_evidence:
+            raise DuplicateSupplierRFQFollowUpAutomatedSentEvidenceError(
+                "Automated Supplier RFQ follow-up sent evidence already exists."
+            )
+        self._follow_up_automated_sent_evidence[evidence.follow_up_id] = evidence
+        return evidence
+
+    def list_follow_up_automated_sent_evidence(
+        self,
+        follow_up_id: Optional[str] = None,
+    ) -> list[SupplierRFQFollowUpAutomatedSentEvidence]:
+        evidence = list(self._follow_up_automated_sent_evidence.values())
+        if follow_up_id is None:
+            return evidence
+        return [item for item in evidence if item.follow_up_id == follow_up_id]
 
     def save_follow_up_manual_sent_evidence(
         self,

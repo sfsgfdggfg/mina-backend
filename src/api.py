@@ -37,7 +37,10 @@ from src.workflow.supplier_response_ingestion import (
     SupplierReplyIngestionRequest,
     ingest_supplier_reply,
 )
-from src.workflow.mail_delivery import send_supplier_rfq_via_mail
+from src.workflow.mail_delivery import (
+    send_supplier_rfq_follow_up_via_mail,
+    send_supplier_rfq_via_mail,
+)
 from src.workflow.mail_ingestion import (
     InboundMailIdempotencyConflictError,
     process_customer_inquiry_mail,
@@ -1260,6 +1263,13 @@ def list_supplier_rfq_follow_ups(rfq_id: str):
         "follow_ups": [
             {
                 **item.model_dump(),
+                "automated_sent_evidence": [
+                    evidence.model_dump()
+                    for evidence in (
+                        supplier_rfq_repository
+                        .list_follow_up_automated_sent_evidence(item.follow_up_id)
+                    )
+                ],
                 "manual_sent_evidence": [
                     evidence.model_dump()
                     for evidence in (
@@ -1283,6 +1293,13 @@ def get_supplier_rfq_follow_up(follow_up_id: str):
         )
     return {
         **follow_up.model_dump(),
+        "automated_sent_evidence": [
+            evidence.model_dump()
+            for evidence in (
+                supplier_rfq_repository
+                .list_follow_up_automated_sent_evidence(follow_up_id)
+            )
+        ],
         "manual_sent_evidence": [
             evidence.model_dump()
             for evidence in (
@@ -1314,6 +1331,27 @@ def approve_supplier_rfq_follow_up_endpoint(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfq-follow-ups/{follow_up_id}/send")
+def send_supplier_rfq_follow_up_endpoint(follow_up_id: str):
+    try:
+        result = send_supplier_rfq_follow_up_via_mail(
+            repository=supplier_rfq_repository,
+            follow_up_id=follow_up_id,
+            sender=outbound_mail_sender,
+        )
+    except SupplierRFQFollowUpNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if result.delivery.status == "rejected_before_provider":
+        raise HTTPException(status_code=409, detail=result.delivery.reason)
+    if result.delivery.status != "sent":
+        raise HTTPException(status_code=503, detail=result.delivery.reason)
+    return result.model_dump()
 
 
 @app.post("/supplier-rfq-follow-ups/{follow_up_id}/record-manually-sent")

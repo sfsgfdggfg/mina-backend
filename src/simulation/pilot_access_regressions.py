@@ -124,7 +124,6 @@ def evaluate_pilot_access_regressions() -> dict:
     disabled_routes = (
         ("GET", "/run-test-suite"),
         ("POST", "/supplier-rfqs/abc/simulate-response"),
-        ("POST", "/supplier-rfq-follow-ups/f1/send"),
         ("POST", "/supplier-responses/ingest"),
         ("POST", "/customer-memory/import/apply"),
         ("POST", "/customer-memory/backups/restore"),
@@ -157,6 +156,7 @@ def evaluate_pilot_access_regressions() -> dict:
         ("GET", "/supplier-rfqs/r1/follow-ups"),
         ("GET", "/supplier-rfq-follow-ups/f1"),
         ("POST", "/supplier-rfq-follow-ups/f1/approve"),
+        ("POST", "/supplier-rfq-follow-ups/f1/send"),
         ("POST", "/supplier-rfq-follow-ups/f1/record-manually-sent"),
         ("POST", "/supplier-rfq-workflows/w1/resume-quote"),
         ("POST", "/quote-approvals/a1/approve"),

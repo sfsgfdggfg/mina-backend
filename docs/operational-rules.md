@@ -3403,3 +3403,9 @@ The RFQ may advance to `awaiting_response` only after the outbound provider repo
 For `POST /supplier-rfqs/{rfq_id}/send`, `rejected_before_provider` must map to HTTP 409 and provider failure/unavailability must map to HTTP 503. Only `delivery.status = sent` may return a 2xx success response.
 
 The pilot operator CLI inherits these HTTP semantics. A duplicate, invalid-state, provider-failed or provider-unavailable supplier send must exit nonzero and must not be interpreted by scripts or operators as a successful delivery. Safe rejection must preserve the current RFQ state and existing durable send evidence.
+
+## RULE-154 — Supplier RFQ Follow-Up Delivery Must Be Separately Approved and Idempotent
+
+A clarification follow-up must remain unsent until its own approval is recorded. The controlled `follow-up-send` action may call the provider only while the follow-up is `approved`, the parent RFQ is `clarification_required`, and no manual or automated send evidence already exists.
+
+Only provider `sent` with complete provider metadata may advance the follow-up to `awaiting_response` and create durable automated evidence. Duplicate, stale, manually-sent or otherwise ineligible follow-ups must be rejected before provider delivery; provider failure must leave the approved follow-up unchanged and must not create sent evidence.
