@@ -263,6 +263,176 @@ def _supplier_candidate_with_corrections(
     return candidate, normalized, changed
 
 
+
+_CUSTOMER_SAFETY_FIELDS = {
+    "is_adr", "adr_class", "is_temperature_controlled",
+    "temperature_requirement", "is_high_value",
+}
+_CUSTOMER_OPERATIONAL_FIELDS = {
+    "pickup_country", "pickup_city", "pickup_area", "pickup_postcode",
+    "delivery_country", "delivery_city", "delivery_area", "delivery_postcode",
+    "commodity", "gross_weight_kg", "service_type", "quote_mode",
+    "transport_mode", "equipment_type", "cargo_ready_date",
+    "required_delivery_date", "packages",
+}
+_SUPPLIER_CRITICAL_FIELDS = {"status", "cost", "currency"}
+_SUPPLIER_IMPORTANT_FIELDS = {
+    "transit_time", "validity_date", "vehicle_available_date",
+    "equipment_type", "pricing_basis", "included_costs", "excluded_costs",
+}
+
+
+def _review_field_category(route: str, name: str) -> str:
+    if route == "customer":
+        if name in _CUSTOMER_SAFETY_FIELDS:
+            return "safety"
+        if name in _CUSTOMER_OPERATIONAL_FIELDS:
+            return "operational"
+        return "informational"
+    if name in _SUPPLIER_CRITICAL_FIELDS:
+        return "commercial_critical"
+    if name in _SUPPLIER_IMPORTANT_FIELDS:
+        return "commercial"
+    return "informational"
+
+
+def _review_field_editable(review: AttachmentInterpretationReview, name: str) -> bool:
+    if review.route == "customer":
+        if name == "regulatory_exception_reviews":
+            return False
+        if name == "customer_name" and review.trusted_customer_name:
+            return False
+    return name != "uncertain_fields"
+
+
+def build_attachment_review_preview(
+    review: AttachmentInterpretationReview,
+    corrections: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a mutation-free field review using the exact apply validators."""
+    supplied = corrections or {}
+    blockers: list[str] = []
+    warnings: list[str] = []
+    validation_error = None
+    original = (
+        review.customer_candidate.model_dump(mode="json")
+        if review.route == "customer" and review.customer_candidate is not None
+        else review.supplier_candidate.model_dump(mode="json")
+        if review.supplier_candidate is not None
+        else {}
+    )
+    normalized = dict(original)
+    changed: list[str] = []
+    if review.status != "pending":
+        blockers.append("review_is_not_pending")
+    else:
+        try:
+            if review.route == "customer":
+                candidate, _, changed = _customer_candidate_with_corrections(review, supplied)
+            else:
+                candidate, _, changed = _supplier_candidate_with_corrections(review, supplied)
+            normalized = candidate.model_dump(mode="json")
+        except AttachmentReviewTransitionError as exc:
+            validation_error = str(exc)
+            blockers.append("corrections_invalid_or_not_applyable")
+
+    uncertain = set(
+        (review.supplier_candidate.uncertain_fields if review.supplier_candidate else [])
+    )
+    field_names = [
+        name for name in original
+        if name != "uncertain_fields"
+    ]
+    fields = []
+    critical_attention = []
+    for name in field_names:
+        category = _review_field_category(review.route, name)
+        value = normalized.get(name)
+        reasons: list[str] = []
+        safety_unknown = False
+        if review.route == "customer" and category == "safety" and value is None:
+            if name in {"is_adr", "is_temperature_controlled", "is_high_value"}:
+                safety_unknown = True
+            elif name == "adr_class" and normalized.get("is_adr") is True:
+                safety_unknown = True
+            elif (
+                name == "temperature_requirement"
+                and normalized.get("is_temperature_controlled") is True
+            ):
+                safety_unknown = True
+        if safety_unknown:
+            reasons.append("safety_value_unknown")
+            warnings.append(f"safety_value_unknown:{name}")
+        if review.route == "supplier" and name in uncertain:
+            reasons.append("parser_marked_uncertain")
+            warnings.append(f"parser_marked_uncertain:{name}")
+        if name in changed and category in {"safety", "commercial_critical"}:
+            reasons.append("critical_field_changed_by_operator")
+        requires_attention = bool(reasons)
+        if requires_attention or (
+            name in changed and category in {"safety", "commercial_critical"}
+        ):
+            critical_attention.append(name)
+        fields.append({
+            "field": name,
+            "category": category,
+            "editable": _review_field_editable(review, name),
+            "source_state": (
+                "uncertain" if name in uncertain
+                else "not_provided" if original.get(name) is None
+                else "provided"
+            ),
+            "original_value": original.get(name),
+            "preview_value": value,
+            "changed": name in changed,
+            "requires_attention": requires_attention,
+            "attention_reasons": reasons,
+        })
+
+    token_payload = {
+        "review_id": review.review_id,
+        "source_fingerprint": review.source_fingerprint_sha256,
+        "status": review.status,
+        "corrections": supplied,
+        "normalized": normalized,
+    }
+    preview_token = _stable_hash(token_payload)
+    return {
+        "review_id": review.review_id,
+        "route": review.route,
+        "status": review.status,
+        "apply_ready": not blockers,
+        "preview_token": preview_token,
+        "changed_fields": changed,
+        "critical_attention_fields": sorted(set(critical_attention)),
+        "blockers": blockers,
+        "warnings": sorted(set(warnings)),
+        "validation_error": validation_error,
+        "field_count": len(fields),
+        "changed_field_count": len(changed),
+        "critical_attention_count": len(set(critical_attention)),
+        "fields": fields,
+    }
+
+
+def require_matching_attachment_review_preview(
+    review: AttachmentInterpretationReview,
+    *,
+    corrections: dict[str, Any] | None,
+    preview_token: str,
+) -> dict[str, Any]:
+    preview = build_attachment_review_preview(review, corrections)
+    if not preview["apply_ready"]:
+        raise AttachmentReviewTransitionError(
+            preview.get("validation_error") or "Attachment review preview is not apply-ready."
+        )
+    if not preview_token or preview_token != preview["preview_token"]:
+        raise AttachmentReviewConflictError(
+            "Attachment review preview token does not match the current corrections/state."
+        )
+    return preview
+
+
 def apply_attachment_interpretation_review(
     *,
     repository: AttachmentInterpretationReviewRepository,

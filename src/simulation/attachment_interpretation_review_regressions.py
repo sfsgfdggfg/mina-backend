@@ -241,15 +241,21 @@ def evaluate_attachment_interpretation_review_regressions():
     ), patch.object(api,"supplier_rfq_repository",api_suppliers):
         listed=api.list_attachment_reviews()
         detail=api.get_attachment_review(api_review.review_id)
+        preview=api.preview_attachment_review_endpoint(
+            api_review.review_id,api.PreviewAttachmentReviewRequest(corrections={"is_high_value":False})
+        )
         applied_api=api.apply_attachment_review_endpoint(
-            api_review.review_id,api.ApplyAttachmentReviewRequest(corrections={"is_high_value":False}),_Request()
+            api_review.review_id,api.ApplyAttachmentReviewRequest(
+                corrections={"is_high_value":False}, preview_token=preview["preview_token"]
+            ),_Request()
         )
     check(
         listed["reviews"][0].get("candidate") is None
         and "subject" not in listed["reviews"][0]
         and "operator_corrections" not in listed["reviews"][0]
         and "rejection_reason" not in listed["reviews"][0]
-        and detail.get("candidate") is not None
+        and detail.get("candidate") is not None and detail.get("field_review") is not None
+        and preview.get("apply_ready") is True
         and "sha256" not in repr(listed) and "sha256" not in repr(detail)
         and applied_api.get("status")=="applied"
         and applied_api.get("reviewed_by")=="Authenticated Review Operator"

@@ -146,11 +146,22 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append(
         (_last_contract(session), ("GET", "/attachment-reviews/review-1", None))
     )
-    client.apply_attachment_review("review-1", {"is_high_value": False})
+    client.preview_attachment_review("review-1", {"is_high_value": False})
     contracts.append(
         (
             _last_contract(session),
-            ("POST", "/attachment-reviews/review-1/apply", {"corrections": {"is_high_value": False}}),
+            ("POST", "/attachment-reviews/review-1/preview", {"corrections": {"is_high_value": False}}),
+        )
+    )
+    client.apply_attachment_review(
+        "review-1", preview_token="a" * 64, corrections={"is_high_value": False}
+    )
+    contracts.append(
+        (
+            _last_contract(session),
+            ("POST", "/attachment-reviews/review-1/apply", {
+                "corrections": {"is_high_value": False}, "preview_token": "a" * 64
+            }),
         )
     )
     client.reject_attachment_review("review-2", "Needs manual verification")
@@ -442,6 +453,7 @@ def evaluate_pilot_operator_regressions() -> dict:
     recovery_paths = {
         "/attachment-reviews",
         "/attachment-reviews/review-1",
+        "/attachment-reviews/review-1/preview",
         "/extraction-proposals/proposal-1",
         "/supplier-rfqs",
         "/supplier-rfqs/rfq-1",
@@ -540,6 +552,22 @@ def evaluate_pilot_operator_regressions() -> dict:
     ):
         failures.append("case manual-sent CLI mapped to the wrong API contract")
 
+    review_preview_cli_session = _Session([_Response(200, {"apply_ready": True, "preview_token": "b" * 64})])
+    review_preview_cli_client = _client(review_preview_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=review_preview_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            review_preview_cli_exit = main([
+                "attachment-review", "preview", "review-cli",
+                "--corrections", '{"is_high_value": false}',
+            ])
+    if review_preview_cli_exit != 0:
+        failures.append("attachment review preview CLI command failed")
+    elif _last_contract(review_preview_cli_session) != (
+        "POST", "/attachment-reviews/review-cli/preview",
+        {"corrections": {"is_high_value": False}},
+    ):
+        failures.append("attachment review preview CLI mapped to the wrong API contract")
+
     review_cli_session = _Session([_Response(200, {"status": "applied"})])
     review_cli_client = _client(review_cli_session)
     with patch.object(PilotOperatorClient, "from_environment", return_value=review_cli_client):
@@ -547,12 +575,13 @@ def evaluate_pilot_operator_regressions() -> dict:
             review_cli_exit = main([
                 "attachment-review", "apply", "review-cli",
                 "--corrections", '{"is_high_value": false}',
+                "--preview-token", "b" * 64,
             ])
     if review_cli_exit != 0:
         failures.append("attachment review apply CLI command failed")
     elif _last_contract(review_cli_session) != (
         "POST", "/attachment-reviews/review-cli/apply",
-        {"corrections": {"is_high_value": False}},
+        {"corrections": {"is_high_value": False}, "preview_token": "b" * 64},
     ):
         failures.append("attachment review apply CLI mapped to the wrong API contract")
 

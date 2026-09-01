@@ -3480,3 +3480,9 @@ A successful P1-57 interpretation may create a durable P1-58 review case, but it
 Customer apply creates only an unconfirmed extraction proposal and preserves the normal extraction-confirmation gate. The proposal must carry `source_attachment_review_id` provenance. Trusted customer identity is system-controlled at this boundary. Supplier apply must compare the current RFQ with the exact frozen RFQ snapshot from review creation; any drift fails closed without a response or lifecycle mutation. A successful supplier apply records the operator identity, `source_attachment_review_id` and attachment-aware inbound evidence before/with the existing atomic RFQ response transition.
 
 A pending review may be rejected, but an applied or rejected review cannot be applied or rejected again. P1-58 does not authorize mailbox writes, customer quote sends, supplier RFQ sends or any other outbound action.
+
+## RULE-165 — Operators Must Preview Attachment Field Changes Before Pilot Apply
+
+A pilot attachment-review apply must correspond exactly to a prior field-level preview of the same corrections and current review state. Preview is read-only. Customer safety fields (`is_adr`, `is_temperature_controlled`, `is_high_value` and their conditional details) and supplier commercial-critical fields (`status`, `cost`, `currency`) must be visibly classified; trusted/system-managed fields must be marked non-editable.
+
+The apply endpoint must reject a missing or mismatched preview token and must retain all P1-58 stale-state, operator-authentication and transaction guards. Preview tokens must not expose source fingerprints, attachment hashes, provider IDs or raw attachment content, and they must never be treated as bearer credentials or reusable authorization outside the matching review/correction state.

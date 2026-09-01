@@ -203,13 +203,23 @@ class PilotOperatorClient:
     def get_attachment_review(self, review_id: str) -> Any:
         return self._request("GET", f"/attachment-reviews/{self._id(review_id)}")
 
-    def apply_attachment_review(
+    def preview_attachment_review(
         self, review_id: str, corrections: dict[str, Any] | None = None
     ) -> Any:
         return self._request(
             "POST",
-            f"/attachment-reviews/{self._id(review_id)}/apply",
+            f"/attachment-reviews/{self._id(review_id)}/preview",
             {"corrections": corrections or {}},
+        )
+
+    def apply_attachment_review(
+        self, review_id: str, *, preview_token: str,
+        corrections: dict[str, Any] | None = None
+    ) -> Any:
+        return self._request(
+            "POST",
+            f"/attachment-reviews/{self._id(review_id)}/apply",
+            {"corrections": corrections or {}, "preview_token": preview_token},
         )
 
     def reject_attachment_review(self, review_id: str, reason: str) -> Any:
@@ -468,9 +478,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     attachment_review.add_parser("list")
     attachment_review.add_parser("get").add_argument("review_id")
+    review_preview = attachment_review.add_parser("preview")
+    review_preview.add_argument("review_id")
+    review_preview.add_argument("--corrections", default="{}")
     review_apply = attachment_review.add_parser("apply")
     review_apply.add_argument("review_id")
     review_apply.add_argument("--corrections", default="{}")
+    review_apply.add_argument("--preview-token", required=True)
     review_reject = attachment_review.add_parser("reject")
     review_reject.add_argument("review_id")
     review_reject.add_argument("--reason", required=True)
@@ -627,9 +641,15 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.list_attachment_reviews()
         if args.action == "get":
             return client.get_attachment_review(args.review_id)
+        if args.action == "preview":
+            return client.preview_attachment_review(
+                args.review_id, _load_corrections(args.corrections)
+            )
         if args.action == "apply":
             return client.apply_attachment_review(
-                args.review_id, _load_corrections(args.corrections)
+                args.review_id,
+                preview_token=args.preview_token,
+                corrections=_load_corrections(args.corrections),
             )
         return client.reject_attachment_review(args.review_id, args.reason)
     if args.command == "proposal":

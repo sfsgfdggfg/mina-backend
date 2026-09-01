@@ -150,6 +150,7 @@ def evaluate_pilot_access_regressions() -> dict:
         ("POST", "/process-email"),
         ("GET", "/attachment-reviews"),
         ("GET", "/attachment-reviews/ar1"),
+        ("POST", "/attachment-reviews/ar1/preview"),
         ("POST", "/attachment-reviews/ar1/apply"),
         ("POST", "/attachment-reviews/ar1/reject"),
         ("POST", "/extraction-proposals/p1/confirm"),

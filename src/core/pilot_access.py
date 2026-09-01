@@ -34,6 +34,7 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("POST", re.compile(r"^/inbound/outlook/pull$")),
     ("GET", re.compile(r"^/attachment-reviews$")),
     ("GET", re.compile(r"^/attachment-reviews/[^/]+$")),
+    ("POST", re.compile(r"^/attachment-reviews/[^/]+/preview$")),
     ("POST", re.compile(r"^/attachment-reviews/[^/]+/apply$")),
     ("POST", re.compile(r"^/attachment-reviews/[^/]+/reject$")),
     ("GET", re.compile(r"^/extraction-proposals/[^/]+$")),
