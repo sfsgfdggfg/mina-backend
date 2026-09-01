@@ -142,6 +142,8 @@ def evaluate_pilot_operator_regressions() -> dict:
     )
     client.list_attachment_review_queue()
     contracts.append((_last_contract(session), ("GET", "/attachment-review-queue", None)))
+    client.get_operational_work_queue()
+    contracts.append((_last_contract(session), ("GET", "/operational-work-queue", None)))
     client.list_attachment_reviews()
     contracts.append((_last_contract(session), ("GET", "/attachment-reviews", None)))
     client.get_attachment_review("review-1")
@@ -453,6 +455,7 @@ def evaluate_pilot_operator_regressions() -> dict:
         failures.append("redirect response was accepted")
 
     recovery_paths = {
+        "/operational-work-queue",
         "/attachment-review-queue",
         "/attachment-reviews",
         "/attachment-reviews/review-1",
@@ -555,6 +558,18 @@ def evaluate_pilot_operator_regressions() -> dict:
     ):
         failures.append("case manual-sent CLI mapped to the wrong API contract")
 
+
+    work_queue_cli_session = _Session([_Response(200, {"pending_count": 0, "items": []})])
+    work_queue_cli_client = _client(work_queue_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=work_queue_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            work_queue_cli_exit = main(["work", "queue"])
+    if work_queue_cli_exit != 0:
+        failures.append("operational work queue CLI command failed")
+    elif _last_contract(work_queue_cli_session) != (
+        "GET", "/operational-work-queue", None,
+    ):
+        failures.append("operational work queue CLI mapped to the wrong API contract")
 
     queue_cli_session = _Session([_Response(200, {"pending_count": 0, "items": []})])
     queue_cli_client = _client(queue_cli_session)

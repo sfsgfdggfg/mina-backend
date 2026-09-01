@@ -1239,3 +1239,19 @@ python -m src.pilot_operator attachment-review queue
 The queue returns only pending review IDs plus route, age, priority band/score, reason codes, aggregate attention/blocker/warning counts and relative nearest-deadline information. It does not expose customer identity, subject, candidate values, preview tokens or attachment/source fingerprints.
 
 Priority is deterministic and recalculated on every read. `critical` items include combinations of unresolved safety/commercial attention, near/past exact ISO dates, or stale/missing Supplier RFQ snapshots. Free-form date text is not interpreted for priority. A high queue priority does not authorize apply: continue with `attachment-review get`, `attachment-review preview`, and only then `attachment-review apply` using the matching P1-59 preview token.
+
+## P1-61 unified operational work queue
+
+Use the authenticated read-only inbox to see human work across the supported pilot workflows:
+
+```bash
+python -m src.pilot_operator work queue
+```
+
+The queue includes only current human-action items: pending attachment reviews, proposed customer extraction confirmations, Supplier RFQ follow-up drafts/approved follow-ups, clarification-required RFQs with no active follow-up, and pending quote approvals. Supplier follow-ups already awaiting a supplier response and completed/rejected/applied work are excluded.
+
+Use each item's `resource_type`, `resource_id` and `next_action` only to navigate to the existing controlled workflow. Attachment work continues through `attachment-review get/preview/apply|reject`; customer extraction through `proposal get/confirm/resume`; supplier follow-up through the existing `rfq follow-up-*` commands; quote approvals through `approval get/approve|reject`. A `supplier_clarification_gap` requires inspection of the referenced RFQ and is never auto-repaired by the queue.
+
+Priority is recalculated on read from age, current safety/commercial attention, lifecycle consistency and strict ISO operational dates. Free-form dates are not interpreted. The queue is mutation-free and must not expose party identity, subject/body text, candidate values, prices/currency, clarification text, preview tokens or attachment/source fingerprints.
+
+If `next_action` is an inspection action such as `inspect_supplier_follow_up` or `inspect_quote_approval_state`, do not proceed directly to send/approve. Inspect the referenced resource with its existing GET command first; the inbox detected a durable state inconsistency that must be resolved through the underlying workflow, not through queue mutation.
