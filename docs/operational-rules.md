@@ -3574,3 +3574,11 @@ The reconciliation read must not assign, acknowledge, renew, take over, hand off
 Acceptance receipts are immutable, authenticated-self-scoped and privacy-minimal. Same-state retries are idempotent. Receipt creation/listing must not assign, acknowledge, renew, take over, hand off, release, confirm, approve, send, apply, reject or resume work, and it must not create a durable global shift-open authority. Existing assignment and workflow guards remain authoritative.
 
 Shift-close receipt events and shift-open acceptance receipt events are evidence-only and must be excluded from operational event high-water/change summaries. Any later real operational event must make a prior acceptance historical/stale until a fresh reconciliation becomes clear and the operator explicitly accepts the new state.
+
+## RULE-177 — Continuity Audit Must Pair Close/Open Evidence Without Inventing Gaps or Authority
+
+`work continuity` is authenticated, GET-only and organization-scoped. It must group duplicate close attestations from the same durable operational state when no acceptance occurred between them, and it must start a new cycle after an acceptance even if a later quiet shift produces the same visible operational state.
+
+Cycle completion and evidence freshness are independent. A completed cycle may later be stale due to normal operational activity and must remain historically complete. Only a latest unaccepted close, a superseded unaccepted close, or impossible acceptance-before-close timing creates continuity audit attention. Historical gaps remain audit evidence; this readout must never repair them or mutate work.
+
+The ledger must remain privacy-minimal: no closing/accepting/requesting operator identity, acceptance receipt IDs, internal event IDs/watermarks, fingerprints, raw event payloads, customer/supplier identity, message content, provider identifiers or commercial values. It must not assign, acknowledge, renew, take over, hand off, release, confirm, approve, send, apply, reject, resume, open or close anything.

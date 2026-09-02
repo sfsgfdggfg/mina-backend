@@ -6279,3 +6279,16 @@ P1-70 adds an explicit authenticated incoming-shift acceptance receipt. Acceptan
 Each acceptance is scoped to the authenticated incoming operator and bound to a server-side SHA-256 projection of the current privacy-safe reconciliation state, including the latest global close receipt, change summary, current queue coverage and incomplete handoff state. The internal fingerprint and `accepted_by` identity are never returned. Same operator plus exact same reconciliation state is idempotent; another operator may record their own independent acceptance without transferring ownership or opening a global shift state.
 
 Shift-close and shift-open acceptance receipts are both evidence-only pilot events and are excluded from P1-68/P1-69 operational state high-water/change accounting. Therefore writing evidence never invalidates itself. Any later real operational persistence event makes the old acceptance stale through fresh reconciliation, and a later clean cycle requires fresh close evidence plus a new acceptance rather than resurrecting an old receipt.
+
+## DEC-162 — Shift Continuity Ledger Separates Historical Completion From Evidence Freshness
+
+**Status:** Accepted
+**Date:** 2026-09-02
+
+P1-71 adds an authenticated organization-level, read-only shift continuity ledger that pairs retained P1-68 close evidence with P1-70 incoming acceptance evidence without exposing closing or accepting operator identity. The ledger is an audit projection only; it does not open or close a shift, claim or transfer work, or grant workflow authority.
+
+A continuity cycle is not defined by raw receipt count. Multiple close attestations produced against the same durable operational high-water state before any acceptance are duplicate evidence for one cycle and are grouped together. Once a cycle has an acceptance, a later close attestation starts a new cycle even when no operational work changed in between, preserving quiet-shift boundaries.
+
+Each cycle reports `completion_status` separately from `evidence_freshness`. `complete` means at least one temporally valid acceptance was recorded for that close cycle. `open` means the latest retained cycle still awaits acceptance. `gap` means an older close cycle was superseded without any valid acceptance. Freshness is `current`, `stale` or `historical`; later ordinary operational activity may make otherwise complete evidence stale, but staleness alone must never be reclassified as a continuity gap.
+
+The organization ledger may expose opaque close receipt anchors, bounded timestamps, duplicate close counts, acceptance counts and audit status codes. It must not expose `attested_by`, `accepted_by`, acceptance receipt IDs, internal state-event watermarks, fingerprints, raw event payloads, party identity, message content or commercial values. Retention-boundary acceptances whose source close has already expired may be counted as unmatched metadata but are not automatically treated as corruption.

@@ -1397,3 +1397,11 @@ At shift start, first run `python -m src.pilot_operator work open-reconciliation
 The POST recomputes reconciliation inside the same SQLite transaction that writes evidence. If state changed after the read, the command fails with a lifecycle conflict and writes no receipt. Repeating acceptance for the exact same authenticated operator and unchanged state is idempotent.
 
 Review your own recent acceptance evidence with `python -m src.pilot_operator work open-acceptances`. `current` means it still matches a fresh clear reconciliation; `stale` means continuity changed. An acceptance receipt never claims work or authorizes workflow actions. Use `work queue`, `work get` and normal `work assign` for actual coverage.
+
+### P1-71 — Shift Continuity Audit / Cycle Ledger
+
+Use `python -m src.pilot_operator work continuity` to inspect retained organization-level close/open continuity evidence. The command is read-only and does not depend on the requesting operator owning any work.
+
+Read `completion_status` and `evidence_freshness` separately. `complete` means an incoming acceptance was recorded for the cycle; later normal work may make that evidence `stale` without creating a historical gap. `open` means the newest close still awaits acceptance. `gap` means an older close was superseded without acceptance and should remain visible as audit attention.
+
+Duplicate close attestations against one unchanged operational high-water state are grouped as one cycle until an acceptance occurs. Operator identities and acceptance receipt IDs are intentionally omitted. Use the existing `open-reconciliation` and `open-accept` paths for current incoming-shift handling; never treat the ledger as authority to repair, claim, transfer or approve work.

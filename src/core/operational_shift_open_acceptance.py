@@ -113,6 +113,42 @@ def _public_receipt(
     }
 
 
+def evaluate_operational_shift_open_acceptance_status(
+    receipt: OperationalShiftOpenAcceptanceReceipt,
+    *,
+    receipt_repository: OperationalShiftCloseReceiptRepository,
+    assignment_repository: OperationalWorkAssignmentRepository,
+    attachment_repository,
+    proposal_repository,
+    supplier_repository,
+    approval_repository,
+    quote_case_repository,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    timestamp = _utc(now)
+    reconciliation, current_state_sha256 = _acceptance_state(
+        operator_name=receipt.accepted_by,
+        receipt_repository=receipt_repository,
+        assignment_repository=assignment_repository,
+        attachment_repository=attachment_repository,
+        proposal_repository=proposal_repository,
+        supplier_repository=supplier_repository,
+        approval_repository=approval_repository,
+        quote_case_repository=quote_case_repository,
+        now=timestamp,
+    )
+    current_clear = (
+        reconciliation.get("reconciliation_status") == "clear"
+        and reconciliation.get("review_required") is False
+    )
+    current = current_clear and receipt.acceptance_state_sha256 == current_state_sha256
+    return {
+        "current_status": "current" if current else "stale",
+        "current_for_open_state": current,
+        "current_reconciliation_clear": current_clear,
+    }
+
+
 def attest_operational_shift_open_acceptance(
     *,
     operator_name: str,

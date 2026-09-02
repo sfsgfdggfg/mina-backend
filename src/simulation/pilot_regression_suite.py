@@ -82,6 +82,9 @@ from src.simulation.operational_shift_open_reconciliation_regressions import (
 from src.simulation.operational_shift_open_acceptance_regressions import (
     evaluate_operational_shift_open_acceptance_regressions,
 )
+from src.simulation.operational_shift_continuity_ledger_regressions import (
+    evaluate_operational_shift_continuity_ledger_regressions,
+)
 from src.simulation.operational_work_assignment_regressions import (
     evaluate_operational_work_assignment_regressions,
 )
@@ -308,6 +311,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Operational shift open acceptance evidence",
         evaluate_operational_shift_open_acceptance_regressions,
+    ),
+    Suite(
+        "Operational shift continuity audit ledger",
+        evaluate_operational_shift_continuity_ledger_regressions,
     ),
     Suite(
         "Operational work assignment and acknowledgement",
