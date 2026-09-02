@@ -1341,3 +1341,17 @@ python -m src.pilot_operator work shift-summary
 The summary combines four privacy-minimal views: your current lease-active My Work items, your `expiring_soon` count, your own recent shift handoffs from the last 12 hours (maximum 20), and currently critical unassigned work. A handoff may show whether the same work state is now unassigned, claimed, expired, changed or no longer active.
 
 The command is GET-only. It never renews a lease, assigns work, performs a handoff, takes over expired work or executes any proposal/RFQ/approval/attachment action. Use `work mine`, `work get`, `work assign`, `work renew`, `work takeover`, `work handoff` and the underlying controlled workflow commands separately as appropriate. Do not treat a shift-summary item as authorization for the underlying action.
+
+## P1-67 shift close readiness and handoff completeness
+
+Before ending an operator shift, run the read-only readiness gate:
+
+```bash
+python -m src.pilot_operator work close-readiness
+```
+
+`ready_to_close=true` means coordination coverage is currently clear: you hold no active assignment, you have no same-state expired assignment that still needs cleanup, your recent handoffs are either claimed or no longer active, and there is no critical unassigned work in the shared queue. The command does not actually close a shift and creates no durable close record.
+
+If `active_assignments_remaining` is present, finish the controlled workflow or use `work handoff` / `work release` as appropriate. If `expired_assignments_require_recovery` is present, refresh with `work get`; use the existing P1-64 recovery path such as `work takeover` when needed before a handoff, or release the assignment when intentionally returning it. If `recent_handoffs_incomplete` is present, the receiving shift must refresh current state and claim appropriate work through normal `work assign`. If `critical_unassigned_work_requires_coverage` is present, the critical item must be inspected and deliberately claimed by an operator before readiness can pass.
+
+`active_assignment_lease_expiring_soon` is a warning layered on top of the active-work blocker. Readiness never performs assignment or workflow mutations and does not authorize any proposal, attachment, supplier, approval, case or send action. Always use the existing controlled commands and lifecycle guards for the actual work.

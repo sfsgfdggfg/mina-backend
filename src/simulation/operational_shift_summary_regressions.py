@@ -170,6 +170,13 @@ def evaluate_operational_shift_summary_regressions():
         patch.object(api, "supplier_rfq_repository", suppliers),
         patch.object(api, "quote_approval_repository", approvals),
         patch.object(api, "quote_case_repository", cases),
+        patch.object(
+            api,
+            "build_operational_shift_summary",
+            side_effect=lambda **kwargs: build_operational_shift_summary(
+                now=NOW + timedelta(minutes=3), **kwargs
+            ),
+        ),
     ):
         api_summary = api.get_operational_work_shift_summary(request)
     check(

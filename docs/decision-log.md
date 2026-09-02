@@ -6229,3 +6229,16 @@ P1-66 adds an authenticated, read-only shift summary for one pilot operator. The
 Recent handoffs are read from the existing append-only operational assignment event history rather than inferred from the current assignment snapshot. The read window is fixed at 12 hours and capped at 20 handoff records. Successor claims may replace the current assignment state but must not erase the prior handoff readout. Raw event payloads and internal work-state fingerprints are never returned.
 
 The summary is scoped to the authenticated pilot operator. It may expose safe work IDs/types, current priority/routing metadata, lease attention, handoff time/generation and a coarse current disposition (`available_unassigned`, `claimed`, `expired_assignment`, `state_changed`, or `resolved_or_inactive`). It must not expose party identity, email/message content, commercial amounts/currency, provider identifiers, attachment/source hashes or internal fingerprints. Existing workflow guards remain authoritative.
+
+## DEC-158 — Shift Close Readiness Is a Read-Only Fail-Closed Coordination Gate
+
+**Status:** Accepted
+**Date:** 2026-09-02
+
+P1-67 adds an authenticated shift-close readiness readout. It does not close a shift, release or assign work, record a close event, or grant workflow authority. `ready_to_close=true` is descriptive coordination state only and is returned only when the authenticated operator has no current active assignment, no same-state expired assignment, no incomplete recent handoff, and no current critical unassigned work.
+
+Active assignments block close readiness even when their lease is healthy. Expiring-soon active leases remain a separate warning so the operator can distinguish ordinary unfinished work from urgent lease attention. Expired same-state assignments are checked outside My Work because P1-65 intentionally excludes expired ownership; an expired assignment must not disappear from shift-close accounting merely because it is no longer lease-active.
+
+Recent handoffs reuse the bounded P1-66 handoff history. `claimed` and `resolved_or_inactive` are complete dispositions. `available_unassigned`, `expired_assignment`, and `state_changed` fail closed as incomplete because receiving coverage is not currently proven. Critical unassigned work independently blocks readiness even when it did not originate from the closing operator.
+
+The readout may return privacy-minimal work IDs/types, priority/routing metadata, lease state and handoff disposition plus descriptive existing CLI command names for remediation. It must never execute those commands, expose internal work-state fingerprints or raw assignment events, or include party identity, message content, commercial values, provider identifiers or attachment/source hashes.
