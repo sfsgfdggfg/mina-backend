@@ -1417,3 +1417,13 @@ A silent supplier reaches `send_no_response_reminder` after 30 minutes from conf
 Secondary supplier approval remains blocked until all primaries explicitly report `no_capacity`/`declined`, or until every primary has a terminal result and the operator has completed real price negotiation. For the latter case, record only the fact that negotiation was exhausted with `python -m src.pilot_operator workflow secondary-release <workflow_id>`. Never enter the customer's raw target price into that command or supplier communications.
 
 The policy carries a five-minute proactive customer-deadline update lead, but P1-72 intentionally does not infer a quote-response deadline from delivery dates or free-text urgency. A later structured customer-deadline step must provide the actual deadline before MINAI can automate that customer status message safely.
+
+## P1-73 — Automatic Follow-Up, Customer Quote Deadline, and Business Hours
+
+Default pilot business hours are Monday-Friday 09:00-18:30 in Europe/Istanbul. Supplier reminder timers count business minutes only. A Friday 18:20 silent RFQ reaches its 30-minute reminder on Monday 09:20; a Friday 17:30 acknowledgement reaches its 120-minute reminder on Monday 10:00.
+
+Automatic supplier reminders and customer deadline updates are independently disableable through the supplier dispatch policy. Outside business hours the scheduler does not send automatic mail and does not surface phone/WhatsApp escalation work. Inbound mail may still be ingested; state is rechecked before the next business-time action.
+
+Explicit customer quote deadlines are distinct from required delivery dates. A deadline after business close moves the single proactive status update to five minutes before close when that safe window still exists. Urgency alone does not create a deadline. Provider failure is not automatically retried.
+
+Approved initial supplier RFQ and controlled supplier follow-up provider sends are rejected before provider delivery outside business hours. This does not grant automatic initial RFQ authority: approved drafts remain under the existing controlled send workflow. `/automation/status` is authenticated/read-only and reports scheduler health plus the active business calendar.

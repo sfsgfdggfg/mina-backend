@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from pydantic import BaseModel
 
+from src.core.business_calendar import is_business_time, next_business_open
 from src.core.mail import (
     MailSendStatus,
     MailSendResult,
@@ -103,6 +105,29 @@ def dispatch_outbound_mail(
     return result
 
 
+
+
+def _business_hours_rejection(
+    *, repository: SupplierRFQRepository, workflow_id: str, operation_id: str,
+    now: datetime | None,
+) -> MailSendResult | None:
+    workflow = repository.get_workflow(workflow_id)
+    if workflow is None:
+        return None
+    current = now or datetime.now(timezone.utc)
+    if is_business_time(current, workflow.dispatch_policy):
+        return None
+    resume_at = next_business_open(current, workflow.dispatch_policy)
+    return _controlled_result(
+        operation_id=operation_id,
+        status="rejected_before_provider",
+        reason=(
+            "Supplier outbound mail is paused outside agency business hours; "
+            f"next business opening is {resume_at.isoformat()}."
+        ),
+    )
+
+
 def build_supplier_rfq_mail_request(
     draft: SupplierRFQDraft,
 ) -> OutboundMailRequest:
@@ -127,6 +152,8 @@ def send_supplier_rfq_via_mail(
     repository: SupplierRFQRepository,
     rfq_id: str,
     sender: OutboundMailSender | None,
+    enforce_business_hours: bool = False,
+    now: datetime | None = None,
 ) -> SupplierRFQMailDeliveryResult:
     draft = repository.get_draft(rfq_id)
     if draft is None:
@@ -172,6 +199,15 @@ def send_supplier_rfq_via_mail(
                 reason="Supplier RFQ already has automated send evidence.",
             ),
         )
+    if enforce_business_hours:
+        business_rejection = _business_hours_rejection(
+            repository=repository, workflow_id=draft.workflow_id,
+            operation_id=operation_id, now=now,
+        )
+        if business_rejection is not None:
+            return SupplierRFQMailDeliveryResult(
+                supplier_rfq=draft, delivery=business_rejection
+            )
 
     request = build_supplier_rfq_mail_request(draft)
     delivery = dispatch_outbound_mail(request, sender)
@@ -261,6 +297,8 @@ def send_supplier_rfq_follow_up_via_mail(
     repository: SupplierRFQRepository,
     follow_up_id: str,
     sender: OutboundMailSender | None,
+    enforce_business_hours: bool = False,
+    now: datetime | None = None,
 ) -> SupplierRFQFollowUpMailDeliveryResult:
     follow_up = repository.get_follow_up_draft(follow_up_id)
     if follow_up is None:
@@ -302,6 +340,15 @@ def send_supplier_rfq_follow_up_via_mail(
                 reason="Supplier RFQ follow-up already has automated send evidence.",
             ),
         )
+    if enforce_business_hours:
+        business_rejection = _business_hours_rejection(
+            repository=repository, workflow_id=follow_up.workflow_id,
+            operation_id=operation_id, now=now,
+        )
+        if business_rejection is not None:
+            return SupplierRFQFollowUpMailDeliveryResult(
+                supplier_rfq_follow_up=follow_up, delivery=business_rejection
+            )
     request = build_supplier_rfq_follow_up_mail_request(follow_up)
     delivery = dispatch_outbound_mail(request, sender)
     if delivery.status != "sent":

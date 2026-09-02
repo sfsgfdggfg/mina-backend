@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Any, Literal, Optional, List
 from src.core.pricing_policy import PricingPolicyResolution
@@ -53,6 +54,7 @@ class Shipment(BaseModel):
 
     cargo_ready_date: Optional[str] = None
     required_delivery_date: Optional[str] = None
+    customer_quote_deadline_at: Optional[datetime] = None
 
     is_adr: Optional[bool] = None
     adr_class: Optional[str] = None
@@ -71,6 +73,15 @@ class Shipment(BaseModel):
     ] = Field(default_factory=dict)
 
     packages: List[Package] = Field(default_factory=list)
+
+    @field_validator("customer_quote_deadline_at")
+    @classmethod
+    def validate_customer_quote_deadline_at(
+        cls, value: Optional[datetime]
+    ) -> Optional[datetime]:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Customer quote deadline must include timezone evidence.")
+        return value
 
     @field_validator("commodity_attributes")
     @classmethod

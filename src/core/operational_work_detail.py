@@ -25,6 +25,10 @@ _BLOCKER_REASON_CODES = {
     "supplier_follow_up_parent_state_stale",
     "supplier_follow_up_send_evidence_state_conflict",
     "multiple_active_supplier_follow_ups",
+    "supplier_automation_delivery_requires_review",
+    "supplier_recipient_missing_for_automation",
+    "customer_status_update_delivery_requires_review",
+    "customer_recipient_missing_for_deadline_update",
     "clarification_required_without_active_follow_up",
     "quote_approval_case_missing",
     "quote_approval_multiple_cases",
@@ -167,6 +171,42 @@ def _clarification_gap_detail(item, repository):
     }, commands
 
 
+def _supplier_contact_detail(item, repository):
+    draft = repository.get_draft(item["resource_id"])
+    if draft is None:
+        return {"state_checks": {"resource_present": False}, "recovery_mode": "inspect_state"}, []
+    workflow = repository.get_workflow(draft.workflow_id)
+    commands = [_cmd("rfq", "get", draft.rfq_id, purpose="inspect_supplier_rfq")]
+    if draft.status == "awaiting_response":
+        commands.append(_cmd(
+            "rfq", "ack-seen", draft.rfq_id, "--channel", "phone",
+            purpose="record_phone_confirmation_after_contact",
+        ))
+    return {
+        "state_checks": {
+            "resource_present": True,
+            "rfq_status": draft.status,
+            "workflow_present": workflow is not None,
+            "recipient_configured": bool(draft.recipient_email),
+        },
+        "recovery_mode": "human_supplier_contact",
+    }, commands
+
+
+def _customer_deadline_detail(item, repository):
+    workflow = repository.get_workflow(item["resource_id"])
+    if workflow is None:
+        return {"state_checks": {"resource_present": False}, "recovery_mode": "inspect_state"}, []
+    return {
+        "state_checks": {
+            "resource_present": True,
+            "customer_recipient_configured": bool(workflow.sender_address),
+            "explicit_quote_deadline_present": workflow.shipment.customer_quote_deadline_at is not None,
+        },
+        "recovery_mode": "human_customer_contact",
+    }, []
+
+
 def _approval_detail(item, approval_repository, quote_case_repository):
     approval = approval_repository.get(item["resource_id"])
     if approval is None:
@@ -235,6 +275,10 @@ def build_operational_work_item_detail(
         detail, commands = _follow_up_detail(item, supplier_repository)
     elif item["work_type"] == "supplier_clarification_gap":
         detail, commands = _clarification_gap_detail(item, supplier_repository)
+    elif item["work_type"] == "supplier_contact_escalation":
+        detail, commands = _supplier_contact_detail(item, supplier_repository)
+    elif item["work_type"] == "customer_deadline_update":
+        detail, commands = _customer_deadline_detail(item, supplier_repository)
     elif item["work_type"] == "quote_approval":
         detail, commands = _approval_detail(item, approval_repository, quote_case_repository)
     else:

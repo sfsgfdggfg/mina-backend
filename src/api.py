@@ -37,6 +37,7 @@ from src.workflow.supplier_response_ingestion import (
     SupplierReplyIngestionRequest,
     ingest_supplier_reply,
 )
+from src.workflow.automation_scheduler import AutomationScheduler
 from src.workflow.mail_delivery import (
     send_supplier_rfq_follow_up_via_mail,
     send_supplier_rfq_via_mail,
@@ -67,6 +68,7 @@ from src.workflow.extraction_confirmation import (
     resume_confirmed_extraction,
 )
 from src.core.pilot_store import SQLitePilotStore
+from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
 from src.core.runtime_release import runtime_release_payload
 from src.core.pilot_access import (
     authorize_pilot_request,
@@ -75,6 +77,7 @@ from src.core.pilot_access import (
 from src.core.operational_data import operational_data_sources_from_environment
 from src.core.sqlite_repositories import (
     SQLiteAttachmentInterpretationReviewRepository,
+    SQLiteAutomationActionRepository,
     SQLiteOperationalWorkAssignmentRepository,
     SQLiteOperationalShiftCloseReceiptRepository,
     SQLiteOperationalShiftOpenAcceptanceReceiptRepository,
@@ -253,6 +256,7 @@ quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
+automation_action_repository = SQLiteAutomationActionRepository(pilot_store)
 operational_work_assignment_repository = SQLiteOperationalWorkAssignmentRepository(pilot_store)
 operational_shift_close_receipt_repository = SQLiteOperationalShiftCloseReceiptRepository(pilot_store)
 operational_shift_open_acceptance_repository = SQLiteOperationalShiftOpenAcceptanceReceiptRepository(pilot_store)
@@ -260,6 +264,41 @@ try:
     outbound_mail_sender: OutboundMailSender | None = outlook_graph_sender_from_environment()
 except MicrosoftAuthConfigurationError:
     outbound_mail_sender = None
+
+automation_scheduler = AutomationScheduler(
+    supplier_repository=supplier_rfq_repository,
+    action_repository=automation_action_repository,
+    sender=outbound_mail_sender,
+)
+
+
+@app.on_event("startup")
+def start_controlled_automation_scheduler():
+    if pilot_mode_enabled():
+        automation_scheduler.start()
+
+
+@app.on_event("shutdown")
+def stop_controlled_automation_scheduler():
+    automation_scheduler.stop()
+
+
+@app.get("/automation/status")
+def get_automation_status():
+    status = automation_scheduler.status()
+    policy = resolve_supplier_dispatch_policy()
+    return {
+        **status,
+        "legacy_workflows_not_auto_activated": True,
+        "supplier_reminders_default_enabled": policy.automatic_supplier_reminders_enabled,
+        "customer_deadline_updates_default_enabled": policy.automatic_customer_deadline_updates_enabled,
+        "business_hours": {
+            "timezone": policy.business_timezone,
+            "start": policy.business_day_start,
+            "end": policy.business_day_end,
+            "weekdays": list(policy.business_weekdays),
+        },
+    }
 
 
 class ProcessEmailRequest(BaseModel):
@@ -1784,6 +1823,7 @@ def send_supplier_rfq_follow_up_endpoint(follow_up_id: str):
             repository=supplier_rfq_repository,
             follow_up_id=follow_up_id,
             sender=outbound_mail_sender,
+            enforce_business_hours=True,
         )
     except SupplierRFQFollowUpNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1848,6 +1888,7 @@ def get_supplier_rfq_dispatch_status(workflow_id: str):
         return build_supplier_dispatch_status(
             repository=supplier_rfq_repository,
             workflow_id=workflow_id,
+            action_repository=automation_action_repository,
         )
     except SupplierSecondaryDispatchBlockedError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1898,6 +1939,7 @@ def send_supplier_rfq_endpoint(rfq_id: str):
             repository=supplier_rfq_repository,
             rfq_id=rfq_id,
             sender=outbound_mail_sender,
+            enforce_business_hours=True,
         )
         if result.delivery.status == "rejected_before_provider":
             raise HTTPException(

@@ -181,6 +181,9 @@ class SupplierRFQRepository(Protocol):
     ) -> Optional[SupplierRFQWorkflow]:
         ...
 
+    def list_workflows(self) -> list[SupplierRFQWorkflow]:
+        ...
+
     def list_responses(
         self,
         rfq_id: Optional[str] = None,
@@ -469,6 +472,9 @@ class InMemorySupplierRFQRepository:
         workflow_id: str,
     ) -> Optional[SupplierRFQWorkflow]:
         return self._workflows.get(workflow_id)
+
+    def list_workflows(self) -> list[SupplierRFQWorkflow]:
+        return list(self._workflows.values())
 
     def list_responses(
         self,

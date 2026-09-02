@@ -246,6 +246,7 @@ def resume_confirmed_extraction(
             shipment=started.confirmed_shipment.model_copy(deep=True),
             email_text=proposal.inbound_mail.body_text,
             sender_address=proposal.inbound_mail.sender_address,
+            customer_subject=proposal.inbound_mail.subject,
             rfq_repository=rfq_repository,
             operational_data_sources=operational_data_sources,
             approval_repository=approval_repository,
