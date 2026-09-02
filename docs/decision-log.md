@@ -6242,3 +6242,18 @@ Active assignments block close readiness even when their lease is healthy. Expir
 Recent handoffs reuse the bounded P1-66 handoff history. `claimed` and `resolved_or_inactive` are complete dispositions. `available_unassigned`, `expired_assignment`, and `state_changed` fail closed as incomplete because receiving coverage is not currently proven. Critical unassigned work independently blocks readiness even when it did not originate from the closing operator.
 
 The readout may return privacy-minimal work IDs/types, priority/routing metadata, lease state and handoff disposition plus descriptive existing CLI command names for remediation. It must never execute those commands, expose internal work-state fingerprints or raw assignment events, or include party identity, message content, commercial values, provider identifiers or attachment/source hashes.
+
+## DEC-159 — Shift Close Attestation Records State-Bound Audit Evidence Without Creating Authority
+
+**Status:** Accepted
+**Date:** 2026-09-02
+
+P1-68 adds an explicit authenticated shift-close attestation that may create durable evidence only when P1-67 recomputes the current state as `ready_to_close=true` inside the same atomic SQLite transaction that records the receipt. A prior readiness GET is never sufficient evidence for attestation, and a blocked current state fails closed without writing a receipt.
+
+Each receipt is bound to a server-side SHA-256 fingerprint of the authenticated operator scope, privacy-safe current unified queue/assignment coordination state, recent handoff disposition and readiness checks. The fingerprint is internal and never returned by API/CLI. Same operator plus the exact same close state is idempotent and resolves to one durable receipt; a changed close state requires a fresh receipt.
+
+Receipt history is authenticated-self-scoped and bounded for operator readout. A receipt is reported as `current` only while the current state still recomputes ready and matches its internal fingerprint; otherwise it remains immutable historical evidence marked `stale`. A receipt never authorizes assignment, confirmation, approval, send, apply, reject, resume or any future shift close.
+
+P1-68 also tightens P1-67 critical coverage: critical work is covered only by a lease-active `assigned` or `acknowledged` assignment. Unassigned, stale or expired critical ownership is uncovered and blocks close readiness, including when the expired assignment belongs to another operator.
+
+The state binding also includes the latest non-receipt pilot event high-water mark when SQLite durability is available. Shift-close receipt events themselves are excluded from that watermark so writing a receipt does not invalidate itself. Any later operational persistence event advances the watermark monotonically, preventing an old receipt from becoming current again merely because visible queue state later returns to a previous shape.

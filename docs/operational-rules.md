@@ -3548,3 +3548,13 @@ Handoff history must be scoped to the authenticated operator, limited to the fix
 An expired assignment must remain a shift-close blocker even though it is excluded from My Work. Recent handoff dispositions are complete only when the work is currently claimed or no longer active; unassigned, expired-assignment or changed-state dispositions remain incomplete until current queue state proves safe coverage. Expiring-soon active leases are additional attention metadata and do not replace the active-assignment blocker.
 
 Readiness must not release, renew, take over, hand off, assign, confirm, approve, send, apply, reject or resume work and must not persist a shift-close state. Remediation may name existing controlled CLI actions only as descriptive routing metadata. Existing assignment and workflow lifecycle guards remain authoritative, and internal fingerprints, raw history payloads and sensitive operational/commercial data must not be exposed.
+
+## RULE-174 — Shift Close Receipts Require Atomic Current Readiness and Are Historical Evidence Only
+
+`work close-attest` may record a shift-close receipt only after recomputing current P1-67 readiness inside the same atomic persistence transaction and proving `ready_to_close=true`. The authenticated operator identity must come from pilot authentication; no client-supplied operator, target operator, free-form note or internal fingerprint is accepted.
+
+Receipts must be immutable, privacy-minimal and state-bound. The close-state fingerprint is internal only. Same-state retries must be idempotent; changed state must make prior receipts stale rather than updating or deleting them. Receipt current/stale status never substitutes for a fresh readiness check and never grants workflow or assignment authority.
+
+Critical work counts as covered for shift-close purposes only while it has a lease-active assigned/acknowledged coordination assignment. Unassigned, expired or stale critical assignment state must fail closed as uncovered. Receipt creation/listing must not mutate assignment or underlying workflow repositories.
+
+For durable SQLite operation, receipt state binding must include a monotonic high-water mark from non-receipt pilot events. Receipt events are excluded from that mark. Once any later operational state event occurs, an older receipt must remain stale even if a later visible queue snapshot happens to resemble the original state.

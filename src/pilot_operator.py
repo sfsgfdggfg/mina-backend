@@ -212,6 +212,12 @@ class PilotOperatorClient:
     def get_operational_shift_close_readiness(self) -> Any:
         return self._request("GET", "/operational-work-shift-close-readiness")
 
+    def attest_operational_shift_close(self) -> Any:
+        return self._request("POST", "/operational-work-shift-close-attest", {})
+
+    def list_operational_shift_close_receipts(self) -> Any:
+        return self._request("GET", "/operational-work-shift-close-receipts")
+
     def get_operational_work_item(self, work_id: str) -> Any:
         return self._request(
             "GET", f"/operational-work-items/{self._id(work_id)}"
@@ -530,6 +536,8 @@ def _build_parser() -> argparse.ArgumentParser:
     work.add_parser("mine")
     work.add_parser("shift-summary")
     work.add_parser("close-readiness")
+    work.add_parser("close-attest")
+    work.add_parser("close-receipts")
     work.add_parser("get").add_argument("work_id")
     work.add_parser("assign").add_argument("work_id")
     work.add_parser("ack").add_argument("work_id")
@@ -711,6 +719,10 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.get_operational_shift_summary()
         if args.action == "close-readiness":
             return client.get_operational_shift_close_readiness()
+        if args.action == "close-attest":
+            return client.attest_operational_shift_close()
+        if args.action == "close-receipts":
+            return client.list_operational_shift_close_receipts()
         if args.action == "get":
             return client.get_operational_work_item(args.work_id)
         if args.action == "assign":

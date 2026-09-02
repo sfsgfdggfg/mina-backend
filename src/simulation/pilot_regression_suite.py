@@ -73,6 +73,9 @@ from src.simulation.operational_shift_summary_regressions import (
 from src.simulation.operational_shift_close_readiness_regressions import (
     evaluate_operational_shift_close_readiness_regressions,
 )
+from src.simulation.operational_shift_close_attestation_regressions import (
+    evaluate_operational_shift_close_attestation_regressions,
+)
 from src.simulation.operational_work_assignment_regressions import (
     evaluate_operational_work_assignment_regressions,
 )
@@ -287,6 +290,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Operational shift close readiness and handoff completeness",
         evaluate_operational_shift_close_readiness_regressions,
+    ),
+    Suite(
+        "Operational shift close attestation and evidence receipt",
+        evaluate_operational_shift_close_attestation_regressions,
     ),
     Suite(
         "Operational work assignment and acknowledgement",
