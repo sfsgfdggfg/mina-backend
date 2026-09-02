@@ -3,6 +3,11 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
+from src.core.automation_action_repository import AutomationActionRepository
+from src.core.automation_planning import (
+    customer_deadline_plan,
+    supplier_reminder_plan,
+)
 from src.core.attachment_interpretation_review_repository import (
     AttachmentInterpretationReviewRepository,
 )
@@ -345,6 +350,124 @@ def _clarification_gap_item(
     )
 
 
+def _automation_attention_items(
+    *,
+    supplier_repository: SupplierRFQRepository,
+    action_repository: AutomationActionRepository,
+    now: datetime,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    supplier_states = {
+        "manual_reminder_due": (
+            "send_supplier_reminder_manually", 60,
+            "supplier_automatic_reminder_disabled",
+        ),
+        "human_contact_required": (
+            "contact_supplier_phone_or_whatsapp", 80,
+            "supplier_phone_or_whatsapp_contact_required",
+        ),
+        "automation_delivery_attention": (
+            "inspect_supplier_automation_delivery", 85,
+            "supplier_automation_delivery_requires_review",
+        ),
+        "automation_cancelled_manual_attention": (
+            "inspect_supplier_automation_state", 65,
+            "supplier_automation_cancelled_requires_review",
+        ),
+        "missing_supplier_recipient_manual_attention": (
+            "inspect_supplier_contact_data", 85,
+            "supplier_recipient_missing_for_automation",
+        ),
+    }
+    for draft in supplier_repository.list_drafts():
+        plan = supplier_reminder_plan(
+            supplier_repository=supplier_repository,
+            action_repository=action_repository,
+            draft=draft,
+            now=now,
+        )
+        state = str(plan.get("state"))
+        config = supplier_states.get(state)
+        if config is None:
+            continue
+        next_action, score, reason = config
+        created_at = plan.get("due_at") or draft.sent_at or draft.created_at
+        age_hours = _age_hours(created_at, now=now)
+        reasons = [reason]
+        if plan.get("reason"):
+            reasons.append(str(plan["reason"]))
+        score, nearest_kind, nearest_days = _add_deadlines(
+            score, reasons, _rfq_dates(draft, supplier_repository=supplier_repository), now=now
+        )
+        items.append(_final_item(
+            work_type="supplier_contact_escalation",
+            resource_type="supplier_rfq",
+            resource_id=draft.rfq_id,
+            route="supplier",
+            status=state,
+            next_action=next_action,
+            created_at=created_at,
+            age_hours=age_hours,
+            score=score,
+            reasons=reasons,
+            blocker_count=1 if "attention" in state or "missing" in state else 0,
+            warning_count=1,
+            nearest_deadline_kind=nearest_kind,
+            days_until_nearest_deadline=nearest_days,
+        ))
+
+    customer_states = {
+        "manual_customer_update_due": (
+            "contact_customer_manually", 70,
+            "customer_deadline_update_automation_disabled",
+        ),
+        "deadline_passed_manual_attention": (
+            "contact_customer_manually", 90,
+            "customer_quote_deadline_passed_without_automatic_update",
+        ),
+        "automation_delivery_attention": (
+            "inspect_customer_update_delivery", 90,
+            "customer_status_update_delivery_requires_review",
+        ),
+        "automation_cancelled_manual_attention": (
+            "inspect_customer_update_state", 70,
+            "customer_status_update_cancelled_requires_review",
+        ),
+        "missing_customer_recipient_manual_attention": (
+            "inspect_customer_contact_data", 90,
+            "customer_recipient_missing_for_deadline_update",
+        ),
+    }
+    for workflow in supplier_repository.list_workflows():
+        plan = customer_deadline_plan(
+            supplier_repository=supplier_repository,
+            action_repository=action_repository,
+            workflow=workflow,
+            now=now,
+        )
+        state = str(plan.get("state"))
+        config = customer_states.get(state)
+        if config is None:
+            continue
+        next_action, score, reason = config
+        created_at = plan.get("due_at") or workflow.shipment.customer_quote_deadline_at or workflow.created_at
+        items.append(_final_item(
+            work_type="customer_deadline_update",
+            resource_type="supplier_rfq_workflow",
+            resource_id=workflow.workflow_id,
+            route="customer",
+            status=state,
+            next_action=next_action,
+            created_at=created_at,
+            age_hours=_age_hours(created_at, now=now),
+            score=score,
+            reasons=[reason],
+            blocker_count=1 if "attention" in state or "missing" in state else 0,
+            warning_count=1,
+        ))
+    return items
+
+
 def _quote_approval_item(
     approval: QuoteApproval,
     *,
@@ -415,6 +538,7 @@ def build_operational_work_queue(
     supplier_repository: SupplierRFQRepository,
     approval_repository: QuoteApprovalRepository,
     quote_case_repository: QuoteCaseRepository,
+    automation_action_repository: AutomationActionRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = aware_utc(now or datetime.now(timezone.utc))
@@ -431,6 +555,19 @@ def build_operational_work_queue(
         for proposal in proposal_repository.list_all()
         if proposal.extraction_status == "proposed"
     )
+
+    resolved_automation_repository = automation_action_repository
+    if resolved_automation_repository is None and getattr(supplier_repository, "store", None) is not None:
+        from src.core.sqlite_repositories import SQLiteAutomationActionRepository
+        resolved_automation_repository = SQLiteAutomationActionRepository(
+            supplier_repository.store
+        )
+    if resolved_automation_repository is not None:
+        items.extend(_automation_attention_items(
+            supplier_repository=supplier_repository,
+            action_repository=resolved_automation_repository,
+            now=current,
+        ))
 
     follow_ups = supplier_repository.list_follow_up_drafts()
     active_follow_up_counts: dict[str, int] = {}

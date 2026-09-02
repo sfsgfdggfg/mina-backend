@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
+
+from src.core.automation_action_repository import AutomationActionRepository
+from src.core.automation_planning import supplier_reminder_plan
+from src.core.business_calendar import add_business_minutes
 
 from src.core.supplier_rfq import (
     SupplierRFQAcknowledgementEvidence,
@@ -226,6 +230,7 @@ def build_supplier_dispatch_status(
     repository: SupplierRFQRepository,
     workflow_id: str,
     now: datetime | None = None,
+    action_repository: AutomationActionRepository | None = None,
 ) -> dict[str, Any]:
     workflow = repository.get_workflow(workflow_id)
     if workflow is None:
@@ -260,8 +265,10 @@ def build_supplier_dispatch_status(
                 "send_secondary_rfq" if gate["allowed"] else "hold_secondary_rfq"
             )
         elif draft.status == "awaiting_response" and acknowledged_at is not None:
-            reminder_due_at = acknowledged_at + timedelta(
-                minutes=workflow.dispatch_policy.acknowledged_grace_minutes
+            reminder_due_at = add_business_minutes(
+                acknowledged_at,
+                workflow.dispatch_policy.acknowledged_grace_minutes,
+                workflow.dispatch_policy,
             )
             next_action = (
                 "send_acknowledged_reminder"
@@ -269,14 +276,35 @@ def build_supplier_dispatch_status(
                 else "wait_acknowledged_supplier"
             )
         elif draft.status == "awaiting_response" and draft.sent_at is not None:
-            reminder_due_at = _utc(draft.sent_at) + timedelta(
-                minutes=workflow.dispatch_policy.no_response_reminder_minutes
+            reminder_due_at = add_business_minutes(
+                _utc(draft.sent_at),
+                workflow.dispatch_policy.no_response_reminder_minutes,
+                workflow.dispatch_policy,
             )
             next_action = (
                 "send_no_response_reminder"
                 if current >= reminder_due_at
                 else "wait_for_supplier_acknowledgement"
             )
+        if action_repository is not None and draft.status == "awaiting_response":
+            automation_plan = supplier_reminder_plan(
+                supplier_repository=repository,
+                action_repository=action_repository,
+                draft=draft,
+                now=current,
+            )
+            automation_state = automation_plan.get("state")
+            if automation_plan.get("due_at") is not None:
+                reminder_due_at = automation_plan["due_at"]
+            next_action = {
+                "automatic_reminder_due": "automatic_supplier_reminder_due",
+                "manual_reminder_due": "manual_supplier_reminder_due",
+                "human_contact_required": "contact_supplier_phone_or_whatsapp",
+                "automation_delivery_attention": "inspect_supplier_automation_delivery",
+                "automation_cancelled_manual_attention": "inspect_supplier_automation_state",
+                "missing_supplier_recipient_manual_attention": "inspect_supplier_contact_data",
+                "outside_business_hours_waiting": "wait_for_business_hours",
+            }.get(str(automation_state), next_action)
         items.append({
             "rfq_id": draft.rfq_id,
             "supplier_name": draft.supplier_name,
@@ -301,6 +329,16 @@ def build_supplier_dispatch_status(
             "no_response_reminder_minutes": workflow.dispatch_policy.no_response_reminder_minutes,
             "acknowledged_grace_minutes": workflow.dispatch_policy.acknowledged_grace_minutes,
             "customer_deadline_proactive_minutes": workflow.dispatch_policy.customer_deadline_proactive_minutes,
+            "automatic_supplier_reminders_enabled": (
+                workflow.dispatch_policy.automatic_supplier_reminders_enabled
+            ),
+            "automatic_customer_deadline_updates_enabled": (
+                workflow.dispatch_policy.automatic_customer_deadline_updates_enabled
+            ),
+            "business_timezone": workflow.dispatch_policy.business_timezone,
+            "business_day_start": workflow.dispatch_policy.business_day_start,
+            "business_day_end": workflow.dispatch_policy.business_day_end,
+            "business_weekdays": list(workflow.dispatch_policy.business_weekdays),
         },
         "secondary_gate": gate,
         "items": items,
@@ -311,5 +349,7 @@ def build_supplier_dispatch_status(
             "phone_or_whatsapp_is_human_escalation": True,
             "customer_urgency_does_not_auto_release_secondary": True,
             "customer_target_price_must_not_be_disclosed_to_supplier": True,
+            "automation_runs_only_during_business_hours": True,
+            "reminder_minutes_count_business_time_only": True,
         },
     }

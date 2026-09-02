@@ -11,6 +11,7 @@ from unittest.mock import patch
 from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
 from src.simulation.pricing_policy_fixture import SYNTHETIC_AGENCY_PRICING_POLICY_JSON
 from src.simulation.attachment_intake_policy_regressions import evaluate_attachment_intake_policy_regressions
+from src.simulation.business_hours_automation_regressions import evaluate_business_hours_automation_regressions
 from src.simulation.atomic_transition_regressions import evaluate_atomic_transition_regressions
 from src.simulation.clarification_resolution_regressions import evaluate_clarification_resolution_regressions
 from src.simulation.customer_identity_trust_regressions import evaluate_customer_identity_trust_regressions
@@ -21,6 +22,7 @@ from src.simulation.extraction_confirmation_regressions import evaluate_extracti
 from src.simulation.initial_supplier_rfq_regressions import evaluate_initial_supplier_rfq_regressions
 from src.simulation.supplier_dispatch_policy_regressions import evaluate_supplier_dispatch_policy_regressions
 from src.simulation.supplier_primary_dispatch_regressions import evaluate_supplier_primary_dispatch_regressions
+from src.simulation.automatic_followup_deadline_regressions import evaluate_automatic_followup_deadline_regressions
 from src.simulation.human_operational_flow_regressions import evaluate_human_operational_flow_regressions
 from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
@@ -214,6 +216,8 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Initial supplier RFQ draft", evaluate_initial_supplier_rfq_regressions),
     Suite("Supplier dispatch policy", evaluate_supplier_dispatch_policy_regressions),
     Suite("Primary supplier dispatch and response timing", evaluate_supplier_primary_dispatch_regressions),
+    Suite("Business-hours outbound automation", evaluate_business_hours_automation_regressions),
+    Suite("Automatic supplier follow-up and customer quote deadline", evaluate_automatic_followup_deadline_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),
     Suite("Pricing policy resolution", evaluate_pricing_policy_regressions),
     Suite(

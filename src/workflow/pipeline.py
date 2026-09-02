@@ -122,6 +122,7 @@ def process_shipment(
     shipment: Shipment,
     email_text: str | None = None,
     sender_address: str | None = None,
+    customer_subject: str | None = None,
     rfq_repository: SupplierRFQRepository | None = None,
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
@@ -419,6 +420,8 @@ def process_shipment(
         shipment=shipment,
         email_text=email_text,
         sender_address=sender_address,
+        customer_subject=customer_subject,
+        automation_timing_version=1,
         dispatch_policy=dispatch_policy,
     )
     selected_suppliers = supplier_selection["selected_suppliers"]

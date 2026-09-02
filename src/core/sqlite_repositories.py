@@ -8,6 +8,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from src.core.automation_action import ScheduledAutomationAction
 from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.attachment_interpretation_review import AttachmentInterpretationReview
 from src.core.operational_work_assignment import OperationalWorkAssignment
@@ -78,6 +79,49 @@ def _model_from_payload(model_type: type[ModelT], payload: Any) -> ModelT:
 def _stable_payload_key(payload: Any) -> str:
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+
+class SQLiteAutomationActionRepository:
+    NAMESPACE = "scheduled_automation_actions"
+
+    def __init__(self, store: SQLitePilotStore) -> None:
+        self.store = store
+
+    def get(self, action_key: str) -> ScheduledAutomationAction | None:
+        payload = self.store.get(namespace=self.NAMESPACE, record_key=action_key)
+        return (
+            None
+            if payload is None
+            else _model_from_payload(ScheduledAutomationAction, payload)
+        )
+
+    def reserve(self, action: ScheduledAutomationAction) -> bool:
+        payload = _model_payload(action)
+        return self.store.insert_once(
+            namespace=self.NAMESPACE,
+            record_key=action.action_key,
+            payload=payload,
+            event_type="scheduled_automation_action_reserved",
+            entity_type="scheduled_automation_action",
+        )
+
+    def save(self, action: ScheduledAutomationAction) -> ScheduledAutomationAction:
+        payload = _model_payload(action)
+        self.store.upsert(
+            namespace=self.NAMESPACE,
+            record_key=action.action_key,
+            payload=payload,
+            event_type="scheduled_automation_action_saved",
+            entity_type="scheduled_automation_action",
+        )
+        return _model_from_payload(ScheduledAutomationAction, payload)
+
+    def list_all(self) -> list[ScheduledAutomationAction]:
+        return [
+            _model_from_payload(ScheduledAutomationAction, payload)
+            for payload in self.store.list_all(namespace=self.NAMESPACE)
+        ]
 
 class SQLiteOperationalWorkAssignmentRepository:
     NAMESPACE = "operational_work_assignments"
@@ -503,6 +547,11 @@ class SQLiteSupplierRFQRepository:
     def get_workflow(self, workflow_id: str) -> SupplierRFQWorkflow | None:
         payload = self.store.get(namespace=self.WORKFLOW_NAMESPACE, record_key=workflow_id)
         return None if payload is None else _model_from_payload(SupplierRFQWorkflow, payload)
+    def list_workflows(self) -> list[SupplierRFQWorkflow]:
+        return [
+            _model_from_payload(SupplierRFQWorkflow, payload)
+            for payload in self.store.list_all(namespace=self.WORKFLOW_NAMESPACE)
+        ]
     def list_responses(self, rfq_id: str | None = None) -> list[SupplierRFQResponse]:
         responses = [_model_from_payload(SupplierRFQResponse, p) for p in self.store.list_all(namespace=self.RESPONSE_NAMESPACE)]
         return responses if rfq_id is None else [r for r in responses if r.rfq_id == rfq_id]

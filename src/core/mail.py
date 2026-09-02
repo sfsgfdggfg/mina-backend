@@ -18,6 +18,7 @@ MailPurpose = Literal[
     "customer_clarification",
     "supplier_rfq",
     "customer_quote",
+    "customer_status_update",
 ]
 
 MailSendStatus = Literal[

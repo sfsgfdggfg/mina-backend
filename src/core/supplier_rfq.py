@@ -166,6 +166,8 @@ class SupplierRFQWorkflow(BaseModel):
     shipment: Shipment
     email_text: Optional[str] = None
     sender_address: Optional[str] = None
+    customer_subject: Optional[str] = None
+    automation_timing_version: int = Field(default=0, ge=0)
     rfq_ids: list[str] = Field(default_factory=list)
     dispatch_policy: SupplierDispatchPolicy = Field(
         default_factory=SupplierDispatchPolicy
