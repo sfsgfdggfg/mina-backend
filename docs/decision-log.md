@@ -6351,3 +6351,15 @@ Agency-level automation policy remains the default, but a MINA job may disable s
 An authenticated operator may preview and trigger an individual supplier reminder early from the MINA job. This does not bypass supplier communication hours or holiday controls. The early send consumes the same durable reminder action that the scheduler would later use, so the scheduled 30/120-minute reminder cannot be duplicated. Provider delivery is rechecked against current supplier state immediately before send and operator identity is retained as evidence.
 
 P1-75 provides backend job list/detail and controlled action surfaces for the future MINA main screen. It does not implement the P1-76 graphical job dashboard or Guide Editor settings. Visual MINA codes retain the slash format while API resource routing uses the opaque job ID.
+
+## DEC-167 — MINA Jobs Are the Default Operations Workspace While UI Authority Remains API-Controlled
+
+**Status:** Accepted
+**Date:** 2026-09-02
+
+P1-76 makes the MINA job list the default development workspace. Operators can search/filter durable jobs, open one job, review its current lifecycle stage, customer/route summary, supplier RFQ state, quote/revision summary, automation state and chronological operational timeline.
+
+The job-detail UX exposes only deliberate human controls already authorized by P1-75: job-level automation disable overrides, supplier reminder preview/early-send, customer acceptance, operations/in-transit/delivered progression, and explicit lost/cancelled closure. Quote preparation/send progression remains system-driven rather than a manual stage toggle.
+Streamlit remains a development-only UI and is not promoted to controlled-pilot authority by P1-76. It does not embed pilot bearer credentials or bypass authentication. Real mutations remain enforced by the authenticated API and existing lifecycle guards. A future pilot-approved browser shell must add its own authenticated session/binding controls before this UI can become the live operator surface.
+
+Timeline rendering is deliberately curated rather than a raw metadata dump. It may show operational event meaning, time, actor and bounded safe summaries, but not internal fingerprints, provider credentials or protected commercial-release evidence. MINA timestamps are rendered in Europe/Istanbul regardless of workstation timezone.
