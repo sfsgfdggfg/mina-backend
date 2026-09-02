@@ -6257,3 +6257,14 @@ Receipt history is authenticated-self-scoped and bounded for operator readout. A
 P1-68 also tightens P1-67 critical coverage: critical work is covered only by a lease-active `assigned` or `acknowledged` assignment. Unassigned, stale or expired critical ownership is uncovered and blocks close readiness, including when the expired assignment belongs to another operator.
 
 The state binding also includes the latest non-receipt pilot event high-water mark when SQLite durability is available. Shift-close receipt events themselves are excluded from that watermark so writing a receipt does not invalidate itself. Any later operational persistence event advances the watermark monotonically, preventing an old receipt from becoming current again merely because visible queue state later returns to a previous shape.
+
+## DEC-160 — Incoming Shift Reconciliation Uses the Latest Global Close Receipt Without Reopening Authority
+
+**Status:** Accepted
+**Date:** 2026-09-02
+
+P1-69 adds an authenticated, read-only incoming-shift reconciliation view. The view anchors to the latest durable P1-68 shift-close receipt across the pilot operation rather than only receipts created by the incoming operator. The closing operator identity remains internal and is never returned. A prior receipt is historical evidence only; reconciliation never converts it into assignment, workflow or shift-open authority.
+
+The reconciliation compares the prior close evidence with current operational state, surfaces current critical work that lacks lease-active assigned/acknowledged coverage, and evaluates recent shift handoffs across all operators without exposing who released or owns the work. Recent incomplete handoffs remain limited to the existing 12-hour/20-item coordination boundary.
+
+Changes since close are summarized from SQLite event metadata after the receipt's non-receipt high-water mark. Receipt events are excluded. The read path must never decode or return historical event payloads, entity IDs or raw internal entity types. Public change categories are coarse operational classes such as work coordination, customer extraction, supplier operations, customer quote and attachment review. If no prior receipt or no trustworthy change watermark is available, reconciliation fails safe into review-required rather than assuming continuity.

@@ -393,6 +393,42 @@ class SQLitePilotStore:
                 ).fetchone()
         return 0 if row is None else int(row["event_id"])
 
+    def summarize_events_after(
+        self,
+        after_event_id: int,
+        *,
+        exclude_entity_type: str | None = None,
+    ) -> dict[str, Any]:
+        if after_event_id < 0:
+            raise ValueError("after_event_id must be non-negative.")
+        clauses = ["event_id > ?"]
+        values: list[Any] = [after_event_id]
+        if exclude_entity_type is not None:
+            clauses.append("entity_type != ?")
+            values.append(exclude_entity_type)
+        where_sql = " WHERE " + " AND ".join(clauses)
+        with self._connection_scope() as connection:
+            summary = connection.execute(
+                "SELECT COUNT(*) AS event_count, MIN(created_at) AS first_created_at, "
+                "MAX(created_at) AS last_created_at FROM pilot_events" + where_sql,
+                values,
+            ).fetchone()
+            grouped = connection.execute(
+                "SELECT entity_type, COUNT(*) AS event_count FROM pilot_events"
+                + where_sql
+                + " GROUP BY entity_type ORDER BY entity_type ASC",
+                values,
+            ).fetchall()
+        return {
+            "event_count": 0 if summary is None else int(summary["event_count"]),
+            "first_created_at": None if summary is None else summary["first_created_at"],
+            "last_created_at": None if summary is None else summary["last_created_at"],
+            "entity_type_counts": {
+                str(row["entity_type"]): int(row["event_count"])
+                for row in grouped
+            },
+        }
+
     def list_events(self, *, entity_type: str | None = None, entity_id: str | None = None) -> list[dict[str, Any]]:
         clauses = []
         values = []

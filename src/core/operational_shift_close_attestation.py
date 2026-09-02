@@ -159,6 +159,36 @@ def _public_receipt(
     }
 
 
+def evaluate_operational_shift_close_receipt_status(
+    receipt: OperationalShiftCloseReceipt,
+    *,
+    assignment_repository: OperationalWorkAssignmentRepository,
+    attachment_repository,
+    proposal_repository,
+    supplier_repository,
+    approval_repository,
+    quote_case_repository,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    timestamp = _utc(now)
+    readiness, current_state_sha256, _, _ = _close_state(
+        operator_name=receipt.attested_by,
+        assignment_repository=assignment_repository,
+        attachment_repository=attachment_repository,
+        proposal_repository=proposal_repository,
+        supplier_repository=supplier_repository,
+        approval_repository=approval_repository,
+        quote_case_repository=quote_case_repository,
+        now=timestamp,
+    )
+    current = bool(readiness.get("ready_to_close")) and receipt.close_state_sha256 == current_state_sha256
+    return {
+        "current_status": "current" if current else "stale",
+        "current_for_close_state": current,
+        "current_ready_to_close": bool(readiness.get("ready_to_close")),
+    }
+
+
 def attest_operational_shift_close(
     *,
     operator_name: str,

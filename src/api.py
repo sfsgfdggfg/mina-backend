@@ -155,6 +155,7 @@ from src.core.operational_work_assignment_service import (
 )
 from src.core.operational_shift_summary import build_operational_shift_summary
 from src.core.operational_shift_close_readiness import build_operational_shift_close_readiness
+from src.core.operational_shift_open_reconciliation import build_operational_shift_open_reconciliation
 from src.core.operational_shift_close_attestation import (
     OperationalShiftCloseAttestationBlockedError,
     attest_operational_shift_close,
@@ -1239,6 +1240,20 @@ def get_operational_work_shift_summary(http_request: Request):
 def get_operational_work_shift_close_readiness(http_request: Request):
     return build_operational_shift_close_readiness(
         operator_name=_authenticated_operator(http_request),
+        assignment_repository=operational_work_assignment_repository,
+        attachment_repository=attachment_review_repository,
+        proposal_repository=extraction_proposal_repository,
+        supplier_repository=supplier_rfq_repository,
+        approval_repository=quote_approval_repository,
+        quote_case_repository=quote_case_repository,
+    )
+
+
+@app.get("/operational-work-shift-open-reconciliation")
+def get_operational_work_shift_open_reconciliation(http_request: Request):
+    return build_operational_shift_open_reconciliation(
+        operator_name=_authenticated_operator(http_request),
+        receipt_repository=operational_shift_close_receipt_repository,
         assignment_repository=operational_work_assignment_repository,
         attachment_repository=attachment_review_repository,
         proposal_repository=extraction_proposal_repository,
