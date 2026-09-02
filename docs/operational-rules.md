@@ -3558,3 +3558,11 @@ Receipts must be immutable, privacy-minimal and state-bound. The close-state fin
 Critical work counts as covered for shift-close purposes only while it has a lease-active assigned/acknowledged coordination assignment. Unassigned, expired or stale critical assignment state must fail closed as uncovered. Receipt creation/listing must not mutate assignment or underlying workflow repositories.
 
 For durable SQLite operation, receipt state binding must include a monotonic high-water mark from non-receipt pilot events. Receipt events are excluded from that mark. Once any later operational state event occurs, an older receipt must remain stale even if a later visible queue snapshot happens to resemble the original state.
+
+## RULE-175 — Shift-Open Reconciliation Must Be Global Enough for Handoff but Privacy-Minimal and Non-Authoritative
+
+`work open-reconciliation` is GET-only and authenticated. It may use the latest organization-wide shift-close receipt and recent cross-operator handoff history, but it must not expose closing/releasing/current operator identities, raw assignment history, internal fingerprints, event IDs/entity IDs, message content, party identity or commercial values.
+
+A prior close receipt is never proof that the incoming shift is currently safe. Missing/stale close evidence, unavailable change tracking, post-close operational events, incomplete recent handoffs or current critical work without lease-active assigned/acknowledged coverage must produce review-required attention. Receipt audit events themselves must not be counted as operational changes.
+
+The reconciliation read must not assign, acknowledge, renew, take over, hand off, release, confirm, approve, send, apply, reject, resume or persist a shift-open state. Remediation may name existing controlled commands only as descriptive routing metadata; all existing assignment and workflow lifecycle guards remain authoritative.

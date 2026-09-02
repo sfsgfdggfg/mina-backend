@@ -1381,3 +1381,11 @@ python -m src.pilot_operator work close-receipts
 `current` means the receipt still matches a freshly recomputed ready close state. `stale` means queue, assignment, lease, handoff or readiness state changed; the receipt remains historical evidence only. Never use a receipt as authorization for assignment, proposal confirmation, attachment apply, RFQ/quote approval, workflow resume or outbound send.
 
 Receipt status is non-resurrecting: after any later operational persistence event, an older receipt remains historical/stale even if the visible queue later happens to return to the same shape. Always use current `work close-readiness` plus a fresh `work close-attest` for the new close state.
+
+### P1-69 — Shift Open / Incoming Shift Reconciliation
+
+At the beginning of a shift, run `python -m src.pilot_operator work open-reconciliation` after operator authentication. This is a read-only reconciliation surface; it does not open a durable shift or claim any work.
+
+Review the latest prior shift-close evidence, safe post-close change category counts, incomplete recent handoffs and current critical uncovered work. `review_required=true` means the incoming operator must inspect current work using existing `work queue` / `work get` and claim coverage only through normal `work assign` when appropriate.
+
+A missing or stale close receipt is not repaired automatically. Receipt history is evidence only. Cross-operator handoff records intentionally omit operator identity, and post-close change summaries never return raw event payloads, entity IDs or internal event types.
