@@ -1389,3 +1389,11 @@ At the beginning of a shift, run `python -m src.pilot_operator work open-reconci
 Review the latest prior shift-close evidence, safe post-close change category counts, incomplete recent handoffs and current critical uncovered work. `review_required=true` means the incoming operator must inspect current work using existing `work queue` / `work get` and claim coverage only through normal `work assign` when appropriate.
 
 A missing or stale close receipt is not repaired automatically. Receipt history is evidence only. Cross-operator handoff records intentionally omit operator identity, and post-close change summaries never return raw event payloads, entity IDs or internal event types.
+
+### P1-70 — Incoming Shift Acceptance Evidence
+
+At shift start, first run `python -m src.pilot_operator work open-reconciliation`. Only when the current response is `reconciliation_status=clear` and `review_required=false` should the incoming operator explicitly record acceptance with `python -m src.pilot_operator work open-accept`.
+
+The POST recomputes reconciliation inside the same SQLite transaction that writes evidence. If state changed after the read, the command fails with a lifecycle conflict and writes no receipt. Repeating acceptance for the exact same authenticated operator and unchanged state is idempotent.
+
+Review your own recent acceptance evidence with `python -m src.pilot_operator work open-acceptances`. `current` means it still matches a fresh clear reconciliation; `stale` means continuity changed. An acceptance receipt never claims work or authorizes workflow actions. Use `work queue`, `work get` and normal `work assign` for actual coverage.

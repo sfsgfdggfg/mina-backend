@@ -48,7 +48,10 @@ def _state_event_id(assignment_repository: OperationalWorkAssignmentRepository) 
     if store is None:
         return None
     return store.latest_event_id(
-        exclude_entity_type="operational_shift_close_receipt"
+        exclude_entity_types=(
+            "operational_shift_close_receipt",
+            "operational_shift_open_acceptance_receipt",
+        )
     )
 
 

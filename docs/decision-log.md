@@ -6268,3 +6268,14 @@ P1-69 adds an authenticated, read-only incoming-shift reconciliation view. The v
 The reconciliation compares the prior close evidence with current operational state, surfaces current critical work that lacks lease-active assigned/acknowledged coverage, and evaluates recent shift handoffs across all operators without exposing who released or owns the work. Recent incomplete handoffs remain limited to the existing 12-hour/20-item coordination boundary.
 
 Changes since close are summarized from SQLite event metadata after the receipt's non-receipt high-water mark. Receipt events are excluded. The read path must never decode or return historical event payloads, entity IDs or raw internal entity types. Public change categories are coarse operational classes such as work coordination, customer extraction, supplier operations, customer quote and attachment review. If no prior receipt or no trustworthy change watermark is available, reconciliation fails safe into review-required rather than assuming continuity.
+
+## DEC-161 — Incoming Shift Acceptance Is Explicit, State-Bound Evidence and Never Opening Authority
+
+**Status:** Accepted
+**Date:** 2026-09-02
+
+P1-70 adds an explicit authenticated incoming-shift acceptance receipt. Acceptance may be recorded only when P1-69 is recomputed inside the same atomic SQLite transaction and returns `reconciliation_status=clear` with `review_required=false`. A prior reconciliation GET is advisory only; if continuity changes before POST, acceptance fails closed without evidence.
+
+Each acceptance is scoped to the authenticated incoming operator and bound to a server-side SHA-256 projection of the current privacy-safe reconciliation state, including the latest global close receipt, change summary, current queue coverage and incomplete handoff state. The internal fingerprint and `accepted_by` identity are never returned. Same operator plus exact same reconciliation state is idempotent; another operator may record their own independent acceptance without transferring ownership or opening a global shift state.
+
+Shift-close and shift-open acceptance receipts are both evidence-only pilot events and are excluded from P1-68/P1-69 operational state high-water/change accounting. Therefore writing evidence never invalidates itself. Any later real operational persistence event makes the old acceptance stale through fresh reconciliation, and a later clean cycle requires fresh close evidence plus a new acceptance rather than resurrecting an old receipt.

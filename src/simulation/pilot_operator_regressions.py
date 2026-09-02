@@ -150,6 +150,10 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append((_last_contract(session), ("GET", "/operational-work-shift-close-readiness", None)))
     client.get_operational_shift_open_reconciliation()
     contracts.append((_last_contract(session), ("GET", "/operational-work-shift-open-reconciliation", None)))
+    client.accept_operational_shift_open()
+    contracts.append((_last_contract(session), ("POST", "/operational-work-shift-open-accept", {})))
+    client.list_operational_shift_open_acceptances()
+    contracts.append((_last_contract(session), ("GET", "/operational-work-shift-open-acceptances", None)))
     client.attest_operational_shift_close()
     contracts.append((_last_contract(session), ("POST", "/operational-work-shift-close-attest", {})))
     client.list_operational_shift_close_receipts()
@@ -655,6 +659,30 @@ def evaluate_pilot_operator_regressions() -> dict:
         "GET", "/operational-work-shift-open-reconciliation", None,
     ):
         failures.append("operational shift-open reconciliation CLI mapped to the wrong API contract")
+
+    open_accept_cli_session = _Session([_Response(200, {"receipt_id": "shift-open-test"})])
+    open_accept_cli_client = _client(open_accept_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=open_accept_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            open_accept_cli_exit = main(["work", "open-accept"])
+    if open_accept_cli_exit != 0:
+        failures.append("operational shift-open acceptance CLI command failed")
+    elif _last_contract(open_accept_cli_session) != (
+        "POST", "/operational-work-shift-open-accept", {},
+    ):
+        failures.append("operational shift-open acceptance CLI mapped to the wrong API contract")
+
+    open_acceptances_cli_session = _Session([_Response(200, {"count": 0, "items": []})])
+    open_acceptances_cli_client = _client(open_acceptances_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=open_acceptances_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            open_acceptances_cli_exit = main(["work", "open-acceptances"])
+    if open_acceptances_cli_exit != 0:
+        failures.append("operational shift-open acceptances CLI command failed")
+    elif _last_contract(open_acceptances_cli_session) != (
+        "GET", "/operational-work-shift-open-acceptances", None,
+    ):
+        failures.append("operational shift-open acceptances CLI mapped to the wrong API contract")
 
     close_attest_cli_session = _Session([_Response(200, {"receipt_id": "shift-close-test"})])
     close_attest_cli_client = _client(close_attest_cli_session)
