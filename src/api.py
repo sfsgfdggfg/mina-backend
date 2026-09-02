@@ -83,6 +83,7 @@ from src.core.sqlite_repositories import (
     SQLiteOperationalShiftCloseReceiptRepository,
     SQLiteOperationalShiftOpenAcceptanceReceiptRepository,
     SQLiteExtractionProposalRepository,
+    SQLiteMinaJobRepository,
     SQLiteQuoteApprovalRepository,
     SQLiteQuoteCaseRepository,
     SQLiteSupplierRFQRepository,
@@ -92,6 +93,18 @@ from src.core.mail import (
     OutboundMailSender,
     validate_inbound_mail_body,
 )
+from src.core.mina_job_actions import (
+    MinaJobActionError,
+    preview_supplier_reminder_now,
+    send_supplier_reminder_now,
+)
+from src.core.mina_job_service import (
+    MinaJobNotFoundError,
+    MinaJobTransitionError,
+    set_mina_job_automation_overrides,
+    transition_mina_job_stage,
+)
+from src.core.mina_job_view import build_mina_job_detail, build_mina_job_list
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -254,6 +267,7 @@ pilot_store = SQLitePilotStore()
 operational_data_sources = operational_data_sources_from_environment()
 quote_approval_repository = SQLiteQuoteApprovalRepository(pilot_store)
 quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
+mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
@@ -270,6 +284,7 @@ automation_scheduler = AutomationScheduler(
     supplier_repository=supplier_rfq_repository,
     action_repository=automation_action_repository,
     sender=outbound_mail_sender,
+    mina_job_repository=mina_job_repository,
 )
 
 
@@ -323,6 +338,20 @@ class OutlookPullRequest(BaseModel):
 class ConfirmExtractionRequest(BaseModel):
     operator_identity: Optional[str] = None
     corrections: dict[str, Any] = Field(default_factory=dict)
+
+
+class MinaJobAutomationOverrideRequest(BaseModel):
+    disable_supplier_reminders: bool = False
+    disable_customer_deadline_updates: bool = False
+
+
+class MinaJobStageTransitionRequest(BaseModel):
+    target_stage: Literal[
+        "pricing", "quote_ready", "quote_sent", "negotiation",
+        "accepted", "operations", "in_transit", "delivered",
+        "lost", "cancelled",
+    ]
+    reason: Optional[str] = None
 
 
 class PreviewAttachmentReviewRequest(BaseModel):
@@ -827,6 +856,114 @@ def runtime_release():
     return runtime_release_payload()
 
 
+@app.get("/mina-jobs")
+def list_mina_jobs():
+    return build_mina_job_list(mina_job_repository)
+
+
+@app.get("/mina-jobs/{job_id}")
+def get_mina_job(job_id: str):
+    try:
+        return build_mina_job_detail(
+            repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            quote_case_repository=quote_case_repository,
+            action_repository=automation_action_repository,
+            job_id=job_id,
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/automation-overrides")
+def update_mina_job_automation_overrides(
+    job_id: str, request: MinaJobAutomationOverrideRequest,
+    http_request: Request,
+):
+    job = mina_job_repository.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    try:
+        updated = set_mina_job_automation_overrides(
+            repository=mina_job_repository,
+            mina_code=job.mina_code,
+            actor=_authenticated_operator(http_request),
+            disable_supplier_reminders=request.disable_supplier_reminders,
+            disable_customer_deadline_updates=request.disable_customer_deadline_updates,
+        )
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return updated.model_dump()
+
+
+@app.post("/mina-jobs/{job_id}/stage")
+def update_mina_job_stage(
+    job_id: str, request: MinaJobStageTransitionRequest,
+    http_request: Request,
+):
+    job = mina_job_repository.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    try:
+        updated = transition_mina_job_stage(
+            repository=mina_job_repository,
+            mina_code=job.mina_code,
+            target_stage=request.target_stage,
+            actor=_authenticated_operator(http_request),
+            reason=request.reason,
+        )
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return updated.model_dump()
+
+
+@app.get("/mina-jobs/{job_id}/supplier-rfqs/{rfq_id}/reminder-preview")
+def preview_mina_job_supplier_reminder(job_id: str, rfq_id: str):
+    job = mina_job_repository.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    try:
+        return preview_supplier_reminder_now(
+            mina_job_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            action_repository=automation_action_repository,
+            mina_code=job.mina_code,
+            rfq_id=rfq_id,
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobActionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/supplier-rfqs/{rfq_id}/reminder-now")
+def send_mina_job_supplier_reminder_now(
+    job_id: str, rfq_id: str, http_request: Request,
+):
+    job = mina_job_repository.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    try:
+        result = send_supplier_reminder_now(
+            mina_job_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            action_repository=automation_action_repository,
+            sender=outbound_mail_sender,
+            mina_code=job.mina_code,
+            rfq_id=rfq_id,
+            actor=_authenticated_operator(http_request),
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobActionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return serialize_result(result)
+
+
 def _enrich_quote_case_with_current_approval(quote_case):
     snapshot_approval = quote_case.quote_approval
 
@@ -908,6 +1045,7 @@ def record_quote_case_manually_sent(
                 http_request,
                 request.sent_by,
             ),
+            mina_job_repository=mina_job_repository,
         )
     except CustomerQuoteManualSentNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -932,6 +1070,7 @@ def send_quote_case_endpoint(
             expected_approval_id=request.expected_approval_id,
             recipient_email=request.recipient_email,
             sender=outbound_mail_sender,
+            mina_job_repository=mina_job_repository,
         )
     except CustomerQuoteAutomatedSentNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -994,6 +1133,7 @@ def revise_quote_case_endpoint(
             edited_by=_authenticated_operator(
                 http_request
             ),
+            mina_job_repository=mina_job_repository,
         )
     except QuoteRevisionNotFoundError as exc:
         raise HTTPException(
@@ -1654,6 +1794,7 @@ def confirm_extraction_proposal_endpoint(
                 request.operator_identity,
             ),
             corrections=request.corrections,
+            mina_job_repository=mina_job_repository,
         )
     except ExtractionProposalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1673,6 +1814,7 @@ def resume_extraction_proposal_endpoint(proposal_id: str):
             rfq_repository=supplier_rfq_repository,
             approval_repository=quote_approval_repository,
             quote_case_repository=quote_case_repository,
+            mina_job_repository=mina_job_repository,
             evidence_recorder=pilot_store,
             operational_data_sources=operational_data_sources,
         )
@@ -2032,6 +2174,7 @@ def resume_supplier_rfq_quote(
             rfq_repository=supplier_rfq_repository,
             approval_repository=quote_approval_repository,
             quote_case_repository=quote_case_repository,
+            mina_job_repository=mina_job_repository,
             operational_data_sources=operational_data_sources,
             quote_pricing_override=(
                 request.quote_pricing_override if request is not None else None

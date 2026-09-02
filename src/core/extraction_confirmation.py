@@ -70,6 +70,8 @@ class ShipmentExtractionProposal(BaseModel):
     changed_fields: list[str] = Field(default_factory=list)
     confirmed_by: Optional[str] = None
     confirmed_at: Optional[datetime] = None
+    mina_job_id: Optional[str] = None
+    mina_code: Optional[str] = None
 
     resume_started_at: Optional[datetime] = None
     resumed_at: Optional[datetime] = None
@@ -132,6 +134,10 @@ class ShipmentExtractionProposal(BaseModel):
                 raise ValueError(
                     "Proposed extraction must not contain operator corrections."
                 )
+            if self.mina_job_id is not None or self.mina_code is not None:
+                raise ValueError(
+                    "Proposed extraction must not be linked to a MINA job."
+                )
             if (
                 self.resume_started_at is not None
                 or self.resumed_at is not None
@@ -148,6 +154,10 @@ class ShipmentExtractionProposal(BaseModel):
             if any(value is None for value in confirmation_metadata):
                 raise ValueError(
                     "Confirmed extraction requires shipment, operator, and time."
+                )
+            if (self.mina_job_id is None) != (self.mina_code is None):
+                raise ValueError(
+                    "MINA job id and code must be linked together."
                 )
         if (
             self.resume_started_at is not None

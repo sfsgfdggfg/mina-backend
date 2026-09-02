@@ -123,6 +123,8 @@ def process_shipment(
     email_text: str | None = None,
     sender_address: str | None = None,
     customer_subject: str | None = None,
+    mina_job_id: str | None = None,
+    mina_code: str | None = None,
     rfq_repository: SupplierRFQRepository | None = None,
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
@@ -418,6 +420,8 @@ def process_shipment(
     # RFQ oluşturmak gönderim değildir; insan onayı beklenir.
     supplier_rfq_workflow = SupplierRFQWorkflow(
         shipment=shipment,
+        mina_job_id=mina_job_id,
+        mina_code=mina_code,
         email_text=email_text,
         sender_address=sender_address,
         customer_subject=customer_subject,

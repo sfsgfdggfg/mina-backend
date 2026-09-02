@@ -519,17 +519,21 @@ def _api_and_development_behavior(
     registry_path = temp_root / "api" / "data" / "provenance_registry.json"
     registry_path.parent.mkdir(parents=True)
     registry_path.write_text("{malformed", encoding="utf-8")
+    from src.core.mina_job_repository import InMemoryMinaJobRepository
+
     original = (
         api.extraction_proposal_repository,
         api.supplier_rfq_repository,
         api.quote_approval_repository,
         api.quote_case_repository,
+        api.mina_job_repository,
         api.pilot_store,
     )
     api.extraction_proposal_repository = proposals
     api.supplier_rfq_repository = InMemorySupplierRFQRepository()
     api.quote_approval_repository = InMemoryQuoteApprovalRepository()
     api.quote_case_repository = InMemoryQuoteCaseRepository()
+    api.mina_job_repository = InMemoryMinaJobRepository()
     api.pilot_store = None
     try:
         with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
@@ -560,6 +564,7 @@ def _api_and_development_behavior(
             api.supplier_rfq_repository,
             api.quote_approval_repository,
             api.quote_case_repository,
+            api.mina_job_repository,
             api.pilot_store,
         ) = original
 

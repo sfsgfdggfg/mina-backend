@@ -3613,3 +3613,17 @@ Turkish official holidays are part of the supplier calendar. Full public holiday
 Customer quote-response deadlines do not inherit supplier hours or supplier holidays. A proactive customer status update remains tied to the customer's explicit deadline and the configured lead, including evenings and weekends. For example, an explicit 20:00 quote deadline produces a 19:55 update when no usable quote exists. Supplier reminders remain paused at that time.
 
 This rule supersedes only the P1-73 statements that constrained automatic customer deadline updates to the supplier/business-hours window. All other P1-73 duplicate-send, pre-provider recheck, no-blind-retry and legacy-workflow protections remain in force. Foreign supplier/agent holiday calendars are deferred until the relevant import workflow exists.
+
+
+## RULE-181 — Every Confirmed Logistics Job Has One Durable MINA Identity and Controlled Job-Level Overrides
+
+A MINA code is allocated only after human extraction confirmation proves that the inbound customer request is a genuine operational job. Proposal creation alone must not consume numbering. Allocation must be atomic, idempotent per proposal and yearly in Europe/Istanbul; concurrent confirmations must never produce the same `MINAYYYY/N` code.
+
+The MINA code identifies the logistics job, not a single quote revision. Supplier RFQs, quote cases and quote revisions remain linked to the same job. Quote revisions must not create new MINA codes. Normal lifecycle may continue from pricing through acceptance, operations, in-transit and delivery. `delivered`, `lost` and `cancelled` are terminal; lost/cancelled require explicit authenticated human reason evidence.
+MINA job and timeline state must remain durable beyond the ordinary pilot state retention window because an open logistics operation may last longer than 30 days. This persistence exception applies only to the job/case identity, sequence indexes and privacy-minimal timeline evidence; it must not be used to retain raw mail or unrelated state indefinitely.
+
+Job-level automation overrides may only reduce authority. When supplier reminder automation is disabled for a job, due reminder work becomes human work and the scheduler must not send it. A job cannot re-enable a globally disabled automation. Closed jobs cannot change their automation overrides.
+
+An authenticated operator may preview and send a supplier reminder before its normal 30/120-minute due time. The send-now action must still obey the fixed supplier communication calendar, verify that the RFQ is awaiting response, verify that no commercial response has arrived, reserve the same durable action key used by the scheduler, and recheck state immediately before provider delivery. A successful early send consumes that scheduled reminder; it must never be followed by a duplicate automatic reminder for the same stage.
+
+MINA job timeline/list/detail views may expose operationally useful status, supplier state, quote revision state, safe commercial result summaries and authenticated action history, but must not invent authority. Reading a job never approves, sends, resumes or transitions anything. Mutations continue to use the existing controlled lifecycle guards.

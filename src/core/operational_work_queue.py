@@ -14,6 +14,7 @@ from src.core.attachment_interpretation_review_repository import (
 from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.extraction_confirmation_repository import ExtractionProposalRepository
+from src.core.mina_job_repository import MinaJobRepository
 from src.core.operational_priority import (
     PRIORITY_RANK,
     age_score,
@@ -355,6 +356,7 @@ def _automation_attention_items(
     supplier_repository: SupplierRFQRepository,
     action_repository: AutomationActionRepository,
     now: datetime,
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     supplier_states = {
@@ -389,6 +391,7 @@ def _automation_attention_items(
             action_repository=action_repository,
             draft=draft,
             now=now,
+            mina_job_repository=mina_job_repository,
         )
         state = str(plan.get("state"))
         config = supplier_states.get(state)
@@ -448,6 +451,7 @@ def _automation_attention_items(
             action_repository=action_repository,
             workflow=workflow,
             now=now,
+            mina_job_repository=mina_job_repository,
         )
         state = str(plan.get("state"))
         config = customer_states.get(state)
@@ -543,6 +547,7 @@ def build_operational_work_queue(
     approval_repository: QuoteApprovalRepository,
     quote_case_repository: QuoteCaseRepository,
     automation_action_repository: AutomationActionRepository | None = None,
+    mina_job_repository: MinaJobRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = aware_utc(now or datetime.now(timezone.utc))
@@ -561,16 +566,26 @@ def build_operational_work_queue(
     )
 
     resolved_automation_repository = automation_action_repository
-    if resolved_automation_repository is None and getattr(supplier_repository, "store", None) is not None:
-        from src.core.sqlite_repositories import SQLiteAutomationActionRepository
-        resolved_automation_repository = SQLiteAutomationActionRepository(
-            supplier_repository.store
+    resolved_mina_job_repository = mina_job_repository
+    if getattr(supplier_repository, "store", None) is not None:
+        from src.core.sqlite_repositories import (
+            SQLiteAutomationActionRepository,
+            SQLiteMinaJobRepository,
         )
+        if resolved_automation_repository is None:
+            resolved_automation_repository = SQLiteAutomationActionRepository(
+                supplier_repository.store
+            )
+        if resolved_mina_job_repository is None:
+            resolved_mina_job_repository = SQLiteMinaJobRepository(
+                supplier_repository.store
+            )
     if resolved_automation_repository is not None:
         items.extend(_automation_attention_items(
             supplier_repository=supplier_repository,
             action_repository=resolved_automation_repository,
             now=current,
+            mina_job_repository=resolved_mina_job_repository,
         ))
 
     follow_ups = supplier_repository.list_follow_up_drafts()

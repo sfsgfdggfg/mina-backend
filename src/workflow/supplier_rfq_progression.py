@@ -12,6 +12,8 @@ from src.core.data_provenance import DataProvenanceError
 from src.core.equipment import decide_equipment
 from src.core.missing_info import check_missing_information
 from src.core.mail import OutboundMailRequest
+from src.core.mina_job_repository import MinaJobRepository
+from src.core.mina_job_service import link_mina_job_quote_case
 from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.operational_consistency import check_operational_consistency
@@ -89,6 +91,7 @@ def resume_supplier_rfq_workflow(
     rfq_repository: SupplierRFQRepository,
     approval_repository: QuoteApprovalRepository,
     quote_case_repository: QuoteCaseRepository,
+    mina_job_repository: MinaJobRepository | None = None,
     operational_data_sources: OperationalDataSources | None = None,
     quote_pricing_override: PricingFormula | None = None,
 ) -> dict:
@@ -181,6 +184,7 @@ def resume_supplier_rfq_workflow(
             rfq_repository,
             approval_repository,
             quote_case_repository,
+            mina_job_repository,
         ):
             _require_unchanged_progression_state(
                 rfq_repository,
@@ -196,6 +200,12 @@ def resume_supplier_rfq_workflow(
             result["quote_case"] = quote_case_repository.save(
                 result["quote_case"]
             )
+            if mina_job_repository is not None and persisted.mina_job_id:
+                result["mina_job"] = link_mina_job_quote_case(
+                    repository=mina_job_repository,
+                    job_id=persisted.mina_job_id,
+                    quote_case_id=result["quote_case"].case_id,
+                )
             persisted = rfq_repository.save_workflow(persisted)
     else:
         with atomic_repository_transaction(rfq_repository):
@@ -889,6 +899,8 @@ def _progress_supplier_rfq_workflow(
     )
     quote_case = QuoteCase(
         shipment=shipment,
+        mina_job_id=workflow.mina_job_id,
+        mina_code=workflow.mina_code,
         supplier_rfq_workflow_id=workflow.workflow_id,
         supplier_quote_selection_decision=(
             supplier_quote_selection_decision
