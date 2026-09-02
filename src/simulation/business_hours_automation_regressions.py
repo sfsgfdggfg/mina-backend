@@ -7,7 +7,13 @@ from src.core.attachment_interpretation_review_repository import (
     InMemoryAttachmentInterpretationReviewRepository,
 )
 from src.core.automation_action_repository import InMemoryAutomationActionRepository
-from src.core.business_calendar import add_business_minutes, proactive_customer_update_due
+from src.core.business_calendar import (
+    SUPPLIER_HOLIDAY_COVERAGE_YEARS,
+    SupplierHolidayCalendarCoverageError,
+    add_supplier_business_minutes,
+    is_supplier_business_time,
+    supplier_calendar_metadata,
+)
 from src.core.extraction_confirmation_repository import InMemoryExtractionProposalRepository
 from src.core.mail import MailSendResult
 from src.core.models import Shipment
@@ -103,26 +109,50 @@ def evaluate_business_hours_automation_regressions() -> dict:
     policy = _policy()
     friday_1820 = datetime(2026, 9, 4, 18, 20, tzinfo=ISTANBUL)
     friday_1730 = datetime(2026, 9, 4, 17, 30, tzinfo=ISTANBUL)
+    metadata = supplier_calendar_metadata()
     check(
-        policy.business_timezone == "Europe/Istanbul"
-        and policy.business_day_start == "09:00"
-        and policy.business_day_end == "18:30"
-        and policy.business_weekdays == (0, 1, 2, 3, 4),
-        "business calendar defaults to weekdays 09:00-18:30 Istanbul",
+        metadata["timezone"] == "Europe/Istanbul"
+        and metadata["start"] == "09:00"
+        and metadata["end"] == "18:30"
+        and metadata["weekdays"] == [0, 1, 2, 3, 4]
+        and metadata["configurable"] is False,
+        "supplier communication calendar is fixed weekdays 09:00-18:30 Istanbul",
     )
     check(
-        add_business_minutes(friday_1820, 30, policy).astimezone(ISTANBUL)
+        add_supplier_business_minutes(friday_1820, 30).astimezone(ISTANBUL)
         == datetime(2026, 9, 7, 9, 20, tzinfo=ISTANBUL)
-        and add_business_minutes(friday_1730, 120, policy).astimezone(ISTANBUL)
+        and add_supplier_business_minutes(friday_1730, 120).astimezone(ISTANBUL)
         == datetime(2026, 9, 7, 10, 0, tzinfo=ISTANBUL),
         "supplier timers pause overnight and across weekends",
     )
     check(
-        proactive_customer_update_due(
-            datetime(2026, 9, 4, 20, 0, tzinfo=ISTANBUL), 5, policy
+        not is_supplier_business_time(datetime(2026, 10, 29, 10, 0, tzinfo=ISTANBUL))
+        and is_supplier_business_time(datetime(2026, 10, 28, 12, 30, tzinfo=ISTANBUL))
+        and not is_supplier_business_time(datetime(2026, 10, 28, 13, 0, tzinfo=ISTANBUL))
+        and not is_supplier_business_time(datetime(2026, 5, 27, 10, 0, tzinfo=ISTANBUL))
+        and tuple(SUPPLIER_HOLIDAY_COVERAGE_YEARS) == (2026, 2027, 2028),
+        "Turkey official holidays and half-day eves close supplier communication",
+    )
+    check(
+        add_supplier_business_minutes(
+            datetime(2026, 5, 26, 12, 50, tzinfo=ISTANBUL), 30
         ).astimezone(ISTANBUL)
-        == datetime(2026, 9, 4, 18, 25, tzinfo=ISTANBUL),
-        "after-hours customer deadline moves update to 18:25",
+        == datetime(2026, 6, 1, 9, 20, tzinfo=ISTANBUL)
+        and add_supplier_business_minutes(
+            datetime(2026, 10, 28, 12, 50, tzinfo=ISTANBUL), 30
+        ).astimezone(ISTANBUL)
+        == datetime(2026, 10, 30, 9, 20, tzinfo=ISTANBUL),
+        "half-day holiday closing pauses and resumes supplier timers correctly",
+    )
+    try:
+        is_supplier_business_time(datetime(2029, 1, 2, 10, 0, tzinfo=ISTANBUL))
+    except SupplierHolidayCalendarCoverageError:
+        uncovered_year_blocked = True
+    else:
+        uncovered_year_blocked = False
+    check(
+        uncovered_year_blocked,
+        "unverified future holiday year fails closed for supplier automation",
     )
 
     weekend_repo = InMemorySupplierRFQRepository()
@@ -158,13 +188,14 @@ def evaluate_business_hours_automation_regressions() -> dict:
     deadline_repo.save_workflow(
         _workflow(deadline=datetime(2026, 9, 4, 20, 0, tzinfo=ISTANBUL))
     )
-    deadline_sender = _Sender(datetime(2026, 9, 4, 18, 25, tzinfo=ISTANBUL))
+    deadline_sender = _Sender(datetime(2026, 9, 4, 19, 55, tzinfo=ISTANBUL))
     run_automation_tick(
         supplier_repository=deadline_repo,
         action_repository=deadline_actions,
         sender=deadline_sender,
         now=datetime(2026, 9, 4, 18, 25, tzinfo=ISTANBUL),
     )
+    check(not deadline_sender.requests, "customer deadline does not inherit supplier closing time")
     run_automation_tick(
         supplier_repository=deadline_repo,
         action_repository=deadline_actions,
@@ -174,7 +205,25 @@ def evaluate_business_hours_automation_regressions() -> dict:
     check(
         len(deadline_sender.requests) == 1
         and deadline_sender.requests[0].purpose == "customer_status_update",
-        "20:00 customer deadline sends once at 18:25 and not after close",
+        "20:00 customer deadline sends one proactive update at 19:55",
+    )
+
+    future_repo = InMemorySupplierRFQRepository()
+    future_actions = InMemoryAutomationActionRepository()
+    future_repo.save_workflow(
+        _workflow(deadline=datetime(2029, 1, 7, 20, 0, tzinfo=ISTANBUL))
+    )
+    future_sender = _Sender(datetime(2029, 1, 7, 19, 55, tzinfo=ISTANBUL))
+    run_automation_tick(
+        supplier_repository=future_repo,
+        action_repository=future_actions,
+        sender=future_sender,
+        now=datetime(2029, 1, 7, 19, 55, tzinfo=ISTANBUL),
+    )
+    check(
+        len(future_sender.requests) == 1
+        and future_sender.requests[0].purpose == "customer_status_update",
+        "customer deadline automation remains independent of supplier holiday coverage",
     )
 
     initial_repo = InMemorySupplierRFQRepository()

@@ -6322,3 +6322,15 @@ The default agency calendar is Europe/Istanbul, Monday-Friday, 09:00-18:30. Supp
 MINAI provider delivery for approved initial supplier RFQs and controlled supplier follow-ups is blocked outside business hours before any provider call. Existing human approval authority is unchanged: P1-73 does not grant automatic initial RFQ send authority. An approved draft remains pending until business hours and may then be sent through the existing controlled action. Pre-P1-73 workflows are not retroactively activated for timed automatic reminders.
 
 Each scheduled automatic send uses durable single-action reservation before provider delivery. Concurrent scheduler ticks may reserve at most one send. State is recomputed immediately before delivery; late supplier/customer progress cancels stale sends. Provider failure is not blindly retried and instead becomes privacy-minimal human attention. Scheduled-action records do not persist customer or supplier email addresses.
+## DEC-165 — Supplier Communication Calendar Is Fixed and Customer Deadline Communication Is Independent
+
+**Status:** Accepted
+**Date:** 2026-09-02
+
+P1-74 narrows the P1-73 business-hours concept to supplier communication only. The Turkey supplier communication calendar is a system operational assumption, not an agency preference: Europe/Istanbul, Monday-Friday, 09:00-18:30. These hours are intentionally not part of configurable supplier dispatch policy and must not be exposed as a Guide Editor setting.
+
+Supplier timers, automatic reminders, phone/WhatsApp escalation work, approved initial supplier RFQ provider sends and controlled supplier follow-up provider sends use this fixed supplier calendar. Turkish official public holidays also close supplier communication. Full holidays close the entire day; statutory half-day eves close the supplier window at 13:00.
+
+Customer quote-deadline communication is separate. If a customer explicitly requests a quote by 20:00, the default five-minute proactive update is due at 19:55 even though supplier communication has ended. Supplier working hours must never pull that customer update back to 18:25 or suppress it solely because the supplier window is closed.
+
+Religious holiday dates are maintained as verified year-specific calendar data while fixed national holidays remain deterministic. The initial verified religious-holiday coverage is 2026-2028. If supplier automation reaches an unverified calendar year, it fails closed instead of assuming the day is open. Future import workflows may select a supplier/agent country and regional calendar, but P1-74 does not implement foreign calendars yet.

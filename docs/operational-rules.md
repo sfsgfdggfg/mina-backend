@@ -3604,3 +3604,12 @@ A customer quote-response deadline must come from explicit customer timing evide
 Before any scheduled provider call, current workflow state and business hours must be recomputed. A newly arrived supplier acknowledgement/quote or newly usable supplier price cancels stale outbound work. Scheduled sends require durable single reservation so concurrent workers cannot duplicate delivery. Provider failure or uncertain completion must not trigger blind automatic retry.
 
 MINAI-controlled provider sends for approved initial supplier RFQs and controlled supplier follow-ups must be rejected before provider delivery outside business hours. This does not create automatic initial RFQ authority and does not falsify or prohibit manual external communication; manual evidence remains a record of what a human actually did. Legacy workflows created before timed automation activation must not receive retroactive automatic reminders.
+## RULE-180 — Supplier Hours and Customer Deadline Communication Must Use Separate Clocks
+
+The Turkey supplier communication window is fixed at Europe/Istanbul Monday-Friday 09:00-18:30 and is not an agency-configurable policy. Supplier no-response/acknowledgement timers count only supplier business minutes. Automatic supplier reminders, supplier phone/WhatsApp escalation work and MINAI-controlled supplier RFQ/follow-up provider sends must pause outside that window.
+
+Turkish official holidays are part of the supplier calendar. Full public holidays are closed days. Official half-day eves close supplier communication at 13:00. Verified religious-holiday data must be year-bound and its coverage visible. An unverified future year must fail closed for supplier automation rather than silently treating religious holidays as ordinary workdays.
+
+Customer quote-response deadlines do not inherit supplier hours or supplier holidays. A proactive customer status update remains tied to the customer's explicit deadline and the configured lead, including evenings and weekends. For example, an explicit 20:00 quote deadline produces a 19:55 update when no usable quote exists. Supplier reminders remain paused at that time.
+
+This rule supersedes only the P1-73 statements that constrained automatic customer deadline updates to the supplier/business-hours window. All other P1-73 duplicate-send, pre-provider recheck, no-blind-retry and legacy-workflow protections remain in force. Foreign supplier/agent holiday calendars are deferred until the relevant import workflow exists.

@@ -1427,3 +1427,10 @@ Automatic supplier reminders and customer deadline updates are independently dis
 Explicit customer quote deadlines are distinct from required delivery dates. A deadline after business close moves the single proactive status update to five minutes before close when that safe window still exists. Urgency alone does not create a deadline. Provider failure is not automatically retried.
 
 Approved initial supplier RFQ and controlled supplier follow-up provider sends are rejected before provider delivery outside business hours. This does not grant automatic initial RFQ authority: approved drafts remain under the existing controlled send workflow. `/automation/status` is authenticated/read-only and reports scheduler health plus the active business calendar.
+## P1-74 Supplier calendar and customer deadline separation
+
+Supplier automation uses a fixed Turkey communication calendar: Europe/Istanbul, Monday-Friday, 09:00-18:30. This is not a Guide Editor setting. Turkish full public holidays close the supplier day; statutory half-day eves close at 13:00. Verified religious-holiday coverage is reported by `/automation/status`.
+
+Customer quote-deadline updates are independent of supplier hours. An explicit customer deadline keeps its own clock and default five-minute lead, including evenings/weekends. If no usable supplier price exists, a 20:00 customer deadline is eligible for the one proactive update at 19:55 while supplier outbound remains paused.
+
+If the current supplier calendar year is not verified, supplier timed automation fails closed and requires calendar maintenance. Do not bypass this by changing agency dispatch policy. Foreign country/region holiday calendars are deferred to future import workflows.

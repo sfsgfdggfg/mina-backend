@@ -69,6 +69,7 @@ from src.workflow.extraction_confirmation import (
 )
 from src.core.pilot_store import SQLitePilotStore
 from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
+from src.core.business_calendar import supplier_calendar_metadata
 from src.core.runtime_release import runtime_release_payload
 from src.core.pilot_access import (
     authorize_pilot_request,
@@ -292,12 +293,7 @@ def get_automation_status():
         "legacy_workflows_not_auto_activated": True,
         "supplier_reminders_default_enabled": policy.automatic_supplier_reminders_enabled,
         "customer_deadline_updates_default_enabled": policy.automatic_customer_deadline_updates_enabled,
-        "business_hours": {
-            "timezone": policy.business_timezone,
-            "start": policy.business_day_start,
-            "end": policy.business_day_end,
-            "weekdays": list(policy.business_weekdays),
-        },
+        "supplier_communication_calendar": supplier_calendar_metadata(),
     }
 
 

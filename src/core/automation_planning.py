@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.core.automation_action_repository import AutomationActionRepository
 from src.core.business_calendar import (
-    add_business_minutes,
-    is_business_time,
-    next_business_open,
-    proactive_customer_update_due,
+    SupplierHolidayCalendarCoverageError,
+    add_supplier_business_minutes,
+    is_supplier_business_time,
+    next_supplier_business_open,
 )
 from src.core.supplier_commercial_safety import evaluate_supplier_commercial_safety
 from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQWorkflow
@@ -56,33 +56,43 @@ def supplier_reminder_plan(
         return {"state": "commercial_response_present"}
 
     acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
-    if acknowledgements:
-        anchor = max(aware_utc(item.acknowledged_at) for item in acknowledgements)
-        action_type = "supplier_acknowledged_reminder"
-        due_at = add_business_minutes(
-            anchor, workflow.dispatch_policy.acknowledged_grace_minutes,
-            workflow.dispatch_policy,
-        )
-    else:
-        action_type = "supplier_no_response_reminder"
-        due_at = add_business_minutes(
-            aware_utc(draft.sent_at),
-            workflow.dispatch_policy.no_response_reminder_minutes,
-            workflow.dispatch_policy,
-        )
+    try:
+        if acknowledgements:
+            anchor = max(aware_utc(item.acknowledged_at) for item in acknowledgements)
+            action_type = "supplier_acknowledged_reminder"
+            due_at = add_supplier_business_minutes(
+                anchor, workflow.dispatch_policy.acknowledged_grace_minutes
+            )
+        else:
+            action_type = "supplier_no_response_reminder"
+            due_at = add_supplier_business_minutes(
+                aware_utc(draft.sent_at),
+                workflow.dispatch_policy.no_response_reminder_minutes,
+            )
+    except SupplierHolidayCalendarCoverageError as exc:
+        return {
+            "state": "supplier_calendar_unavailable_manual_attention",
+            "reason": str(exc),
+        }
 
     action_key = supplier_action_key(draft.rfq_id, action_type)
     action = action_repository.get(action_key)
     current = aware_utc(now)
     if action is not None:
         if action.status == "sent":
-            if not is_business_time(current, workflow.dispatch_policy):
+            try:
+                if not is_supplier_business_time(current):
+                    return {
+                        "state": "outside_business_hours_waiting",
+                        "action_type": action_type,
+                        "action_key": action_key,
+                        "due_at": due_at,
+                        "resume_at": next_supplier_business_open(current),
+                    }
+            except SupplierHolidayCalendarCoverageError as exc:
                 return {
-                    "state": "outside_business_hours_waiting",
-                    "action_type": action_type,
-                    "action_key": action_key,
-                    "due_at": due_at,
-                    "resume_at": next_business_open(current, workflow.dispatch_policy),
+                    "state": "supplier_calendar_unavailable_manual_attention",
+                    "reason": str(exc),
                 }
             return {
                 "state": "human_contact_required",
@@ -113,13 +123,19 @@ def supplier_reminder_plan(
             "action_key": action_key,
             "due_at": due_at,
         }
-    if not is_business_time(current, workflow.dispatch_policy):
+    try:
+        if not is_supplier_business_time(current):
+            return {
+                "state": "outside_business_hours_waiting",
+                "action_type": action_type,
+                "action_key": action_key,
+                "due_at": due_at,
+                "resume_at": next_supplier_business_open(current),
+            }
+    except SupplierHolidayCalendarCoverageError as exc:
         return {
-            "state": "outside_business_hours_waiting",
-            "action_type": action_type,
-            "action_key": action_key,
-            "due_at": due_at,
-            "resume_at": next_business_open(current, workflow.dispatch_policy),
+            "state": "supplier_calendar_unavailable_manual_attention",
+            "reason": str(exc),
         }
     if not workflow.dispatch_policy.automatic_supplier_reminders_enabled:
         return {
@@ -185,10 +201,8 @@ def customer_deadline_plan(
 
     current = aware_utc(now)
     deadline_utc = aware_utc(deadline)
-    due_at = proactive_customer_update_due(
-        deadline,
-        workflow.dispatch_policy.customer_deadline_proactive_minutes,
-        workflow.dispatch_policy,
+    due_at = deadline_utc - timedelta(
+        minutes=workflow.dispatch_policy.customer_deadline_proactive_minutes
     )
     action_key = customer_deadline_action_key(workflow.workflow_id)
     action = action_repository.get(action_key)
@@ -207,13 +221,6 @@ def customer_deadline_plan(
         }
     if current < due_at:
         return {"state": "waiting", "due_at": due_at}
-    if not is_business_time(current, workflow.dispatch_policy):
-        return {
-            "state": "outside_business_hours_waiting",
-            "due_at": due_at,
-            "deadline_at": deadline_utc,
-            "resume_at": next_business_open(current, workflow.dispatch_policy),
-        }
     if current >= deadline_utc:
         return {
             "state": "deadline_passed_manual_attention",
