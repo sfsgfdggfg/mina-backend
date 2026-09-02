@@ -36,6 +36,7 @@ from src.core.supplier_quote_selection import (
 from src.core.supplier_rfq_lifecycle import (
     validate_supplier_rfq_responses,
 )
+from src.core.supplier_dispatch_control import secondary_dispatch_gate
 from src.core.supplier_rfq import SupplierRFQFollowUpDraft
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.core.sqlite_repositories import atomic_repository_transaction
@@ -514,6 +515,70 @@ def _progress_supplier_rfq_workflow(
         operational_data_sources=operational_data_sources,
     )
 
+    # Secondary suppliers are not prepared at initial dispatch. They become
+    # eligible only after the primary-group gate is explicitly satisfied.
+    dispatch_gate = secondary_dispatch_gate(
+        rfq_repository, workflow.workflow_id
+    )
+    if dispatch_gate["allowed"]:
+        existing_secondary = [
+            draft
+            for draft in supplier_rfq_drafts
+            if draft.dispatch_tier == "secondary"
+        ]
+        if existing_secondary:
+            held_secondary = [
+                draft for draft in existing_secondary if draft.status == "draft"
+            ]
+            fallback_draft = None
+        else:
+            held_secondary = []
+            fallback_draft = _next_supplier_rfq_draft(
+                workflow=workflow,
+                shipment=shipment,
+                equipment_decision=equipment_decision,
+                supplier_selection=supplier_selection,
+                existing_drafts=supplier_rfq_drafts,
+            )
+        if held_secondary or fallback_draft is not None:
+            visible_drafts = (
+                supplier_rfq_drafts
+                if fallback_draft is None
+                else [*supplier_rfq_drafts, fallback_draft]
+            )
+            action_recommendation = generate_action_recommendation(
+                shipment=shipment,
+                equipment_decision=equipment_decision,
+                risk_assessment=risk_assessment,
+                missing_info=missing_info,
+                result_type="supplier_rfq_approval_required",
+            )
+            result = _result(
+                workflow=workflow,
+                pilot_scope=pilot_scope,
+                customer_memory=customer_memory,
+                commodity_profile=commodity_profile,
+                missing_info=missing_info,
+                regulatory_compliance=regulatory_compliance,
+                equipment_decision=equipment_decision,
+                risk_assessment=risk_assessment,
+                supplier_selection=supplier_selection,
+                operational_consistency=operational_consistency,
+                quote_readiness=None,
+                drafts=visible_drafts,
+                responses=supplier_rfq_responses,
+                valid_responses=valid_supplier_rfq_responses,
+                validation=supplier_rfq_response_validation,
+                comparisons=supplier_quote_comparisons,
+                selection_decision=supplier_quote_selection_decision,
+                supplier_quote=None,
+                result_type="supplier_rfq_approval_required",
+                action_recommendation=action_recommendation,
+            )
+            if fallback_draft is not None:
+                result["_rfq_drafts_to_save"] = [fallback_draft]
+            return result
+
     if supplier_quote is None:
         # Prefer clarifying a real quoted response when its missing/contradictory
         # commercial facts can be fixed on the same RFQ.
@@ -644,6 +709,7 @@ def _progress_supplier_rfq_workflow(
                 "draft", "approved", "sent", "awaiting_response",
                 "clarification_required",
             }
+            and not (draft.dispatch_tier == "secondary" and draft.status == "draft")
             for draft in supplier_rfq_drafts
         )
         if (terminal_negative or deadline_miss) and not waiting_on_existing:

@@ -24,6 +24,10 @@ from src.core.supplier_response_ingestion import (
 )
 from src.core.supplier_commercial_safety import parse_transit_time
 from src.core.supplier_rfq import SupplierRFQResponse
+from src.core.supplier_dispatch_control import (
+    SupplierAcknowledgementError,
+    record_supplier_acknowledgement,
+)
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQNotFoundError,
     SupplierRFQResponseError,
@@ -62,6 +66,34 @@ _TRANSIT_ONLY_REPLY_PATTERN = re.compile(
     r"(?:\s*(?:dir|dır|dur|dür|tir|tır|tur|tür))?\s*[.!]?\s*$",
     flags=re.IGNORECASE,
 )
+
+_ACKNOWLEDGEMENT_REPLY_PATTERN = re.compile(
+    r"(?:mailinizi|mailinizi|talebinizi|rfq(?:\s+talebinizi)?|request|email)"
+    r".{0,80}(?:ald[ıi]k|g[oö]rd[uü]k|received|working|[cç]al[ıi][sş][ıi]yoruz)"
+    r"|(?:working on it|we are working on|looking into it)",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+
+
+_ACK_COMMERCIAL_SIGNAL_PATTERN = re.compile(
+    r"(?:\b(?:EUR|USD|GBP|TRY)\b|€|\$|£|"
+    r"\b(?:fiyat(?:[ıi]m[ıi]z)?|price|navlun|freight).{0,30}\d|"
+    r"\d.{0,20}\b(?:fiyat|price|navlun|freight)\b|"
+    r"\b(?:no\s+capacity|declin(?:e|ed)|ara[cç](?:\s|\w)*yok|"
+    r"kapasite(?:miz)?\s+yok|yapam[ıi]yoruz)\b)",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+
+
+def _deterministic_acknowledgement_extraction(
+    reply_text: str,
+) -> SupplierResponseExtraction | None:
+    if _ACKNOWLEDGEMENT_REPLY_PATTERN.search(reply_text) is None:
+        return None
+    if _ACK_COMMERCIAL_SIGNAL_PATTERN.search(reply_text) is not None:
+        return None
+    return SupplierResponseExtraction(status="acknowledged")
+
 
 
 def _normalized_price_amount(value: str) -> float | None:
@@ -237,6 +269,9 @@ def _resolve_extraction(
     transit_only = _deterministic_transit_only_extraction(str(safe_text))
     if transit_only is not None:
         return transit_only, None, None
+    acknowledgement = _deterministic_acknowledgement_extraction(str(safe_text))
+    if acknowledgement is not None:
+        return acknowledgement, None, None
 
     if parser is None:
         return (
@@ -274,6 +309,19 @@ def _validate_required_extraction(
         return "parsing_failed", "Supplier response status is uncertain."
     if extraction.status is None:
         return "invalid_response", "Supplier response status is required."
+    if extraction.status == "acknowledged":
+        commercial_values = (
+            extraction.cost, extraction.currency, extraction.transit_time,
+            extraction.validity_date, extraction.vehicle_available_date,
+            extraction.equipment_type, extraction.pricing_basis,
+            extraction.included_costs, extraction.excluded_costs,
+        )
+        if any(value is not None for value in commercial_values):
+            return (
+                "invalid_response",
+                "Acknowledgement cannot carry a commercial quote result.",
+            )
+        return None, None
     if extraction.status == "quoted":
         uncertain_required = [
             field_name
@@ -409,6 +457,40 @@ def ingest_supplier_reply(
             rfq_id=draft.rfq_id,
             correlation_method=correlation.method,
             external_message_id=reply.external_message_id,
+        )
+
+    if extraction.status == "acknowledged":
+        try:
+            with atomic_repository_transaction(repository):
+                record_supplier_acknowledgement(
+                    repository=repository,
+                    rfq_id=draft.rfq_id,
+                    channel="email",
+                    acknowledged_at=reply.received_at or datetime.utcnow(),
+                )
+                if message_key:
+                    repository.record_ingested_message(
+                        message_key,
+                        body_sha256=fingerprint_text(reply.body_text),
+                        sender_address=reply.sender_address,
+                    )
+        except SupplierAcknowledgementError as exc:
+            return SupplierReplyIngestionResult(
+                status="invalid_response",
+                reason=str(exc),
+                rfq_id=draft.rfq_id,
+                correlation_method=correlation.method,
+                external_message_id=reply.external_message_id,
+            )
+        return SupplierReplyIngestionResult(
+            status="acknowledgement_recorded",
+            reason=(
+                "Supplier confirmed receipt/attention; RFQ remains awaiting a commercial response."
+            ),
+            rfq_id=draft.rfq_id,
+            correlation_method=correlation.method,
+            external_message_id=reply.external_message_id,
+            supplier_rfq=draft,
         )
 
     extraction, inherited_fields, prior_response_received_at = (

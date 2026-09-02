@@ -119,6 +119,35 @@ def evaluate_initial_supplier_rfq_regressions() -> dict:
         if [draft.priority for draft in parallel_three_result["supplier_rfq_drafts"]] != [1, 2, 3]:
             failures.append("parallel-3 did not create all three RFQ drafts")
 
+        tiered_selection = _selection(3)
+        tiered_selection["selected_suppliers"][0].update({
+            "supplier_role": "primary", "dispatch_tier": "primary"
+        })
+        tiered_selection["selected_suppliers"][1].update({
+            "supplier_role": "specialist", "dispatch_tier": "primary"
+        })
+        tiered_selection["selected_suppliers"][2].update({
+            "supplier_role": "backup", "dispatch_tier": "secondary"
+        })
+        with patch(
+            "src.workflow.pipeline.select_suppliers_for_shipment",
+            return_value=tiered_selection,
+        ):
+            tiered_result = process_shipment(_shipment())
+        tiered_drafts = tiered_result["supplier_rfq_drafts"]
+        if (
+            len(tiered_drafts) != 2
+            or [draft.dispatch_tier for draft in tiered_drafts]
+            != ["primary", "primary"]
+            or any(
+                draft.supplier_role == "backup"
+                for draft in tiered_drafts
+            )
+        ):
+            failures.append(
+                "tier-aware dispatch did not prepare all primary RFQs in parallel while withholding secondary RFQs"
+            )
+
         with patch(
             "src.workflow.pipeline.select_suppliers_for_shipment",
             return_value=_selection(0),

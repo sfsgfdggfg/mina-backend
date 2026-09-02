@@ -324,6 +324,26 @@ class PilotOperatorClient:
     def get_rfq(self, rfq_id: str) -> Any:
         return self._request("GET", f"/supplier-rfqs/{self._id(rfq_id)}")
 
+    def record_rfq_acknowledgement(self, rfq_id: str, channel: str) -> Any:
+        return self._request(
+            "POST",
+            f"/supplier-rfqs/{self._id(rfq_id)}/acknowledge-seen",
+            {"channel": channel},
+        )
+
+    def get_supplier_dispatch_status(self, workflow_id: str) -> Any:
+        return self._request(
+            "GET",
+            f"/supplier-rfq-workflows/{self._id(workflow_id)}/dispatch-status",
+        )
+
+    def authorize_secondary_after_negotiation(self, workflow_id: str) -> Any:
+        return self._request(
+            "POST",
+            f"/supplier-rfq-workflows/{self._id(workflow_id)}/authorize-secondary-after-negotiation",
+            {},
+        )
+
     def approve_rfq(self, rfq_id: str) -> Any:
         return self._request(
             "POST", f"/supplier-rfqs/{self._id(rfq_id)}/approve", {}
@@ -596,6 +616,9 @@ def _build_parser() -> argparse.ArgumentParser:
     rfq.add_parser("approve").add_argument("rfq_id")
     rfq.add_parser("send").add_argument("rfq_id")
     rfq.add_parser("manual-sent").add_argument("rfq_id")
+    ack_seen = rfq.add_parser("ack-seen")
+    ack_seen.add_argument("rfq_id")
+    ack_seen.add_argument("--channel", required=True, choices=("phone", "whatsapp", "manual"))
     rfq.add_parser("follow-up-list").add_argument("rfq_id")
     rfq.add_parser("follow-up-get").add_argument("follow_up_id")
     rfq.add_parser("follow-up-approve").add_argument("follow_up_id")
@@ -620,6 +643,8 @@ def _build_parser() -> argparse.ArgumentParser:
     workflow = commands.add_parser("workflow").add_subparsers(
         dest="action", required=True
     )
+    workflow.add_parser("dispatch-status").add_argument("workflow_id")
+    workflow.add_parser("secondary-release").add_argument("workflow_id")
     resume_quote = workflow.add_parser("resume-quote")
     resume_quote.add_argument("workflow_id")
     resume_quote.add_argument(
@@ -797,6 +822,8 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.send_rfq(args.rfq_id)
         if args.action == "manual-sent":
             return client.record_rfq_manually_sent(args.rfq_id)
+        if args.action == "ack-seen":
+            return client.record_rfq_acknowledgement(args.rfq_id, args.channel)
         if args.action == "follow-up-list":
             return client.list_rfq_follow_ups(args.rfq_id)
         if args.action == "follow-up-get":
@@ -825,6 +852,10 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             ),
         )
     if args.command == "workflow":
+        if args.action == "dispatch-status":
+            return client.get_supplier_dispatch_status(args.workflow_id)
+        if args.action == "secondary-release":
+            return client.authorize_secondary_after_negotiation(args.workflow_id)
         if (args.pricing_method is None) != (args.pricing_value is None):
             raise PilotOpsError(
                 "--pricing-method and --pricing-value must be provided together."

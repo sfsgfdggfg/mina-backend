@@ -300,6 +300,21 @@ def evaluate_pilot_operator_regressions() -> dict:
             ("POST", "/supplier-rfq-follow-ups/follow-up-1/send", {}),
         )
     )
+    client.record_rfq_acknowledgement("rfq-1", "whatsapp")
+    contracts.append((
+        _last_contract(session),
+        ("POST", "/supplier-rfqs/rfq-1/acknowledge-seen", {"channel": "whatsapp"}),
+    ))
+    client.get_supplier_dispatch_status("workflow-1")
+    contracts.append((
+        _last_contract(session),
+        ("GET", "/supplier-rfq-workflows/workflow-1/dispatch-status", None),
+    ))
+    client.authorize_secondary_after_negotiation("workflow-1")
+    contracts.append((
+        _last_contract(session),
+        ("POST", "/supplier-rfq-workflows/workflow-1/authorize-secondary-after-negotiation", {}),
+    ))
     client.record_rfq_follow_up_manually_sent("follow-up-1")
     contracts.append(
         (
@@ -625,6 +640,33 @@ def evaluate_pilot_operator_regressions() -> dict:
         "GET", "/operational-work-queue", None,
     ):
         failures.append("operational work queue CLI mapped to the wrong API contract")
+
+    ack_seen_cli_session = _Session([_Response(200, {"commercial_response_recorded": False})])
+    with patch.object(PilotOperatorClient, "from_environment", return_value=_client(ack_seen_cli_session)):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            ack_seen_cli_exit = main(["rfq", "ack-seen", "rfq-1", "--channel", "whatsapp"])
+    if ack_seen_cli_exit != 0 or _last_contract(ack_seen_cli_session) != (
+        "POST", "/supplier-rfqs/rfq-1/acknowledge-seen", {"channel": "whatsapp"}
+    ):
+        failures.append("supplier acknowledgement CLI mapped to the wrong API contract")
+
+    dispatch_status_cli_session = _Session([_Response(200, {"items": []})])
+    with patch.object(PilotOperatorClient, "from_environment", return_value=_client(dispatch_status_cli_session)):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            dispatch_status_cli_exit = main(["workflow", "dispatch-status", "workflow-1"])
+    if dispatch_status_cli_exit != 0 or _last_contract(dispatch_status_cli_session) != (
+        "GET", "/supplier-rfq-workflows/workflow-1/dispatch-status", None
+    ):
+        failures.append("supplier dispatch-status CLI mapped to the wrong API contract")
+
+    secondary_release_cli_session = _Session([_Response(200, {"secondary_dispatch_allowed": True})])
+    with patch.object(PilotOperatorClient, "from_environment", return_value=_client(secondary_release_cli_session)):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            secondary_release_cli_exit = main(["workflow", "secondary-release", "workflow-1"])
+    if secondary_release_cli_exit != 0 or _last_contract(secondary_release_cli_session) != (
+        "POST", "/supplier-rfq-workflows/workflow-1/authorize-secondary-after-negotiation", {}
+    ):
+        failures.append("secondary dispatch release CLI mapped to the wrong API contract")
 
     shift_summary_cli_session = _Session([_Response(200, {"overview": {"pending_count": 0}})])
     shift_summary_cli_client = _client(shift_summary_cli_session)

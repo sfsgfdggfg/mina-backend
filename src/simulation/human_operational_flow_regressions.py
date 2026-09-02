@@ -343,10 +343,11 @@ def evaluate_human_operational_flow_regressions() -> dict:
     indicative_drafts = initial_indicative.get("supplier_rfq_drafts") or []
     if (
         initial_indicative.get("result_type") != "supplier_rfq_approval_required"
-        or len(indicative_drafts) != 1
-        or "İNDİKATİF" not in indicative_drafts[0].body
+        or not indicative_drafts
+        or any(draft.dispatch_tier != "primary" for draft in indicative_drafts)
+        or any("İNDİKATİF" not in draft.body for draft in indicative_drafts)
     ):
-        failures.append("minimal indicative request did not reach RFQ approval")
+        failures.append("minimal indicative request did not reach primary RFQ approval")
     else:
         d = indicative_drafts[0].model_copy(update={
             "status": "awaiting_response",

@@ -18,6 +18,7 @@ from src.core.quote_approval import QuoteApproval
 from src.core.quote_case import QuoteCase
 from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
+    SupplierRFQAcknowledgementEvidence,
     SupplierRFQDraft,
     SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpDraft,
@@ -25,6 +26,7 @@ from src.core.supplier_rfq import (
     SupplierRFQManualSentEvidence,
     SupplierRFQResponse,
     SupplierRFQWorkflow,
+    SupplierSecondaryDispatchAuthorization,
 )
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQAutomatedSentEvidenceError,
@@ -240,6 +242,8 @@ class SQLiteSupplierRFQRepository:
     )
     WORKFLOW_NAMESPACE = "supplier_rfq_workflows"
     RESPONSE_NAMESPACE = "supplier_rfq_responses"
+    ACKNOWLEDGEMENT_NAMESPACE = "supplier_rfq_acknowledgements"
+    SECONDARY_DISPATCH_AUTH_NAMESPACE = "supplier_secondary_dispatch_authorizations"
     INGESTED_MESSAGE_NAMESPACE = "supplier_ingested_messages"
     def __init__(self, store: SQLitePilotStore) -> None:
         self.store = store
@@ -439,6 +443,57 @@ class SQLiteSupplierRFQRepository:
             evidence
             if follow_up_id is None
             else [e for e in evidence if e.follow_up_id == follow_up_id]
+        )
+
+    def save_acknowledgement(
+        self, evidence: SupplierRFQAcknowledgementEvidence
+    ) -> SupplierRFQAcknowledgementEvidence:
+        payload = _model_payload(evidence)
+        record_key = _stable_payload_key(payload)
+        self.store.insert_once(
+            namespace=self.ACKNOWLEDGEMENT_NAMESPACE,
+            record_key=record_key,
+            payload=payload,
+            event_type="supplier_rfq_acknowledged",
+            entity_type="supplier_rfq_acknowledgement",
+        )
+        return _model_from_payload(SupplierRFQAcknowledgementEvidence, payload)
+
+    def list_acknowledgements(
+        self, rfq_id: str | None = None
+    ) -> list[SupplierRFQAcknowledgementEvidence]:
+        items = [
+            _model_from_payload(SupplierRFQAcknowledgementEvidence, payload)
+            for payload in self.store.list_all(namespace=self.ACKNOWLEDGEMENT_NAMESPACE)
+        ]
+        return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
+
+    def save_secondary_dispatch_authorization(
+        self, evidence: SupplierSecondaryDispatchAuthorization
+    ) -> SupplierSecondaryDispatchAuthorization:
+        payload = _model_payload(evidence)
+        self.store.insert_once(
+            namespace=self.SECONDARY_DISPATCH_AUTH_NAMESPACE,
+            record_key=evidence.workflow_id,
+            payload=payload,
+            event_type="supplier_secondary_dispatch_authorized",
+            entity_type="supplier_secondary_dispatch_authorization",
+        )
+        stored = self.store.get(
+            namespace=self.SECONDARY_DISPATCH_AUTH_NAMESPACE,
+            record_key=evidence.workflow_id,
+        )
+        return _model_from_payload(SupplierSecondaryDispatchAuthorization, stored)
+
+    def get_secondary_dispatch_authorization(
+        self, workflow_id: str
+    ) -> SupplierSecondaryDispatchAuthorization | None:
+        payload = self.store.get(
+            namespace=self.SECONDARY_DISPATCH_AUTH_NAMESPACE,
+            record_key=workflow_id,
+        )
+        return None if payload is None else _model_from_payload(
+            SupplierSecondaryDispatchAuthorization, payload
         )
 
     def save_workflow(self, workflow: SupplierRFQWorkflow) -> SupplierRFQWorkflow:

@@ -55,6 +55,8 @@ class SupplierRFQDraft(BaseModel):
     supplier_name: str
     priority: int
     recipient_email: Optional[str] = None
+    supplier_role: Optional[Literal["primary", "backup", "specialist"]] = None
+    dispatch_tier: Literal["primary", "secondary"] = "primary"
     subject: str
     body: str
     status: SupplierRFQStatus = "draft"
@@ -88,6 +90,26 @@ class SupplierRFQManualSentEvidence(BaseModel):
     recorded_by: str
     recorded_at: datetime
     source: Literal["manual_external_send"] = "manual_external_send"
+
+
+class SupplierRFQAcknowledgementEvidence(BaseModel):
+    rfq_id: str
+    acknowledged_at: datetime = Field(default_factory=datetime.utcnow)
+    channel: Literal["email", "phone", "whatsapp", "manual"]
+    recorded_by: Optional[str] = None
+    source: Literal["supplier_acknowledgement"] = "supplier_acknowledgement"
+
+
+class SupplierSecondaryDispatchAuthorization(BaseModel):
+    workflow_id: str
+    authorized_at: datetime = Field(default_factory=datetime.utcnow)
+    authorized_by: str = Field(min_length=1, max_length=200)
+    reason: Literal["primary_price_negotiation_exhausted"] = (
+        "primary_price_negotiation_exhausted"
+    )
+    source: Literal["manual_secondary_dispatch_authorization"] = (
+        "manual_secondary_dispatch_authorization"
+    )
 
 
 class SupplierRFQFollowUpDraft(BaseModel):

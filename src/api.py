@@ -125,6 +125,13 @@ from src.core.quote_manual_sent import (
 from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.quote_send_service import prepare_quote_for_sending
 from src.core.supplier_rfq import SupplierRFQResponse
+from src.core.supplier_dispatch_control import (
+    SupplierAcknowledgementError,
+    SupplierSecondaryDispatchBlockedError,
+    authorize_secondary_after_price_negotiation,
+    build_supplier_dispatch_status,
+    record_supplier_acknowledgement,
+)
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQFollowUpNotFoundError,
     SupplierRFQNotFoundError,
@@ -342,6 +349,10 @@ class SupplierRFQApproveRequest(BaseModel):
 
 class SupplierRFQManualSentRequest(BaseModel):
     recorded_by: Optional[str] = None
+
+
+class SupplierRFQAcknowledgementRequest(BaseModel):
+    channel: Literal["phone", "whatsapp", "manual"]
 
 
 class SupplierRFQResponseRequest(BaseModel):
@@ -1669,6 +1680,13 @@ def get_supplier_rfq(rfq_id: str):
             evidence.model_dump()
             for evidence in supplier_rfq_repository.list_manual_sent_evidence(rfq_id)
         ],
+        "acknowledgements": [
+            {
+                "acknowledged_at": evidence.acknowledged_at,
+                "channel": evidence.channel,
+            }
+            for evidence in supplier_rfq_repository.list_acknowledgements(rfq_id)
+        ],
         "follow_ups": [
             item.model_dump()
             for item in supplier_rfq_repository.list_follow_up_drafts(rfq_id)
@@ -1805,6 +1823,49 @@ def record_supplier_rfq_follow_up_manually_sent_endpoint(
         "supplier_rfq_follow_up": follow_up.model_dump(),
         "manual_sent_evidence": evidence.model_dump(),
     }
+
+
+@app.post("/supplier-rfqs/{rfq_id}/acknowledge-seen")
+def record_supplier_rfq_seen(
+    rfq_id: str,
+    request: SupplierRFQAcknowledgementRequest,
+    http_request: Request = None,
+):
+    try:
+        return record_supplier_acknowledgement(
+            repository=supplier_rfq_repository,
+            rfq_id=rfq_id,
+            channel=request.channel,
+            recorded_by=_authenticated_operator(http_request),
+        )
+    except SupplierAcknowledgementError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/supplier-rfq-workflows/{workflow_id}/dispatch-status")
+def get_supplier_rfq_dispatch_status(workflow_id: str):
+    try:
+        return build_supplier_dispatch_status(
+            repository=supplier_rfq_repository,
+            workflow_id=workflow_id,
+        )
+    except SupplierSecondaryDispatchBlockedError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfq-workflows/{workflow_id}/authorize-secondary-after-negotiation")
+def authorize_supplier_secondary_dispatch(
+    workflow_id: str,
+    http_request: Request = None,
+):
+    try:
+        return authorize_secondary_after_price_negotiation(
+            repository=supplier_rfq_repository,
+            workflow_id=workflow_id,
+            authorized_by=_authenticated_operator(http_request),
+        )
+    except SupplierSecondaryDispatchBlockedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/supplier-rfqs/{rfq_id}/approve")

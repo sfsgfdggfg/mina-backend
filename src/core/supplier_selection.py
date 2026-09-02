@@ -380,6 +380,10 @@ def select_suppliers_for_shipment(
             {
                 "supplier_name": supplier["supplier_name"],
                 "recipient_email": supplier.get("recipient_email"),
+                "supplier_role": supplier.get("role", "backup"),
+                "dispatch_tier": (
+                    "secondary" if supplier.get("role", "backup") == "backup" else "primary"
+                ),
                 "priority": 0,
                 "total_score": round(total_score, 3),
                 "route_score": round(route_score, 3),
@@ -397,7 +401,13 @@ def select_suppliers_for_shipment(
             }
         )
 
-    scored_suppliers.sort(key=lambda item: item["total_score"], reverse=True)
+    scored_suppliers.sort(
+        key=lambda item: (
+            item.get("dispatch_tier") != "primary",
+            -item["total_score"],
+            item["supplier_name"],
+        )
+    )
 
     selected = scored_suppliers[:max_suppliers]
 
