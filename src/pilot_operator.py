@@ -215,6 +215,9 @@ class PilotOperatorClient:
     def get_operational_shift_open_reconciliation(self) -> Any:
         return self._request("GET", "/operational-work-shift-open-reconciliation")
 
+    def get_operational_shift_continuity(self) -> Any:
+        return self._request("GET", "/operational-work-shift-continuity")
+
     def accept_operational_shift_open(self) -> Any:
         return self._request("POST", "/operational-work-shift-open-accept", {})
 
@@ -546,6 +549,7 @@ def _build_parser() -> argparse.ArgumentParser:
     work.add_parser("shift-summary")
     work.add_parser("close-readiness")
     work.add_parser("open-reconciliation")
+    work.add_parser("continuity")
     work.add_parser("open-accept")
     work.add_parser("open-acceptances")
     work.add_parser("close-attest")
@@ -733,6 +737,8 @@ def _execute(client: PilotOperatorClient, args: argparse.Namespace) -> Any:
             return client.get_operational_shift_close_readiness()
         if args.action == "open-reconciliation":
             return client.get_operational_shift_open_reconciliation()
+        if args.action == "continuity":
+            return client.get_operational_shift_continuity()
         if args.action == "open-accept":
             return client.accept_operational_shift_open()
         if args.action == "open-acceptances":

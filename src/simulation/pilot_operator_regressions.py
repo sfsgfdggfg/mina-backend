@@ -150,6 +150,8 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append((_last_contract(session), ("GET", "/operational-work-shift-close-readiness", None)))
     client.get_operational_shift_open_reconciliation()
     contracts.append((_last_contract(session), ("GET", "/operational-work-shift-open-reconciliation", None)))
+    client.get_operational_shift_continuity()
+    contracts.append((_last_contract(session), ("GET", "/operational-work-shift-continuity", None)))
     client.accept_operational_shift_open()
     contracts.append((_last_contract(session), ("POST", "/operational-work-shift-open-accept", {})))
     client.list_operational_shift_open_acceptances()
@@ -659,6 +661,18 @@ def evaluate_pilot_operator_regressions() -> dict:
         "GET", "/operational-work-shift-open-reconciliation", None,
     ):
         failures.append("operational shift-open reconciliation CLI mapped to the wrong API contract")
+
+    continuity_cli_session = _Session([_Response(200, {"ledger_status": "clear"})])
+    continuity_cli_client = _client(continuity_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=continuity_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            continuity_cli_exit = main(["work", "continuity"])
+    if continuity_cli_exit != 0:
+        failures.append("operational shift continuity CLI command failed")
+    elif _last_contract(continuity_cli_session) != (
+        "GET", "/operational-work-shift-continuity", None,
+    ):
+        failures.append("operational shift continuity CLI mapped to the wrong API contract")
 
     open_accept_cli_session = _Session([_Response(200, {"receipt_id": "shift-open-test"})])
     open_accept_cli_client = _client(open_accept_cli_session)
