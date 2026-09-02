@@ -5,7 +5,11 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from src.core.business_calendar import is_business_time, next_business_open
+from src.core.business_calendar import (
+    SupplierHolidayCalendarCoverageError,
+    is_supplier_business_time,
+    next_supplier_business_open,
+)
 from src.core.mail import (
     MailSendStatus,
     MailSendResult,
@@ -115,16 +119,21 @@ def _business_hours_rejection(
     if workflow is None:
         return None
     current = now or datetime.now(timezone.utc)
-    if is_business_time(current, workflow.dispatch_policy):
-        return None
-    resume_at = next_business_open(current, workflow.dispatch_policy)
+    try:
+        if is_supplier_business_time(current):
+            return None
+        resume_at = next_supplier_business_open(current)
+        reason = (
+            "Supplier outbound mail is paused outside the Turkey supplier "
+            "communication window; "
+            f"next supplier opening is {resume_at.isoformat()}."
+        )
+    except SupplierHolidayCalendarCoverageError as exc:
+        reason = f"Supplier outbound mail is paused: {exc}"
     return _controlled_result(
         operation_id=operation_id,
         status="rejected_before_provider",
-        reason=(
-            "Supplier outbound mail is paused outside agency business hours; "
-            f"next business opening is {resume_at.isoformat()}."
-        ),
+        reason=reason,
     )
 
 

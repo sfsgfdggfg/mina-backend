@@ -378,6 +378,10 @@ def _automation_attention_items(
             "inspect_supplier_contact_data", 85,
             "supplier_recipient_missing_for_automation",
         ),
+        "supplier_calendar_unavailable_manual_attention": (
+            "inspect_supplier_calendar", 90,
+            "supplier_holiday_calendar_coverage_required",
+        ),
     }
     for draft in supplier_repository.list_drafts():
         plan = supplier_reminder_plan(

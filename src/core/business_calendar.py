@@ -1,42 +1,104 @@
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+SUPPLIER_TIMEZONE = "Europe/Istanbul"
+SUPPLIER_DAY_START = "09:00"
+SUPPLIER_DAY_END = "18:30"
+SUPPLIER_HALF_DAY_END = "13:00"
+SUPPLIER_WEEKDAYS = (0, 1, 2, 3, 4)
+SUPPLIER_HOLIDAY_COVERAGE_YEARS = (2026, 2027, 2028)
 
-def _parse_clock(value: str) -> time:
-    hour_text, minute_text = value.split(":", 1)
-    return time(hour=int(hour_text), minute=int(minute_text))
+_FIXED_FULL_HOLIDAYS = {
+    (1, 1), (4, 23), (5, 1), (5, 19), (7, 15), (8, 30), (10, 29),
+}
+_FIXED_HALF_HOLIDAYS = {(10, 28)}
+_RELIGIOUS_FULL_HOLIDAYS = {
+    2026: {(3, 20), (3, 21), (3, 22), (5, 27), (5, 28), (5, 29), (5, 30)},
+    2027: {(3, 9), (3, 10), (3, 11), (5, 16), (5, 17), (5, 18), (5, 19)},
+    2028: {(2, 26), (2, 27), (2, 28), (5, 5), (5, 6), (5, 7), (5, 8)},
+}
+_RELIGIOUS_HALF_HOLIDAYS = {
+    2026: {(3, 19), (5, 26)},
+    2027: {(3, 8), (5, 15)},
+    2028: {(2, 25), (5, 4)},
+}
 
 
-def _local(value: datetime, timezone_name: str) -> datetime:
-    zone = ZoneInfo(timezone_name)
+class SupplierHolidayCalendarCoverageError(RuntimeError):
+    pass
+
+
+def _clock(value: str) -> time:
+    hour, minute = map(int, value.split(":"))
+    return time(hour=hour, minute=minute)
+
+
+def _local(value: datetime) -> datetime:
+    zone = ZoneInfo(SUPPLIER_TIMEZONE)
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc).astimezone(zone)
     return value.astimezone(zone)
 
 
-def is_business_time(value: datetime, policy) -> bool:
-    local = _local(value, policy.business_timezone)
-    if local.weekday() not in set(policy.business_weekdays):
+def supplier_calendar_metadata() -> dict:
+    return {
+        "timezone": SUPPLIER_TIMEZONE,
+        "start": SUPPLIER_DAY_START,
+        "end": SUPPLIER_DAY_END,
+        "weekdays": list(SUPPLIER_WEEKDAYS),
+        "holiday_country": "TR",
+        "holiday_source": "official_2429_and_diyanet_verified_calendar",
+        "holiday_coverage_years": list(SUPPLIER_HOLIDAY_COVERAGE_YEARS),
+        "half_day_close": SUPPLIER_HALF_DAY_END,
+        "configurable": False,
+    }
+
+
+def _require_holiday_coverage(day: date) -> None:
+    if day.year not in SUPPLIER_HOLIDAY_COVERAGE_YEARS:
+        raise SupplierHolidayCalendarCoverageError(
+            f"Turkey supplier holiday calendar is not verified for {day.year}."
+        )
+
+
+def _day_window(day: date) -> tuple[time, time] | None:
+    if day.weekday() not in SUPPLIER_WEEKDAYS:
+        return None
+    _require_holiday_coverage(day)
+    key = (day.month, day.day)
+    if key in _FIXED_FULL_HOLIDAYS or key in _RELIGIOUS_FULL_HOLIDAYS[day.year]:
+        return None
+    end = (
+        _clock(SUPPLIER_HALF_DAY_END)
+        if key in _FIXED_HALF_HOLIDAYS or key in _RELIGIOUS_HALF_HOLIDAYS[day.year]
+        else _clock(SUPPLIER_DAY_END)
+    )
+    return _clock(SUPPLIER_DAY_START), end
+
+
+def is_supplier_business_time(value: datetime) -> bool:
+    local = _local(value)
+    window = _day_window(local.date())
+    if window is None:
         return False
-    start = _parse_clock(policy.business_day_start)
-    end = _parse_clock(policy.business_day_end)
+    start, end = window
     clock = local.timetz().replace(tzinfo=None)
     return start <= clock < end
 
 
-def next_business_open(value: datetime, policy) -> datetime:
-    local = _local(value, policy.business_timezone)
-    start = _parse_clock(policy.business_day_start)
-    end = _parse_clock(policy.business_day_end)
-    weekdays = set(policy.business_weekdays)
-    for offset in range(0, 15):
+def next_supplier_business_open(value: datetime) -> datetime:
+    local = _local(value)
+    zone = ZoneInfo(SUPPLIER_TIMEZONE)
+    for offset in range(0, 370):
         day = (local + timedelta(days=offset)).date()
-        if day.weekday() not in weekdays:
+        window = _day_window(day)
+        if window is None:
             continue
-        opening = datetime.combine(day, start, tzinfo=local.tzinfo)
-        closing = datetime.combine(day, end, tzinfo=local.tzinfo)
+        start, end = window
+        opening = datetime.combine(day, start, tzinfo=zone)
+        closing = datetime.combine(day, end, tzinfo=zone)
         if offset == 0:
             if local < opening:
                 return opening.astimezone(timezone.utc)
@@ -44,67 +106,30 @@ def next_business_open(value: datetime, policy) -> datetime:
                 return local.astimezone(timezone.utc)
             continue
         return opening.astimezone(timezone.utc)
-    raise ValueError("No business opening found within the supported calendar window.")
+    raise SupplierHolidayCalendarCoverageError(
+        "No verified supplier business opening found in calendar coverage."
+    )
 
 
-def previous_business_close(value: datetime, policy) -> datetime:
-    local = _local(value, policy.business_timezone)
-    start = _parse_clock(policy.business_day_start)
-    end = _parse_clock(policy.business_day_end)
-    weekdays = set(policy.business_weekdays)
-    for offset in range(0, 15):
-        day = (local - timedelta(days=offset)).date()
-        if day.weekday() not in weekdays:
-            continue
-        opening = datetime.combine(day, start, tzinfo=local.tzinfo)
-        closing = datetime.combine(day, end, tzinfo=local.tzinfo)
-        if offset == 0:
-            if local > closing:
-                return closing.astimezone(timezone.utc)
-            if local >= opening:
-                return local.astimezone(timezone.utc)
-            continue
-        return closing.astimezone(timezone.utc)
-    raise ValueError("No prior business close found within the supported calendar window.")
-
-
-def add_business_minutes(anchor: datetime, minutes: int, policy) -> datetime:
+def add_supplier_business_minutes(anchor: datetime, minutes: int) -> datetime:
     if minutes < 0:
-        raise ValueError("Business minutes must be non-negative.")
-    current = next_business_open(anchor, policy)
+        raise ValueError("Supplier business minutes must be non-negative.")
+    current = next_supplier_business_open(anchor)
     remaining = int(minutes)
     if remaining == 0:
         return current
-    zone = ZoneInfo(policy.business_timezone)
-    end = _parse_clock(policy.business_day_end)
+    zone = ZoneInfo(SUPPLIER_TIMEZONE)
     while remaining > 0:
         local = current.astimezone(zone)
+        window = _day_window(local.date())
+        if window is None:
+            current = next_supplier_business_open(local + timedelta(days=1))
+            continue
+        _, end = window
         closing = datetime.combine(local.date(), end, tzinfo=zone)
         available = max(0, int((closing - local).total_seconds() // 60))
         if remaining <= available:
             return (local + timedelta(minutes=remaining)).astimezone(timezone.utc)
         remaining -= available
-        current = next_business_open(closing + timedelta(seconds=1), policy)
+        current = next_supplier_business_open(closing + timedelta(seconds=1))
     return current
-
-
-def proactive_customer_update_due(deadline: datetime, lead_minutes: int, policy) -> datetime:
-    local_deadline = _local(deadline, policy.business_timezone)
-    raw_due = local_deadline - timedelta(minutes=lead_minutes)
-    if is_business_time(raw_due, policy):
-        return raw_due.astimezone(timezone.utc)
-
-    start = _parse_clock(policy.business_day_start)
-    end = _parse_clock(policy.business_day_end)
-    weekdays = set(policy.business_weekdays)
-    if local_deadline.weekday() in weekdays:
-        opening = datetime.combine(local_deadline.date(), start, tzinfo=local_deadline.tzinfo)
-        closing = datetime.combine(local_deadline.date(), end, tzinfo=local_deadline.tzinfo)
-        if local_deadline >= closing:
-            return (closing - timedelta(minutes=lead_minutes)).astimezone(timezone.utc)
-        if local_deadline >= opening and raw_due < opening:
-            prior = previous_business_close(opening - timedelta(seconds=1), policy)
-            return prior - timedelta(minutes=lead_minutes)
-
-    prior = previous_business_close(local_deadline, policy)
-    return prior - timedelta(minutes=lead_minutes)
