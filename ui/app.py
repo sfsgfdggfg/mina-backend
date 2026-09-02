@@ -10,6 +10,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
 from src.core.data_health_labels import get_data_health_check_label
+from ui.mina_operations import render_mina_operations
 
 
 API_BASE_URL = "http://127.0.0.1:8000"
@@ -1929,35 +1930,17 @@ def render_customer_memory_editor():
                 st.code(str(error))
 
 
-st.title("MINAI Freight OS")
-st.subheader("AI Freight Operations Assistant")
-
-st.write(
-    "Müşteri mailini yapıştırın. MINAI shipment bilgilerini çıkarır, riskleri değerlendirir ve uygun aksiyonu üretir."
-)
-
-example_options = get_example_email_options()
-
-selected_example = st.selectbox(
-    "Hazır Senaryo Seç",
-    options=list(example_options.keys()),
-)
-
-selected_email = example_options[selected_example]
-
-if selected_example == "Custom Email":
-    selected_email = ""
-
-email_text = st.text_area(
-    "Müşteri Email Metni",
-    value=selected_email,
-    height=220,
-)
-
-if st.button("Process Email"):
-    if not email_text.strip():
-        st.warning("Lütfen bir email metni girin.")
-    else:
+def render_new_inquiry_page():
+    st.subheader("Yeni Talep")
+    st.write("Müşteri mailini yapıştırın. MINAI bilgileri çıkarır ve insan teyidine hazırlar.")
+    example_options = get_example_email_options()
+    selected_example = st.selectbox("Hazır Senaryo Seç", options=list(example_options.keys()))
+    selected_email = "" if selected_example == "Custom Email" else example_options[selected_example]
+    email_text = st.text_area("Müşteri Email Metni", value=selected_email, height=220)
+    if st.button("Process Email"):
+        if not email_text.strip():
+            st.warning("Lütfen bir email metni girin.")
+            return
         with st.spinner("MINAI emaili işliyor..."):
             try:
                 response = requests.post(
@@ -1965,25 +1948,38 @@ if st.button("Process Email"):
                     json={"email_text": email_text},
                     timeout=60,
                 )
-
                 response.raise_for_status()
                 result = response.json()
-
                 st.success("Email işlendi.")
-
                 render_summary(result)
                 render_draft(result)
                 render_debug(result)
-
             except requests.exceptions.RequestException as error:
                 st.error("API çağrısı başarısız oldu.")
                 st.code(str(error))
 
 
-render_data_health_dashboard()
-render_customer_memory_list()
-render_customer_memory_editor()
-render_customer_memory_export()
-render_customer_memory_import_preview()
-render_customer_memory_backup_restore_preview()
-render_customer_memory_backup_cleanup_preview()
+def render_data_management_page():
+    st.subheader("Veri & Rehber")
+    render_data_health_dashboard()
+    render_customer_memory_list()
+    render_customer_memory_editor()
+    render_customer_memory_export()
+    render_customer_memory_import_preview()
+    render_customer_memory_backup_restore_preview()
+    render_customer_memory_backup_cleanup_preview()
+
+
+st.title("MINAI Freight OS")
+st.caption("Freight Operations Workspace")
+page = st.sidebar.radio(
+    "Çalışma Alanı",
+    ["MINA İşleri", "Yeni Talep", "Veri & Rehber"],
+    index=0,
+)
+if page == "MINA İşleri":
+    render_mina_operations(API_BASE_URL)
+elif page == "Yeni Talep":
+    render_new_inquiry_page()
+else:
+    render_data_management_page()

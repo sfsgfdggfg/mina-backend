@@ -1446,3 +1446,12 @@ Job-specific automation override changes are controlled POST actions and are int
 For an individual supplier RFQ inside a MINA job, use the reminder-preview endpoint before an optional early send. Preview is read-only and returns the subject/body plus planned due time and whether supplier communication is currently open. The send-now endpoint requires authenticated operator authority and still enforces supplier hours/holidays. A successful early reminder consumes the same durable scheduler action, preventing later duplicate delivery.
 
 Lifecycle transitions are explicit controlled mutations. Delivery normally closes the operation. Lost or cancelled closure requires a reason. P1-75 does not yet provide the graphical main job screen; P1-76 will consume these backend list/detail/action contracts. MINA job/timeline state is intentionally retained beyond the standard 30-day pilot state purge, while raw mail and ordinary pilot state retain their existing privacy/retention rules.
+
+## P1-76 — MINA Operations Development UI
+
+The optional Streamlit development UI now opens on `MINA İşleri`. It lists durable MINA jobs and provides job detail tabs for general status, suppliers, quote summary, timeline and controlled job actions. `Yeni Talep` preserves the existing manual email-development flow and `Veri & Rehber` contains the existing data/customer-memory tooling.
+
+The job controls mirror P1-75 APIs: job-wide automation disable overrides, supplier reminder preview/early send and valid manual lifecycle transitions. Early reminder send has no extra confirmation dialog, but backend supplier-hours and duplicate-send guards remain mandatory.
+P1-76 does not approve Streamlit for live pilot use. Do not inject pilot bearer credentials into the Streamlit source or treat the development UI as an authenticated pilot boundary. Live pilot authority remains the authenticated FastAPI/operator-client surface until a browser/session security layer is separately approved.
+
+For development UI validation use `python -m py_compile ui/app.py ui/mina_operations.py` and `python -m src.simulation.mina_operations_ui_regressions`. The controlled pilot launcher remains unchanged and does not start Streamlit.

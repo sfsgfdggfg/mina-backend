@@ -3627,3 +3627,12 @@ Job-level automation overrides may only reduce authority. When supplier reminder
 An authenticated operator may preview and send a supplier reminder before its normal 30/120-minute due time. The send-now action must still obey the fixed supplier communication calendar, verify that the RFQ is awaiting response, verify that no commercial response has arrived, reserve the same durable action key used by the scheduler, and recheck state immediately before provider delivery. A successful early send consumes that scheduled reminder; it must never be followed by a duplicate automatic reminder for the same stage.
 
 MINA job timeline/list/detail views may expose operationally useful status, supplier state, quote revision state, safe commercial result summaries and authenticated action history, but must not invent authority. Reading a job never approves, sends, resumes or transitions anything. Mutations continue to use the existing controlled lifecycle guards.
+
+## RULE-182 — MINA Job UI Must Reflect Durable State Without Creating New Authority
+
+The MINA job workspace may list/search/filter jobs and display curated job detail, supplier response/reminder state, quote/revision counts, automation state and timeline evidence. Read-only rendering must not mutate job, RFQ, quote, assignment or automation state.
+
+UI mutations must call the existing controlled API actions; the UI must not write repositories directly. Supplier early-reminder send remains preview-then-send with no second confirmation, but the backend supplier calendar, state recheck and durable action reservation remain authoritative. Job-level overrides may disable automation only for that job and may never expand globally disabled authority.
+Manual UI lifecycle controls must represent real operational facts rather than editable cosmetic status. Quote-ready/quote-sent progression should continue from quote workflow evidence; the operator UI may record customer acceptance, operations start, in-transit, delivered, lost or cancelled only through valid backend transitions. Lost/cancelled reason evidence remains mandatory.
+
+The development UI must not contain pilot bearer tokens, customer raw target-price evidence or internal release/fingerprint metadata. Timeline rendering must be curated and work timestamps must use Europe/Istanbul. Streamlit remains non-pilot-approved until a separate authenticated browser/session boundary is explicitly validated.
