@@ -83,7 +83,15 @@ def build_operational_shift_close_readiness(
         for item in summary["recent_handoffs"]["items"]
         if item.get("current_disposition") in INCOMPLETE_HANDOFF_DISPOSITIONS
     ]
-    critical_unassigned = [dict(item) for item in summary["critical_unassigned"]["items"]]
+    critical_unassigned = [
+        _safe_expired_item(item)
+        for item in decorated.get("items", [])
+        if item.get("priority_band") == "critical"
+        and not (
+            item.get("assignment_status") in {"assigned", "acknowledged"}
+            and item.get("lease_status") == "active"
+        )
+    ]
 
     blocker_codes: list[str] = []
     if active_items:

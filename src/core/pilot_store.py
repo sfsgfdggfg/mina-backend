@@ -380,6 +380,19 @@ class SQLitePilotStore:
             ).fetchone()
         return row is not None
 
+    def latest_event_id(self, *, exclude_entity_type: str | None = None) -> int:
+        with self._connection_scope() as connection:
+            if exclude_entity_type is None:
+                row = connection.execute(
+                    "SELECT COALESCE(MAX(event_id), 0) AS event_id FROM pilot_events"
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    "SELECT COALESCE(MAX(event_id), 0) AS event_id FROM pilot_events WHERE entity_type != ?",
+                    (exclude_entity_type,),
+                ).fetchone()
+        return 0 if row is None else int(row["event_id"])
+
     def list_events(self, *, entity_type: str | None = None, entity_id: str | None = None) -> list[dict[str, Any]]:
         clauses = []
         values = []

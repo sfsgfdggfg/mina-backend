@@ -184,6 +184,31 @@ def evaluate_operational_shift_close_readiness_regressions():
         "critical unassigned work blocks shift close until coverage exists",
     )
 
+    attachments5, proposals5, suppliers5, approvals5, cases5 = _fixture()
+    assignments5 = InMemoryOperationalWorkAssignmentRepository()
+    args5 = _args(assignments5, attachments5, proposals5, suppliers5, approvals5, cases5)
+    queue5 = _queue(attachments5, proposals5, suppliers5, approvals5, cases5)
+    critical_items = [item for item in queue5["items"] if item["priority_band"] == "critical"]
+    for index, item in enumerate(critical_items):
+        assign_operational_work_to_me(
+            work_id=item["work_id"],
+            operator_name="Coverage Operator",
+            now=(NOW - timedelta(minutes=31) if index == 0 else NOW),
+            **args5,
+        )
+    expired_critical = build_operational_shift_close_readiness(
+        operator_name="Closing Operator", now=NOW, **args5
+    )
+    check(
+        expired_critical["ready_to_close"] is False
+        and expired_critical["critical_unassigned"]["count"] >= 1
+        and any(
+            item.get("assignment_status") == "expired"
+            for item in expired_critical["critical_unassigned"]["items"]
+        ),
+        "critical work with expired other-operator lease is uncovered and blocks close readiness",
+    )
+
     rendered = repr(active_blocked).lower() + repr(expired).lower() + repr(incomplete).lower()
     check(
         "work_state_sha256" not in rendered

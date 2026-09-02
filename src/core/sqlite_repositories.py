@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.attachment_interpretation_review import AttachmentInterpretationReview
 from src.core.operational_work_assignment import OperationalWorkAssignment
+from src.core.operational_shift_close_receipt import OperationalShiftCloseReceipt
 from src.core.pilot_store import SQLitePilotStore
 from src.core.quote_approval import QuoteApproval
 from src.core.quote_case import QuoteCase
@@ -107,6 +108,39 @@ class SQLiteOperationalWorkAssignmentRepository:
             _model_from_payload(OperationalWorkAssignment, event["payload"])
             for event in self.store.list_events(entity_type="operational_work_assignment")
             if event["event_type"] == "operational_work_assignment_saved"
+        ]
+
+
+class SQLiteOperationalShiftCloseReceiptRepository:
+    NAMESPACE = "operational_shift_close_receipts"
+
+    def __init__(self, store: SQLitePilotStore) -> None:
+        self.store = store
+
+    def save_if_absent(self, receipt: OperationalShiftCloseReceipt) -> OperationalShiftCloseReceipt:
+        payload = _model_payload(receipt)
+        inserted = self.store.insert_once(
+            namespace=self.NAMESPACE,
+            record_key=receipt.receipt_id,
+            payload=payload,
+            event_type="operational_shift_close_attested",
+            entity_type="operational_shift_close_receipt",
+        )
+        if inserted:
+            return _model_from_payload(OperationalShiftCloseReceipt, payload)
+        existing = self.get(receipt.receipt_id)
+        if existing is None:
+            raise RuntimeError("Shift close receipt insert conflict could not be recovered.")
+        return existing
+
+    def get(self, receipt_id: str) -> OperationalShiftCloseReceipt | None:
+        payload = self.store.get(namespace=self.NAMESPACE, record_key=receipt_id)
+        return None if payload is None else _model_from_payload(OperationalShiftCloseReceipt, payload)
+
+    def list_all(self) -> list[OperationalShiftCloseReceipt]:
+        return [
+            _model_from_payload(OperationalShiftCloseReceipt, payload)
+            for payload in self.store.list_all(namespace=self.NAMESPACE)
         ]
 
 

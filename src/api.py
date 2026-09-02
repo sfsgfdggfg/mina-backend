@@ -76,6 +76,7 @@ from src.core.operational_data import operational_data_sources_from_environment
 from src.core.sqlite_repositories import (
     SQLiteAttachmentInterpretationReviewRepository,
     SQLiteOperationalWorkAssignmentRepository,
+    SQLiteOperationalShiftCloseReceiptRepository,
     SQLiteExtractionProposalRepository,
     SQLiteQuoteApprovalRepository,
     SQLiteQuoteCaseRepository,
@@ -154,6 +155,11 @@ from src.core.operational_work_assignment_service import (
 )
 from src.core.operational_shift_summary import build_operational_shift_summary
 from src.core.operational_shift_close_readiness import build_operational_shift_close_readiness
+from src.core.operational_shift_close_attestation import (
+    OperationalShiftCloseAttestationBlockedError,
+    attest_operational_shift_close,
+    list_operational_shift_close_receipts,
+)
 from src.core.operational_work_detail import (
     OperationalWorkItemNotFoundError,
     build_operational_work_item_detail,
@@ -233,6 +239,7 @@ supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
 operational_work_assignment_repository = SQLiteOperationalWorkAssignmentRepository(pilot_store)
+operational_shift_close_receipt_repository = SQLiteOperationalShiftCloseReceiptRepository(pilot_store)
 try:
     outbound_mail_sender: OutboundMailSender | None = outlook_graph_sender_from_environment()
 except MicrosoftAuthConfigurationError:
@@ -1232,6 +1239,37 @@ def get_operational_work_shift_summary(http_request: Request):
 def get_operational_work_shift_close_readiness(http_request: Request):
     return build_operational_shift_close_readiness(
         operator_name=_authenticated_operator(http_request),
+        assignment_repository=operational_work_assignment_repository,
+        attachment_repository=attachment_review_repository,
+        proposal_repository=extraction_proposal_repository,
+        supplier_repository=supplier_rfq_repository,
+        approval_repository=quote_approval_repository,
+        quote_case_repository=quote_case_repository,
+    )
+
+
+@app.post("/operational-work-shift-close-attest")
+def attest_operational_work_shift_close(http_request: Request):
+    try:
+        return attest_operational_shift_close(
+            operator_name=_authenticated_operator(http_request),
+            receipt_repository=operational_shift_close_receipt_repository,
+            assignment_repository=operational_work_assignment_repository,
+            attachment_repository=attachment_review_repository,
+            proposal_repository=extraction_proposal_repository,
+            supplier_repository=supplier_rfq_repository,
+            approval_repository=quote_approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
+    except OperationalShiftCloseAttestationBlockedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/operational-work-shift-close-receipts")
+def get_operational_work_shift_close_receipts(http_request: Request):
+    return list_operational_shift_close_receipts(
+        operator_name=_authenticated_operator(http_request),
+        receipt_repository=operational_shift_close_receipt_repository,
         assignment_repository=operational_work_assignment_repository,
         attachment_repository=attachment_review_repository,
         proposal_repository=extraction_proposal_repository,

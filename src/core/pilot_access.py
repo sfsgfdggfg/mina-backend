@@ -37,6 +37,8 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("GET", re.compile(r"^/operational-work-my$")),
     ("GET", re.compile(r"^/operational-work-shift-summary$")),
     ("GET", re.compile(r"^/operational-work-shift-close-readiness$")),
+    ("POST", re.compile(r"^/operational-work-shift-close-attest$")),
+    ("GET", re.compile(r"^/operational-work-shift-close-receipts$")),
     ("GET", re.compile(r"^/operational-work-items/[^/]+$")),
     ("POST", re.compile(r"^/operational-work-items/[^/]+/assign-to-me$")),
     ("POST", re.compile(r"^/operational-work-items/[^/]+/acknowledge$")),

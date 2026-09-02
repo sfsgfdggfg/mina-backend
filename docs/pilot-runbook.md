@@ -1355,3 +1355,29 @@ python -m src.pilot_operator work close-readiness
 If `active_assignments_remaining` is present, finish the controlled workflow or use `work handoff` / `work release` as appropriate. If `expired_assignments_require_recovery` is present, refresh with `work get`; use the existing P1-64 recovery path such as `work takeover` when needed before a handoff, or release the assignment when intentionally returning it. If `recent_handoffs_incomplete` is present, the receiving shift must refresh current state and claim appropriate work through normal `work assign`. If `critical_unassigned_work_requires_coverage` is present, the critical item must be inspected and deliberately claimed by an operator before readiness can pass.
 
 `active_assignment_lease_expiring_soon` is a warning layered on top of the active-work blocker. Readiness never performs assignment or workflow mutations and does not authorize any proposal, attachment, supplier, approval, case or send action. Always use the existing controlled commands and lifecycle guards for the actual work.
+
+## P1-68 shift close attestation and evidence receipts
+
+First recheck current readiness:
+
+```bash
+python -m src.pilot_operator work close-readiness
+```
+
+Only when that current readout is ready, explicitly attest the close state:
+
+```bash
+python -m src.pilot_operator work close-attest
+```
+
+The server recomputes readiness again inside the same SQLite transaction that records the receipt. If coverage changed between the read and attestation, attestation fails with a lifecycle conflict and no receipt is written. Repeating attestation against the exact same unchanged state is idempotent.
+
+Review your own recent receipts with:
+
+```bash
+python -m src.pilot_operator work close-receipts
+```
+
+`current` means the receipt still matches a freshly recomputed ready close state. `stale` means queue, assignment, lease, handoff or readiness state changed; the receipt remains historical evidence only. Never use a receipt as authorization for assignment, proposal confirmation, attachment apply, RFQ/quote approval, workflow resume or outbound send.
+
+Receipt status is non-resurrecting: after any later operational persistence event, an older receipt remains historical/stale even if the visible queue later happens to return to the same shape. Always use current `work close-readiness` plus a fresh `work close-attest` for the new close state.
