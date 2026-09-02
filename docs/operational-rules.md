@@ -3540,3 +3540,11 @@ An expired or legacy lease does not make the underlying work safe to approve, co
 A shift summary may read current unified work state, the authenticated operator's active assignment state and append-only assignment event history only to produce bounded coordination metadata. It must never mutate an assignment or underlying workflow as a side effect of reading the summary.
 
 Handoff history must be scoped to the authenticated operator, limited to the fixed recent window/cap, and projected into safe fields rather than returning raw event payloads. Internal work-state fingerprints, party identity, message content, prices/currency, provider IDs and attachment/source hashes are prohibited from the summary. Critical unassigned work may be highlighted, but summary presence or priority never grants claim or workflow action authority.
+
+## RULE-173 — Shift Close Readiness Must Prove Coordination Coverage Without Closing or Authorizing Anything
+
+`work close-readiness` is GET-only and authenticated-self-scoped. It may return ready only when the operator has zero lease-active current assignments, zero same-state expired assignments, zero incomplete recent shift handoffs, and the shared queue has zero critical unassigned items. Missing or ambiguous coverage must fail closed as not ready.
+
+An expired assignment must remain a shift-close blocker even though it is excluded from My Work. Recent handoff dispositions are complete only when the work is currently claimed or no longer active; unassigned, expired-assignment or changed-state dispositions remain incomplete until current queue state proves safe coverage. Expiring-soon active leases are additional attention metadata and do not replace the active-assignment blocker.
+
+Readiness must not release, renew, take over, hand off, assign, confirm, approve, send, apply, reject or resume work and must not persist a shift-close state. Remediation may name existing controlled CLI actions only as descriptive routing metadata. Existing assignment and workflow lifecycle guards remain authoritative, and internal fingerprints, raw history payloads and sensitive operational/commercial data must not be exposed.

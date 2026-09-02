@@ -146,6 +146,8 @@ def evaluate_pilot_operator_regressions() -> dict:
     contracts.append((_last_contract(session), ("GET", "/operational-work-queue", None)))
     client.get_operational_shift_summary()
     contracts.append((_last_contract(session), ("GET", "/operational-work-shift-summary", None)))
+    client.get_operational_shift_close_readiness()
+    contracts.append((_last_contract(session), ("GET", "/operational-work-shift-close-readiness", None)))
     client.get_my_operational_work()
     contracts.append((_last_contract(session), ("GET", "/operational-work-my", None)))
     client.get_operational_work_item("customer_extraction_confirmation:proposal-1")
@@ -623,6 +625,18 @@ def evaluate_pilot_operator_regressions() -> dict:
         "GET", "/operational-work-shift-summary", None,
     ):
         failures.append("operational shift summary CLI mapped to the wrong API contract")
+
+    close_readiness_cli_session = _Session([_Response(200, {"ready_to_close": True})])
+    close_readiness_cli_client = _client(close_readiness_cli_session)
+    with patch.object(PilotOperatorClient, "from_environment", return_value=close_readiness_cli_client):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            close_readiness_cli_exit = main(["work", "close-readiness"])
+    if close_readiness_cli_exit != 0:
+        failures.append("operational shift-close readiness CLI command failed")
+    elif _last_contract(close_readiness_cli_session) != (
+        "GET", "/operational-work-shift-close-readiness", None,
+    ):
+        failures.append("operational shift-close readiness CLI mapped to the wrong API contract")
 
     work_mine_cli_session = _Session([_Response(200, {"active_count": 0, "items": []})])
     work_mine_cli_client = _client(work_mine_cli_session)
