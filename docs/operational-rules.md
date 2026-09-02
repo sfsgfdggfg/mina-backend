@@ -3566,3 +3566,11 @@ For durable SQLite operation, receipt state binding must include a monotonic hig
 A prior close receipt is never proof that the incoming shift is currently safe. Missing/stale close evidence, unavailable change tracking, post-close operational events, incomplete recent handoffs or current critical work without lease-active assigned/acknowledged coverage must produce review-required attention. Receipt audit events themselves must not be counted as operational changes.
 
 The reconciliation read must not assign, acknowledge, renew, take over, hand off, release, confirm, approve, send, apply, reject, resume or persist a shift-open state. Remediation may name existing controlled commands only as descriptive routing metadata; all existing assignment and workflow lifecycle guards remain authoritative.
+
+## RULE-176 — Incoming Acceptance Requires Atomic Clear Reconciliation and Cannot Claim or Authorize Work
+
+`work open-accept` may persist evidence only after the server recomputes P1-69 in the same atomic transaction and proves `reconciliation_status=clear`. The authenticated incoming operator identity must come only from pilot authentication; the client must not supply another operator, receipt ID, note, fingerprint or target assignment.
+
+Acceptance receipts are immutable, authenticated-self-scoped and privacy-minimal. Same-state retries are idempotent. Receipt creation/listing must not assign, acknowledge, renew, take over, hand off, release, confirm, approve, send, apply, reject or resume work, and it must not create a durable global shift-open authority. Existing assignment and workflow guards remain authoritative.
+
+Shift-close receipt events and shift-open acceptance receipt events are evidence-only and must be excluded from operational event high-water/change summaries. Any later real operational event must make a prior acceptance historical/stale until a fresh reconciliation becomes clear and the operator explicitly accepts the new state.

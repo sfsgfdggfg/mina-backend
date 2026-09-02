@@ -154,6 +154,8 @@ def evaluate_pilot_access_regressions() -> dict:
         ("GET", "/operational-work-shift-summary"),
         ("GET", "/operational-work-shift-close-readiness"),
         ("GET", "/operational-work-shift-open-reconciliation"),
+        ("POST", "/operational-work-shift-open-accept"),
+        ("GET", "/operational-work-shift-open-acceptances"),
         ("POST", "/operational-work-shift-close-attest"),
         ("GET", "/operational-work-shift-close-receipts"),
         ("GET", "/operational-work-items/customer_extraction_confirmation:proposal-1"),

@@ -12,6 +12,7 @@ from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.attachment_interpretation_review import AttachmentInterpretationReview
 from src.core.operational_work_assignment import OperationalWorkAssignment
 from src.core.operational_shift_close_receipt import OperationalShiftCloseReceipt
+from src.core.operational_shift_open_acceptance_receipt import OperationalShiftOpenAcceptanceReceipt
 from src.core.pilot_store import SQLitePilotStore
 from src.core.quote_approval import QuoteApproval
 from src.core.quote_case import QuoteCase
@@ -140,6 +141,39 @@ class SQLiteOperationalShiftCloseReceiptRepository:
     def list_all(self) -> list[OperationalShiftCloseReceipt]:
         return [
             _model_from_payload(OperationalShiftCloseReceipt, payload)
+            for payload in self.store.list_all(namespace=self.NAMESPACE)
+        ]
+
+
+class SQLiteOperationalShiftOpenAcceptanceReceiptRepository:
+    NAMESPACE = "operational_shift_open_acceptance_receipts"
+
+    def __init__(self, store: SQLitePilotStore) -> None:
+        self.store = store
+
+    def save_if_absent(self, receipt: OperationalShiftOpenAcceptanceReceipt) -> OperationalShiftOpenAcceptanceReceipt:
+        payload = _model_payload(receipt)
+        inserted = self.store.insert_once(
+            namespace=self.NAMESPACE,
+            record_key=receipt.receipt_id,
+            payload=payload,
+            event_type="operational_shift_open_accepted",
+            entity_type="operational_shift_open_acceptance_receipt",
+        )
+        if inserted:
+            return _model_from_payload(OperationalShiftOpenAcceptanceReceipt, payload)
+        existing = self.get(receipt.receipt_id)
+        if existing is None:
+            raise RuntimeError("Shift open acceptance receipt insert conflict could not be recovered.")
+        return existing
+
+    def get(self, receipt_id: str) -> OperationalShiftOpenAcceptanceReceipt | None:
+        payload = self.store.get(namespace=self.NAMESPACE, record_key=receipt_id)
+        return None if payload is None else _model_from_payload(OperationalShiftOpenAcceptanceReceipt, payload)
+
+    def list_all(self) -> list[OperationalShiftOpenAcceptanceReceipt]:
+        return [
+            _model_from_payload(OperationalShiftOpenAcceptanceReceipt, payload)
             for payload in self.store.list_all(namespace=self.NAMESPACE)
         ]
 

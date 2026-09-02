@@ -73,7 +73,10 @@ def _change_summary(
         }
     raw = store.summarize_events_after(
         receipt_state_event_id,
-        exclude_entity_type="operational_shift_close_receipt",
+        exclude_entity_types=(
+            "operational_shift_close_receipt",
+            "operational_shift_open_acceptance_receipt",
+        ),
     )
     categories: dict[str, int] = {}
     for entity_type, count in raw.get("entity_type_counts", {}).items():

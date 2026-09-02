@@ -380,16 +380,27 @@ class SQLitePilotStore:
             ).fetchone()
         return row is not None
 
-    def latest_event_id(self, *, exclude_entity_type: str | None = None) -> int:
+    def latest_event_id(
+        self,
+        *,
+        exclude_entity_type: str | None = None,
+        exclude_entity_types: tuple[str, ...] | list[str] | None = None,
+    ) -> int:
+        excluded = list(exclude_entity_types or ())
+        if exclude_entity_type is not None:
+            excluded.append(exclude_entity_type)
+        excluded = sorted(set(excluded))
         with self._connection_scope() as connection:
-            if exclude_entity_type is None:
+            if not excluded:
                 row = connection.execute(
                     "SELECT COALESCE(MAX(event_id), 0) AS event_id FROM pilot_events"
                 ).fetchone()
             else:
+                placeholders = ",".join("?" for _ in excluded)
                 row = connection.execute(
-                    "SELECT COALESCE(MAX(event_id), 0) AS event_id FROM pilot_events WHERE entity_type != ?",
-                    (exclude_entity_type,),
+                    "SELECT COALESCE(MAX(event_id), 0) AS event_id FROM pilot_events "
+                    f"WHERE entity_type NOT IN ({placeholders})",
+                    excluded,
                 ).fetchone()
         return 0 if row is None else int(row["event_id"])
 
@@ -398,14 +409,20 @@ class SQLitePilotStore:
         after_event_id: int,
         *,
         exclude_entity_type: str | None = None,
+        exclude_entity_types: tuple[str, ...] | list[str] | None = None,
     ) -> dict[str, Any]:
         if after_event_id < 0:
             raise ValueError("after_event_id must be non-negative.")
         clauses = ["event_id > ?"]
         values: list[Any] = [after_event_id]
+        excluded = list(exclude_entity_types or ())
         if exclude_entity_type is not None:
-            clauses.append("entity_type != ?")
-            values.append(exclude_entity_type)
+            excluded.append(exclude_entity_type)
+        excluded = sorted(set(excluded))
+        if excluded:
+            placeholders = ",".join("?" for _ in excluded)
+            clauses.append(f"entity_type NOT IN ({placeholders})")
+            values.extend(excluded)
         where_sql = " WHERE " + " AND ".join(clauses)
         with self._connection_scope() as connection:
             summary = connection.execute(
