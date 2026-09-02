@@ -531,12 +531,15 @@ def evaluate_extraction_confirmation_regressions() -> dict:
 
     import src.api as api
 
+    from src.core.mina_job_repository import InMemoryMinaJobRepository
+
     original_api_state = (
         api.parse_email_with_ai,
         api.extraction_proposal_repository,
         api.supplier_rfq_repository,
         api.quote_approval_repository,
         api.quote_case_repository,
+        api.mina_job_repository,
     )
     try:
         api.parse_email_with_ai = lambda _: _snapshot()
@@ -546,6 +549,7 @@ def evaluate_extraction_confirmation_regressions() -> dict:
         api.supplier_rfq_repository = InMemorySupplierRFQRepository()
         api.quote_approval_repository = InMemoryQuoteApprovalRepository()
         api.quote_case_repository = InMemoryQuoteCaseRepository()
+        api.mina_job_repository = InMemoryMinaJobRepository()
 
         api_initial = api.process_email(
             api.ProcessEmailRequest(email_text="API checkpoint inquiry")
@@ -576,6 +580,7 @@ def evaluate_extraction_confirmation_regressions() -> dict:
             api.supplier_rfq_repository,
             api.quote_approval_repository,
             api.quote_case_repository,
+            api.mina_job_repository,
         ) = original_api_state
 
     return {

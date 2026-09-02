@@ -1434,3 +1434,15 @@ Supplier automation uses a fixed Turkey communication calendar: Europe/Istanbul,
 Customer quote-deadline updates are independent of supplier hours. An explicit customer deadline keeps its own clock and default five-minute lead, including evenings/weekends. If no usable supplier price exists, a 20:00 customer deadline is eligible for the one proactive update at 19:55 while supplier outbound remains paused.
 
 If the current supplier calendar year is not verified, supplier timed automation fails closed and requires calendar maintenance. Do not bypass this by changing agency dispatch policy. Foreign country/region holiday calendars are deferred to future import workflows.
+
+
+## P1-75 — MINA Job / Case Model
+
+A genuine customer inquiry receives its MINA code only when an authenticated operator confirms the extraction proposal. The confirmation response contains `mina_job_id` and `mina_code`; the first new confirmed job in 2026 is expected to be `MINA2026/1` when no earlier P1-75 job exists. Do not pre-create MINA codes for proposed/spam intake.
+
+Use the authenticated `GET /mina-jobs` surface for the job list and `GET /mina-jobs/{job_id}` for one job's current lifecycle, supplier status, reminder plan, quote/revision summary, automation state and durable timeline. The slash-bearing human code is display/reference data; API routing uses the opaque `job_id`.
+Job-specific automation override changes are controlled POST actions and are intended for the future job-detail UI. Disabling supplier reminders converts due automation into manual operational work for that MINA job; it does not alter agency defaults or other jobs. Closed jobs reject override changes.
+
+For an individual supplier RFQ inside a MINA job, use the reminder-preview endpoint before an optional early send. Preview is read-only and returns the subject/body plus planned due time and whether supplier communication is currently open. The send-now endpoint requires authenticated operator authority and still enforces supplier hours/holidays. A successful early reminder consumes the same durable scheduler action, preventing later duplicate delivery.
+
+Lifecycle transitions are explicit controlled mutations. Delivery normally closes the operation. Lost or cancelled closure requires a reason. P1-75 does not yet provide the graphical main job screen; P1-76 will consume these backend list/detail/action contracts. MINA job/timeline state is intentionally retained beyond the standard 30-day pilot state purge, while raw mail and ordinary pilot state retain their existing privacy/retention rules.

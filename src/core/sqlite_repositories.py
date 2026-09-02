@@ -4,11 +4,14 @@ import hashlib
 import json
 from collections.abc import Iterable
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
 from src.core.automation_action import ScheduledAutomationAction
+from src.core.mina_job import MinaJob, MinaJobEvent
+from src.core.models import Shipment
 from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.attachment_interpretation_review import AttachmentInterpretationReview
 from src.core.operational_work_assignment import OperationalWorkAssignment
@@ -80,6 +83,126 @@ def _stable_payload_key(payload: Any) -> str:
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
+
+
+class SQLiteMinaJobRepository:
+    JOB_NAMESPACE = "mina_jobs"
+    SEQUENCE_NAMESPACE = "mina_job_sequences"
+    PROPOSAL_INDEX_NAMESPACE = "mina_job_by_proposal"
+    CODE_INDEX_NAMESPACE = "mina_job_by_code"
+    EVENT_NAMESPACE = "mina_job_timeline_events"
+
+    def __init__(self, store: SQLitePilotStore) -> None:
+        self.store = store
+
+    def _create_for_proposal(
+        self, *, proposal_id: str, shipment: Shipment, opened_by: str,
+        opened_at: datetime, sequence_year: int,
+    ) -> tuple[MinaJob, bool]:
+        existing = self.find_by_proposal_id(proposal_id)
+        if existing is not None:
+            return existing, False
+        sequence_key = str(sequence_year)
+        sequence = self.store.get(
+            namespace=self.SEQUENCE_NAMESPACE, record_key=sequence_key
+        ) or {"last_sequence_number": 0}
+        sequence_number = int(sequence.get("last_sequence_number", 0)) + 1
+        mina_code = f"MINA{sequence_year}/{sequence_number}"
+        job = MinaJob(
+            mina_code=mina_code, sequence_year=sequence_year,
+            sequence_number=sequence_number, source_proposal_id=proposal_id,
+            shipment=shipment.model_copy(deep=True), opened_by=opened_by,
+            opened_at=opened_at, updated_at=opened_at,
+        )
+        self.store.upsert(
+            namespace=self.SEQUENCE_NAMESPACE, record_key=sequence_key,
+            payload={"last_sequence_number": sequence_number},
+            event_type="mina_job_sequence_advanced", entity_type="mina_job_sequence",
+        )
+        if not self.store.insert_once(
+            namespace=self.JOB_NAMESPACE, record_key=job.job_id,
+            payload=_model_payload(job), event_type="mina_job_created",
+            entity_type="mina_job",
+        ):
+            raise RuntimeError("MINA job identifier collision.")
+        self.store.insert_once(
+            namespace=self.PROPOSAL_INDEX_NAMESPACE, record_key=proposal_id,
+            payload={"job_id": job.job_id}, event_type="mina_job_proposal_indexed",
+            entity_type="mina_job_index",
+        )
+        if not self.store.insert_once(
+            namespace=self.CODE_INDEX_NAMESPACE, record_key=mina_code.upper(),
+            payload={"job_id": job.job_id}, event_type="mina_job_code_indexed",
+            entity_type="mina_job_index",
+        ):
+            raise RuntimeError("MINA job code collision.")
+        return job, True
+
+    def create_for_proposal(
+        self, *, proposal_id: str, shipment: Shipment, opened_by: str,
+        opened_at: datetime, sequence_year: int,
+    ) -> tuple[MinaJob, bool]:
+        if self.store.transaction_active:
+            return self._create_for_proposal(
+                proposal_id=proposal_id, shipment=shipment, opened_by=opened_by,
+                opened_at=opened_at, sequence_year=sequence_year,
+            )
+        with self.store.transaction():
+            return self._create_for_proposal(
+                proposal_id=proposal_id, shipment=shipment, opened_by=opened_by,
+                opened_at=opened_at, sequence_year=sequence_year,
+            )
+
+    def save(self, job: MinaJob) -> MinaJob:
+        payload = _model_payload(job)
+        self.store.upsert(
+            namespace=self.JOB_NAMESPACE, record_key=job.job_id, payload=payload,
+            event_type="mina_job_saved", entity_type="mina_job",
+        )
+        return _model_from_payload(MinaJob, payload)
+
+    def get(self, job_id: str) -> MinaJob | None:
+        payload = self.store.get(namespace=self.JOB_NAMESPACE, record_key=job_id)
+        return None if payload is None else _model_from_payload(MinaJob, payload)
+
+    def _job_from_index(self, namespace: str, key: str) -> MinaJob | None:
+        payload = self.store.get(namespace=namespace, record_key=key)
+        if payload is None:
+            return None
+        return self.get(str(payload.get("job_id") or ""))
+
+    def get_by_code(self, mina_code: str) -> MinaJob | None:
+        return self._job_from_index(self.CODE_INDEX_NAMESPACE, mina_code.strip().upper())
+
+    def find_by_proposal_id(self, proposal_id: str) -> MinaJob | None:
+        return self._job_from_index(self.PROPOSAL_INDEX_NAMESPACE, proposal_id)
+
+    def list_all(self) -> list[MinaJob]:
+        jobs = [
+            _model_from_payload(MinaJob, payload)
+            for payload in self.store.list_all(namespace=self.JOB_NAMESPACE)
+        ]
+        return sorted(jobs, key=lambda item: (item.sequence_year, item.sequence_number))
+
+    def append_event(self, event: MinaJobEvent) -> MinaJobEvent:
+        payload = _model_payload(event)
+        if not self.store.insert_once(
+            namespace=self.EVENT_NAMESPACE, record_key=event.event_id, payload=payload,
+            event_type="mina_job_timeline_event_recorded", entity_type="mina_job_event",
+        ):
+            existing = self.store.get(namespace=self.EVENT_NAMESPACE, record_key=event.event_id)
+            return _model_from_payload(MinaJobEvent, existing)
+        return _model_from_payload(MinaJobEvent, payload)
+
+    def list_events(self, job_id: str) -> list[MinaJobEvent]:
+        events = [
+            _model_from_payload(MinaJobEvent, payload)
+            for payload in self.store.list_all(namespace=self.EVENT_NAMESPACE)
+        ]
+        return sorted(
+            (event for event in events if event.job_id == job_id),
+            key=lambda item: (item.occurred_at, item.event_id),
+        )
 
 
 class SQLiteAutomationActionRepository:

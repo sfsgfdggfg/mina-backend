@@ -4,6 +4,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.core.automation_action_repository import AutomationActionRepository
+from src.core.mina_job_repository import MinaJobRepository
+from src.core.mina_job_service import (
+    customer_deadline_updates_enabled_for_job,
+    supplier_reminders_enabled_for_job,
+)
 from src.core.business_calendar import (
     SupplierHolidayCalendarCoverageError,
     add_supplier_business_minutes,
@@ -44,6 +49,7 @@ def supplier_reminder_plan(
     action_repository: AutomationActionRepository,
     draft: SupplierRFQDraft,
     now: datetime,
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> dict[str, Any]:
     workflow = supplier_repository.get_workflow(draft.workflow_id)
     if workflow is None or workflow.automation_timing_version < 1:
@@ -137,7 +143,11 @@ def supplier_reminder_plan(
             "state": "supplier_calendar_unavailable_manual_attention",
             "reason": str(exc),
         }
-    if not workflow.dispatch_policy.automatic_supplier_reminders_enabled:
+    if not supplier_reminders_enabled_for_job(
+        repository=mina_job_repository,
+        job_id=workflow.mina_job_id,
+        global_enabled=workflow.dispatch_policy.automatic_supplier_reminders_enabled,
+    ):
         return {
             "state": "manual_reminder_due",
             "action_type": action_type,
@@ -184,6 +194,7 @@ def customer_deadline_plan(
     action_repository: AutomationActionRepository,
     workflow: SupplierRFQWorkflow,
     now: datetime,
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> dict[str, Any]:
     if workflow.automation_timing_version < 1:
         return {"state": "not_automation_eligible"}
@@ -227,7 +238,11 @@ def customer_deadline_plan(
             "due_at": due_at,
             "deadline_at": deadline_utc,
         }
-    if not workflow.dispatch_policy.automatic_customer_deadline_updates_enabled:
+    if not customer_deadline_updates_enabled_for_job(
+        repository=mina_job_repository,
+        job_id=workflow.mina_job_id,
+        global_enabled=workflow.dispatch_policy.automatic_customer_deadline_updates_enabled,
+    ):
         return {"state": "manual_customer_update_due", "due_at": due_at}
     return {
         "state": "automatic_customer_update_due",

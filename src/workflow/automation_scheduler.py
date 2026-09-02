@@ -12,6 +12,7 @@ from src.core.automation_planning import (
     supplier_reminder_plan,
 )
 from src.core.mail import OutboundMailRequest, OutboundMailSender
+from src.core.mina_job_repository import MinaJobRepository
 from src.core.sqlite_repositories import atomic_repository_transaction
 from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQWorkflow
 from src.core.supplier_rfq_repository import SupplierRFQRepository
@@ -163,6 +164,7 @@ def _run_supplier_action(
     draft: SupplierRFQDraft,
     sender: OutboundMailSender | None,
     now: datetime,
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> str:
     with atomic_repository_transaction(supplier_repository, action_repository):
         current_draft = supplier_repository.get_draft(draft.rfq_id)
@@ -173,6 +175,7 @@ def _run_supplier_action(
             action_repository=action_repository,
             draft=current_draft,
             now=now,
+            mina_job_repository=mina_job_repository,
         )
         if plan.get("state") != "automatic_reminder_due":
             return "skipped"
@@ -205,6 +208,7 @@ def _run_supplier_action(
         action_repository=_IgnoringReservedActionRepository(action_repository, action.action_key),
         draft=current_draft,
         now=now,
+        mina_job_repository=mina_job_repository,
     )
     if pre_send_plan.get("state") != "automatic_reminder_due":
         _complete_action(
@@ -271,6 +275,7 @@ def _run_customer_action(
     workflow: SupplierRFQWorkflow,
     sender: OutboundMailSender | None,
     now: datetime,
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> str:
     with atomic_repository_transaction(supplier_repository, action_repository):
         current_workflow = supplier_repository.get_workflow(workflow.workflow_id)
@@ -281,6 +286,7 @@ def _run_customer_action(
             action_repository=action_repository,
             workflow=current_workflow,
             now=now,
+            mina_job_repository=mina_job_repository,
         )
         if plan.get("state") != "automatic_customer_update_due":
             return "skipped"
@@ -311,6 +317,7 @@ def _run_customer_action(
         action_repository=_IgnoringReservedActionRepository(action_repository, action.action_key),
         workflow=current_workflow,
         now=now,
+        mina_job_repository=mina_job_repository,
     )
     if pre_send_plan.get("state") != "automatic_customer_update_due":
         _complete_action(
@@ -352,6 +359,7 @@ def run_automation_tick(
     supplier_repository: SupplierRFQRepository,
     action_repository: AutomationActionRepository,
     sender: OutboundMailSender | None,
+    mina_job_repository: MinaJobRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = aware_utc(now or _now())
@@ -363,6 +371,7 @@ def run_automation_tick(
             draft=draft,
             sender=sender,
             now=current,
+            mina_job_repository=mina_job_repository,
         )
         counts[outcome] = counts.get(outcome, 0) + 1
     for workflow in supplier_repository.list_workflows():
@@ -372,6 +381,7 @@ def run_automation_tick(
             workflow=workflow,
             sender=sender,
             now=current,
+            mina_job_repository=mina_job_repository,
         )
         counts[outcome] = counts.get(outcome, 0) + 1
     return {"generated_at": current, "counts": counts}
@@ -384,11 +394,13 @@ class AutomationScheduler:
         supplier_repository: SupplierRFQRepository,
         action_repository: AutomationActionRepository,
         sender: OutboundMailSender | None,
+        mina_job_repository: MinaJobRepository | None = None,
         poll_seconds: int = DEFAULT_AUTOMATION_POLL_SECONDS,
     ) -> None:
         self.supplier_repository = supplier_repository
         self.action_repository = action_repository
         self.sender = sender
+        self.mina_job_repository = mina_job_repository
         self.poll_seconds = max(5, int(poll_seconds))
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -418,6 +430,7 @@ class AutomationScheduler:
                     supplier_repository=self.supplier_repository,
                     action_repository=self.action_repository,
                     sender=self.sender,
+                    mina_job_repository=self.mina_job_repository,
                 )
                 self._last_tick_at = _now()
                 self._last_error = None

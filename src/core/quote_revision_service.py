@@ -7,6 +7,8 @@ from typing import Optional
 from pydantic import BaseModel
 
 from src.core.models import CustomerQuote, QuoteDraft
+from src.core.mina_job_repository import MinaJobRepository
+from src.core.mina_job_service import record_mina_job_quote_revision
 from src.core.pricing_policy import build_operator_revision_pricing_policy
 from src.core.quote_approval import (
     QuoteApproval,
@@ -203,6 +205,7 @@ def revise_quote_case(
     final_price: Optional[float] = None,
     operator_note: Optional[str] = None,
     edited_at: Optional[datetime] = None,
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> QuoteRevisionResult:
     normalized_subject = subject.strip()
     normalized_operator = edited_by.strip()
@@ -243,6 +246,7 @@ def revise_quote_case(
     with atomic_repository_transaction(
         quote_case_repository,
         approval_repository,
+        mina_job_repository,
     ):
         quote_case = quote_case_repository.get(case_id)
 
@@ -427,6 +431,15 @@ def revise_quote_case(
                 updated_case.model_dump()
             )
         )
+        if mina_job_repository is not None and updated_case.mina_job_id:
+            record_mina_job_quote_revision(
+                repository=mina_job_repository,
+                job_id=updated_case.mina_job_id,
+                actor=normalized_operator,
+                revision_number=revision.revision_number,
+                changed_fields=changed_fields,
+                occurred_at=now,
+            )
 
     return QuoteRevisionResult(
         quote_case=updated_case,

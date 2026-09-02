@@ -164,6 +164,8 @@ class SupplierRFQFollowUpManualSentEvidence(BaseModel):
 class SupplierRFQWorkflow(BaseModel):
     workflow_id: str = Field(default_factory=lambda: str(uuid4()))
     shipment: Shipment
+    mina_job_id: Optional[str] = None
+    mina_code: Optional[str] = None
     email_text: Optional[str] = None
     sender_address: Optional[str] = None
     customer_subject: Optional[str] = None

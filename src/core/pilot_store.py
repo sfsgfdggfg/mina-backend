@@ -15,6 +15,13 @@ from pydantic import BaseModel
 from src.paths import data_path
 
 DEFAULT_PILOT_DB_PATH = data_path("pilot", "minai_pilot.sqlite3")
+PERSISTENT_STATE_NAMESPACES = (
+    "mina_jobs",
+    "mina_job_sequences",
+    "mina_job_by_proposal",
+    "mina_job_by_code",
+    "mina_job_timeline_events",
+)
 
 
 class SQLiteTransactionError(RuntimeError):
@@ -330,9 +337,11 @@ class SQLitePilotStore:
         ).isoformat()
 
         with self._connection_scope() as connection:
+            placeholders = ",".join("?" for _ in PERSISTENT_STATE_NAMESPACES)
             state_cursor = connection.execute(
-                "DELETE FROM state_records WHERE updated_at < ?",
-                (cutoff_iso,),
+                "DELETE FROM state_records WHERE updated_at < ? "
+                f"AND namespace NOT IN ({placeholders})",
+                (cutoff_iso, *PERSISTENT_STATE_NAMESPACES),
             )
             event_cursor = connection.execute(
                 "DELETE FROM pilot_events WHERE created_at < ?",

@@ -6334,3 +6334,20 @@ Supplier timers, automatic reminders, phone/WhatsApp escalation work, approved i
 Customer quote-deadline communication is separate. If a customer explicitly requests a quote by 20:00, the default five-minute proactive update is due at 19:55 even though supplier communication has ended. Supplier working hours must never pull that customer update back to 18:25 or suppress it solely because the supplier window is closed.
 
 Religious holiday dates are maintained as verified year-specific calendar data while fixed national holidays remain deterministic. The initial verified religious-holiday coverage is 2026-2028. If supplier automation reaches an unverified calendar year, it fails closed instead of assuming the day is open. Future import workflows may select a supplier/agent country and regional calendar, but P1-74 does not implement foreign calendars yet.
+
+
+## DEC-166 — A MINA Job Is the Durable Identity of One Logistics Job, Not One Quote
+
+**Status:** Accepted
+**Date:** 2026-09-02
+
+P1-75 introduces a durable MINA job/case identity. A code such as `MINA2026/1` is allocated only when a customer inquiry is human-confirmed as a genuine operational job. Unconfirmed extraction proposals, spam and rejected intake must not consume a MINA sequence number. Numbering is yearly in Europe/Istanbul and concurrent confirmations must reserve unique sequence numbers atomically.
+
+The MINA identity survives the commercial quote lifecycle. Supplier RFQ workflow, quote case, customer quote revisions and later operational stages remain attached to the same job. A revised customer quote is Rev.1/Rev.2 inside the same MINA job rather than a new MINA code. The intended lifecycle extends through accepted, operations, in-transit and delivered; delivery is the normal operational completion point. Lost/rejected and cancelled are explicit terminal alternatives.
+MINA job state and timeline are durable operational records and are not subject to the pilot store's ordinary 30-day state purge. This exception does not remove retention controls from raw inbound mail, supplier/customer message bodies or ordinary pilot state. Timeline records should carry operational event metadata, references and authenticated actor evidence without becoming an unrestricted archive of message content.
+
+Agency-level automation policy remains the default, but a MINA job may disable supplier reminders and/or customer deadline updates for that job only. A job override may reduce automation authority but must not re-enable an automation disabled globally. In P1-75 the supplier reminder override is job-wide; supplier-specific persistent override settings are intentionally deferred.
+
+An authenticated operator may preview and trigger an individual supplier reminder early from the MINA job. This does not bypass supplier communication hours or holiday controls. The early send consumes the same durable reminder action that the scheduler would later use, so the scheduled 30/120-minute reminder cannot be duplicated. Provider delivery is rechecked against current supplier state immediately before send and operator identity is retained as evidence.
+
+P1-75 provides backend job list/detail and controlled action surfaces for the future MINA main screen. It does not implement the P1-76 graphical job dashboard or Guide Editor settings. Visual MINA codes retain the slash format while API resource routing uses the opaque job ID.

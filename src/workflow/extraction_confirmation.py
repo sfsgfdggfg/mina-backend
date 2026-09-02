@@ -14,6 +14,12 @@ from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
 from src.core.mail import InboundMailEnvelope
+from src.core.mina_job_repository import MinaJobRepository
+from src.core.mina_job_service import (
+    create_mina_job_for_confirmed_proposal,
+    link_mina_job_workflow,
+    record_mina_job_resume_result,
+)
 from src.core.models import Shipment
 from src.core.data_provenance import DataProvenanceError
 from src.core.operational_data import OperationalDataSources
@@ -175,12 +181,13 @@ def confirm_extraction_proposal(
     operator_identity: str,
     corrections: dict[str, Any] | None = None,
     confirmed_at: datetime | None = None,
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> ShipmentExtractionProposal:
     normalized_operator = operator_identity.strip()
     if not normalized_operator:
         raise ValueError("Operator identity is required.")
 
-    with atomic_repository_transaction(repository):
+    with atomic_repository_transaction(repository, mina_job_repository):
         proposal = _load_proposal(repository, proposal_id)
         if proposal.extraction_status != "proposed":
             raise ExtractionConfirmationTransitionError(
@@ -193,6 +200,16 @@ def confirm_extraction_proposal(
                 corrections or {},
             )
         )
+        confirmation_time = confirmed_at or utc_now()
+        mina_job = None
+        if mina_job_repository is not None:
+            mina_job = create_mina_job_for_confirmed_proposal(
+                repository=mina_job_repository,
+                proposal_id=proposal.proposal_id,
+                shipment=confirmed_shipment,
+                opened_by=normalized_operator,
+                opened_at=confirmation_time,
+            )
         updated = ShipmentExtractionProposal.model_validate(
             {
                 **proposal.model_dump(
@@ -203,7 +220,9 @@ def confirm_extraction_proposal(
                 "operator_corrections": normalized_corrections,
                 "changed_fields": changed_fields,
                 "confirmed_by": normalized_operator,
-                "confirmed_at": confirmed_at or utc_now(),
+                "confirmed_at": confirmation_time,
+                "mina_job_id": None if mina_job is None else mina_job.job_id,
+                "mina_code": None if mina_job is None else mina_job.mina_code,
             }
         )
         return repository.save(updated)
@@ -216,6 +235,7 @@ def resume_confirmed_extraction(
     rfq_repository: SupplierRFQRepository | None = None,
     approval_repository: QuoteApprovalRepository | None = None,
     quote_case_repository: QuoteCaseRepository | None = None,
+    mina_job_repository: MinaJobRepository | None = None,
     evidence_recorder: PilotEvidenceRecorder | None = None,
     operational_data_sources: OperationalDataSources | None = None,
 ) -> dict:
@@ -247,6 +267,8 @@ def resume_confirmed_extraction(
             email_text=proposal.inbound_mail.body_text,
             sender_address=proposal.inbound_mail.sender_address,
             customer_subject=proposal.inbound_mail.subject,
+            mina_job_id=proposal.mina_job_id,
+            mina_code=proposal.mina_code,
             rfq_repository=rfq_repository,
             operational_data_sources=operational_data_sources,
             approval_repository=approval_repository,
@@ -283,10 +305,18 @@ def resume_confirmed_extraction(
         )
         with atomic_repository_transaction(
             repository,
+            mina_job_repository,
             transactional_evidence_recorder,
         ):
             _require_unchanged_resume_state(repository, proposal)
             blocked = repository.save(blocked)
+            if mina_job_repository is not None and blocked.mina_job_id:
+                result["mina_job"] = record_mina_job_resume_result(
+                    repository=mina_job_repository,
+                    job_id=blocked.mina_job_id,
+                    result_type=result_type,
+                    occurred_at=blocked.last_resume_blocked_at,
+                )
             if evidence_recorder is not None:
                 evidence_recorder.record_event(
                     event_type="confirmed_extraction_resume_blocked",
@@ -316,6 +346,7 @@ def resume_confirmed_extraction(
     with atomic_repository_transaction(
         repository,
         rfq_repository if deferred_workflow is not None else None,
+        mina_job_repository,
         transactional_evidence_recorder,
     ):
         _require_unchanged_resume_state(repository, proposal)
@@ -326,6 +357,22 @@ def resume_confirmed_extraction(
             result["supplier_rfq_workflow"] = rfq_repository.save_workflow(
                 deferred_workflow
             )
+        if mina_job_repository is not None and resumed.mina_job_id:
+            if deferred_workflow is not None:
+                result["mina_job"] = link_mina_job_workflow(
+                    repository=mina_job_repository,
+                    job_id=resumed.mina_job_id,
+                    workflow_id=deferred_workflow.workflow_id,
+                    result_type=result_type,
+                    occurred_at=resumed.resumed_at,
+                )
+            else:
+                result["mina_job"] = record_mina_job_resume_result(
+                    repository=mina_job_repository,
+                    job_id=resumed.mina_job_id,
+                    result_type=result_type,
+                    occurred_at=resumed.resumed_at,
+                )
         if evidence_recorder is not None:
             evidence_recorder.record_event(
                 event_type="confirmed_extraction_resumed",

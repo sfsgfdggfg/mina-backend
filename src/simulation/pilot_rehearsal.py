@@ -24,6 +24,7 @@ from src.core.pilot_access import authorize_pilot_request, validate_pilot_config
 from src.core.pilot_store import DEFAULT_PILOT_DB_PATH, SQLitePilotStore
 from src.core.sqlite_repositories import (
     SQLiteExtractionProposalRepository,
+    SQLiteMinaJobRepository,
     SQLiteQuoteApprovalRepository,
     SQLiteQuoteCaseRepository,
     SQLiteSupplierRFQRepository,
@@ -198,6 +199,7 @@ def _api_repositories(api_module: Any, store: SQLitePilotStore) -> Iterator[None
     replacements = {
         "pilot_store": store,
         "extraction_proposal_repository": SQLiteExtractionProposalRepository(store),
+        "mina_job_repository": SQLiteMinaJobRepository(store),
         "supplier_rfq_repository": SQLiteSupplierRFQRepository(store),
         "quote_approval_repository": SQLiteQuoteApprovalRepository(store),
         "quote_case_repository": SQLiteQuoteCaseRepository(store),

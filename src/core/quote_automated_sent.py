@@ -3,6 +3,8 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from src.core.mail import MailSendResult, OutboundMailSender
+from src.core.mina_job_repository import MinaJobRepository
+from src.core.mina_job_service import record_mina_job_customer_quote_sent
 from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.quote_case import CustomerQuoteAutomatedSentEvidence, QuoteCase
 from src.core.quote_case_repository import QuoteCaseRepository
@@ -38,6 +40,7 @@ def send_customer_quote_and_record(
     expected_approval_id: str,
     recipient_email: str,
     sender: OutboundMailSender | None,
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> CustomerQuoteAutomatedSentResult:
     normalized_case_id = case_id.strip()
     normalized_approval_id = expected_approval_id.strip()
@@ -124,7 +127,9 @@ def send_customer_quote_and_record(
         provider_message_id=delivery.provider_message_id,
         sent_at=delivery.sent_at,
     )
-    with atomic_repository_transaction(quote_case_repository, approval_repository):
+    with atomic_repository_transaction(
+        quote_case_repository, approval_repository, mina_job_repository
+    ):
         current_case = quote_case_repository.get(normalized_case_id)
         if current_case is None:
             raise CustomerQuoteAutomatedSentNotFoundError(
@@ -147,6 +152,15 @@ def send_customer_quote_and_record(
             ).model_dump()
         )
         updated_case = quote_case_repository.save(updated_case)
+        if mina_job_repository is not None and updated_case.mina_job_id:
+            record_mina_job_customer_quote_sent(
+                repository=mina_job_repository,
+                job_id=updated_case.mina_job_id,
+                actor="MINAI automation",
+                revision_number=revision_number,
+                send_mode="automated_provider",
+                occurred_at=delivery.sent_at,
+            )
 
     return CustomerQuoteAutomatedSentResult(
         quote_case=updated_case,

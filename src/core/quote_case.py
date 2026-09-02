@@ -50,6 +50,8 @@ class QuoteCase(BaseModel):
     )
 
     shipment: Shipment
+    mina_job_id: Optional[str] = None
+    mina_code: Optional[str] = None
     supplier_rfq_workflow_id: Optional[str] = None
 
     supplier_quote_selection_decision: Optional[
