@@ -23,6 +23,10 @@ from src.core.supplier_rfq_repository import (
     SupplierRFQRepository,
 )
 from src.core.sqlite_repositories import atomic_repository_transaction
+from src.core.supplier_dispatch_control import (
+    SupplierSecondaryDispatchBlockedError,
+    require_secondary_dispatch_allowed,
+)
 
 
 class SupplierRFQNotFoundError(LookupError):
@@ -228,6 +232,10 @@ def approve_supplier_rfq(
         approver = approved_by.strip()
         if not approver:
             raise ValueError("RFQ approver identity is required.")
+        try:
+            require_secondary_dispatch_allowed(repository, draft)
+        except SupplierSecondaryDispatchBlockedError as exc:
+            raise SupplierRFQTransitionError(str(exc)) from exc
         if draft.status != "draft":
             raise SupplierRFQTransitionError(
                 f"Cannot approve Supplier RFQ from status: {draft.status}"
@@ -251,6 +259,10 @@ def send_supplier_rfq(
 ) -> SupplierRFQDraft:
     with atomic_repository_transaction(repository):
         draft = _get_draft(repository, rfq_id)
+        try:
+            require_secondary_dispatch_allowed(repository, draft)
+        except SupplierSecondaryDispatchBlockedError as exc:
+            raise SupplierRFQTransitionError(str(exc)) from exc
         if draft.status != "approved":
             raise SupplierRFQTransitionError(
                 f"Cannot send Supplier RFQ from status: {draft.status}"

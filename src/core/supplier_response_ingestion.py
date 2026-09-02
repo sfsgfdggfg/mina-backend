@@ -21,6 +21,8 @@ from src.core.supplier_rfq_repository import SupplierRFQRepository
 # provider-neutral mail envelope rather than owning a second inbound model.
 InboundSupplierReply = InboundMailEnvelope
 
+SupplierResponseExtractionStatus = SupplierRFQResponseStatus | Literal["acknowledged"]
+
 CommercialResponseField = Literal[
     "status",
     "cost",
@@ -57,6 +59,7 @@ SupplierRFQCorrelationStatus = Literal[
 
 SupplierReplyIngestionStatus = Literal[
     "response_attached",
+    "acknowledgement_recorded",
     "unresolved_rfq",
     "ambiguous_rfq",
     "invalid_supplier",
@@ -73,7 +76,7 @@ class SupplierResponseExtraction(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    status: Optional[SupplierRFQResponseStatus] = None
+    status: Optional[SupplierResponseExtractionStatus] = None
     cost: Optional[float] = None
     currency: Optional[str] = None
     transit_time: Optional[str] = None

@@ -421,11 +421,22 @@ def process_shipment(
         sender_address=sender_address,
         dispatch_policy=dispatch_policy,
     )
+    selected_suppliers = supplier_selection["selected_suppliers"]
+    has_dispatch_tiers = bool(selected_suppliers) and all(
+        supplier.get("dispatch_tier") in {"primary", "secondary"}
+        for supplier in selected_suppliers
+    )
     initial_supplier_selection = {
         **supplier_selection,
-        "selected_suppliers": supplier_selection["selected_suppliers"][
-            : dispatch_policy.initial_supplier_count
-        ],
+        "selected_suppliers": (
+            [
+                supplier
+                for supplier in selected_suppliers
+                if supplier.get("dispatch_tier") == "primary"
+            ]
+            if has_dispatch_tiers
+            else selected_suppliers[: dispatch_policy.initial_supplier_count]
+        ),
     }
     supplier_rfq_drafts = generate_supplier_rfq_drafts(
         workflow_id=supplier_rfq_workflow.workflow_id,

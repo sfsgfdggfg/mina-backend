@@ -5,6 +5,7 @@ from typing import Optional, Protocol
 
 from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
+    SupplierRFQAcknowledgementEvidence,
     SupplierRFQDraft,
     SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpDraft,
@@ -12,6 +13,7 @@ from src.core.supplier_rfq import (
     SupplierRFQManualSentEvidence,
     SupplierRFQResponse,
     SupplierRFQWorkflow,
+    SupplierSecondaryDispatchAuthorization,
 )
 
 
@@ -143,6 +145,30 @@ class SupplierRFQRepository(Protocol):
     ) -> list[SupplierRFQFollowUpManualSentEvidence]:
         ...
 
+    def save_acknowledgement(
+        self,
+        evidence: SupplierRFQAcknowledgementEvidence,
+    ) -> SupplierRFQAcknowledgementEvidence:
+        ...
+
+    def list_acknowledgements(
+        self,
+        rfq_id: Optional[str] = None,
+    ) -> list[SupplierRFQAcknowledgementEvidence]:
+        ...
+
+    def save_secondary_dispatch_authorization(
+        self,
+        evidence: SupplierSecondaryDispatchAuthorization,
+    ) -> SupplierSecondaryDispatchAuthorization:
+        ...
+
+    def get_secondary_dispatch_authorization(
+        self,
+        workflow_id: str,
+    ) -> Optional[SupplierSecondaryDispatchAuthorization]:
+        ...
+
     def save_workflow(
         self,
         workflow: SupplierRFQWorkflow,
@@ -236,6 +262,10 @@ class InMemorySupplierRFQRepository:
         ] = {}
         self._follow_up_manual_sent_evidence: dict[
             str, SupplierRFQFollowUpManualSentEvidence
+        ] = {}
+        self._acknowledgements: list[SupplierRFQAcknowledgementEvidence] = []
+        self._secondary_dispatch_authorizations: dict[
+            str, SupplierSecondaryDispatchAuthorization
         ] = {}
         self._ingested_message_keys: set[str] = set()
         self._ingested_message_evidence: dict[
@@ -388,6 +418,44 @@ class InMemorySupplierRFQRepository:
         if follow_up_id is None:
             return evidence
         return [item for item in evidence if item.follow_up_id == follow_up_id]
+
+    def save_acknowledgement(
+        self,
+        evidence: SupplierRFQAcknowledgementEvidence,
+    ) -> SupplierRFQAcknowledgementEvidence:
+        existing = [
+            item for item in self._acknowledgements
+            if item.rfq_id == evidence.rfq_id
+            and item.acknowledged_at == evidence.acknowledged_at
+            and item.channel == evidence.channel
+        ]
+        if existing:
+            return existing[0]
+        self._acknowledgements.append(evidence)
+        return evidence
+
+    def list_acknowledgements(
+        self,
+        rfq_id: Optional[str] = None,
+    ) -> list[SupplierRFQAcknowledgementEvidence]:
+        items = list(self._acknowledgements)
+        return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
+
+    def save_secondary_dispatch_authorization(
+        self,
+        evidence: SupplierSecondaryDispatchAuthorization,
+    ) -> SupplierSecondaryDispatchAuthorization:
+        existing = self._secondary_dispatch_authorizations.get(evidence.workflow_id)
+        if existing is not None:
+            return existing
+        self._secondary_dispatch_authorizations[evidence.workflow_id] = evidence
+        return evidence
+
+    def get_secondary_dispatch_authorization(
+        self,
+        workflow_id: str,
+    ) -> Optional[SupplierSecondaryDispatchAuthorization]:
+        return self._secondary_dispatch_authorizations.get(workflow_id)
 
     def save_workflow(
         self,

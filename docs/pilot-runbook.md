@@ -1405,3 +1405,15 @@ Use `python -m src.pilot_operator work continuity` to inspect retained organizat
 Read `completion_status` and `evidence_freshness` separately. `complete` means an incoming acceptance was recorded for the cycle; later normal work may make that evidence `stale` without creating a historical gap. `open` means the newest close still awaits acceptance. `gap` means an older close was superseded without acceptance and should remain visible as audit attention.
 
 Duplicate close attestations against one unchanged operational high-water state are grouped as one cycle until an acceptance occurs. Operator identities and acceptance receipt IDs are intentionally omitted. Use the existing `open-reconciliation` and `open-accept` paths for current incoming-shift handling; never treat the ledger as authority to repair, claim, transfer or approve work.
+
+### P1-72 — Primary Supplier Dispatch and Response Timing
+
+Use `python -m src.pilot_operator workflow dispatch-status <workflow_id>` to inspect each supplier's current dispatch tier, acknowledgement state, reminder due time and next controlled action. `primary` and selected `specialist` suppliers form the protected first group; `backup` suppliers are held as secondary.
+
+If a supplier confirms by phone or WhatsApp that the RFQ was seen, record only that fact with `python -m src.pilot_operator rfq ack-seen <rfq_id> --channel phone|whatsapp`. This is not a quote and does not close the RFQ. The road grace timer then runs for 120 minutes from the acknowledgement. Email replies such as “mailinizi aldık, çalışıyoruz” are ingested as the same non-commercial acknowledgement state.
+
+A silent supplier reaches `send_no_response_reminder` after 30 minutes from confirmed send. The dispatch status also indicates that continued silence after the reminder requires human phone/WhatsApp escalation. Do not interpret silence as no capacity and do not release backup suppliers for customer urgency alone.
+
+Secondary supplier approval remains blocked until all primaries explicitly report `no_capacity`/`declined`, or until every primary has a terminal result and the operator has completed real price negotiation. For the latter case, record only the fact that negotiation was exhausted with `python -m src.pilot_operator workflow secondary-release <workflow_id>`. Never enter the customer's raw target price into that command or supplier communications.
+
+The policy carries a five-minute proactive customer-deadline update lead, but P1-72 intentionally does not infer a quote-response deadline from delivery dates or free-text urgency. A later structured customer-deadline step must provide the actual deadline before MINAI can automate that customer status message safely.

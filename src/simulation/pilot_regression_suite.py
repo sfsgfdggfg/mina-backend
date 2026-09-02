@@ -20,6 +20,7 @@ from src.simulation.data_path_regressions import evaluate_data_path_regressions
 from src.simulation.extraction_confirmation_regressions import evaluate_extraction_confirmation_regressions
 from src.simulation.initial_supplier_rfq_regressions import evaluate_initial_supplier_rfq_regressions
 from src.simulation.supplier_dispatch_policy_regressions import evaluate_supplier_dispatch_policy_regressions
+from src.simulation.supplier_primary_dispatch_regressions import evaluate_supplier_primary_dispatch_regressions
 from src.simulation.human_operational_flow_regressions import evaluate_human_operational_flow_regressions
 from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
@@ -212,6 +213,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Supplier RFQ follow-up automated send surface", evaluate_supplier_rfq_follow_up_automated_send_regressions),
     Suite("Initial supplier RFQ draft", evaluate_initial_supplier_rfq_regressions),
     Suite("Supplier dispatch policy", evaluate_supplier_dispatch_policy_regressions),
+    Suite("Primary supplier dispatch and response timing", evaluate_supplier_primary_dispatch_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),
     Suite("Pricing policy resolution", evaluate_pricing_policy_regressions),
     Suite(

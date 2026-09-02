@@ -216,6 +216,8 @@ MINAI Freight OS
                 supplier_name=supplier_name,
                 priority=priority,
                 recipient_email=recipient_email,
+                supplier_role=supplier.get("supplier_role"),
+                dispatch_tier=supplier.get("dispatch_tier", "primary"),
                 subject=subject,
                 body=body,
             )
