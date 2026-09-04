@@ -125,9 +125,13 @@ def evaluate_operations_dashboard_regressions() -> dict:
     web_css = (ROOT / "ui" / "web_shell" / "app.css").read_text()
     check('formatDashboardDate' in web_js and 'Operasyon Merkezi' in web_shell
           and dashboard_block.index('dashboard-attention') < dashboard_block.index('dashboard-toolbar')
-          and 'if (unscheduled.length)' in dashboard_block
           and 'grid-template-columns: repeat(4, minmax(0, 1fr))' in web_css,
           "dashboard first-view polish keeps attention above calendar and avoids empty vertical waste")
+    check('const visibleLimit = selectedDays === 5 ? 2 : 4' in web_js
+          and 'calendar-more' in web_js and 'calendar-more' in web_css
+          and 'unscheduledByJob' in dashboard_block and 'dashboard-attention-grid' in dashboard_block
+          and 'dashboard-unscheduled' not in dashboard_block,
+          "dense dashboard keeps date-less work in attention and collapses excess day entries")
 
     return {"name": "Operations home dashboard and calendar", "passed": not failures, "failures": failures}
 
