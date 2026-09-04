@@ -289,15 +289,26 @@ def _render_job_overview(detail: dict[str, Any]) -> None:
     st.markdown("### Otomasyon Özeti")
     supplier_effective = automation.get("supplier_reminders_effective")
     customer_effective = automation.get("customer_deadline_updates_effective")
+    supplier_policy = automation.get("supplier_reminder_policy") or {}
+    customer_policy = automation.get("customer_deadline_update_policy") or {}
+    mode_labels = {
+        "automatic": "Otomatik",
+        "approval_required": "Onay Gerekli",
+        "manual": "Manuel",
+    }
+    source_labels = {
+        "job": "İş", "job_legacy_disable": "İş (eski kapatma)",
+        "customer": "Müşteri", "agency": "Acenta", "legacy_dispatch": "Mevcut varsayılan",
+    }
     a1, a2 = st.columns(2)
-    a1.metric(
-        "Supplier Reminder",
-        "Açık" if supplier_effective else "Kapalı" if supplier_effective is not None else "-",
-    )
-    a2.metric(
-        "Müşteri Deadline Bilgisi",
-        "Açık" if customer_effective else "Kapalı" if customer_effective is not None else "-",
-    )
+    supplier_mode = supplier_policy.get("effective_mode")
+    customer_mode = customer_policy.get("effective_mode")
+    a1.metric("Supplier Reminder", mode_labels.get(supplier_mode, "-"))
+    a2.metric("Müşteri Deadline Bilgisi", mode_labels.get(customer_mode, "-"))
+    if supplier_policy.get("resolved_from"):
+        a1.caption(f"Kaynak: {source_labels.get(supplier_policy.get('resolved_from'), supplier_policy.get('resolved_from'))}")
+    if customer_policy.get("resolved_from"):
+        a2.caption(f"Kaynak: {source_labels.get(customer_policy.get('resolved_from'), customer_policy.get('resolved_from'))}")
     customer_plan = automation.get("customer_deadline_plan") or {}
     if customer_plan.get("state"):
         st.caption(
@@ -585,6 +596,24 @@ def _render_automation_overrides(
     st.caption(
         "Buradaki değişiklik yalnız bu MINA işini etkiler; ajans genel ayarını değiştirmez."
     )
+    mode_options = ["inherit", "automatic", "approval_required", "manual"]
+    mode_labels = {
+        "inherit": "Üst politikadan devral", "automatic": "Otomatik",
+        "approval_required": "Onay Gerekli", "manual": "Manuel",
+    }
+    supplier_current = overrides.get("supplier_reminder_mode") or "inherit"
+    customer_current = overrides.get("customer_deadline_update_mode") or "inherit"
+    m1, m2 = st.columns(2)
+    supplier_mode = m1.selectbox(
+        "Supplier reminder modu", mode_options,
+        index=mode_options.index(supplier_current) if supplier_current in mode_options else 0,
+        format_func=lambda value: mode_labels[value], key=f"supplier_mode_{job_id}",
+    )
+    customer_mode = m2.selectbox(
+        "Müşteri deadline modu", mode_options,
+        index=mode_options.index(customer_current) if customer_current in mode_options else 0,
+        format_func=lambda value: mode_labels[value], key=f"customer_mode_{job_id}",
+    )
     disable_supplier = st.checkbox(
         "Bu işte otomatik supplier reminder'larını kapat",
         value=bool(overrides.get("disable_supplier_reminders")),
@@ -604,8 +633,14 @@ def _render_automation_overrides(
                 api_base_url,
                 f"/mina-jobs/{job_id}/automation-overrides",
                 {
-                    "disable_supplier_reminders": disable_supplier,
-                    "disable_customer_deadline_updates": disable_customer,
+                    "disable_supplier_reminders": (
+                        disable_supplier if supplier_mode == "inherit" else False
+                    ),
+                    "disable_customer_deadline_updates": (
+                        disable_customer if customer_mode == "inherit" else False
+                    ),
+                    "supplier_reminder_mode": None if supplier_mode == "inherit" else supplier_mode,
+                    "customer_deadline_update_mode": None if customer_mode == "inherit" else customer_mode,
                 },
             )
             st.success("Bu işe özel otomasyon ayarı kaydedildi.")

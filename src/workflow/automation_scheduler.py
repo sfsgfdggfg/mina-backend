@@ -13,6 +13,8 @@ from src.core.automation_planning import (
 )
 from src.core.mail import OutboundMailRequest, OutboundMailSender
 from src.core.mina_job_repository import MinaJobRepository
+from src.core.master_data_repository import MasterDataRepository
+from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
 from src.core.sqlite_repositories import atomic_repository_transaction
 from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQWorkflow
 from src.core.supplier_rfq_repository import SupplierRFQRepository
@@ -165,6 +167,8 @@ def _run_supplier_action(
     sender: OutboundMailSender | None,
     now: datetime,
     mina_job_repository: MinaJobRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
 ) -> str:
     with atomic_repository_transaction(supplier_repository, action_repository):
         current_draft = supplier_repository.get_draft(draft.rfq_id)
@@ -176,6 +180,8 @@ def _run_supplier_action(
             draft=current_draft,
             now=now,
             mina_job_repository=mina_job_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
         if plan.get("state") != "automatic_reminder_due":
             return "skipped"
@@ -209,6 +215,8 @@ def _run_supplier_action(
         draft=current_draft,
         now=now,
         mina_job_repository=mina_job_repository,
+        master_data_repository=master_data_repository,
+        agency_policy_repository=agency_policy_repository,
     )
     if pre_send_plan.get("state") != "automatic_reminder_due":
         _complete_action(
@@ -276,6 +284,8 @@ def _run_customer_action(
     sender: OutboundMailSender | None,
     now: datetime,
     mina_job_repository: MinaJobRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
 ) -> str:
     with atomic_repository_transaction(supplier_repository, action_repository):
         current_workflow = supplier_repository.get_workflow(workflow.workflow_id)
@@ -287,6 +297,8 @@ def _run_customer_action(
             workflow=current_workflow,
             now=now,
             mina_job_repository=mina_job_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
         if plan.get("state") != "automatic_customer_update_due":
             return "skipped"
@@ -318,6 +330,8 @@ def _run_customer_action(
         workflow=current_workflow,
         now=now,
         mina_job_repository=mina_job_repository,
+        master_data_repository=master_data_repository,
+        agency_policy_repository=agency_policy_repository,
     )
     if pre_send_plan.get("state") != "automatic_customer_update_due":
         _complete_action(
@@ -360,6 +374,8 @@ def run_automation_tick(
     action_repository: AutomationActionRepository,
     sender: OutboundMailSender | None,
     mina_job_repository: MinaJobRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = aware_utc(now or _now())
@@ -372,6 +388,8 @@ def run_automation_tick(
             sender=sender,
             now=current,
             mina_job_repository=mina_job_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
         counts[outcome] = counts.get(outcome, 0) + 1
     for workflow in supplier_repository.list_workflows():
@@ -382,6 +400,8 @@ def run_automation_tick(
             sender=sender,
             now=current,
             mina_job_repository=mina_job_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
         counts[outcome] = counts.get(outcome, 0) + 1
     return {"generated_at": current, "counts": counts}
@@ -395,12 +415,16 @@ class AutomationScheduler:
         action_repository: AutomationActionRepository,
         sender: OutboundMailSender | None,
         mina_job_repository: MinaJobRepository | None = None,
+        master_data_repository: MasterDataRepository | None = None,
+        agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
         poll_seconds: int = DEFAULT_AUTOMATION_POLL_SECONDS,
     ) -> None:
         self.supplier_repository = supplier_repository
         self.action_repository = action_repository
         self.sender = sender
         self.mina_job_repository = mina_job_repository
+        self.master_data_repository = master_data_repository
+        self.agency_policy_repository = agency_policy_repository
         self.poll_seconds = max(5, int(poll_seconds))
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -431,6 +455,8 @@ class AutomationScheduler:
                     action_repository=self.action_repository,
                     sender=self.sender,
                     mina_job_repository=self.mina_job_repository,
+                    master_data_repository=self.master_data_repository,
+                    agency_policy_repository=self.agency_policy_repository,
                 )
                 self._last_tick_at = _now()
                 self._last_error = None

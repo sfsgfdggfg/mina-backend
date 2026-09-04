@@ -323,6 +323,8 @@ def set_mina_job_automation_overrides(
     *, repository: MinaJobRepository, mina_code: str, actor: str,
     disable_supplier_reminders: bool,
     disable_customer_deadline_updates: bool,
+    supplier_reminder_mode=None,
+    customer_deadline_update_mode=None,
     occurred_at: datetime | None = None,
 ) -> MinaJob:
     timestamp = aware_utc(occurred_at)
@@ -336,6 +338,8 @@ def set_mina_job_automation_overrides(
         overrides = job.automation_overrides.model_copy(update={
             "disable_supplier_reminders": disable_supplier_reminders,
             "disable_customer_deadline_updates": disable_customer_deadline_updates,
+            "supplier_reminder_mode": supplier_reminder_mode,
+            "customer_deadline_update_mode": customer_deadline_update_mode,
         })
         updated = MinaJob.model_validate(job.model_copy(update={
             "automation_overrides": overrides,
@@ -351,6 +355,8 @@ def set_mina_job_automation_overrides(
             metadata={
                 "disable_supplier_reminders": disable_supplier_reminders,
                 "disable_customer_deadline_updates": disable_customer_deadline_updates,
+                "supplier_reminder_mode": supplier_reminder_mode,
+                "customer_deadline_update_mode": customer_deadline_update_mode,
             },
         )
         return updated

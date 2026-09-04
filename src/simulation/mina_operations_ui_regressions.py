@@ -70,8 +70,12 @@ def evaluate_mina_operations_ui_regressions() -> dict:
     check(
         "Bu işte otomatik supplier reminder'larını kapat" in ui_text
         and "Bu işte otomatik müşteri deadline bilgilendirmesini kapat" in ui_text
+        and "Onay Gerekli" in ui_text
+        and "Üst politikadan devral" in ui_text
+        and "supplier_reminder_mode" in ui_text
+        and "customer_deadline_update_mode" in ui_text
         and "/automation-overrides" in ui_text,
-        "job-level automation disable overrides are visible and isolated",
+        "job-level automation modes and legacy disable overrides are visible and isolated",
     )
     check(
         "Müşteri kabul etti" in ui_text
