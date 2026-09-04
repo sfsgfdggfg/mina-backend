@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from src.core.models import SupplierQuote
 from src.core.supplier_rfq import SupplierRFQResponse
+from src.core.supplier_price import SupplierPriceOffer
 
 from src.core.supplier_quote_comparison import (
     SupplierQuoteComparison,
@@ -13,7 +14,9 @@ from src.core.supplier_quote_comparison import (
 
 
 class RejectedSupplierQuoteAlternative(BaseModel):
-    rfq_id: str
+    rfq_id: Optional[str] = None
+    price_offer_id: Optional[str] = None
+    price_source: Optional[str] = None
     supplier_name: str
     cost: float
     currency: str
@@ -25,7 +28,9 @@ class RejectedSupplierQuoteAlternative(BaseModel):
 
 class SupplierQuoteSelectionDecision(BaseModel):
     selected_supplier: str
-    selected_rfq_id: str
+    selected_rfq_id: Optional[str] = None
+    selected_price_offer_id: Optional[str] = None
+    selected_price_source: Optional[str] = None
     selected_total_score: float
     selection_reason: str
     price_difference: Optional[float] = None
@@ -215,6 +220,8 @@ def build_supplier_quote_selection_decision(
         rejected_alternatives.append(
             RejectedSupplierQuoteAlternative(
                 rfq_id=alternative.rfq_id,
+                price_offer_id=alternative.price_offer_id,
+                price_source=alternative.price_source,
                 supplier_name=alternative.supplier_name,
                 cost=alternative.cost,
                 currency=alternative.currency,
@@ -230,9 +237,36 @@ def build_supplier_quote_selection_decision(
     return SupplierQuoteSelectionDecision(
         selected_supplier=selected.supplier_name,
         selected_rfq_id=selected.rfq_id,
+        selected_price_offer_id=selected.price_offer_id,
+        selected_price_source=selected.price_source,
         selected_total_score=selected.total_score,
         selection_reason=" ".join(reason_parts),
         price_difference=price_difference,
         score_difference=score_difference,
         rejected_alternatives=rejected_alternatives,
     )
+
+
+def select_supplier_quote_from_price_offers(
+    comparisons: Iterable[SupplierQuoteComparison],
+    offers: Iterable[SupplierPriceOffer],
+) -> Optional[SupplierQuote]:
+    offer_by_id = {offer.offer_id: offer for offer in offers if offer.is_price_usable}
+    ranked = sorted(
+        (item for item in comparisons if item.commercial_eligible and item.price_offer_id),
+        key=lambda item: (-item.total_score, item.priority, item.cost),
+    )
+    for comparison in ranked:
+        offer = offer_by_id.get(str(comparison.price_offer_id))
+        if offer is None:
+            continue
+        return SupplierQuote(
+            supplier_name=offer.supplier_name, cost=offer.cost, currency=offer.currency,
+            transit_time=offer.transit_time, validity_date=offer.validity_date,
+            vehicle_available_date=offer.vehicle_available_date,
+            equipment_type=offer.equipment_type, pricing_basis=offer.pricing_basis,
+            included_costs=offer.included_costs, excluded_costs=offer.excluded_costs,
+            notes=offer.notes, price_offer_id=offer.offer_id,
+            price_source=offer.source_type, price_source_reference=offer.source_reference_id,
+        )
+    return None

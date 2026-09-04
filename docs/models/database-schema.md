@@ -782,3 +782,11 @@ Sonraki schema geliştirme alanları:
 * Margin Rule schema
 * Booking schema
 * Document Checklist schema
+
+## P2-02 Supplier Price Sources and Fixed Rates
+
+`SupplierFixedRate` is reusable commercial evidence keyed by `rate_id` and an idempotent `entry_id`. It stores supplier name, deterministic origin/destination scope, optional city/region/transport/service/equipment restrictions, cost/currency, transit and pricing-basis evidence, inclusive validity dates, evidence source/reference, authenticated recorder, notes, active state and bounded status-update evidence.
+
+`SupplierPriceOffer` is a job-specific price candidate keyed by `offer_id` and an idempotent `entry_id`. It stores MINA job identity, supplier, normalized source type/reference, optional RFQ or fixed-rate provenance, commercial price/transit/equipment fields and authenticated recording evidence. RFQ responses can be normalized into deterministic read projections without duplicating the RFQ repository; direct and fixed-rate offers are persisted.
+
+Persistent namespaces: `supplier_fixed_rates`, `supplier_fixed_rate_by_entry`, `supplier_price_offers`, `supplier_price_offer_by_entry`, and `supplier_price_offer_by_job_fixed_rate`. These namespaces are excluded from ordinary pilot state purging because agreed rates may remain valid longer than 30 days and open-job price evidence belongs to the durable MINA case.

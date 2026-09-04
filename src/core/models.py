@@ -130,6 +130,9 @@ class SupplierQuote(BaseModel):
     included_costs: Optional[List[str]] = None
     excluded_costs: Optional[List[str]] = None
     notes: Optional[str] = None
+    price_offer_id: Optional[str] = None
+    price_source: Optional[str] = None
+    price_source_reference: Optional[str] = None
 
 
 class CustomerQuote(BaseModel):

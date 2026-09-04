@@ -15,10 +15,14 @@ from src.core.supplier_rfq import (
     SupplierRFQDraft,
     SupplierRFQResponse,
 )
+from src.core.supplier_price import SupplierPriceOffer
 
 
 class SupplierQuoteComparison(BaseModel):
-    rfq_id: str
+    rfq_id: Optional[str] = None
+    price_offer_id: Optional[str] = None
+    price_source: Optional[str] = None
+    price_source_reference: Optional[str] = None
     supplier_name: str
     priority: int
 
@@ -336,3 +340,57 @@ def build_supplier_quote_comparisons(
         )
 
     return comparisons
+
+
+def build_supplier_price_offer_comparisons(
+    offers: Iterable[SupplierPriceOffer],
+    supplier_selection: dict[str, Any],
+    *,
+    shipment: Shipment | None = None,
+    expected_equipment: str | None = None,
+    require_commercial_safety: bool = False,
+    as_of: date | None = None,
+) -> list[SupplierQuoteComparison]:
+    selected_suppliers = {
+        item.get("supplier_name"): item
+        for item in supplier_selection.get("selected_suppliers", [])
+        if item.get("supplier_name")
+    }
+    offer_by_id: dict[str, SupplierPriceOffer] = {}
+    synthetic_responses: list[SupplierRFQResponse] = []
+    for offer in offers:
+        supplier = selected_suppliers.get(offer.supplier_name)
+        if supplier is None or not offer.is_price_usable:
+            continue
+        offer_by_id[offer.offer_id] = offer
+        synthetic_responses.append(SupplierRFQResponse(
+            rfq_id=offer.offer_id,
+            supplier_name=offer.supplier_name,
+            rfq_priority=int(supplier.get("priority") or 999),
+            status="quoted", cost=offer.cost, currency=offer.currency,
+            transit_time=offer.transit_time, validity_date=offer.validity_date,
+            vehicle_available_date=offer.vehicle_available_date,
+            equipment_type=offer.equipment_type, pricing_basis=offer.pricing_basis,
+            included_costs=offer.included_costs, excluded_costs=offer.excluded_costs,
+            notes=offer.notes, source="manual", recorded_by=offer.recorded_by,
+            received_at=offer.recorded_at,
+        ))
+    comparisons = build_supplier_quote_comparisons(
+        synthetic_responses, supplier_selection, shipment=shipment,
+        expected_equipment=expected_equipment,
+        require_commercial_safety=require_commercial_safety, as_of=as_of,
+    )
+    normalized: list[SupplierQuoteComparison] = []
+    for comparison in comparisons:
+        offer = offer_by_id.get(str(comparison.rfq_id or ""))
+        if offer is None:
+            continue
+        normalized.append(SupplierQuoteComparison.model_validate(
+            comparison.model_copy(update={
+                "rfq_id": offer.rfq_id,
+                "price_offer_id": offer.offer_id,
+                "price_source": offer.source_type,
+                "price_source_reference": offer.source_reference_id,
+            }).model_dump()
+        ))
+    return normalized
