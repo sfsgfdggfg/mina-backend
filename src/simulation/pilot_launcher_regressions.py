@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.core.pilot_access import PilotAccessConfigurationError
+from src.core.web_session import hash_password
 from src.pilot_launcher import run
 
 
@@ -90,6 +91,19 @@ def evaluate_pilot_launcher_regressions() -> dict:
         )
 
         base_env = _valid_env(data_dir)
+        web_password_hash = hash_password(
+            "Launcher-Web-Password-2026!", salt=b"1234567890abcdef"
+        )
+        web_config = {
+            "MINAI_WEB_SHELL_ENABLED": "1",
+            "MINAI_WEB_SESSION_SECRET": "launcher-session-secret-" + "x" * 32,
+            "MINAI_WEB_USERS_JSON": json.dumps({
+                "ops@example.com": {
+                    "name": "Launcher Web Operator",
+                    "password_hash": web_password_hash,
+                }
+            }),
+        }
 
         tls_cert = external_root / "pilot-cert.pem"
         tls_key = external_root / "pilot-key.pem"
@@ -206,6 +220,22 @@ def evaluate_pilot_launcher_regressions() -> dict:
                     "out-of-range port",
                     {**base_env, "MINAI_PILOT_PORT": "65536"},
                 ),
+                (
+                    "web shell loopback without TLS",
+                    {**base_env, **web_config},
+                ),
+                (
+                    "web shell invalid password storage",
+                    {
+                        **base_env, **web_config,
+                        "MINAI_WEB_USERS_JSON": json.dumps({
+                            "ops@example.com": {
+                                "name": "Launcher Web Operator",
+                                "password_hash": "invalid-storage",
+                            }
+                        }),
+                    },
+                ),
             )
 
             for name, env in rejected_configs:
@@ -251,6 +281,18 @@ def evaluate_pilot_launcher_regressions() -> dict:
                     },
                     "10.42.1.9",
                     8123,
+                    str(tls_cert.resolve()),
+                    str(tls_key.resolve()),
+                ),
+                (
+                    "loopback web shell with TLS",
+                    {
+                        **_valid_env(data_dir), **web_config,
+                        "MINAI_PILOT_TLS_CERTFILE": str(tls_cert),
+                        "MINAI_PILOT_TLS_KEYFILE": str(tls_key),
+                    },
+                    "127.0.0.1",
+                    8000,
                     str(tls_cert.resolve()),
                     str(tls_key.resolve()),
                 ),

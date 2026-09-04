@@ -6462,3 +6462,16 @@ Approval and rejection require the authenticated operator identity. Approval res
 Rejection records durable no-send evidence by consuming the action key as a cancelled action with `operator_rejected`; the same due state must not immediately reappear as another approval request. Rejection requires a bounded reason. Approval-provider failure is durable attention and must not be blindly retried.
 
 The existing operator-early supplier reminder path remains available for manual/ordinary early-send use, but when the effective policy is `approval_required` the API must reject that path so it cannot bypass the explicit approval record. P2-08 does not promote Streamlit to a pilot-approved browser surface; the development UI only exposes the controlled preview/approve/reject API flow.
+
+## DEC-176 — Pilot Browser Access Uses Server-Side Sessions Without Exposing Pilot Bearer Tokens
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-09 introduces an explicitly enabled FastAPI web operator shell for pilot use. The existing bearer-token pilot interface remains the authority for CLI/integration access, while browser users authenticate with email and password and receive an opaque server-side session. The browser must never receive, persist or reconstruct a pilot bearer token.
+
+Web-shell passwords are configured outside the repository as bounded scrypt hashes. Plaintext passwords are invalid configuration. Pilot web access requires HTTPS even on loopback so the session cookie can remain `Secure`, `HttpOnly` and `SameSite=Strict`. Sessions carry an authenticated operator identity, absolute expiry, idle expiry and CSRF token; they are intentionally process-local and disappear on restart, which fails closed rather than preserving stale browser authority.
+
+A browser session may access only API routes already admitted by the controlled pilot allowlist. Unsafe browser-session methods require a matching CSRF header before request-model or business processing. An explicit `Authorization` header takes precedence over browser-session authentication so existing bearer clients remain deterministic and do not silently fall back to cookies after a bad token.
+
+The first P2-09 shell exposes MINA Jobs, bounded job detail, P2-08 supplier/customer approval execution and reporting. It remains a presentation shell over backend read models and mutation APIs; business rules, stage authority, automation authority and send safety stay server-side. Streamlit remains available as a development/debug workspace and is not the pilot browser authority.

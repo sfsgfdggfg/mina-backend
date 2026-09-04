@@ -1,7 +1,9 @@
 from datetime import date, datetime
+from pathlib import Path
 import json
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 from typing import Any, List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
@@ -75,8 +77,14 @@ from src.core.business_calendar import supplier_calendar_metadata
 from src.core.runtime_release import runtime_release_payload
 from src.core.pilot_access import (
     authorize_pilot_request,
+    authorize_pilot_transport,
     pilot_mode_enabled,
 )
+from src.core.web_session import (
+    CSRF_HEADER_NAME, SESSION_COOKIE_NAME, WebSessionConfigurationError,
+    validate_web_session_configuration, web_session_store, web_shell_enabled,
+)
+from src.web_shell import router as web_shell_router
 from src.core.operational_data import operational_data_sources_from_environment
 from src.core.sqlite_repositories import (
     SQLiteAttachmentInterpretationReviewRepository,
@@ -293,24 +301,55 @@ app = FastAPI(
 
 @app.middleware("http")
 async def enforce_pilot_access(request: Request, call_next):
+    path = request.url.path
+    client_host = request.client.host if request.client is not None else None
+    authorization = request.headers.get("Authorization")
+    session = None
+    should_resolve_session = path.startswith("/app") or (
+        not authorization and request.cookies.get(SESSION_COOKIE_NAME) is not None
+    )
+    if should_resolve_session:
+        try:
+            if path.startswith("/app"):
+                if not web_shell_enabled():
+                    return JSONResponse(status_code=404, content={"detail": "pilot_web_shell_disabled"})
+                validate_web_session_configuration()
+            session = web_session_store.resolve(request.cookies.get(SESSION_COOKIE_NAME))
+        except WebSessionConfigurationError as exc:
+            return JSONResponse(status_code=503, content={"detail": str(exc)})
+    request.state.web_session = session
+
+    if path.startswith("/app"):
+        transport = authorize_pilot_transport(
+            client_host=client_host, request_scheme=request.url.scheme
+        )
+        if not transport.allowed:
+            return JSONResponse(status_code=transport.status_code, content={"detail": transport.reason})
+        if pilot_mode_enabled() and request.url.scheme.lower() != "https":
+            return JSONResponse(status_code=426, content={"detail": "pilot_web_https_required"})
+        response = await call_next(request)
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        return response
+
+    browser_operator = None if authorization or session is None else session.operator_name
     decision = authorize_pilot_request(
-        method=request.method,
-        path=request.url.path,
-        client_host=(
-            request.client.host
-            if request.client is not None
-            else None
-        ),
-        authorization=request.headers.get("Authorization"),
-        request_scheme=request.url.scheme,
+        method=request.method, path=path, client_host=client_host,
+        authorization=authorization, request_scheme=request.url.scheme,
+        authenticated_operator=browser_operator,
     )
     if not decision.allowed:
-        return JSONResponse(
-            status_code=decision.status_code,
-            content={"detail": decision.reason},
-        )
-    request.state.pilot_operator = decision.operator_name
+        return JSONResponse(status_code=decision.status_code, content={"detail": decision.reason})
+    if browser_operator and request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+        if not web_session_store.verify_csrf(session, request.headers.get(CSRF_HEADER_NAME)):
+            return JSONResponse(status_code=403, content={"detail": "csrf_validation_failed"})
+    request.state.pilot_operator = browser_operator or decision.operator_name
     return await call_next(request)
+
+
+_WEB_ASSET_DIR = Path(__file__).resolve().parents[1] / "ui" / "web_shell"
+app.mount("/app/assets", StaticFiles(directory=str(_WEB_ASSET_DIR)), name="web-shell-assets")
+app.include_router(web_shell_router)
 
 
 def _authenticated_operator(

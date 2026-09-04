@@ -303,6 +303,34 @@ def _operator_from_authorization(
     return None
 
 
+def authorize_pilot_transport(
+    *,
+    client_host: str | None,
+    request_scheme: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> PilotAccessDecision:
+    env = environ if environ is not None else os.environ
+    if not pilot_mode_enabled(env):
+        return PilotAccessDecision(True, 200, "pilot_mode_disabled")
+
+    try:
+        validate_pilot_configuration(env)
+        networks = _load_allowed_networks(env)
+    except PilotAccessConfigurationError as exc:
+        return PilotAccessDecision(False, 503, str(exc))
+
+    if not _client_network_allowed(client_host, networks):
+        return PilotAccessDecision(False, 403, "pilot_network_denied")
+
+    client_address = ipaddress.ip_address(client_host)
+    if (
+        not client_address.is_loopback
+        and (request_scheme or "").lower() != "https"
+    ):
+        return PilotAccessDecision(False, 426, "pilot_https_required")
+    return PilotAccessDecision(True, 200, "pilot_transport_allowed")
+
+
 def authorize_pilot_request(
     *,
     method: str,
@@ -311,42 +339,33 @@ def authorize_pilot_request(
     authorization: str | None,
     request_scheme: str | None = None,
     environ: Mapping[str, str] | None = None,
+    authenticated_operator: str | None = None,
 ) -> PilotAccessDecision:
     env = environ if environ is not None else os.environ
-
+    transport = authorize_pilot_transport(
+        client_host=client_host, request_scheme=request_scheme, environ=env
+    )
+    if not transport.allowed:
+        return transport
     if not pilot_mode_enabled(env):
         return PilotAccessDecision(True, 200, "pilot_mode_disabled")
-
     try:
-        validate_pilot_configuration(env)
-        networks = _load_allowed_networks(env)
         operators = _load_operators(env)
     except PilotAccessConfigurationError as exc:
         return PilotAccessDecision(False, 503, str(exc))
-
-    if not _client_network_allowed(client_host, networks):
-        return PilotAccessDecision(False, 403, "pilot_network_denied")
-
-    client_address = ipaddress.ip_address(
-        client_host
-    )
-
-    if (
-        not client_address.is_loopback
-        and (request_scheme or "").lower()
-        != "https"
-    ):
-        return PilotAccessDecision(
-            False,
-            426,
-            "pilot_https_required",
-        )
 
     if not route_allowed(method, path):
         return PilotAccessDecision(False, 404, "pilot_route_disabled")
 
     if (method.upper(), path) in _AUTH_EXEMPT_ROUTES:
         return PilotAccessDecision(True, 200, "pilot_health_allowed")
+
+    if authenticated_operator:
+        normalized_operator = authenticated_operator.strip()
+        if normalized_operator:
+            return PilotAccessDecision(
+                True, 200, "pilot_web_session_authenticated", normalized_operator
+            )
 
     operator = _operator_from_authorization(authorization, operators)
     if operator is None:

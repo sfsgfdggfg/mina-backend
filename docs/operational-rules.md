@@ -3711,3 +3711,13 @@ Approve/reject decisions must use the authenticated operator identity. Approval 
 Rejection requires a bounded non-empty reason and must record durable `operator_rejected` no-send evidence. That consumed action must suppress immediate re-creation of the same approval request. A failed provider delivery after approval is a durable failure requiring human attention; it must not be automatically retried.
 
 The legacy supplier `reminder-now` path must reject execution when the current effective supplier-reminder mode is `approval_required`. UI buttons never grant authority themselves; they call the controlled API, and all backend business-calendar, policy, recipient, stale-state, idempotency and workflow guards remain authoritative.
+
+## RULE-191 — Pilot Web Sessions Must Fail Closed and Must Not Weaken API Authority
+
+The pilot web shell must be disabled unless `MINAI_WEB_SHELL_ENABLED=1`. When enabled, its user registry and session secret must be supplied outside the repository. Password material must be a supported scrypt hash with bounded parameters; plaintext, arbitrary cost parameters and repository-committed credentials are forbidden.
+
+Pilot web routes require HTTPS, including loopback. Authenticated cookies must be opaque, `Secure`, `HttpOnly`, `SameSite=Strict` and bounded by both absolute and idle expiry. Logout removes the server-side session. Process restart invalidates all browser sessions by design. Repeated failed logins are throttled in process memory and login errors must not disclose whether an email identity exists.
+
+Browser-session API mutations require CSRF evidence before Pydantic request parsing or business execution. Browser sessions may not bypass the controlled route allowlist, supplier/customer policy checks, approval gates, lifecycle guards or provider revalidation. If an `Authorization` header is present it is evaluated as bearer authentication and an invalid bearer must not fall back to an otherwise valid browser cookie.
+
+Web UI code must render API-controlled text as text rather than executable HTML. No pilot bearer token, password, session secret or protected commercial credential may be stored in localStorage, sessionStorage, HTML source or JavaScript assets.
