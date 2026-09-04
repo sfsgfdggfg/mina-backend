@@ -1,4 +1,5 @@
 from datetime import date
+import json
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -178,6 +179,22 @@ from src.core.supplier_price_service import (
     set_supplier_fixed_rate_active,
     use_fixed_rate_for_job,
 )
+from src.core.master_data import (
+    MasterContact,
+    SupplierGeographyCapability,
+)
+from src.core.master_data_repository import (
+    MasterDataConflictError,
+    SQLiteMasterDataRepository,
+)
+from src.core.master_data_service import (
+    bootstrap_legacy_master_data,
+    create_customer_master,
+    create_supplier_master,
+    supplier_geography_view,
+    update_customer_master,
+    update_supplier_master,
+)
 from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.operational_work_queue import build_operational_work_queue
 from src.core.operational_work_assignment_service import (
@@ -285,6 +302,7 @@ quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
+master_data_repository = SQLiteMasterDataRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
 automation_action_repository = SQLiteAutomationActionRepository(pilot_store)
@@ -530,6 +548,84 @@ class SupplierRFQResponseRequest(BaseModel):
 
 class ResumeSupplierQuoteRequest(BaseModel):
     quote_pricing_override: Optional[PricingFormula] = None
+
+
+class CustomerMasterCreateRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    customer_name: str = Field(min_length=1, max_length=240)
+    active: bool = True
+    aliases: list[str] = Field(default_factory=list)
+    trusted_sender_addresses: list[str] = Field(default_factory=list)
+    trusted_sender_domains: list[str] = Field(default_factory=list)
+    contacts: list[MasterContact] = Field(default_factory=list)
+    sales_owner: Optional[str] = Field(default=None, max_length=200)
+    default_commodity: Optional[str] = Field(default=None, max_length=300)
+    default_equipment_type: Optional[str] = Field(default=None, max_length=300)
+    default_pickup_city: Optional[str] = Field(default=None, max_length=200)
+    default_pickup_area: Optional[str] = Field(default=None, max_length=300)
+    default_pickup_country: Optional[str] = Field(default=None, max_length=120)
+    default_delivery_city: Optional[str] = Field(default=None, max_length=200)
+    default_delivery_country: Optional[str] = Field(default=None, max_length=120)
+    price_sensitivity: Optional[str] = Field(default=None, max_length=80)
+    time_sensitivity: Optional[str] = Field(default=None, max_length=80)
+    pricing_policy: Optional[PricingFormula] = None
+    operational_notes: list[str] = Field(default_factory=list)
+
+
+class CustomerMasterUpdateRequest(BaseModel):
+    customer_name: str = Field(min_length=1, max_length=240)
+    active: bool = True
+    aliases: list[str] = Field(default_factory=list)
+    trusted_sender_addresses: list[str] = Field(default_factory=list)
+    trusted_sender_domains: list[str] = Field(default_factory=list)
+    contacts: list[MasterContact] = Field(default_factory=list)
+    sales_owner: Optional[str] = Field(default=None, max_length=200)
+    default_commodity: Optional[str] = Field(default=None, max_length=300)
+    default_equipment_type: Optional[str] = Field(default=None, max_length=300)
+    default_pickup_city: Optional[str] = Field(default=None, max_length=200)
+    default_pickup_area: Optional[str] = Field(default=None, max_length=300)
+    default_pickup_country: Optional[str] = Field(default=None, max_length=120)
+    default_delivery_city: Optional[str] = Field(default=None, max_length=200)
+    default_delivery_country: Optional[str] = Field(default=None, max_length=120)
+    price_sensitivity: Optional[str] = Field(default=None, max_length=80)
+    time_sensitivity: Optional[str] = Field(default=None, max_length=80)
+    pricing_policy: Optional[PricingFormula] = None
+    operational_notes: list[str] = Field(default_factory=list)
+
+
+class SupplierMasterCreateRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    supplier_name: str = Field(min_length=1, max_length=240)
+    active: bool = True
+    role: Literal["primary", "backup", "specialist"] = "backup"
+    contacts: list[MasterContact] = Field(default_factory=list)
+    geographies: list[SupplierGeographyCapability] = Field(default_factory=list)
+    service_types: list[str] = Field(default_factory=list)
+    equipment_types: list[str] = Field(default_factory=list)
+    special_capabilities: list[str] = Field(default_factory=list)
+    priority_routes: list[str] = Field(default_factory=list)
+    legacy_region_tags: list[str] = Field(default_factory=list)
+    reliability_score: float = Field(default=0.5, ge=0, le=1)
+    price_score: float = Field(default=0.5, ge=0, le=1)
+    speed_score: float = Field(default=0.5, ge=0, le=1)
+    notes: str = Field(default="Master supplier profile.", min_length=1, max_length=2000)
+
+
+class SupplierMasterUpdateRequest(BaseModel):
+    supplier_name: str = Field(min_length=1, max_length=240)
+    active: bool = True
+    role: Literal["primary", "backup", "specialist"] = "backup"
+    contacts: list[MasterContact] = Field(default_factory=list)
+    geographies: list[SupplierGeographyCapability] = Field(default_factory=list)
+    service_types: list[str] = Field(default_factory=list)
+    equipment_types: list[str] = Field(default_factory=list)
+    special_capabilities: list[str] = Field(default_factory=list)
+    priority_routes: list[str] = Field(default_factory=list)
+    legacy_region_tags: list[str] = Field(default_factory=list)
+    reliability_score: float = Field(default=0.5, ge=0, le=1)
+    price_score: float = Field(default=0.5, ge=0, le=1)
+    speed_score: float = Field(default=0.5, ge=0, le=1)
+    notes: str = Field(default="Master supplier profile.", min_length=1, max_length=2000)
 
 
 class CustomerMemoryCreateRequest(BaseModel):
@@ -927,6 +1023,150 @@ def create_customer_memory_profile(request: CustomerMemoryCreateRequest):
         "status": "created",
         "profile": saved_profile.model_dump(),
     }
+
+@app.get("/master-data/customers")
+def list_customer_master_profiles():
+    return {
+        "customers": [item.model_dump() for item in master_data_repository.list_customers()]
+    }
+
+
+@app.post("/master-data/customers")
+def create_customer_master_profile(
+    request: CustomerMasterCreateRequest, http_request: Request,
+):
+    try:
+        profile = create_customer_master(
+            repository=master_data_repository,
+            updated_by=_authenticated_operator(http_request),
+            source="manual",
+            **request.model_dump(),
+        )
+    except MasterDataConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return profile.model_dump()
+
+
+@app.get("/master-data/customers/{customer_id}")
+def get_customer_master_profile(customer_id: str):
+    profile = master_data_repository.get_customer(customer_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}")
+    return profile.model_dump()
+
+
+@app.post("/master-data/customers/{customer_id}")
+def update_customer_master_profile(
+    customer_id: str, request: CustomerMasterUpdateRequest, http_request: Request,
+):
+    try:
+        profile = update_customer_master(
+            repository=master_data_repository, customer_id=customer_id,
+            updated_by=_authenticated_operator(http_request), **request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}") from exc
+    except MasterDataConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return profile.model_dump()
+
+
+@app.get("/master-data/suppliers")
+def list_supplier_master_profiles():
+    return {
+        "suppliers": [item.model_dump() for item in master_data_repository.list_suppliers()]
+    }
+
+
+@app.post("/master-data/suppliers")
+def create_supplier_master_profile(
+    request: SupplierMasterCreateRequest, http_request: Request,
+):
+    try:
+        profile = create_supplier_master(
+            repository=master_data_repository,
+            updated_by=_authenticated_operator(http_request),
+            source="manual",
+            **request.model_dump(),
+        )
+    except MasterDataConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return profile.model_dump()
+
+
+@app.get("/master-data/suppliers/{supplier_id}")
+def get_supplier_master_profile(supplier_id: str):
+    profile = master_data_repository.get_supplier(supplier_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"Supplier master not found: {supplier_id}")
+    return profile.model_dump()
+
+
+@app.post("/master-data/suppliers/{supplier_id}")
+def update_supplier_master_profile(
+    supplier_id: str, request: SupplierMasterUpdateRequest, http_request: Request,
+):
+    try:
+        profile = update_supplier_master(
+            repository=master_data_repository, supplier_id=supplier_id,
+            updated_by=_authenticated_operator(http_request), **request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Supplier master not found: {supplier_id}") from exc
+    except MasterDataConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return profile.model_dump()
+
+
+@app.get("/master-data/suppliers/{supplier_id}/geography")
+def get_supplier_master_geography(supplier_id: str, destination_country: str):
+    profile = master_data_repository.get_supplier(supplier_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"Supplier master not found: {supplier_id}")
+    return supplier_geography_view(profile, destination_country)
+
+
+@app.post("/master-data/bootstrap/legacy")
+def bootstrap_master_data_from_legacy(http_request: Request):
+    customer_validation = validate_customer_memory_file(
+        operational_data_sources.customer_memory_path
+    )
+    supplier_validation = validate_supplier_capabilities_file(
+        operational_data_sources.supplier_capabilities_path
+    )
+    if not customer_validation.get("valid") or not supplier_validation.get("valid"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "reason": "legacy_master_data_validation_failed",
+                "customer_errors": customer_validation.get("errors") or [],
+                "supplier_errors": supplier_validation.get("errors") or [],
+            },
+        )
+    customer_raw = json.loads(
+        operational_data_sources.customer_memory_path.read_text(encoding="utf-8")
+    )
+    supplier_raw = json.loads(
+        operational_data_sources.supplier_capabilities_path.read_text(encoding="utf-8")
+    )
+    try:
+        return bootstrap_legacy_master_data(
+            repository=master_data_repository,
+            customer_profiles=[CustomerMemoryProfile.model_validate(item) for item in customer_raw],
+            supplier_profiles=supplier_raw,
+            updated_by=_authenticated_operator(http_request),
+        )
+    except MasterDataConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
 
 @app.get("/health")
 def health_check():
