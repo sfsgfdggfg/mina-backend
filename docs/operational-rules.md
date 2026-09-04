@@ -3729,3 +3729,11 @@ The pilot home calendar may show only structured date or timestamp evidence alre
 The default calendar window is five consecutive Europe/Istanbul dates and the operator may reduce it to three days. Calendar presentation does not modify supplier business-hour rules, customer deadline authority, lifecycle state or operation evidence.
 
 Open actual-delay and delivery-risk exceptions must remain visible as explicit attention even when the relevant date falls outside the current calendar window. An active job with no structured scheduling evidence must appear as unscheduled rather than disappear from the home screen. Closed jobs must not inflate active-workload or attention counts.
+
+## RULE-193 — Operator First-Look Timing Comes From Assignment Acknowledgement, Not From Page Views
+
+An operator's measurable first-look interval is the durable elapsed time from `assigned_at` to `acknowledged_at` for the same operational work-assignment generation. Merely opening the browser, loading the queue or rendering a card must not create acknowledgement evidence. The operator records first look explicitly through the controlled acknowledge transition, which remains idempotent and lease-guarded.
+
+Assignment release, shift handoff and lease expiry are coordination events only. They must never be interpreted as workflow completion or successful action completion. Future operator-performance reporting must derive completion time and outcome from the underlying durable workflow/action evidence appropriate to that work type, while preserving handoff, takeover and stale-assignment history separately.
+
+Browser work-queue filters and labels are presentation aids. Backend priority score/band, assignment ownership, lease status, workflow guards and authenticated operator identity remain authoritative. A future feature that assigns work directly to another person must validate the target against an authoritative operator directory and a defined permission policy; arbitrary browser-supplied operator names are not assignment authority.

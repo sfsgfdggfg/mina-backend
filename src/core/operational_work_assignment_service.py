@@ -81,6 +81,12 @@ def _lease_expiry(timestamp: datetime) -> datetime:
     return timestamp + timedelta(seconds=DEFAULT_ASSIGNMENT_LEASE_SECONDS)
 
 
+def _elapsed_seconds(start: datetime, end: datetime) -> int:
+    start_utc = start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start.astimezone(timezone.utc)
+    end_utc = end.replace(tzinfo=timezone.utc) if end.tzinfo is None else end.astimezone(timezone.utc)
+    return max(0, int((end_utc - start_utc).total_seconds()))
+
+
 def assignment_lease_expired(
     assignment: OperationalWorkAssignment,
     *,
@@ -369,7 +375,7 @@ def assignment_public_payload(assignment: OperationalWorkAssignment | None, *, i
         return {"assignment_status": "unassigned", "stale_assignment_present": True}
     timestamp = _now(now)
     if assignment_lease_expired(assignment, now=timestamp):
-        return {
+        payload: dict[str, Any] = {
             "assignment_status": "expired",
             "assigned_to": assignment.assigned_to,
             "assigned_at": assignment.assigned_at,
@@ -379,6 +385,14 @@ def assignment_public_payload(assignment: OperationalWorkAssignment | None, *, i
             "legacy_lease_missing": assignment.lease_expires_at is None,
             "takeover_available": True,
         }
+        if assignment.last_renewed_at is not None:
+            payload["last_renewed_at"] = assignment.last_renewed_at
+        if assignment.acknowledged_at is not None:
+            payload["acknowledged_at"] = assignment.acknowledged_at
+            payload["first_look_seconds"] = _elapsed_seconds(
+                assignment.assigned_at, assignment.acknowledged_at
+            )
+        return payload
     remaining = max(0, int((assignment.lease_expires_at - timestamp).total_seconds()))
     payload: dict[str, Any] = {
         "assignment_status": assignment.status,
@@ -394,6 +408,9 @@ def assignment_public_payload(assignment: OperationalWorkAssignment | None, *, i
         payload["last_renewed_at"] = assignment.last_renewed_at
     if assignment.acknowledged_at is not None:
         payload["acknowledged_at"] = assignment.acknowledged_at
+        payload["first_look_seconds"] = _elapsed_seconds(
+            assignment.assigned_at, assignment.acknowledged_at
+        )
     return payload
 
 

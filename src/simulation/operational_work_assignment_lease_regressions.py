@@ -146,6 +146,8 @@ def evaluate_operational_work_assignment_lease_regressions():
     check(
         expired_item["assignment_status"] == "expired"
         and expired_item["takeover_available"] is True
+        and expired_item["acknowledged_at"] == ack_time
+        and expired_item["first_look_seconds"] == 600
         and expired_queue["assignment_counts"]["expired"] >= 1
         and blocked == ["assign", "ack", "renew"]
         and takeover.assigned_to == "Lease Operator Beta"

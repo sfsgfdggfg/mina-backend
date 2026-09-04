@@ -205,14 +205,30 @@ def evaluate_pilot_web_shell_regressions() -> dict:
             )
 
             jobs_page = client.get("/app/jobs")
-            csrf = _meta_value(jobs_page.text, "csrf-token")
+            work_page = client.get("/app/work")
+            csrf = _meta_value(work_page.text, "csrf-token")
             api_jobs = client.get("/mina-jobs")
+            api_work = client.get("/operational-work-queue")
+            api_my_work = client.get("/operational-work-my")
             check(
                 jobs_page.status_code == 200
-                and "Web Operator" in jobs_page.text
-                and password not in jobs_page.text
-                and api_jobs.status_code == 200,
-                "authenticated browser session can render the shell and read controlled APIs",
+                and work_page.status_code == 200
+                and "İş Kuyruğu" in work_page.text
+                and "Web Operator" in work_page.text
+                and password not in work_page.text
+                and api_jobs.status_code == 200
+                and api_work.status_code == 200
+                and api_my_work.status_code == 200,
+                "authenticated browser session can render jobs and operator work queue over controlled APIs",
+            )
+
+            missing_work = client.post(
+                "/operational-work-items/missing:work/assign-to-me",
+                headers={"X-CSRF-Token": csrf},
+            )
+            check(
+                missing_work.status_code == 404,
+                "browser work assignment mutation reaches controlled backend only with authenticated CSRF context",
             )
 
             no_csrf = client.post("/mina-jobs/manual", json={})
