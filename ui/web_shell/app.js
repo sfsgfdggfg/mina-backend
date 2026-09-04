@@ -607,6 +607,71 @@ function metric(label, value) {
   return card;
 }
 
+function renderOperatorPerformance(section) {
+  const wrap = node("section", "", "section report-operator-performance");
+  wrap.append(node("h2", "Operatör İş Kuyruğu Performansı"));
+  const performance = section?.work_assignment_performance || {};
+  const summary = performance.summary || {};
+  const summaryGrid = node("div", "", "grid report-performance-metrics");
+  summaryGrid.append(
+    metric("Atama generation", summary.assignment_generation_count ?? 0),
+    metric("İlk bakış kaydı", summary.acknowledged_generation_count ?? 0),
+    metric("İlk bakış kapsamı %", summary.first_look_coverage_percent ?? "-"),
+    metric("Ort. ilk bakış", summary.average_first_look_seconds == null ? "-" : durationLabel(summary.average_first_look_seconds)),
+    metric("Medyan ilk bakış", summary.median_first_look_seconds == null ? "-" : durationLabel(summary.median_first_look_seconds))
+  );
+  wrap.append(summaryGrid);
+
+  const authority = node("div", "", "notice report-performance-note");
+  const slaText = performance.first_look_sla_status === "threshold_not_configured"
+    ? "İlk bakış SLA eşiği henüz tanımlı değil; SLA yüzdesi üretilmiyor."
+    : `İlk bakış SLA durumu: ${codeLabel(performance.first_look_sla_status)}`;
+  const completionText = performance.completion_metric_status === "work_type_completion_mapping_not_configured"
+    ? "Release/handoff tamamlanma sayılmaz; work-type completion eşlemesi henüz tanımlı değil."
+    : `Tamamlanma metriği: ${codeLabel(performance.completion_metric_status)}`;
+  authority.append(
+    node("div", `Dönem temeli: ${codeLabel(performance.period_basis)}`),
+    node("div", slaText),
+    node("div", completionText)
+  );
+  wrap.append(authority);
+
+  const rows = performance.rows || [];
+  if (!rows.length) {
+    wrap.append(node("div", "Bu dönem için ölçülebilir assignment performans kaydı yok.", "muted report-performance-empty"));
+    return wrap;
+  }
+  const tableWrap = node("div", "", "table-wrap report-performance-table");
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  ["Operatör", "Atama", "İlk Bakış", "Kapsam %", "Ort. İlk Bakış", "Medyan", "Handoff", "Bırakma", "Reassignment"].forEach(label => {
+    headRow.append(node("th", label));
+  });
+  thead.append(headRow);
+  table.append(thead);
+  const tbody = document.createElement("tbody");
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    tr.append(
+      node("td", row.name || "-"),
+      node("td", row.assignment_generation_count ?? 0),
+      node("td", row.acknowledged_generation_count ?? 0),
+      node("td", row.first_look_coverage_percent ?? "-"),
+      node("td", row.average_first_look_seconds == null ? "-" : durationLabel(row.average_first_look_seconds)),
+      node("td", row.median_first_look_seconds == null ? "-" : durationLabel(row.median_first_look_seconds)),
+      node("td", row.shift_handoff_count ?? 0),
+      node("td", row.operator_release_count ?? 0),
+      node("td", row.reassignment_generation_count ?? 0)
+    );
+    tbody.append(tr);
+  }
+  table.append(tbody);
+  tableWrap.append(table);
+  wrap.append(tableWrap);
+  return wrap;
+}
+
 function renderReports(data) {
   title.textContent = "Raporlar";
   const overview = data.overview || {};
@@ -619,8 +684,9 @@ function renderReports(data) {
     metric("Açık istisna", overview.open_exception_count ?? 0),
     metric("Zamanında teslimat %", overview.on_time_delivery_percent ?? "-")
   );
+  const operatorPerformance = renderOperatorPerformance(data.operations || {});
   const note = node("div", "Finansal değerler para birimleri arasında toplanmaz; eksik kanıt sıfır kabul edilmez.", "notice section");
-  content.replaceChildren(grid, note);
+  content.replaceChildren(grid, operatorPerformance, note);
 }
 
 async function boot() {

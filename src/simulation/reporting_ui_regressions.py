@@ -59,6 +59,14 @@ def evaluate_reporting_ui_regressions() -> dict:
         "reporting UI surfaces backend-derived commercial operational and MINAI KPIs",
     )
     check(
+        "_render_operator_assignment_performance" in reporting_text
+        and "first_look_coverage_percent" in reporting_text
+        and "average_first_look_seconds" in reporting_text
+        and "median_first_look_seconds" in reporting_text
+        and "Release/handoff workflow completion değildir." in reporting_text,
+        "reporting UI surfaces evidence-based operator first-look metrics without false completion semantics",
+    )
+    check(
         'ZoneInfo("Europe/Istanbul")' in reporting_text
         and "learning_period_basis" in reporting_text
         and "tracked_send_scope" in reporting_text,

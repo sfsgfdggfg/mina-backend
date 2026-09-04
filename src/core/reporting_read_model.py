@@ -10,6 +10,7 @@ from src.core.master_data import normalize_country, normalize_master_text
 from src.core.master_data_repository import MasterDataRepository
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.operation_execution_repository import OperationExecutionRepository
+from src.core.operational_work_assignment_repository import OperationalWorkAssignmentRepository
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_price_repository import SupplierPriceRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
@@ -48,8 +49,130 @@ def _hours(start: datetime | None, end: datetime | None) -> float | None:
     return round((b - a).total_seconds() / 3600, 2)
 
 
+def _seconds(start: datetime | None, end: datetime | None) -> float | None:
+    a, b = _aware(start), _aware(end)
+    if a is None or b is None or b < a:
+        return None
+    return round((b - a).total_seconds(), 2)
+
+
 def _avg(values: list[float]) -> float | None:
     return None if not values else round(sum(values) / len(values), 2)
+
+
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return round(ordered[middle], 2)
+    return round((ordered[middle - 1] + ordered[middle]) / 2, 2)
+
+
+def _operator_assignment_performance(
+    repository: OperationalWorkAssignmentRepository | None,
+    *,
+    start_date: date | None,
+    end_date: date | None,
+) -> dict[str, Any]:
+    if repository is None:
+        return {
+            "period_basis": "assignment_assigned_at_istanbul",
+            "status": "assignment_repository_unavailable",
+            "rows": [],
+            "summary": {"assignment_generation_count": 0, "acknowledged_generation_count": 0},
+            "first_look_sla_status": "threshold_not_configured",
+            "completion_metric_status": "work_type_completion_mapping_not_configured",
+        }
+
+    generations: dict[tuple[str, int], dict[str, Any]] = {}
+    for snapshot in repository.list_history():
+        key = (snapshot.work_id, snapshot.generation)
+        record = generations.setdefault(key, {
+            "work_id": snapshot.work_id,
+            "generation": snapshot.generation,
+            "assigned_to": snapshot.assigned_to,
+            "assigned_at": snapshot.assigned_at,
+            "acknowledged_at": None,
+            "released_at": None,
+            "release_reason": None,
+        })
+        if snapshot.acknowledged_at is not None:
+            record["acknowledged_at"] = snapshot.acknowledged_at
+        if snapshot.released_at is not None:
+            record["released_at"] = snapshot.released_at
+            record["release_reason"] = snapshot.release_reason
+
+    selected = [
+        record for record in generations.values()
+        if (start_date is None or _istanbul_date(record["assigned_at"]) >= start_date)
+        and (end_date is None or _istanbul_date(record["assigned_at"]) <= end_date)
+    ]
+    by_operator: dict[str, dict[str, Any]] = {}
+
+    def row_for(name: str) -> dict[str, Any]:
+        return by_operator.setdefault(name, {
+            "name": name,
+            "assignment_generation_count": 0,
+            "acknowledged_generation_count": 0,
+            "released_assignment_count": 0,
+            "operator_release_count": 0,
+            "shift_handoff_count": 0,
+            "reassignment_generation_count": 0,
+            "_first_look_seconds": [],
+        })
+
+    for record in selected:
+        row = row_for(record["assigned_to"])
+        row["assignment_generation_count"] += 1
+        row["reassignment_generation_count"] += int(record["generation"] > 1)
+        if record["acknowledged_at"] is not None:
+            seconds = _seconds(record["assigned_at"], record["acknowledged_at"])
+            if seconds is not None:
+                row["_first_look_seconds"].append(seconds)
+                row["acknowledged_generation_count"] += 1
+        if record["released_at"] is not None:
+            row["released_assignment_count"] += 1
+            row["operator_release_count"] += int(record["release_reason"] == "operator_release")
+            row["shift_handoff_count"] += int(record["release_reason"] == "shift_handoff")
+
+    rows = []
+    for row in by_operator.values():
+        first_look = row.pop("_first_look_seconds")
+        row["first_look_coverage_percent"] = _ratio(
+            row["acknowledged_generation_count"], row["assignment_generation_count"]
+        )
+        row["average_first_look_seconds"] = _avg(first_look)
+        row["median_first_look_seconds"] = _median(first_look)
+        row["first_look_sla_percent"] = None
+        rows.append(row)
+    rows.sort(key=lambda row: (-row["assignment_generation_count"], row["name"]))
+
+    all_first_look = []
+    for record in selected:
+        if record["acknowledged_at"] is None:
+            continue
+        seconds = _seconds(record["assigned_at"], record["acknowledged_at"])
+        if seconds is not None:
+            all_first_look.append(seconds)
+    assigned_count = len(selected)
+    acknowledged_count = len(all_first_look)
+    return {
+        "period_basis": "assignment_assigned_at_istanbul",
+        "status": "evidence_based",
+        "summary": {
+            "assignment_generation_count": assigned_count,
+            "acknowledged_generation_count": acknowledged_count,
+            "first_look_coverage_percent": _ratio(acknowledged_count, assigned_count),
+            "average_first_look_seconds": _avg(all_first_look),
+            "median_first_look_seconds": _median(all_first_look),
+        },
+        "rows": rows,
+        "first_look_sla_status": "threshold_not_configured",
+        "completion_metric_status": "work_type_completion_mapping_not_configured",
+        "note": "Speed metrics are descriptive evidence only; assignment release/handoff are not workflow completion.",
+    }
 
 
 def _ratio(numerator: int, denominator: int) -> float | None:
@@ -171,6 +294,7 @@ def build_reporting_read_model(
     operation_execution_repository: OperationExecutionRepository,
     master_data_repository: MasterDataRepository,
     learning_fact_repository: LearningFactRepository,
+    operational_work_assignment_repository: OperationalWorkAssignmentRepository | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
     as_of: datetime | None = None,
@@ -552,6 +676,9 @@ def build_reporting_read_model(
     missing_sales_owner = sum(not job.sales_owner for job in jobs)
     missing_operations_owner = sum(not job.operations_owner for job in jobs)
     parseable_delivery = sum(_parse_iso_date(job.shipment.required_delivery_date) is not None for job in jobs)
+    assignment_performance = _operator_assignment_performance(
+        operational_work_assignment_repository, start_date=start_date, end_date=end_date
+    )
 
     return {
         "period": {
@@ -584,6 +711,7 @@ def build_reporting_read_model(
         "operations": {
             "rows": _sorted_rows(operations_groups),
             "unassigned_job_count": missing_operations_owner,
+            "work_assignment_performance": assignment_performance,
         },
         "customers": {"rows": _sorted_rows(customer_groups)},
         "suppliers": {

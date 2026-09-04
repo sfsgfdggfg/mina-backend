@@ -35,6 +35,17 @@ def _hours(value: Any) -> str:
     return "-" if value is None else f"{float(value):.1f} saat"
 
 
+def _duration_seconds(value: Any) -> str:
+    if value is None:
+        return "-"
+    seconds = max(0, float(value))
+    if seconds < 60:
+        return f"{seconds:.0f} sn"
+    if seconds < 3600:
+        return f"{seconds / 60:.1f} dk"
+    return f"{seconds / 3600:.2f} saat"
+
+
 def _rows_without_money(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result = []
     for row in rows:
@@ -75,6 +86,30 @@ def _render_people(report: dict[str, Any], key: str, title: str) -> None:
         st.dataframe(_rows_without_money(rows), use_container_width=True, hide_index=True)
     else:
         st.info("Bu dönem için veri yok.")
+
+
+
+
+def _render_operator_assignment_performance(report: dict[str, Any]) -> None:
+    section = ((report.get("operations") or {}).get("work_assignment_performance") or {})
+    st.markdown("#### İş Kuyruğu Performansı")
+    summary = section.get("summary") or {}
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Atama Generation", summary.get("assignment_generation_count", 0))
+    c2.metric("İlk Bakış Kaydı", summary.get("acknowledged_generation_count", 0))
+    c3.metric("İlk Bakış Kapsamı", _pct(summary.get("first_look_coverage_percent")))
+    c4.metric("Ort. İlk Bakış", _duration_seconds(summary.get("average_first_look_seconds")))
+    c5.metric("Medyan İlk Bakış", _duration_seconds(summary.get("median_first_look_seconds")))
+    rows = section.get("rows") or []
+    if rows:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    else:
+        st.info("Bu dönem için ölçülebilir assignment performans kaydı yok.")
+    st.caption(
+        f"Assignment dönem temeli: {section.get('period_basis', '-')} · "
+        "İlk bakış SLA eşiği tanımlı değilse SLA yüzdesi üretilmez. "
+        "Release/handoff workflow completion değildir."
+    )
 
 
 def _render_group_table(report: dict[str, Any], key: str, title: str) -> None:
@@ -194,6 +229,7 @@ def render_reporting(api_base_url: str) -> None:
         _render_people(report, "sales", "Satış Personeli")
     with tabs[2]:
         _render_people(report, "operations", "Operasyon Personeli")
+        _render_operator_assignment_performance(report)
     with tabs[3]:
         _render_group_table(report, "customers", "Müşteriler")
     with tabs[4]:

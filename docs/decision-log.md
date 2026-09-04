@@ -6497,3 +6497,15 @@ P2-11 exposes the existing unified operational work queue and durable work-assig
 The first pilot browser assignment model is self-claim. An authenticated operator may claim unassigned work for themselves and may take over an expired assignment through the existing lease guard. P2-11 does not let one ordinary operator type an arbitrary name and assign work to another person. Directed person-to-person assignment requires a future authoritative operator directory plus an explicit permission model so identity and assignment authority cannot be fabricated in the browser.
 
 The work-queue workspace provides bounded coordination views such as all open work, my assigned work, approval/confirmation work and unassigned critical work. These are presentation filters over the backend-authoritative item fields and ordering; they do not alter workflow state or priority authority.
+
+## DEC-179 — Operator Performance Reporting Is Evidence-Based and Separates Coordination From Completion
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-12 extends the existing P2-07 operations reporting read model with operator work-assignment performance derived from durable P1-63/P2-11 assignment history. Assignment snapshots are deduplicated by `(work_id, generation)` so acknowledge, renew and release saves do not become duplicate work items.
+
+The assignment-performance activity period is explicitly `assignment_assigned_at_istanbul`, independent from the existing MINA-job-opened cohort used by ordinary job reporting. Per-operator metrics may include assignment generations, acknowledgement coverage, average/median first-look time, release/handoff evidence and reassignment generations.
+A first-look SLA compliance percentage is not authoritative until a separate SLA threshold policy is explicitly defined. The 30-minute assignment lease is coordination safety and must not be reused as an SLA threshold. P2-12 therefore reports measurable first-look timing and coverage while marking SLA status as threshold-not-configured.
+
+Release, shift handoff, lease expiry and reassignment remain coordination events rather than action/workflow completion. P2-12 does not fabricate completion-time performance from those events. Completion metrics require a future work-type mapping to the corresponding durable workflow/action completion evidence. Staff speed remains descriptive evidence and must not be presented as a standalone quality ranking.

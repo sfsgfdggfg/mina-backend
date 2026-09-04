@@ -849,3 +849,9 @@ The external web-user configuration is keyed by normalized email and contains a 
 P2-10 adds no persistent database namespace. `build_operations_dashboard()` is a read-only projection over durable MINA jobs and operation-execution snapshots/exceptions.
 
 The projection contains a bounded three-to-five-day Europe/Istanbul window, calendar milestone rows, explicit attention rows, unscheduled active-job rows and summary counts. Date-only shipment values enter the calendar only when they are exact ISO dates; timezone-aware timestamps are converted to Europe/Istanbul before day bucketing. No dashboard mutation becomes business authority.
+
+## P2-12 Operator Performance Reporting Read Model
+
+P2-12 does not add a mutable performance table. Operator performance is a read model over durable `operational_work_assignment` history. Historical snapshots are grouped by `(work_id, generation)` and projected into per-operator assignment count, acknowledgement coverage, first-look timing, release/handoff counts and reassignment-generation evidence.
+
+The activity-period basis for this projection is `assigned_at` converted to `Europe/Istanbul`. First-look timing uses the exact durable `assigned_at → acknowledged_at` interval. SLA compliance and completion duration are intentionally absent until explicit SLA thresholds and work-type completion-event mappings exist.

@@ -106,6 +106,9 @@ from src.simulation.operational_work_assignment_regressions import (
 from src.simulation.operator_work_queue_web_regressions import (
     evaluate_operator_work_queue_web_regressions,
 )
+from src.simulation.operator_performance_reporting_regressions import (
+    evaluate_operator_performance_reporting_regressions,
+)
 from src.simulation.attachment_interpretation_review_regressions import (
     evaluate_attachment_interpretation_review_regressions,
 )
@@ -356,6 +359,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Pilot operator work queue web workspace",
         evaluate_operator_work_queue_web_regressions,
+    ),
+    Suite(
+        "Operator performance and first-look reporting",
+        evaluate_operator_performance_reporting_regressions,
     ),
     Suite(
         "Controlled Outlook Graph sending",
