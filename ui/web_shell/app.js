@@ -689,9 +689,169 @@ function renderReports(data) {
   content.replaceChildren(grid, operatorPerformance, note);
 }
 
+let currentBranding = null;
+
+function applyBranding(branding) {
+  currentBranding = branding || null;
+  if (!branding) return;
+  const root = document.documentElement.style;
+  root.setProperty("--accent", branding.primary_color);
+  root.setProperty("--accent-contrast", branding.primary_contrast_color);
+  root.setProperty("--accent-soft", branding.primary_soft_color);
+  root.setProperty("--accent-hover", branding.primary_hover_color);
+  root.setProperty("--secondary-accent", branding.secondary_accent_color);
+  root.setProperty("--secondary-accent-contrast", branding.secondary_contrast_color);
+  root.setProperty("--secondary-accent-soft", branding.secondary_soft_color);
+
+  const name = document.getElementById("shell-brand-name");
+  const mark = document.getElementById("shell-brand-mark");
+  if (name) name.textContent = branding.company_name || "MINAI";
+  if (mark) {
+    mark.replaceChildren();
+    mark.classList.remove("has-logo");
+    if (branding.logo_data_uri) {
+      const image = document.createElement("img");
+      image.className = "shell-brand-logo";
+      image.alt = "";
+      image.src = branding.logo_data_uri;
+      mark.append(image);
+      mark.classList.add("has-logo");
+    } else {
+      mark.textContent = (branding.company_name || "M").trim().slice(0, 1).toUpperCase() || "M";
+    }
+  }
+  document.title = `${branding.company_name || "MINAI"} · MINAI`;
+}
+
+function brandingLogoPreview(container, dataUri, companyName) {
+  container.replaceChildren();
+  if (dataUri) {
+    const image = document.createElement("img");
+    image.className = "branding-preview-logo";
+    image.alt = "Logo önizlemesi";
+    image.src = dataUri;
+    container.append(image);
+  } else {
+    container.append(node("span", (companyName || "M").trim().slice(0, 1).toUpperCase() || "M"));
+  }
+}
+
+function renderBrandingSettings(branding) {
+  title.textContent = "Ayarlar";
+  let pendingLogo = branding.logo_data_uri || null;
+  const page = node("div", "", "settings-page");
+  const heading = node("div", "", "settings-heading");
+  heading.append(node("h2", "Branding"), node("p", "Firma adı, logo ve marka renkleri. Kritik durum renkleri sistem tarafından sabit tutulur.", "muted"));
+  page.append(heading);
+
+  const form = node("div", "", "branding-form");
+  const companyLabel = node("label", "Firma adı");
+  const companyInput = document.createElement("input");
+  companyInput.type = "text";
+  companyInput.maxLength = 120;
+  companyInput.value = branding.company_name || "MINAI";
+  companyLabel.append(companyInput);
+
+  const colors = node("div", "", "branding-color-grid");
+  const primaryLabel = node("label", "Ana marka rengi");
+  const primaryInput = document.createElement("input");
+  primaryInput.type = "color";
+  primaryInput.value = (branding.primary_color || "#3157D5").toLowerCase();
+  primaryLabel.append(primaryInput);
+  const secondaryLabel = node("label", "İkincil vurgu rengi");
+  const secondaryInput = document.createElement("input");
+  secondaryInput.type = "color";
+  secondaryInput.value = (branding.secondary_accent_color || "#172033").toLowerCase();
+  secondaryLabel.append(secondaryInput);
+  colors.append(primaryLabel, secondaryLabel);
+
+  const logoLabel = node("label", "Logo");
+  const logoInput = document.createElement("input");
+  logoInput.type = "file";
+  logoInput.accept = "image/png,image/jpeg,image/webp";
+  logoLabel.append(logoInput, node("span", "PNG, JPEG veya WebP · en fazla 256 KB", "muted branding-help"));
+
+  const preview = node("div", "", "branding-preview");
+  const previewMark = node("div", "", "branding-preview-mark");
+  brandingLogoPreview(previewMark, pendingLogo, companyInput.value);
+  const previewText = node("strong", companyInput.value || "MINAI", "branding-preview-name");
+  const previewPrimary = node("button", "Birincil Aksiyon", "primary");
+  previewPrimary.type = "button";
+  previewPrimary.disabled = true;
+  const previewSecondary = node("span", "Vurgu", "branding-secondary-chip");
+  preview.append(previewMark, previewText, previewPrimary, previewSecondary);
+
+  const actions = node("div", "", "actions branding-actions");
+  const clearLogo = node("button", "Logoyu Kaldır");
+  clearLogo.type = "button";
+  const save = node("button", "Kaydet", "primary");
+  save.type = "button";
+  actions.append(clearLogo, save);
+  const feedback = node("div", "", "muted branding-feedback");
+
+  function refreshLocalPreview() {
+    previewText.textContent = companyInput.value.trim() || "MINAI";
+    brandingLogoPreview(previewMark, pendingLogo, companyInput.value);
+    previewPrimary.style.background = primaryInput.value;
+    previewSecondary.style.background = secondaryInput.value;
+  }
+
+  companyInput.addEventListener("input", refreshLocalPreview);
+  primaryInput.addEventListener("input", refreshLocalPreview);
+  secondaryInput.addEventListener("input", refreshLocalPreview);
+  logoInput.addEventListener("change", () => {
+    const file = logoInput.files?.[0];
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 256 * 1024) {
+      feedback.textContent = "Logo PNG/JPEG/WebP olmalı ve 256 KB'ı geçmemeli.";
+      logoInput.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      pendingLogo = String(reader.result || "");
+      feedback.textContent = "Logo önizlemeye yüklendi; kaydetmeden kalıcı olmaz.";
+      refreshLocalPreview();
+    });
+    reader.readAsDataURL(file);
+  });
+  clearLogo.addEventListener("click", () => {
+    pendingLogo = null;
+    logoInput.value = "";
+    feedback.textContent = "Logo kaldırılacak; değişikliği kaydet.";
+    refreshLocalPreview();
+  });
+  save.addEventListener("click", async () => {
+    try {
+      const saved = await api("/settings/branding", {
+        method: "POST",
+        body: JSON.stringify({
+          company_name: companyInput.value,
+          logo_data_uri: pendingLogo,
+          primary_color: primaryInput.value,
+          secondary_accent_color: secondaryInput.value
+        })
+      });
+      applyBranding(saved);
+      feedback.textContent = "Branding ayarları kaydedildi.";
+      setStatus("Kaydedildi");
+    } catch (error) {
+      feedback.textContent = error.message || String(error);
+      setStatus("Hata", false);
+    }
+  });
+
+  form.append(companyLabel, colors, logoLabel, preview, actions, feedback);
+  page.append(form);
+  content.replaceChildren(page);
+  refreshLocalPreview();
+}
+
 async function boot() {
   const page = document.body.dataset.page;
   try {
+    const branding = await api("/settings/branding");
+    applyBranding(branding);
     if (page === "dashboard") {
       await loadDashboard(5); return;
     } else if (page === "work") {
@@ -702,6 +862,8 @@ async function boot() {
       await loadJob(document.body.dataset.jobId || ""); return;
     } else if (page === "reports") {
       renderReports(await api("/reports"));
+    } else if (page === "settings") {
+      renderBrandingSettings(branding);
     }
     setStatus("Güncel");
   } catch (error) { showError(error); }

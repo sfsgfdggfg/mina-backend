@@ -6509,3 +6509,13 @@ The assignment-performance activity period is explicitly `assignment_assigned_at
 A first-look SLA compliance percentage is not authoritative until a separate SLA threshold policy is explicitly defined. The 30-minute assignment lease is coordination safety and must not be reused as an SLA threshold. P2-12 therefore reports measurable first-look timing and coverage while marking SLA status as threshold-not-configured.
 
 Release, shift handoff, lease expiry and reassignment remain coordination events rather than action/workflow completion. P2-12 does not fabricate completion-time performance from those events. Completion metrics require a future work-type mapping to the corresponding durable workflow/action completion evidence. Staff speed remains descriptive evidence and must not be presented as a standalone quality ranking.
+
+## DEC-180 — Agency Branding Is Durable Presentation Configuration, Not Workflow Authority
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-13 adds one durable agency-level branding record exposed under `Ayarlar → Branding` in the authenticated pilot shell. The record may define company name, optional logo, primary brand color and secondary accent color. The browser consumes the backend branding read model; it does not create a second configuration authority.
+
+Brand colors affect product chrome and ordinary primary/accent presentation only. Critical semantic status colors for success, warning and danger remain system-controlled and cannot be overridden by agency branding. Backend code derives contrast, soft and hover tones from the two accepted brand colors so accessible text/background choices are not delegated to arbitrary browser calculations.
+Logo upload is intentionally restricted to validated PNG, JPEG or WebP bytes and a 256 KB bound; SVG is not accepted. Branding changes require authenticated operator evidence and persist update actor/time with the current agency record. P2-13 does not change MINA lifecycle, automation, assignment, approval, SLA, commercial or exception authority.

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 import json
 from fastapi import FastAPI, HTTPException, Request
@@ -243,6 +243,13 @@ from src.core.master_data_service import (
 from src.core.automation_policy_repository import (
     SQLiteAgencyAutomationPolicyRepository,
 )
+from src.core.agency_branding import (
+    AgencyBrandingSettings,
+    AgencyBrandingUpdate,
+    branding_public_payload,
+    default_branding_settings,
+)
+from src.core.agency_branding_repository import SQLiteAgencyBrandingRepository
 from src.core.automation_policy_service import (
     resolve_effective_automation_policy,
     save_agency_automation_policy,
@@ -389,6 +396,7 @@ operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
+agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
 automation_action_repository = SQLiteAutomationActionRepository(pilot_store)
@@ -1356,6 +1364,25 @@ def bootstrap_master_data_from_legacy(http_request: Request):
         )
     except MasterDataConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/settings/branding")
+def get_agency_branding_settings():
+    settings = agency_branding_repository.get() or default_branding_settings()
+    return branding_public_payload(settings)
+
+
+@app.post("/settings/branding")
+def update_agency_branding_settings(
+    update: AgencyBrandingUpdate, http_request: Request,
+):
+    settings = AgencyBrandingSettings(
+        **update.model_dump(),
+        updated_at=datetime.now(timezone.utc),
+        updated_by=_authenticated_operator(http_request),
+    )
+    stored = agency_branding_repository.save(settings)
+    return branding_public_payload(stored)
 
 
 @app.get("/automation-policy/agency")

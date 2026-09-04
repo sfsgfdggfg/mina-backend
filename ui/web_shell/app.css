@@ -7,7 +7,12 @@
   --muted: #6d778a;
   --ink: #172033;
   --accent: #3157d5;
+  --accent-contrast: #ffffff;
   --accent-soft: #eef2ff;
+  --accent-hover: #2b4cbb;
+  --secondary-accent: #172033;
+  --secondary-accent-contrast: #ffffff;
+  --secondary-accent-soft: #eef0f3;
   --success: #127a55;
   --warning: #a16000;
   --danger: #b42318;
@@ -20,9 +25,11 @@ button { cursor: pointer; }
 .muted { color: var(--muted); }
 .brand-mark {
   width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center;
-  background: #172033; color: white; font-weight: 800; font-size: 22px;
+  background: var(--secondary-accent); color: var(--secondary-accent-contrast); font-weight: 800; font-size: 22px;
 }
 .brand-mark.small { width: 34px; height: 34px; border-radius: 10px; font-size: 15px; }
+.brand-mark.has-logo { background: white; padding: 3px; overflow: hidden; }
+.shell-brand-logo { width: 100%; height: 100%; object-fit: contain; display: block; }
 .login-page { display: grid; place-items: center; padding: 24px; }
 .login-card {
   width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line);
@@ -36,9 +43,9 @@ input {
   width: 100%; border: 1px solid #cfd6e3; border-radius: 11px; padding: 12px 13px;
   background: white; color: var(--ink); outline: none;
 }
-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(49,87,213,.12); }
+input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 button.primary {
-  border: 0; border-radius: 11px; background: var(--accent); color: white;
+  border: 0; border-radius: 11px; background: var(--accent); color: var(--accent-contrast);
   padding: 12px 16px; font-weight: 750;
 }
 .login-error {
@@ -94,7 +101,7 @@ tr.clickable:hover { background: #fafbfe; }
 .actions button {
   border: 1px solid #cfd6e3; background: white; border-radius: 9px; padding: 8px 11px;
 }
-.actions button.approve { background: var(--accent); border-color: var(--accent); color: white; }
+.actions button.approve { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 .actions button.reject { color: var(--danger); border-color: #f1b9b5; }
 .preview { margin-top: 10px; padding: 12px; border-radius: 10px; background: #f7f8fb; white-space: pre-wrap; font-size: 12px; }
 .notice { border-radius: 10px; padding: 11px 12px; background: var(--accent-soft); font-size: 12px; }
@@ -195,3 +202,34 @@ tr.clickable:hover { background: #fafbfe; }
 .report-performance-empty { margin-top: 14px; }
 @media (max-width: 1100px) { .report-performance-metrics { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) { .report-performance-metrics { grid-template-columns: 1fr; } }
+
+.settings-page { display: grid; gap: 18px; }
+.settings-heading h2 { margin: 0 0 6px; font-size: 18px; }
+.settings-heading p { margin: 0; }
+.branding-form { display: grid; gap: 18px; max-width: 760px; }
+.branding-color-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.branding-color-grid input[type="color"] {
+  height: 46px; padding: 4px; cursor: pointer; background: white;
+}
+.branding-help { font-size: 11px; font-weight: 400; }
+.branding-preview {
+  border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: #fafbfe;
+}
+.branding-preview-mark {
+  width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
+  overflow: hidden; background: var(--secondary-accent); color: var(--secondary-accent-contrast); font-weight: 800;
+}
+.branding-preview-logo { width: 100%; height: 100%; object-fit: contain; background: white; padding: 3px; }
+.branding-preview-name { min-width: 120px; }
+.branding-secondary-chip {
+  border-radius: 999px; padding: 7px 10px; background: var(--secondary-accent);
+  color: var(--secondary-accent-contrast); font-size: 12px; font-weight: 700;
+}
+.branding-actions { margin-top: 0; }
+.branding-feedback { min-height: 18px; font-size: 12px; }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+@media (max-width: 720px) {
+  .branding-color-grid { grid-template-columns: 1fr; }
+  .branding-preview { align-items: flex-start; flex-direction: column; }
+}
