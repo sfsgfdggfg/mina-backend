@@ -555,6 +555,105 @@ def _render_operation(
             except (requests.RequestException, RuntimeError) as exc:
                 st.error(str(exc))
 
+    _render_learning_facts(api_base_url, job_id, detail)
+
+
+def _render_learning_facts(
+    api_base_url: str, job_id: str, detail: dict[str, Any]
+) -> None:
+    learning = detail.get("learning") or {}
+    facts = learning.get("facts") or []
+    status_labels = {
+        "proposed": "Öneri", "confirmed": "Onaylandı",
+        "rejected": "Reddedildi", "superseded": "Geçmiş / Değiştirildi",
+    }
+    st.divider()
+    st.markdown("### MINAI Öğrenimleri")
+    st.caption(
+        "Confidence yalnız güven sinyalidir. MINAI bir bilgiyi ancak insan tarafından "
+        "onaylandıktan sonra operasyonel otorite olarak kullanabilir."
+    )
+    if facts:
+        for fact in reversed(facts):
+            status = str(fact.get("status") or "proposed")
+            confidence = float(fact.get("confidence") or 0)
+            with st.expander(
+                f"{status_labels.get(status, status)} — {fact.get('fact_key') or '-'} — %{confidence * 100:.0f}"
+            ):
+                st.write(f"**Değer:** {fact.get('value')}")
+                if fact.get("value_unit"):
+                    st.write(f"**Birim:** {fact.get('value_unit')}")
+                st.write(f"**Kaynak:** {fact.get('source_type') or '-'}")
+                for item in fact.get("evidence") or []:
+                    st.caption(
+                        f"Kanıt: {item.get('summary') or '-'} — Referans: {item.get('source_reference') or '-'}"
+                    )
+                if status == "proposed":
+                    review_note = st.text_input(
+                        "İnceleme notu", key=f"learning_review_{fact.get('fact_id')}",
+                    )
+                    c1, c2 = st.columns(2)
+                    if c1.button("Öğrenimi Onayla", key=f"confirm_learning_{fact.get('fact_id')}"):
+                        try:
+                            _post_json(
+                                api_base_url, f"/learning-facts/{fact.get('fact_id')}/confirm",
+                                {"review_note": review_note},
+                            )
+                            st.success("Öğrenim onaylandı ve runtime için kullanılabilir hale geldi.")
+                            st.rerun()
+                        except (requests.RequestException, RuntimeError) as exc:
+                            st.error(str(exc))
+                    if c2.button("Öğrenimi Reddet", key=f"reject_learning_{fact.get('fact_id')}"):
+                        try:
+                            _post_json(
+                                api_base_url, f"/learning-facts/{fact.get('fact_id')}/reject",
+                                {"review_note": review_note},
+                            )
+                            st.success("Öğrenim reddedildi.")
+                            st.rerun()
+                        except (requests.RequestException, RuntimeError) as exc:
+                            st.error(str(exc))
+    else:
+        st.info("Bu operasyon için henüz kayıtlı MINAI öğrenimi yok.")
+
+    with st.expander("Yeni Öğrenim Önerisi Ekle"):
+        with st.form(f"new_learning_fact_{job_id}"):
+            fact_key = st.text_input("Fact key", placeholder="operation.border_risk_pattern")
+            value = st.text_input("Değer")
+            confidence = st.slider("Confidence", 0.0, 1.0, 0.75, 0.05)
+            source_type = st.selectbox(
+                "Kaynak türü", ["minai_inference", "operation_history", "email", "manual", "system"]
+            )
+            evidence_summary = st.text_area(
+                "Kanıt özeti (ham mesajı kopyalamayın)",
+                placeholder="Son üç operasyonda aynı sınır geçişinde gecikme gözlendi.",
+            )
+            source_reference = st.text_input(
+                "Kanıt referansı", placeholder="MINA2026/123 timeline event"
+            )
+            submitted = st.form_submit_button("Öğrenim Önerisi Kaydet")
+        if submitted:
+            payload = {
+                "entry_id": str(uuid4()), "subject_type": "operation",
+                "subject_id": job_id,
+                "subject_label": str((detail.get("summary") or {}).get("mina_code") or job_id),
+                "fact_key": fact_key.strip(), "value": value.strip(),
+                "confidence": confidence, "source_type": source_type,
+                "evidence": [{
+                    "source_type": source_type,
+                    "source_reference": source_reference.strip(),
+                    "observed_at": _operation_now_iso(),
+                    "summary": evidence_summary.strip(),
+                }],
+            }
+            try:
+                _post_json(api_base_url, "/learning-facts", payload)
+                st.success("Öğrenim önerisi kaydedildi; henüz runtime otoritesi değildir.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.error(str(exc))
+
+
 def _render_suppliers(
     api_base_url: str, job_id: str, detail: dict[str, Any]
 ) -> None:

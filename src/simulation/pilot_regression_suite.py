@@ -28,6 +28,7 @@ from src.simulation.mina_operations_ui_regressions import evaluate_mina_operatio
 from src.simulation.master_data_geography_regressions import evaluate_master_data_geography_regressions
 from src.simulation.automation_policy_hierarchy_regressions import evaluate_automation_policy_hierarchy_regressions
 from src.simulation.operation_execution_exception_regressions import evaluate_operation_execution_exception_regressions
+from src.simulation.learning_fact_provenance_regressions import evaluate_learning_fact_provenance_regressions
 from src.simulation.supplier_price_source_regressions import evaluate_supplier_price_source_regressions
 from src.simulation.human_operational_flow_regressions import evaluate_human_operational_flow_regressions
 from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
@@ -229,6 +230,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Customer supplier master data and geography", evaluate_master_data_geography_regressions),
     Suite("Automation policy hierarchy", evaluate_automation_policy_hierarchy_regressions),
     Suite("Operation execution and exception layer", evaluate_operation_execution_exception_regressions),
+    Suite("Learning fact and provenance authority", evaluate_learning_fact_provenance_regressions),
     Suite("Supplier price sources and fixed rates", evaluate_supplier_price_source_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),
     Suite("Pricing policy resolution", evaluate_pricing_policy_regressions),

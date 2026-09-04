@@ -810,3 +810,12 @@ Persistent namespaces: `customer_master_profiles`, `customer_master_by_entry`, `
 `OperationExecutionSnapshot` is one durable current-state record per lifecycle-v2 MINA job. It stores structured supplier-confirmation, vehicle/driver, loading, current location/ETA, delivery-appointment, delivered, POD and CMR timestamps together with authenticated update evidence. It is persisted under `operation_execution_snapshots`.
 
 `OperationException` is a durable incident record keyed by `exception_id` plus an idempotent client `entry_id`. It stores MINA identity, stage-at-report, exception type, explicit impact (`deviation`, `delivery_risk`, `actual_delay`), cause, optional location and ETA change, customer impact, next action, source evidence and open/resolved lifecycle metadata. Persistent namespaces are `operation_exceptions` and `operation_exception_by_entry`. These records are operational evidence and are excluded from ordinary pilot state retention purges.
+
+
+## P2-06 Learning Facts and Provenance Authority
+
+`LearningFact` is a durable evidence-backed assertion keyed by `fact_id` plus idempotent `entry_id`. It stores subject type (`customer`, `supplier`, `route`, `operation`), durable subject identity/label, bounded `fact_key`, scalar or string-list value, optional unit, confidence, primary source type, one or more `LearningEvidence` items, review lifecycle, optional explicit supersession links and authenticated creation/review evidence.
+
+`LearningEvidence` stores source type, bounded source reference, timezone-aware observation time, bounded evidence summary and optional dataset/fingerprint metadata. Raw inbound message bodies are not required for fact provenance.
+
+Persistent namespaces are `learning_facts` and `learning_fact_by_entry`. Ordinary retention does not purge them. Runtime projections must include only `confirmed` facts; `proposed`, `rejected` and `superseded` records remain available for review/history but do not carry runtime authority.
