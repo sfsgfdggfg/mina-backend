@@ -107,10 +107,18 @@ def supplier_reminder_plan(
                 "action_key": action_key,
                 "due_at": due_at,
                 "reason": (
-                    "no_response_after_automatic_reminder"
+                    "no_response_after_reminder"
                     if action_type == "supplier_no_response_reminder"
                     else "no_commercial_response_after_acknowledged_reminder"
                 ),
+            }
+        if action.status == "cancelled" and action.failure_code == "operator_rejected":
+            return {
+                "state": "approval_rejected_no_send",
+                "action_type": action_type,
+                "action_key": action_key,
+                "due_at": due_at,
+                "automation_status": action.status,
             }
         return {
             "state": (
@@ -225,7 +233,14 @@ def customer_deadline_plan(
     action = action_repository.get(action_key)
     if action is not None:
         if action.status == "sent":
-            return {"state": "customer_update_sent", "due_at": due_at}
+            return {"state": "customer_update_sent", "action_key": action_key, "due_at": due_at}
+        if action.status == "cancelled" and action.failure_code == "operator_rejected":
+            return {
+                "state": "approval_rejected_no_send",
+                "action_key": action_key,
+                "due_at": due_at,
+                "automation_status": action.status,
+            }
         return {
             "state": (
                 "automation_cancelled_manual_attention"
@@ -259,10 +274,9 @@ def customer_deadline_plan(
     }[policy.effective_mode]
     result = {
         "state": state,
+        "action_key": action_key,
         "due_at": due_at,
         "deadline_at": deadline_utc,
         "automation_policy": policy.model_dump(),
     }
-    if policy.effective_mode == "automatic":
-        result["action_key"] = action_key
     return result

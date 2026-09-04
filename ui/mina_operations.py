@@ -52,6 +52,14 @@ EVENT_LABELS = {
     "quote_revised": "Teklif revize edildi",
     "automation_override_changed": "İş otomasyon ayarı değiştirildi",
     "supplier_reminder_sent_early": "Supplier reminder erken gönderildi",
+    "supplier_reminder_approved_sent": "Supplier reminder onaylandı ve gönderildi",
+    "supplier_reminder_rejected": "Supplier reminder reddedildi",
+    "supplier_reminder_approval_cancelled": "Supplier reminder onayı durum değişikliği nedeniyle iptal edildi",
+    "supplier_reminder_approved_delivery_failed": "Onaylı supplier reminder gönderilemedi",
+    "customer_deadline_update_approved_sent": "Müşteri deadline bilgilendirmesi onaylandı ve gönderildi",
+    "customer_deadline_update_rejected": "Müşteri deadline bilgilendirmesi reddedildi",
+    "customer_deadline_update_approval_cancelled": "Müşteri bilgilendirme onayı durum değişikliği nedeniyle iptal edildi",
+    "customer_deadline_update_approved_delivery_failed": "Onaylı müşteri bilgilendirmesi gönderilemedi",
     "stage_changed": "İş aşaması değiştirildi",
     "operation_execution_updated": "Operasyon bilgisi güncellendi",
     "operation_exception_created": "Operasyon istisnası açıldı",
@@ -261,7 +269,7 @@ def render_mina_job_detail(api_base_url: str, job_id: str) -> None:
         ["Genel", "Tedarikçiler", "Operasyon", "Teklif", "Zaman Çizelgesi", "Kontroller"]
     )
     with overview_tab:
-        _render_job_overview(detail)
+        _render_job_overview(api_base_url, job_id, detail)
     with supplier_tab:
         _render_suppliers(api_base_url, job_id, detail)
     with operation_tab:
@@ -274,7 +282,7 @@ def render_mina_job_detail(api_base_url: str, job_id: str) -> None:
         _render_job_controls(api_base_url, job_id, detail)
 
 
-def _render_job_overview(detail: dict[str, Any]) -> None:
+def _render_job_overview(api_base_url: str, job_id: str, detail: dict[str, Any]) -> None:
     job = detail.get("job") or {}
     shipment = job.get("shipment") or {}
     automation = detail.get("automation") or {}
@@ -321,7 +329,64 @@ def _render_job_overview(detail: dict[str, Any]) -> None:
             "Müşteri deadline aksiyonu: "
             f"{customer_plan.get('state')}"
         )
+    if customer_plan.get("state") == "approval_required_customer_update_due":
+        _render_customer_deadline_approval_controls(api_base_url, job_id)
 
+
+
+def _render_customer_deadline_approval_controls(
+    api_base_url: str, job_id: str
+) -> None:
+    if not api_base_url or not job_id:
+        return
+    state_key = f"customer_deadline_approval_preview_{job_id}"
+    if st.button("Müşteri Mesajını Önizle", key=f"preview_customer_approval_{job_id}"):
+        try:
+            st.session_state[state_key] = _get_json(
+                api_base_url,
+                f"/mina-jobs/{job_id}/customer-deadline-update/approval-preview",
+            )
+        except (requests.RequestException, RuntimeError) as exc:
+            st.warning(str(exc))
+    preview = st.session_state.get(state_key) or {}
+    if not preview.get("decision_required"):
+        return
+    st.markdown("**Onay bekleyen müşteri bilgilendirmesi**")
+    st.code(preview.get("subject") or "", language=None)
+    st.text_area(
+        "Müşteri mail içeriği", value=preview.get("body_text") or "",
+        height=150, disabled=True, key=f"customer_approval_body_{job_id}",
+    )
+    reject_reason = st.text_input(
+        "Reddetme nedeni", key=f"customer_approval_reject_reason_{job_id}",
+        help="Reddetme halinde zorunludur.",
+    )
+    approve_col, reject_col = st.columns(2)
+    if approve_col.button("Onayla ve Gönder", key=f"approve_customer_update_{job_id}", type="primary"):
+        try:
+            _post_json(
+                api_base_url, f"/mina-jobs/{job_id}/customer-deadline-update/approval",
+                {"decision": "approve"},
+            )
+            st.session_state.pop(state_key, None)
+            st.success("Müşteri bilgilendirmesi onaylandı ve gönderildi.")
+            st.rerun()
+        except (requests.RequestException, RuntimeError) as exc:
+            st.error(str(exc))
+    if reject_col.button("Reddet", key=f"reject_customer_update_{job_id}"):
+        if not reject_reason.strip():
+            st.warning("Reddetme nedeni zorunludur.")
+        else:
+            try:
+                _post_json(
+                    api_base_url, f"/mina-jobs/{job_id}/customer-deadline-update/approval",
+                    {"decision": "reject", "reason": reject_reason.strip()},
+                )
+                st.session_state.pop(state_key, None)
+                st.success("Müşteri bilgilendirmesi reddedildi; gönderim yapılmadı.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.error(str(exc))
 
 
 def _operation_now_iso() -> str:
@@ -810,6 +875,13 @@ def _render_supplier_reminder_controls(
     if state in {"human_contact_required", "automation_delivery_attention"}:
         st.info("Bu aşamada otomatik tekrar mail yerine insan takibi gerekiyor.")
         return
+    if state == "approval_rejected_no_send":
+        st.info("Bu reminder operatör tarafından reddedildi; gönderim yapılmadı.")
+        return
+
+    if state == "approval_required_supplier_reminder_due":
+        _render_supplier_reminder_approval(api_base_url, job_id, rfq_id)
+        return
 
     if st.button("Reminder Önizle", key=f"preview_reminder_{rfq_id}"):
         try:
@@ -828,22 +900,13 @@ def _render_supplier_reminder_controls(
     st.markdown("**Gönderilecek reminder**")
     st.code(preview.get("subject") or "", language=None)
     st.text_area(
-        "Mail içeriği",
-        value=preview.get("body_text") or "",
-        height=150,
-        disabled=True,
-        key=f"preview_body_{rfq_id}",
+        "Mail içeriği", value=preview.get("body_text") or "", height=150,
+        disabled=True, key=f"preview_body_{rfq_id}",
     )
     if preview.get("planned_due_at"):
-        st.caption(
-            f"Normal plan: {_format_time(preview.get('planned_due_at'))}"
-        )
+        st.caption(f"Normal plan: {_format_time(preview.get('planned_due_at'))}")
     if preview.get("send_now_allowed"):
-        if st.button(
-            "Reminder'ı Şimdi Gönder",
-            key=f"send_reminder_{rfq_id}",
-            type="primary",
-        ):
+        if st.button("Reminder'ı Şimdi Gönder", key=f"send_reminder_{rfq_id}", type="primary"):
             try:
                 _post_json(
                     api_base_url,
@@ -856,11 +919,64 @@ def _render_supplier_reminder_controls(
                 st.error(str(exc))
     else:
         next_open = preview.get("next_supplier_open_at")
-        st.warning(
-            "Supplier iletişim penceresi kapalı; MINAI şimdi gönderime izin vermiyor."
-        )
+        st.warning("Supplier iletişim penceresi kapalı; MINAI şimdi gönderime izin vermiyor.")
         if next_open:
             st.caption(f"Sonraki açılış: {_format_time(next_open)}")
+
+
+def _render_supplier_reminder_approval(
+    api_base_url: str, job_id: str, rfq_id: str
+) -> None:
+    state_key = f"supplier_reminder_approval_preview_{rfq_id}"
+    if st.button("Onay Mesajını Önizle", key=f"preview_supplier_approval_{rfq_id}"):
+        try:
+            st.session_state[state_key] = _get_json(
+                api_base_url,
+                f"/mina-jobs/{job_id}/supplier-rfqs/{rfq_id}/reminder-approval-preview",
+            )
+        except (requests.RequestException, RuntimeError) as exc:
+            st.warning(str(exc))
+    preview = st.session_state.get(state_key) or {}
+    if preview.get("rfq_id") != rfq_id or not preview.get("decision_required"):
+        return
+    st.markdown("**Onay bekleyen supplier reminder**")
+    st.code(preview.get("subject") or "", language=None)
+    st.text_area(
+        "Onay mail içeriği", value=preview.get("body_text") or "",
+        height=150, disabled=True, key=f"approval_body_{rfq_id}",
+    )
+    reject_reason = st.text_input(
+        "Reddetme nedeni", key=f"supplier_approval_reject_reason_{rfq_id}",
+        help="Reddetme halinde zorunludur.",
+    )
+    approve_col, reject_col = st.columns(2)
+    if approve_col.button("Onayla ve Gönder", key=f"approve_supplier_reminder_{rfq_id}", type="primary"):
+        try:
+            _post_json(
+                api_base_url,
+                f"/mina-jobs/{job_id}/supplier-rfqs/{rfq_id}/reminder-approval",
+                {"decision": "approve"},
+            )
+            st.session_state.pop(state_key, None)
+            st.success("Supplier reminder onaylandı ve gönderildi.")
+            st.rerun()
+        except (requests.RequestException, RuntimeError) as exc:
+            st.error(str(exc))
+    if reject_col.button("Reddet", key=f"reject_supplier_reminder_{rfq_id}"):
+        if not reject_reason.strip():
+            st.warning("Reddetme nedeni zorunludur.")
+        else:
+            try:
+                _post_json(
+                    api_base_url,
+                    f"/mina-jobs/{job_id}/supplier-rfqs/{rfq_id}/reminder-approval",
+                    {"decision": "reject", "reason": reject_reason.strip()},
+                )
+                st.session_state.pop(state_key, None)
+                st.success("Supplier reminder reddedildi; gönderim yapılmadı.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.error(str(exc))
 
 
 def _render_quote(detail: dict[str, Any]) -> None:

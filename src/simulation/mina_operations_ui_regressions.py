@@ -87,6 +87,16 @@ def evaluate_mina_operations_ui_regressions() -> dict:
         "supplier reminder preview and one-click early send are wired to controlled APIs",
     )
     check(
+        "Onay Mesajını Önizle" in ui_text
+        and "Onayla ve Gönder" in ui_text
+        and "Reddetme nedeni" in ui_text
+        and "/reminder-approval-preview" in ui_text
+        and "/reminder-approval" in ui_text
+        and "/customer-deadline-update/approval-preview" in ui_text
+        and "/customer-deadline-update/approval" in ui_text,
+        "approval-required supplier and customer actions expose explicit preview approve reject controls",
+    )
+    check(
         "Bu işte otomatik supplier reminder'larını kapat" in ui_text
         and "Bu işte otomatik müşteri deadline bilgilendirmesini kapat" in ui_text
         and "Onay Gerekli" in ui_text

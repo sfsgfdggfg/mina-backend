@@ -5,6 +5,9 @@ from typing import Any
 
 from src.core.automation_action import ScheduledAutomationAction
 from src.core.automation_action_repository import AutomationActionRepository
+from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
+from src.core.automation_policy_service import resolve_effective_automation_policy
+from src.core.master_data_repository import MasterDataRepository
 from src.core.automation_planning import (
     aware_utc,
     latest_supplier_response_status,
@@ -151,6 +154,8 @@ def send_supplier_reminder_now(
     action_repository: AutomationActionRepository,
     sender: OutboundMailSender | None,
     mina_code: str, rfq_id: str, actor: str,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = _now(now)
@@ -163,6 +168,18 @@ def send_supplier_reminder_now(
         mina_code=mina_code,
         rfq_id=rfq_id,
     )
+    effective_policy = resolve_effective_automation_policy(
+        action="supplier_reminder",
+        legacy_dispatch_enabled=workflow.dispatch_policy.automatic_supplier_reminders_enabled,
+        mina_job_repository=mina_job_repository,
+        job_id=job.job_id,
+        master_data_repository=master_data_repository,
+        agency_policy_repository=agency_policy_repository,
+    )
+    if effective_policy.effective_mode == "approval_required":
+        raise MinaJobActionError(
+            "Supplier reminder requires explicit approval and cannot use reminder-now."
+        )
     try:
         if not is_supplier_business_time(current):
             resume_at = next_supplier_business_open(current)
@@ -207,9 +224,18 @@ def send_supplier_reminder_now(
             draft=current_draft,
             workflow=current_workflow,
         )
+        current_policy = resolve_effective_automation_policy(
+            action="supplier_reminder",
+            legacy_dispatch_enabled=current_workflow.dispatch_policy.automatic_supplier_reminders_enabled,
+            mina_job_repository=mina_job_repository,
+            job_id=current_job.job_id,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
+        )
         valid_to_send = (
             is_supplier_business_time(current)
             and current_context["action_key"] == action.action_key
+            and current_policy.effective_mode != "approval_required"
         )
     except (MinaJobActionError, SupplierHolidayCalendarCoverageError):
         valid_to_send = False
