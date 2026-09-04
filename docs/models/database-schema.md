@@ -819,3 +819,13 @@ Persistent namespaces: `customer_master_profiles`, `customer_master_by_entry`, `
 `LearningEvidence` stores source type, bounded source reference, timezone-aware observation time, bounded evidence summary and optional dataset/fingerprint metadata. Raw inbound message bodies are not required for fact provenance.
 
 Persistent namespaces are `learning_facts` and `learning_fact_by_entry`. Ordinary retention does not purge them. Runtime projections must include only `confirmed` facts; `proposed`, `rejected` and `superseded` records remain available for review/history but do not carry runtime authority.
+
+## P2-07 Reporting Read Models
+
+P2-07 adds no new persistent reporting namespace. `build_reporting_read_model()` computes a read-only projection from durable MINA jobs/timeline, QuoteCase, supplier RFQ and price evidence, operation execution/exceptions, customer/supplier master data and LearningFact repositories.
+
+The read model exposes `period`, `overview`, `sales`, `operations`, `customers`, `suppliers`, `routes`, `financial`, `minai`, `exceptions`, `data_quality` and job-level reporting rows. Financial aggregates are stored in the response as `by_currency` buckets; currencies are intentionally not normalized or summed. Missing financial evidence is represented through coverage counters rather than zero-valued synthetic revenue/cost.
+
+No report mutation is authoritative. Report APIs are read-only projections and may be rebuilt at any time from the durable source repositories.
+
+Reporting group projections may use P2-03 customer alias identity and country normalization for deterministic grouping. MINAI learning activity carries an explicit learning-fact-created-at period basis, while outbound automation-share fields declare the exact send-evidence scope they cover.

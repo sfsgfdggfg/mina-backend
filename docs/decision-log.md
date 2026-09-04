@@ -6434,3 +6434,18 @@ P2-06 introduces durable `LearningFact` records for customer, supplier, route an
 Learning history is append-oriented. A changed fact must not silently overwrite a previously confirmed value. A replacement is created as a new proposed fact with an explicit `supersedes_fact_id`; confirmation atomically supersedes the prior confirmed fact and makes the replacement the single active runtime authority for that subject/key. Rejected and superseded facts remain durable historical evidence.
 
 P2-06 establishes fact authority, evidence, review lifecycle, APIs and UI review. It does not yet authorize autonomous extraction from historical inboxes, automatic master-data mutation, or automatic use of proposed facts in pricing, supplier selection or external communication. Those require separate evidence-backed integrations.
+
+## DEC-174 — Reporting Is a Read Model Over Durable Freight OS Authority, Not a Second Source of Truth
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-07 introduces reporting read models for general overview, sales personnel, operations personnel, customers, suppliers, routes/countries, financial performance, MINAI performance, exceptions/delays and data-quality coverage. These reports are computed from existing durable authorities such as MINA jobs/timeline, QuoteCase, supplier RFQ/price evidence, operation execution/exceptions, master data and reviewed LearningFact records. P2-07 does not introduce a second mutable reporting database or allow the UI to recompute business authority independently.
+
+The default period filter is a deterministic cohort based on the MINA job `opened_at` date in `Europe/Istanbul`, inclusive of the requested start/end dates. Historical milestone metrics such as quote sent, accepted and operation opened must use durable timeline evidence so later lifecycle stages do not erase earlier funnel history. Current workload metrics may use the current durable stage.
+
+Financial reporting is evidence-covered rather than gap-filled. Customer value, supplier cost and gross profit may be reported only when a durable CustomerQuote provides the required evidence. Missing price evidence remains explicitly uncovered and must never be coerced to zero. Monetary totals are grouped by currency and must not be summed across currencies without a future explicit FX authority.
+
+P2-07 exposes read-only `/reports` and `/reports/{section}` API surfaces plus a development `Raporlar` workspace. The UI consumes backend-derived KPIs and must not independently calculate profit, conversion or SLA authority.
+
+P2-07 MINAI learning metrics state their own activity basis as `learning_fact_created_at_istanbul` when date filters are supplied; they are not silently presented as job-cohort events. The outbound automation-share metric is explicitly limited to tracked provider/send evidence for initial supplier RFQs, supplier follow-ups and customer quote sends. Other automated action types must not be implied by that percentage until equivalent durable provider evidence is included.

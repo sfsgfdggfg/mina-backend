@@ -11,6 +11,7 @@ sys.path.append(str(PROJECT_ROOT))
 from src.simulation.ai_email_test_cases import AI_EMAIL_TEST_CASES
 from src.core.data_health_labels import get_data_health_check_label
 from ui.mina_operations import render_mina_operations
+from ui.reporting import render_reporting
 
 
 API_BASE_URL = "http://127.0.0.1:8000"
@@ -1974,12 +1975,14 @@ st.title("MINAI Freight OS")
 st.caption("Freight Operations Workspace")
 page = st.sidebar.radio(
     "Çalışma Alanı",
-    ["MINA İşleri", "Yeni Talep", "Veri & Rehber"],
+    ["MINA İşleri", "Yeni Talep", "Raporlar", "Veri & Rehber"],
     index=0,
 )
 if page == "MINA İşleri":
     render_mina_operations(API_BASE_URL)
 elif page == "Yeni Talep":
     render_new_inquiry_page()
+elif page == "Raporlar":
+    render_reporting(API_BASE_URL)
 else:
     render_data_management_page()

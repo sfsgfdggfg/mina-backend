@@ -28,7 +28,7 @@ def evaluate_mina_operations_ui_regressions() -> dict:
 
     check(
         'from ui.mina_operations import render_mina_operations' in app_text
-        and '["MINA İşleri", "Yeni Talep", "Veri & Rehber"]' in app_text
+        and '["MINA İşleri", "Yeni Talep", "Raporlar", "Veri & Rehber"]' in app_text
         and "index=0" in app_text,
         "MINA jobs are the default development workspace",
     )

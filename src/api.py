@@ -203,6 +203,11 @@ from src.core.learning_fact_service import (
     list_learning_facts,
     reject_learning_fact,
 )
+from src.core.reporting_read_model import (
+    REPORTING_SECTIONS,
+    build_reporting_read_model,
+    reporting_section,
+)
 from src.core.master_data import (
     MasterContact,
     SupplierGeographyCapability,
@@ -1423,6 +1428,47 @@ def health_check():
 @app.get("/runtime/release")
 def runtime_release():
     return runtime_release_payload()
+
+
+@app.get("/reports")
+def get_reporting_read_model(
+    start_date: Optional[date] = None, end_date: Optional[date] = None,
+):
+    try:
+        return build_reporting_read_model(
+            mina_repository=mina_job_repository,
+            quote_case_repository=quote_case_repository,
+            supplier_rfq_repository=supplier_rfq_repository,
+            supplier_price_repository=supplier_price_repository,
+            operation_execution_repository=operation_execution_repository,
+            master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository,
+            start_date=start_date, end_date=end_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/reports/{section}")
+def get_reporting_section(
+    section: str, start_date: Optional[date] = None, end_date: Optional[date] = None,
+):
+    if section not in REPORTING_SECTIONS:
+        raise HTTPException(status_code=404, detail=f"Unknown reporting section: {section}")
+    try:
+        report = build_reporting_read_model(
+            mina_repository=mina_job_repository,
+            quote_case_repository=quote_case_repository,
+            supplier_rfq_repository=supplier_rfq_repository,
+            supplier_price_repository=supplier_price_repository,
+            operation_execution_repository=operation_execution_repository,
+            master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository,
+            start_date=start_date, end_date=end_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return reporting_section(report, section)
 
 
 @app.get("/learning-facts")

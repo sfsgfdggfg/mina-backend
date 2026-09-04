@@ -3689,3 +3689,15 @@ MINAI may propose a learning fact from manual input, Excel import, email evidenc
 `proposed` facts are suggestions and must not alter runtime decisions. `confirmed` facts are the only learning facts eligible for runtime use. `rejected` facts cannot later be revived as confirmed; a new proposal is required. `superseded` facts remain immutable history and are excluded from runtime authority. At most one confirmed fact may own a given subject + fact key. A changed value requires explicit replacement/supersession rather than in-place mutation.
 
 Customer and supplier facts must reference existing durable master-data identities. Operation facts must reference an existing MINA job when a job repository is available. Route facts may use a deterministic route identity without requiring a separate route-master table. Learning records and their idempotency indexes survive ordinary pilot retention purges.
+
+## RULE-189 — KPI Calculations Must Preserve Evidence Coverage, Currency Boundaries, and Historical Milestones
+
+Reporting must distinguish measurable evidence from missing data. A missing customer price, supplier cost, owner, promised delivery date or milestone timestamp is a coverage gap; it must not become a numeric zero or an invented successful/failed outcome. Coverage counts and percentages should be visible alongside the KPI when incomplete evidence could materially affect interpretation.
+
+Quote conversion for price requests must be derived from durable quote-sent and accepted history, not only the job's current stage. Approved jobs must not be counted as customer quotes. Operations completion, exception impact and current workload must retain their existing lifecycle/exception semantics. Staff reporting is descriptive evidence for workload, SLA, intervention and outcome; speed alone must not be treated as a quality ranking.
+
+Financial totals must remain separated by currency. EUR, USD, GBP or other amounts must never be added into one total unless a future explicit FX source, timestamp and conversion policy are adopted. Jobs lacking a durable CustomerQuote remain financially uncovered. The reporting UI must display backend read-model values rather than reimplementing KPI formulas client-side.
+
+The initial P2-07 period filter is a MINA-job-opened cohort in `Europe/Istanbul`. A future activity-period or accounting-period report may use a different basis only if the report states that basis explicitly and preserves the underlying event evidence.
+
+Customer reporting should resolve deterministic P2-03 customer-name/alias identities where available, and route reporting should use the bounded P2-03 country alias normalization so equivalent country labels do not fragment a route. This is normalization of already authorized master-data semantics, not geographic inference. Reporting should expose master-data coverage and supplier-selection provenance gaps when those gaps can affect grouped KPI interpretation.
