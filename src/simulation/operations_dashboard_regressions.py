@@ -118,9 +118,16 @@ def evaluate_operations_dashboard_regressions() -> dict:
     web_js = (ROOT / "ui" / "web_shell" / "app.js").read_text()
     check('/app/dashboard' in web_shell and 'page="dashboard"' in web_shell,
           "authenticated shell routes login and root navigation to the operations dashboard")
+    dashboard_block = web_js.split('function renderDashboard', 1)[1].split('function renderJobs', 1)[0]
     check('loadDashboard(5)' in web_js and '/operations-dashboard?days=${days}' in web_js
-          and 'calendar-entry' in web_js and 'innerHTML' not in web_js.split('function renderDashboard', 1)[1].split('function renderJobs', 1)[0],
+          and 'calendar-entry' in web_js and 'innerHTML' not in dashboard_block,
           "dashboard UI consumes backend authority and renders operational text without dynamic HTML")
+    web_css = (ROOT / "ui" / "web_shell" / "app.css").read_text()
+    check('formatDashboardDate' in web_js and 'Operasyon Merkezi' in web_shell
+          and dashboard_block.index('dashboard-attention') < dashboard_block.index('dashboard-toolbar')
+          and 'if (unscheduled.length)' in dashboard_block
+          and 'grid-template-columns: repeat(4, minmax(0, 1fr))' in web_css,
+          "dashboard first-view polish keeps attention above calendar and avoids empty vertical waste")
 
     return {"name": "Operations home dashboard and calendar", "passed": not failures, "failures": failures}
 
