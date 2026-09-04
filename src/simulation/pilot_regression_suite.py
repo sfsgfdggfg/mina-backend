@@ -109,6 +109,9 @@ from src.simulation.operator_work_queue_web_regressions import (
 from src.simulation.operator_performance_reporting_regressions import (
     evaluate_operator_performance_reporting_regressions,
 )
+from src.simulation.ui_completion_regressions import (
+    evaluate_ui_completion_regressions,
+)
 from src.simulation.branding_settings_regressions import (
     evaluate_branding_settings_regressions,
 )
@@ -366,6 +369,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Operator performance and first-look reporting",
         evaluate_operator_performance_reporting_regressions,
+    ),
+    Suite(
+        "Pilot browser UI completion",
+        evaluate_ui_completion_regressions,
     ),
     Suite(
         "Agency branding settings",
