@@ -70,8 +70,8 @@ def _shell_html(*, page: str, operator_name: str, csrf_token: str, job_id: str =
 <meta name="csrf-token" content="{html.escape(csrf_token)}"><title>MINAI</title>
 <link rel="stylesheet" href="/app/assets/app.css"></head>
 <body data-page="{html.escape(page)}" data-job-id="{safe_job_id}"><div class="shell">
-<aside><a class="brand" href="/app/jobs"><span class="brand-mark small">M</span><strong>MINAI</strong></a>
-<nav><a href="/app/jobs">MINA İşleri</a><a href="/app/reports">Raporlar</a></nav>
+<aside><a class="brand" href="/app/dashboard"><span class="brand-mark small">M</span><strong>MINAI</strong></a>
+<nav><a href="/app/dashboard">Ana Ekran</a><a href="/app/jobs">MINA İşleri</a><a href="/app/reports">Raporlar</a></nav>
 <div class="sidebar-footer"><span>{operator}</span><form method="post" action="/app/logout">
 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}"><button class="link-button" type="submit">Çıkış</button></form></div></aside>
 <main><header><div><p class="eyebrow">Freight Operations</p><h1 id="page-title">MINAI</h1></div>
@@ -142,7 +142,7 @@ async def web_login_submit(request: Request):
         return response
     login_throttle.clear(client_key)
     session, cookie_value = web_session_store.create(user)
-    response = RedirectResponse("/app/jobs", status_code=303)
+    response = RedirectResponse("/app/dashboard", status_code=303)
     response.set_cookie(
         SESSION_COOKIE_NAME, cookie_value, httponly=True, secure=_cookie_secure(),
         samesite="strict", max_age=int((session.expires_at - session.created_at).total_seconds()),
@@ -179,9 +179,14 @@ def _shell_response(request: Request, *, page: str, job_id: str = ""):
 @router.get("/app")
 async def web_root(request: Request):
     return RedirectResponse(
-        "/app/jobs" if _session_from_request(request) is not None else "/app/login",
+        "/app/dashboard" if _session_from_request(request) is not None else "/app/login",
         status_code=303,
     )
+
+
+@router.get("/app/dashboard")
+async def web_dashboard(request: Request):
+    return _shell_response(request, page="dashboard")
 
 
 @router.get("/app/jobs")

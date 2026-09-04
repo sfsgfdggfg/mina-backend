@@ -3721,3 +3721,11 @@ Pilot web routes require HTTPS, including loopback. Authenticated cookies must b
 Browser-session API mutations require CSRF evidence before Pydantic request parsing or business execution. Browser sessions may not bypass the controlled route allowlist, supplier/customer policy checks, approval gates, lifecycle guards or provider revalidation. If an `Authorization` header is present it is evaluated as bearer authentication and an invalid bearer must not fall back to an otherwise valid browser cookie.
 
 Web UI code must render API-controlled text as text rather than executable HTML. No pilot bearer token, password, session secret or protected commercial credential may be stored in localStorage, sessionStorage, HTML source or JavaScript assets.
+
+## RULE-192 — Home Calendar Dates Must Come From Structured Operational Evidence
+
+The pilot home calendar may show only structured date or timestamp evidence already carried by the MINA shipment or operation-execution snapshot. Supported initial milestones are customer quote deadline, cargo-ready date, required-delivery date, loading appointment, current ETA and delivery appointment. The browser must not parse free-text dates or infer missing logistics milestones.
+
+The default calendar window is five consecutive Europe/Istanbul dates and the operator may reduce it to three days. Calendar presentation does not modify supplier business-hour rules, customer deadline authority, lifecycle state or operation evidence.
+
+Open actual-delay and delivery-risk exceptions must remain visible as explicit attention even when the relevant date falls outside the current calendar window. An active job with no structured scheduling evidence must appear as unscheduled rather than disappear from the home screen. Closed jobs must not inflate active-workload or attention counts.

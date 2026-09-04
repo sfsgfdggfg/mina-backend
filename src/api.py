@@ -223,6 +223,7 @@ from src.core.reporting_read_model import (
     build_reporting_read_model,
     reporting_section,
 )
+from src.core.operations_dashboard import build_operations_dashboard
 from src.core.master_data import (
     MasterContact,
     SupplierGeographyCapability,
@@ -1479,6 +1480,20 @@ def health_check():
 @app.get("/runtime/release")
 def runtime_release():
     return runtime_release_payload()
+
+
+@app.get("/operations-dashboard")
+def get_operations_dashboard(
+    anchor_date: Optional[date] = None, days: int = 5,
+):
+    try:
+        return build_operations_dashboard(
+            mina_repository=mina_job_repository,
+            operation_repository=operation_execution_repository,
+            anchor_date=anchor_date, days=days,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/reports")

@@ -6475,3 +6475,14 @@ Web-shell passwords are configured outside the repository as bounded scrypt hash
 A browser session may access only API routes already admitted by the controlled pilot allowlist. Unsafe browser-session methods require a matching CSRF header before request-model or business processing. An explicit `Authorization` header takes precedence over browser-session authentication so existing bearer clients remain deterministic and do not silently fall back to cookies after a bad token.
 
 The first P2-09 shell exposes MINA Jobs, bounded job detail, P2-08 supplier/customer approval execution and reporting. It remains a presentation shell over backend read models and mutation APIs; business rules, stage authority, automation authority and send safety stay server-side. Streamlit remains available as a development/debug workspace and is not the pilot browser authority.
+
+## DEC-177 — The Pilot Home Screen Is a Backend-Authoritative Three-to-Five-Day Operations Calendar
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-10 changes the authenticated pilot shell's default landing page from the flat MINA job list to an operations dashboard. The dashboard presents a three-to-five-day Europe/Istanbul calendar built by the backend from durable MINA and operation-execution evidence. The first calendar evidence types are customer quote deadline, exact cargo-ready date, exact required-delivery date, loading appointment, current ETA and delivery appointment.
+
+Date authority is fail-closed. Exact ISO dates and timezone-aware timestamps may be placed on the calendar; vague strings such as `next Friday` remain visible as unscheduled work rather than being interpreted by the browser or silently guessed by the backend. Closed MINA jobs are excluded from active workload counts.
+
+Open `delivery_risk` and `actual_delay` operation exceptions remain separate authority from the calendar and are surfaced in a dedicated attention area. Overdue customer quote deadlines and overdue required-delivery dates may also create attention without fabricating a new lifecycle state. The existing MINA Jobs list remains available for search/detail navigation and the reporting workspace remains separate.

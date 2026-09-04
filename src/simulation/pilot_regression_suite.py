@@ -29,6 +29,7 @@ from src.simulation.master_data_geography_regressions import evaluate_master_dat
 from src.simulation.automation_policy_hierarchy_regressions import evaluate_automation_policy_hierarchy_regressions
 from src.simulation.approval_required_execution_regressions import evaluate_approval_required_execution_regressions
 from src.simulation.pilot_web_shell_regressions import evaluate_pilot_web_shell_regressions
+from src.simulation.operations_dashboard_regressions import evaluate_operations_dashboard_regressions
 from src.simulation.operation_execution_exception_regressions import evaluate_operation_execution_exception_regressions
 from src.simulation.learning_fact_provenance_regressions import evaluate_learning_fact_provenance_regressions
 from src.simulation.reporting_read_model_regressions import evaluate_reporting_read_model_regressions
@@ -235,6 +236,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Automation policy hierarchy", evaluate_automation_policy_hierarchy_regressions),
     Suite("Approval-required outbound execution", evaluate_approval_required_execution_regressions),
     Suite("Pilot-approved web operator shell", evaluate_pilot_web_shell_regressions),
+    Suite("Operations home dashboard and calendar", evaluate_operations_dashboard_regressions),
     Suite("Operation execution and exception layer", evaluate_operation_execution_exception_regressions),
     Suite("Learning fact and provenance authority", evaluate_learning_fact_provenance_regressions),
     Suite("Reporting read models", evaluate_reporting_read_model_regressions),
