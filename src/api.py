@@ -100,6 +100,13 @@ from src.core.mina_job_actions import (
     preview_supplier_reminder_now,
     send_supplier_reminder_now,
 )
+from src.core.automation_approval_service import (
+    AutomationApprovalError,
+    decide_customer_deadline_update_approval,
+    decide_supplier_reminder_approval,
+    preview_customer_deadline_update_approval,
+    preview_supplier_reminder_approval,
+)
 from src.core.mina_job_service import (
     MinaJobNotFoundError,
     MinaJobTransitionError,
@@ -482,6 +489,11 @@ class MinaJobAutomationOverrideRequest(BaseModel):
     disable_customer_deadline_updates: bool = False
     supplier_reminder_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
     customer_deadline_update_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+
+
+class AutomationApprovalDecisionRequest(BaseModel):
+    decision: Literal["approve", "reject"]
+    reason: Optional[str] = Field(default=None, max_length=800)
 
 
 class AgencyAutomationPolicyRequest(BaseModel):
@@ -1925,6 +1937,24 @@ def send_mina_job_supplier_reminder_now(
     job = mina_job_repository.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    draft = supplier_rfq_repository.get_draft(rfq_id)
+    workflow = (
+        None if draft is None else supplier_rfq_repository.get_workflow(draft.workflow_id)
+    )
+    if workflow is not None and workflow.mina_job_id == job.job_id:
+        effective = resolve_effective_automation_policy(
+            action="supplier_reminder",
+            legacy_dispatch_enabled=workflow.dispatch_policy.automatic_supplier_reminders_enabled,
+            mina_job_repository=mina_job_repository,
+            job_id=job.job_id,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_automation_policy_repository,
+        )
+        if effective.effective_mode == "approval_required":
+            raise HTTPException(
+                status_code=409,
+                detail="Supplier reminder requires approval; use the approval decision endpoint.",
+            )
     try:
         result = send_supplier_reminder_now(
             mina_job_repository=mina_job_repository,
@@ -1934,10 +1964,93 @@ def send_mina_job_supplier_reminder_now(
             mina_code=job.mina_code,
             rfq_id=rfq_id,
             actor=_authenticated_operator(http_request),
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_automation_policy_repository,
         )
     except MinaJobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except MinaJobActionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return serialize_result(result)
+
+
+@app.get("/mina-jobs/{job_id}/supplier-rfqs/{rfq_id}/reminder-approval-preview")
+def preview_mina_job_supplier_reminder_approval(job_id: str, rfq_id: str):
+    try:
+        return preview_supplier_reminder_approval(
+            mina_job_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            action_repository=automation_action_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_automation_policy_repository,
+            job_id=job_id,
+            rfq_id=rfq_id,
+        )
+    except AutomationApprovalError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/supplier-rfqs/{rfq_id}/reminder-approval")
+def decide_mina_job_supplier_reminder_approval(
+    job_id: str, rfq_id: str, request: AutomationApprovalDecisionRequest,
+    http_request: Request,
+):
+    try:
+        result = decide_supplier_reminder_approval(
+            mina_job_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            action_repository=automation_action_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_automation_policy_repository,
+            sender=outbound_mail_sender,
+            job_id=job_id,
+            rfq_id=rfq_id,
+            decision=request.decision,
+            actor=_authenticated_operator(http_request),
+            reason=request.reason,
+        )
+    except AutomationApprovalError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return serialize_result(result)
+
+
+@app.get("/mina-jobs/{job_id}/customer-deadline-update/approval-preview")
+def preview_mina_job_customer_deadline_approval(job_id: str):
+    try:
+        return preview_customer_deadline_update_approval(
+            mina_job_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            action_repository=automation_action_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_automation_policy_repository,
+            job_id=job_id,
+        )
+    except AutomationApprovalError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/customer-deadline-update/approval")
+def decide_mina_job_customer_deadline_approval(
+    job_id: str, request: AutomationApprovalDecisionRequest, http_request: Request,
+):
+    try:
+        result = decide_customer_deadline_update_approval(
+            mina_job_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            action_repository=automation_action_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_automation_policy_repository,
+            sender=outbound_mail_sender,
+            job_id=job_id,
+            decision=request.decision,
+            actor=_authenticated_operator(http_request),
+            reason=request.reason,
+        )
+    except AutomationApprovalError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

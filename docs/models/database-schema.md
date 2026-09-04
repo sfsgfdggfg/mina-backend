@@ -829,3 +829,11 @@ The read model exposes `period`, `overview`, `sales`, `operations`, `customers`,
 No report mutation is authoritative. Report APIs are read-only projections and may be rebuilt at any time from the durable source repositories.
 
 Reporting group projections may use P2-03 customer alias identity and country normalization for deterministic grouping. MINAI learning activity carries an explicit learning-fact-created-at period basis, while outbound automation-share fields declare the exact send-evidence scope they cover.
+
+## P2-08 Approval-Required Outbound Execution
+
+P2-08 adds no new persistent namespace. Approval-required supplier reminders and customer deadline updates reuse `scheduled_automation_actions` and the existing deterministic action key so scheduled, operator-early and operator-approved execution cannot independently deliver the same logical action.
+
+`ScheduledAutomationAction.trigger_mode` now also supports `operator_approved`. Operator-approved records require authenticated `triggered_by_operator` evidence. A successful approval transitions the action through `reserved` to `sent`; a provider failure becomes `failed`; a stale pre-send state becomes `cancelled` with `state_changed_before_approved_send`.
+
+An explicit rejection is stored as a terminal `cancelled` action with `failure_code=operator_rejected`, authenticated operator identity, decision time and a bounded reason in the MINA job timeline. Rendered message bodies are not persisted as approval evidence. Read-only preview creates no action record.

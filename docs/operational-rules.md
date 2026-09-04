@@ -3701,3 +3701,13 @@ Financial totals must remain separated by currency. EUR, USD, GBP or other amoun
 The initial P2-07 period filter is a MINA-job-opened cohort in `Europe/Istanbul`. A future activity-period or accounting-period report may use a different basis only if the report states that basis explicitly and preserves the underlying event evidence.
 
 Customer reporting should resolve deterministic P2-03 customer-name/alias identities where available, and route reporting should use the bounded P2-03 country alias normalization so equivalent country labels do not fragment a route. This is normalization of already authorized master-data semantics, not geographic inference. Reporting should expose master-data coverage and supplier-selection provenance gaps when those gaps can affect grouped KPI interpretation.
+
+## RULE-190 — Approval-Required Outbound Work Must Be Previewable, Explicitly Decided, and Revalidated Before Delivery
+
+When the effective automation policy for a supplier reminder or customer deadline update is `approval_required`, the automatic scheduler must not send. The operator may first request a current preview, but preview must remain read-only and must not reserve the durable action key, persist the rendered body as decision evidence or create provider activity.
+
+Approve/reject decisions must use the authenticated operator identity. Approval must atomically reserve the same durable action key that protects duplicate delivery, record `operator_approved` trigger evidence, and re-evaluate current workflow state and effective policy immediately before provider delivery. A supplier response, usable price, policy change, closed job or other state change that invalidates the action must cancel the reserved send rather than deliver stale mail.
+
+Rejection requires a bounded non-empty reason and must record durable `operator_rejected` no-send evidence. That consumed action must suppress immediate re-creation of the same approval request. A failed provider delivery after approval is a durable failure requiring human attention; it must not be automatically retried.
+
+The legacy supplier `reminder-now` path must reject execution when the current effective supplier-reminder mode is `approval_required`. UI buttons never grant authority themselves; they call the controlled API, and all backend business-calendar, policy, recipient, stale-state, idempotency and workflow guards remain authoritative.

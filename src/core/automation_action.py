@@ -26,7 +26,7 @@ class ScheduledAutomationAction(BaseModel):
     provider_name: Optional[str] = None
     provider_message_id: Optional[str] = None
     failure_code: Optional[str] = None
-    trigger_mode: Literal["scheduled", "operator_early"] = "scheduled"
+    trigger_mode: Literal["scheduled", "operator_early", "operator_approved"] = "scheduled"
     triggered_by_operator: Optional[str] = None
     source: str = "scheduled_outbound_automation"
 
@@ -39,8 +39,8 @@ class ScheduledAutomationAction(BaseModel):
 
     @model_validator(mode="after")
     def validate_status_evidence(self):
-        if self.trigger_mode == "operator_early" and not self.triggered_by_operator:
-            raise ValueError("Operator-early automation requires operator identity.")
+        if self.trigger_mode in {"operator_early", "operator_approved"} and not self.triggered_by_operator:
+            raise ValueError("Operator-triggered automation requires operator identity.")
         if self.trigger_mode == "scheduled" and self.triggered_by_operator is not None:
             raise ValueError("Scheduled automation must not contain operator identity.")
         if self.status == "reserved":

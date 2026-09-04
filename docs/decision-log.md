@@ -6449,3 +6449,16 @@ Financial reporting is evidence-covered rather than gap-filled. Customer value, 
 P2-07 exposes read-only `/reports` and `/reports/{section}` API surfaces plus a development `Raporlar` workspace. The UI consumes backend-derived KPIs and must not independently calculate profit, conversion or SLA authority.
 
 P2-07 MINAI learning metrics state their own activity basis as `learning_fact_created_at_istanbul` when date filters are supplied; they are not silently presented as job-cohort events. The outbound automation-share metric is explicitly limited to tracked provider/send evidence for initial supplier RFQs, supplier follow-ups and customer quote sends. Other automated action types must not be implied by that percentage until equivalent durable provider evidence is included.
+
+## DEC-175 — Approval-Required Outbound Actions Need Explicit Operator Decision and Fresh Pre-Send Authority
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-08 turns the P2-04 `approval_required` policy state into an executable human-approval boundary for supplier reminders and proactive customer quote-deadline updates. Preview is read-only: it renders the message from current authoritative state but does not reserve an action, persist message content or call a provider.
+
+Approval and rejection require the authenticated operator identity. Approval reserves the same durable automation action key used by the scheduler, marks the trigger as `operator_approved`, and then immediately re-evaluates the current workflow, recipient-relevant state and effective automation policy before any provider call. A prior preview or click is never sufficient authority if the underlying state has changed.
+
+Rejection records durable no-send evidence by consuming the action key as a cancelled action with `operator_rejected`; the same due state must not immediately reappear as another approval request. Rejection requires a bounded reason. Approval-provider failure is durable attention and must not be blindly retried.
+
+The existing operator-early supplier reminder path remains available for manual/ordinary early-send use, but when the effective policy is `approval_required` the API must reject that path so it cannot bypass the explicit approval record. P2-08 does not promote Streamlit to a pilot-approved browser surface; the development UI only exposes the controlled preview/approve/reject API flow.
