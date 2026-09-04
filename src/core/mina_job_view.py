@@ -4,13 +4,14 @@ from datetime import datetime, timezone
 from typing import Any
 
 from src.core.automation_action_repository import AutomationActionRepository
+from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
+from src.core.automation_policy_service import resolve_effective_automation_policy
+from src.core.master_data_repository import MasterDataRepository
 from src.core.automation_planning import customer_deadline_plan, supplier_reminder_plan
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.mina_job_service import (
     allowed_next_stages,
-    customer_deadline_updates_enabled_for_job,
     get_mina_job_or_raise,
-    supplier_reminders_enabled_for_job,
 )
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
@@ -52,6 +53,8 @@ def build_mina_job_detail(
     quote_case_repository: QuoteCaseRepository,
     action_repository: AutomationActionRepository,
     price_repository: SupplierPriceRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
     job_id: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -74,6 +77,8 @@ def build_mina_job_detail(
                 draft=draft,
                 now=current,
                 mina_job_repository=repository,
+                master_data_repository=master_data_repository,
+                agency_policy_repository=agency_policy_repository,
             )
             latest_response = max(responses, key=lambda item: item.received_at) if responses else None
             latest_ack = max(acknowledgements, key=lambda item: item.acknowledged_at) if acknowledgements else None
@@ -100,23 +105,33 @@ def build_mina_job_detail(
     customer_plan: dict[str, Any] | None = None
     supplier_auto_effective: bool | None = None
     customer_auto_effective: bool | None = None
+    supplier_policy = None
+    customer_policy = None
     if workflow is not None:
-        supplier_auto_effective = supplier_reminders_enabled_for_job(
-            repository=repository,
-            job_id=job.job_id,
-            global_enabled=workflow.dispatch_policy.automatic_supplier_reminders_enabled,
+        supplier_policy = resolve_effective_automation_policy(
+            action="supplier_reminder",
+            legacy_dispatch_enabled=workflow.dispatch_policy.automatic_supplier_reminders_enabled,
+            mina_job_repository=repository, job_id=job.job_id,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
-        customer_auto_effective = customer_deadline_updates_enabled_for_job(
-            repository=repository,
-            job_id=job.job_id,
-            global_enabled=workflow.dispatch_policy.automatic_customer_deadline_updates_enabled,
+        customer_policy = resolve_effective_automation_policy(
+            action="customer_deadline_update",
+            legacy_dispatch_enabled=workflow.dispatch_policy.automatic_customer_deadline_updates_enabled,
+            mina_job_repository=repository, job_id=job.job_id,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
+        supplier_auto_effective = supplier_policy.effective_mode == "automatic"
+        customer_auto_effective = customer_policy.effective_mode == "automatic"
         customer_plan = customer_deadline_plan(
             supplier_repository=supplier_repository,
             action_repository=action_repository,
             workflow=workflow,
             now=current,
             mina_job_repository=repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
 
     quote_case = (
@@ -164,6 +179,8 @@ def build_mina_job_detail(
             "supplier_reminders_effective": supplier_auto_effective,
             "customer_deadline_updates_effective": customer_auto_effective,
             "customer_deadline_plan": customer_plan,
+            "supplier_reminder_policy": None if supplier_policy is None else supplier_policy.model_dump(),
+            "customer_deadline_update_policy": None if customer_policy is None else customer_policy.model_dump(),
         },
         "suppliers": supplier_rows,
         "supplier_prices": supplier_prices,

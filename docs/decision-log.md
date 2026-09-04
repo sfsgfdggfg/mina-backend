@@ -6400,3 +6400,14 @@ P2-03 introduces durable `CustomerMasterProfile` and `SupplierMasterProfile` rec
 The existing `customer_memory.json` and `supplier_capabilities.json` datasets are not removed or silently rewritten by P2-03. They remain the current pilot-compatible operational datasets and may be imported through an explicit, authenticated, idempotent legacy bootstrap into the durable master repository. Compatibility projections back to the current customer-memory and supplier-capability contracts must remain valid before any runtime cutover is authorized.
 
 Master profile names are stable identifiers in P2-03 and cannot be silently renamed. Future rename/merge requires a separately controlled identity operation because existing jobs, quotes, emails and audit evidence may refer to the prior name. Master records and their identity indexes are durable evidence and survive ordinary pilot retention purges.
+
+## DEC-171 — Automation Authority Resolves Agency → Customer → Job With Explicit Human-Approval Mode
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-04 introduces a durable automation-policy hierarchy for external operational actions. The supported initial actions are supplier reminders and proactive customer deadline updates. Each action may resolve to `manual`, `approval_required`, or `automatic`. Resolution is deterministic and uses the most specific applicable authority: explicit job mode first, then legacy job-level disable as a compatibility fail-safe, then active customer master policy, then durable agency policy, and finally the pre-P2-04 dispatch-policy boolean as legacy fallback.
+
+`approval_required` is distinct from both manual and automatic execution. The automation planner must create an explicit human-review state and the automatic scheduler must not send the external message. P2-04 establishes policy authority, planner states, scheduler enforcement and operational-work queue visibility; a generalized one-click outbound approval/execution workflow remains a separate controlled implementation concern rather than being fabricated inside the scheduler.
+
+Persisted jobs and older API clients remain backward compatible. Existing `disable_supplier_reminders` and `disable_customer_deadline_updates` fields remain supported and act as job-level manual fail-safes when no modern explicit mode exists. Partial policy updates must preserve fields omitted by older or narrower clients. A durable agency policy containing no explicit mode for an action falls back to the existing supplier dispatch policy instead of silently changing current pilot behavior.

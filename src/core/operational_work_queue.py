@@ -15,6 +15,8 @@ from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.extraction_confirmation_repository import ExtractionProposalRepository
 from src.core.mina_job_repository import MinaJobRepository
+from src.core.master_data_repository import MasterDataRepository
+from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
 from src.core.operational_priority import (
     PRIORITY_RANK,
     age_score,
@@ -357,12 +359,18 @@ def _automation_attention_items(
     action_repository: AutomationActionRepository,
     now: datetime,
     mina_job_repository: MinaJobRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     supplier_states = {
         "manual_reminder_due": (
             "send_supplier_reminder_manually", 60,
             "supplier_automatic_reminder_disabled",
+        ),
+        "approval_required_supplier_reminder_due": (
+            "review_and_approve_supplier_reminder", 65,
+            "supplier_reminder_requires_human_approval",
         ),
         "human_contact_required": (
             "contact_supplier_phone_or_whatsapp", 80,
@@ -392,6 +400,8 @@ def _automation_attention_items(
             draft=draft,
             now=now,
             mina_job_repository=mina_job_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
         state = str(plan.get("state"))
         config = supplier_states.get(state)
@@ -428,6 +438,10 @@ def _automation_attention_items(
             "contact_customer_manually", 70,
             "customer_deadline_update_automation_disabled",
         ),
+        "approval_required_customer_update_due": (
+            "review_and_approve_customer_update", 75,
+            "customer_deadline_update_requires_human_approval",
+        ),
         "deadline_passed_manual_attention": (
             "contact_customer_manually", 90,
             "customer_quote_deadline_passed_without_automatic_update",
@@ -452,6 +466,8 @@ def _automation_attention_items(
             workflow=workflow,
             now=now,
             mina_job_repository=mina_job_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
         )
         state = str(plan.get("state"))
         config = customer_states.get(state)
@@ -548,6 +564,8 @@ def build_operational_work_queue(
     quote_case_repository: QuoteCaseRepository,
     automation_action_repository: AutomationActionRepository | None = None,
     mina_job_repository: MinaJobRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = aware_utc(now or datetime.now(timezone.utc))
@@ -567,11 +585,15 @@ def build_operational_work_queue(
 
     resolved_automation_repository = automation_action_repository
     resolved_mina_job_repository = mina_job_repository
+    resolved_master_data_repository = master_data_repository
+    resolved_agency_policy_repository = agency_policy_repository
     if getattr(supplier_repository, "store", None) is not None:
         from src.core.sqlite_repositories import (
             SQLiteAutomationActionRepository,
             SQLiteMinaJobRepository,
         )
+        from src.core.master_data_repository import SQLiteMasterDataRepository
+        from src.core.automation_policy_repository import SQLiteAgencyAutomationPolicyRepository
         if resolved_automation_repository is None:
             resolved_automation_repository = SQLiteAutomationActionRepository(
                 supplier_repository.store
@@ -580,12 +602,22 @@ def build_operational_work_queue(
             resolved_mina_job_repository = SQLiteMinaJobRepository(
                 supplier_repository.store
             )
+        if resolved_master_data_repository is None:
+            resolved_master_data_repository = SQLiteMasterDataRepository(
+                supplier_repository.store
+            )
+        if resolved_agency_policy_repository is None:
+            resolved_agency_policy_repository = SQLiteAgencyAutomationPolicyRepository(
+                supplier_repository.store
+            )
     if resolved_automation_repository is not None:
         items.extend(_automation_attention_items(
             supplier_repository=supplier_repository,
             action_repository=resolved_automation_repository,
             now=current,
             mina_job_repository=resolved_mina_job_repository,
+            master_data_repository=resolved_master_data_repository,
+            agency_policy_repository=resolved_agency_policy_repository,
         ))
 
     follow_ups = supplier_repository.list_follow_up_drafts()

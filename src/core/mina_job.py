@@ -8,6 +8,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from src.core.models import Shipment
+from src.core.automation_policy import AutomationMode
 
 
 MinaJobLifecycleVersion = Literal[1, 2]
@@ -57,8 +58,11 @@ MINA_CODE_RE = re.compile(r"^MINA(?P<year>\d{4})/(?P<number>[1-9]\d*)$")
 
 
 class MinaJobAutomationOverrides(BaseModel):
+    # Legacy disable flags remain readable/writable for backward compatibility.
     disable_supplier_reminders: bool = False
     disable_customer_deadline_updates: bool = False
+    supplier_reminder_mode: AutomationMode | None = None
+    customer_deadline_update_mode: AutomationMode | None = None
 
 
 class MinaJob(BaseModel):

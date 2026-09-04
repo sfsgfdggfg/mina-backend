@@ -195,6 +195,13 @@ from src.core.master_data_service import (
     update_customer_master,
     update_supplier_master,
 )
+from src.core.automation_policy_repository import (
+    SQLiteAgencyAutomationPolicyRepository,
+)
+from src.core.automation_policy_service import (
+    resolve_effective_automation_policy,
+    save_agency_automation_policy,
+)
 from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.operational_work_queue import build_operational_work_queue
 from src.core.operational_work_assignment_service import (
@@ -303,6 +310,7 @@ mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
+agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
 automation_action_repository = SQLiteAutomationActionRepository(pilot_store)
@@ -319,6 +327,8 @@ automation_scheduler = AutomationScheduler(
     action_repository=automation_action_repository,
     sender=outbound_mail_sender,
     mina_job_repository=mina_job_repository,
+    master_data_repository=master_data_repository,
+    agency_policy_repository=agency_automation_policy_repository,
 )
 
 
@@ -337,11 +347,13 @@ def stop_controlled_automation_scheduler():
 def get_automation_status():
     status = automation_scheduler.status()
     policy = resolve_supplier_dispatch_policy()
+    durable_policy = agency_automation_policy_repository.get()
     return {
         **status,
         "legacy_workflows_not_auto_activated": True,
         "supplier_reminders_default_enabled": policy.automatic_supplier_reminders_enabled,
         "customer_deadline_updates_default_enabled": policy.automatic_customer_deadline_updates_enabled,
+        "durable_agency_policy": None if durable_policy is None else durable_policy.model_dump(),
         "supplier_communication_calendar": supplier_calendar_metadata(),
     }
 
@@ -437,6 +449,18 @@ class SupplierFixedRateStatusRequest(BaseModel):
 class MinaJobAutomationOverrideRequest(BaseModel):
     disable_supplier_reminders: bool = False
     disable_customer_deadline_updates: bool = False
+    supplier_reminder_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+    customer_deadline_update_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+
+
+class AgencyAutomationPolicyRequest(BaseModel):
+    supplier_reminder_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+    customer_deadline_update_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+
+
+class CustomerAutomationPolicyRequest(BaseModel):
+    supplier_reminder_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+    customer_deadline_update_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
 
 
 class MinaJobOwnersRequest(BaseModel):
@@ -569,6 +593,8 @@ class CustomerMasterCreateRequest(BaseModel):
     price_sensitivity: Optional[str] = Field(default=None, max_length=80)
     time_sensitivity: Optional[str] = Field(default=None, max_length=80)
     pricing_policy: Optional[PricingFormula] = None
+    supplier_reminder_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+    customer_deadline_update_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
     operational_notes: list[str] = Field(default_factory=list)
 
 
@@ -590,6 +616,8 @@ class CustomerMasterUpdateRequest(BaseModel):
     price_sensitivity: Optional[str] = Field(default=None, max_length=80)
     time_sensitivity: Optional[str] = Field(default=None, max_length=80)
     pricing_policy: Optional[PricingFormula] = None
+    supplier_reminder_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+    customer_deadline_update_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
     operational_notes: list[str] = Field(default_factory=list)
 
 
@@ -1168,6 +1196,117 @@ def bootstrap_master_data_from_legacy(http_request: Request):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@app.get("/automation-policy/agency")
+def get_agency_automation_policy():
+    policy = agency_automation_policy_repository.get()
+    legacy = resolve_supplier_dispatch_policy()
+    return {
+        "policy": None if policy is None else policy.model_dump(),
+        "legacy_fallback": {
+            "supplier_reminder_mode": (
+                "automatic" if legacy.automatic_supplier_reminders_enabled else "manual"
+            ),
+            "customer_deadline_update_mode": (
+                "automatic" if legacy.automatic_customer_deadline_updates_enabled else "manual"
+            ),
+        },
+    }
+
+
+@app.post("/automation-policy/agency")
+def update_agency_automation_policy(
+    request: AgencyAutomationPolicyRequest, http_request: Request,
+):
+    current = agency_automation_policy_repository.get()
+    supplier_mode = (
+        request.supplier_reminder_mode
+        if "supplier_reminder_mode" in request.model_fields_set
+        else (None if current is None else current.supplier_reminder_mode)
+    )
+    customer_mode = (
+        request.customer_deadline_update_mode
+        if "customer_deadline_update_mode" in request.model_fields_set
+        else (None if current is None else current.customer_deadline_update_mode)
+    )
+    try:
+        policy = save_agency_automation_policy(
+            repository=agency_automation_policy_repository,
+            updated_by=_authenticated_operator(http_request),
+            supplier_reminder_mode=supplier_mode,
+            customer_deadline_update_mode=customer_mode,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return policy.model_dump()
+
+
+@app.post("/master-data/customers/{customer_id}/automation-policy")
+def update_customer_automation_policy(
+    customer_id: str, request: CustomerAutomationPolicyRequest, http_request: Request,
+):
+    current = master_data_repository.get_customer(customer_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}")
+    try:
+        updated = update_customer_master(
+            repository=master_data_repository,
+            customer_id=customer_id,
+            updated_by=_authenticated_operator(http_request),
+            supplier_reminder_mode=(
+                request.supplier_reminder_mode
+                if "supplier_reminder_mode" in request.model_fields_set
+                else current.supplier_reminder_mode
+            ),
+            customer_deadline_update_mode=(
+                request.customer_deadline_update_mode
+                if "customer_deadline_update_mode" in request.model_fields_set
+                else current.customer_deadline_update_mode
+            ),
+        )
+    except MasterDataConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "customer_id": updated.customer_id,
+        "customer_name": updated.customer_name,
+        "supplier_reminder_mode": updated.supplier_reminder_mode,
+        "customer_deadline_update_mode": updated.customer_deadline_update_mode,
+    }
+
+
+@app.get("/mina-jobs/{job_id}/automation-policy")
+def get_mina_job_automation_policy(job_id: str):
+    job = mina_job_repository.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    workflow = (
+        supplier_rfq_repository.get_workflow(job.supplier_rfq_workflow_id)
+        if job.supplier_rfq_workflow_id else None
+    )
+    dispatch = workflow.dispatch_policy if workflow is not None else resolve_supplier_dispatch_policy()
+    supplier_policy = resolve_effective_automation_policy(
+        action="supplier_reminder",
+        legacy_dispatch_enabled=dispatch.automatic_supplier_reminders_enabled,
+        mina_job_repository=mina_job_repository, job_id=job_id,
+        master_data_repository=master_data_repository,
+        agency_policy_repository=agency_automation_policy_repository,
+    )
+    customer_policy = resolve_effective_automation_policy(
+        action="customer_deadline_update",
+        legacy_dispatch_enabled=dispatch.automatic_customer_deadline_updates_enabled,
+        mina_job_repository=mina_job_repository, job_id=job_id,
+        master_data_repository=master_data_repository,
+        agency_policy_repository=agency_automation_policy_repository,
+    )
+    return {
+        "job_id": job.job_id,
+        "mina_code": job.mina_code,
+        "supplier_reminder": supplier_policy.model_dump(),
+        "customer_deadline_update": customer_policy.model_dump(),
+    }
+
+
 @app.get("/health")
 def health_check():
     return {
@@ -1306,6 +1445,8 @@ def get_mina_job(job_id: str):
             quote_case_repository=quote_case_repository,
             action_repository=automation_action_repository,
             price_repository=supplier_price_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_automation_policy_repository,
             job_id=job_id,
         )
     except MinaJobNotFoundError as exc:
@@ -1325,8 +1466,26 @@ def update_mina_job_automation_overrides(
             repository=mina_job_repository,
             mina_code=job.mina_code,
             actor=_authenticated_operator(http_request),
-            disable_supplier_reminders=request.disable_supplier_reminders,
-            disable_customer_deadline_updates=request.disable_customer_deadline_updates,
+            disable_supplier_reminders=(
+                request.disable_supplier_reminders
+                if "disable_supplier_reminders" in request.model_fields_set
+                else job.automation_overrides.disable_supplier_reminders
+            ),
+            disable_customer_deadline_updates=(
+                request.disable_customer_deadline_updates
+                if "disable_customer_deadline_updates" in request.model_fields_set
+                else job.automation_overrides.disable_customer_deadline_updates
+            ),
+            supplier_reminder_mode=(
+                request.supplier_reminder_mode
+                if "supplier_reminder_mode" in request.model_fields_set
+                else job.automation_overrides.supplier_reminder_mode
+            ),
+            customer_deadline_update_mode=(
+                request.customer_deadline_update_mode
+                if "customer_deadline_update_mode" in request.model_fields_set
+                else job.automation_overrides.customer_deadline_update_mode
+            ),
         )
     except MinaJobTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

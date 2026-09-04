@@ -5,10 +5,9 @@ from typing import Any
 
 from src.core.automation_action_repository import AutomationActionRepository
 from src.core.mina_job_repository import MinaJobRepository
-from src.core.mina_job_service import (
-    customer_deadline_updates_enabled_for_job,
-    supplier_reminders_enabled_for_job,
-)
+from src.core.automation_policy_service import resolve_effective_automation_policy
+from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
+from src.core.master_data_repository import MasterDataRepository
 from src.core.business_calendar import (
     SupplierHolidayCalendarCoverageError,
     add_supplier_business_minutes,
@@ -50,6 +49,8 @@ def supplier_reminder_plan(
     draft: SupplierRFQDraft,
     now: datetime,
     mina_job_repository: MinaJobRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
 ) -> dict[str, Any]:
     workflow = supplier_repository.get_workflow(draft.workflow_id)
     if workflow is None or workflow.automation_timing_version < 1:
@@ -143,22 +144,25 @@ def supplier_reminder_plan(
             "state": "supplier_calendar_unavailable_manual_attention",
             "reason": str(exc),
         }
-    if not supplier_reminders_enabled_for_job(
-        repository=mina_job_repository,
+    policy = resolve_effective_automation_policy(
+        action="supplier_reminder",
+        legacy_dispatch_enabled=workflow.dispatch_policy.automatic_supplier_reminders_enabled,
+        mina_job_repository=mina_job_repository,
         job_id=workflow.mina_job_id,
-        global_enabled=workflow.dispatch_policy.automatic_supplier_reminders_enabled,
-    ):
-        return {
-            "state": "manual_reminder_due",
-            "action_type": action_type,
-            "action_key": action_key,
-            "due_at": due_at,
-        }
+        master_data_repository=master_data_repository,
+        agency_policy_repository=agency_policy_repository,
+    )
+    state = {
+        "manual": "manual_reminder_due",
+        "approval_required": "approval_required_supplier_reminder_due",
+        "automatic": "automatic_reminder_due",
+    }[policy.effective_mode]
     return {
-        "state": "automatic_reminder_due",
+        "state": state,
         "action_type": action_type,
         "action_key": action_key,
         "due_at": due_at,
+        "automation_policy": policy.model_dump(),
     }
 
 
@@ -195,6 +199,8 @@ def customer_deadline_plan(
     workflow: SupplierRFQWorkflow,
     now: datetime,
     mina_job_repository: MinaJobRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
 ) -> dict[str, Any]:
     if workflow.automation_timing_version < 1:
         return {"state": "not_automation_eligible"}
@@ -238,15 +244,25 @@ def customer_deadline_plan(
             "due_at": due_at,
             "deadline_at": deadline_utc,
         }
-    if not customer_deadline_updates_enabled_for_job(
-        repository=mina_job_repository,
+    policy = resolve_effective_automation_policy(
+        action="customer_deadline_update",
+        legacy_dispatch_enabled=workflow.dispatch_policy.automatic_customer_deadline_updates_enabled,
+        mina_job_repository=mina_job_repository,
         job_id=workflow.mina_job_id,
-        global_enabled=workflow.dispatch_policy.automatic_customer_deadline_updates_enabled,
-    ):
-        return {"state": "manual_customer_update_due", "due_at": due_at}
-    return {
-        "state": "automatic_customer_update_due",
-        "action_key": action_key,
+        master_data_repository=master_data_repository,
+        agency_policy_repository=agency_policy_repository,
+    )
+    state = {
+        "manual": "manual_customer_update_due",
+        "approval_required": "approval_required_customer_update_due",
+        "automatic": "automatic_customer_update_due",
+    }[policy.effective_mode]
+    result = {
+        "state": state,
         "due_at": due_at,
         "deadline_at": deadline_utc,
+        "automation_policy": policy.model_dump(),
     }
+    if policy.effective_mode == "automatic":
+        result["action_key"] = action_key
+    return result

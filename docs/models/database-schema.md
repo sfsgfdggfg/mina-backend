@@ -798,3 +798,9 @@ Persistent namespaces: `supplier_fixed_rates`, `supplier_fixed_rate_by_entry`, `
 `SupplierMasterProfile` is durable supplier identity keyed by `supplier_id` plus idempotent `entry_id`. It stores canonical supplier name, role, structured contacts, service/equipment/special capabilities, explicit geography capabilities, priority routes, legacy region tags, selection score inputs, notes, source and authenticated update evidence. `SupplierGeographyCapability` stores `country` or `region` scope, explicit country membership, business strength and evidence source.
 
 Persistent namespaces: `customer_master_profiles`, `customer_master_by_entry`, `customer_master_by_name`, `supplier_master_profiles`, `supplier_master_by_entry`, and `supplier_master_by_name`. These records and identity indexes are excluded from ordinary pilot state purging.
+
+## P2-04 Automation Policy Hierarchy
+
+`AgencyAutomationPolicy` is a durable singleton record in namespace `agency_automation_policy`. It stores optional `supplier_reminder_mode` and `customer_deadline_update_mode`, plus authenticated update actor/time evidence. `CustomerMasterProfile` carries optional action modes for the same actions. `MinaJobAutomationOverrides` carries optional job-level action modes while retaining the prior legacy disable booleans.
+
+`EffectiveAutomationPolicy` is a computed read model, not a separate persisted authority. It records the action, effective mode, resolution source (`job`, `job_legacy_disable`, `customer`, `agency`, or `legacy_dispatch`), each candidate policy value, matched customer identity when applicable, and the legacy dispatch fallback value. Planner, scheduler, Job Detail and operational-work views must derive behavior from this resolver rather than independently interpreting policy fields.

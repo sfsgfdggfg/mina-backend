@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from src.core.pricing_policy import PricingFormula
+from src.core.automation_policy import AutomationMode
 
 
 SupplierRole = Literal["primary", "backup", "specialist"]
@@ -130,6 +131,8 @@ class CustomerMasterProfile(BaseModel):
     price_sensitivity: str | None = Field(default=None, max_length=80)
     time_sensitivity: str | None = Field(default=None, max_length=80)
     pricing_policy: PricingFormula | None = None
+    supplier_reminder_mode: AutomationMode | None = None
+    customer_deadline_update_mode: AutomationMode | None = None
     operational_notes: list[str] = Field(default_factory=list)
     source: MasterDataSource = "manual"
     created_at: datetime
