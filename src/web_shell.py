@@ -74,7 +74,7 @@ def _shell_html(*, page: str, operator_name: str, csrf_token: str, job_id: str =
 <nav><a href="/app/dashboard">Ana Ekran</a><a href="/app/jobs">MINA İşleri</a><a href="/app/reports">Raporlar</a></nav>
 <div class="sidebar-footer"><span>{operator}</span><form method="post" action="/app/logout">
 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}"><button class="link-button" type="submit">Çıkış</button></form></div></aside>
-<main><header><div><p class="eyebrow">Freight Operations</p><h1 id="page-title">MINAI</h1></div>
+<main><header><div><p class="eyebrow">Operasyon Merkezi</p><h1 id="page-title">MINAI</h1></div>
 <div id="status-pill" class="status-pill">Bağlanıyor…</div></header><section id="app-content" class="content-card"></section></main>
 </div><script src="/app/assets/app.js" defer></script></body></html>'''
 
