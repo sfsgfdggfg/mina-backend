@@ -53,6 +53,10 @@ EVENT_LABELS = {
     "automation_override_changed": "İş otomasyon ayarı değiştirildi",
     "supplier_reminder_sent_early": "Supplier reminder erken gönderildi",
     "stage_changed": "İş aşaması değiştirildi",
+    "operation_execution_updated": "Operasyon bilgisi güncellendi",
+    "operation_exception_created": "Operasyon istisnası açıldı",
+    "operation_exception_updated": "Operasyon istisnası güncellendi",
+    "operation_exception_resolved": "Operasyon istisnası kapatıldı",
 }
 
 V1_MANUAL_STAGE_ACTIONS = {
@@ -253,13 +257,15 @@ def render_mina_job_detail(api_base_url: str, job_id: str) -> None:
         _format_time(summary.get("customer_quote_deadline_at")),
     )
 
-    overview_tab, supplier_tab, quote_tab, timeline_tab, controls_tab = st.tabs(
-        ["Genel", "Tedarikçiler", "Teklif", "Zaman Çizelgesi", "Kontroller"]
+    overview_tab, supplier_tab, operation_tab, quote_tab, timeline_tab, controls_tab = st.tabs(
+        ["Genel", "Tedarikçiler", "Operasyon", "Teklif", "Zaman Çizelgesi", "Kontroller"]
     )
     with overview_tab:
         _render_job_overview(detail)
     with supplier_tab:
         _render_suppliers(api_base_url, job_id, detail)
+    with operation_tab:
+        _render_operation(api_base_url, job_id, detail)
     with quote_tab:
         _render_quote(detail)
     with timeline_tab:
@@ -316,6 +322,238 @@ def _render_job_overview(detail: dict[str, Any]) -> None:
             f"{customer_plan.get('state')}"
         )
 
+
+
+def _operation_now_iso() -> str:
+    return datetime.now(tz=ISTANBUL).isoformat()
+
+
+def _render_operation(
+    api_base_url: str, job_id: str, detail: dict[str, Any]
+) -> None:
+    job = detail.get("job") or {}
+    stage = str(job.get("stage") or "")
+    operation = detail.get("operation") or {}
+    snapshot = operation.get("snapshot") or {}
+    exceptions = operation.get("exceptions") or []
+    open_exceptions = [item for item in exceptions if item.get("status") == "open"]
+
+    st.markdown("### Operasyon Yürütme")
+    summary_cols = st.columns(4)
+    summary_cols[0].metric("Araç", snapshot.get("vehicle_plate") or "-")
+    summary_cols[1].metric("Şoför", snapshot.get("driver_name") or "-")
+    summary_cols[2].metric("Konum", snapshot.get("current_location") or "-")
+    summary_cols[3].metric("Güncel ETA", _format_time(snapshot.get("current_eta")))
+
+    if operation.get("open_exception_count"):
+        impact = operation.get("open_impact_counts") or {}
+        st.warning(
+            "Açık istisna: "
+            f"{operation.get('open_exception_count')} — "
+            f"Sapma {impact.get('deviation', 0)}, "
+            f"Teslim Riski {impact.get('delivery_risk', 0)}, "
+            f"Gerçek Gecikme {impact.get('actual_delay', 0)}"
+        )
+
+    st.markdown("#### Operasyon Kanıtları")
+    if stage in {"supplier_confirmation_pending", "vehicle_details_pending"}:
+        c1, c2, c3 = st.columns(3)
+        plate = c1.text_input(
+            "Plaka", value=str(snapshot.get("vehicle_plate") or ""),
+            key=f"operation_plate_{job_id}",
+        )
+        driver = c2.text_input(
+            "Şoför", value=str(snapshot.get("driver_name") or ""),
+            key=f"operation_driver_{job_id}",
+        )
+        phone = c3.text_input(
+            "Şoför telefonu", value=str(snapshot.get("driver_phone") or ""),
+            key=f"operation_driver_phone_{job_id}",
+        )
+        if st.button("Araç Bilgisini Kaydet", key=f"save_vehicle_{job_id}"):
+            payload = {
+                "vehicle_plate": plate.strip() or None,
+                "driver_name": driver.strip() or None,
+                "driver_phone": phone.strip() or None,
+                "vehicle_assigned_at": _operation_now_iso(),
+            }
+            try:
+                _post_json(api_base_url, f"/mina-jobs/{job_id}/operation", payload)
+                st.success("Araç ve şoför kanıtı kaydedildi.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.error(str(exc))
+
+    if stage in {"ready_for_loading", "loaded"} and not snapshot.get("loaded_at"):
+        if st.button("Yükleme Gerçekleşti — Şimdi", key=f"loaded_now_{job_id}"):
+            try:
+                _post_json(
+                    api_base_url, f"/mina-jobs/{job_id}/operation",
+                    {"loaded_at": _operation_now_iso()},
+                )
+                st.success("Yükleme zamanı kaydedildi.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.error(str(exc))
+
+    if stage in {"loaded", "in_transit", "delivery"}:
+        c1, c2 = st.columns(2)
+        location = c1.text_input(
+            "Güncel konum", value=str(snapshot.get("current_location") or ""),
+            key=f"operation_location_{job_id}",
+        )
+        eta = c2.text_input(
+            "Güncel ETA (ISO tarih-saat)",
+            value=str(snapshot.get("current_eta") or ""),
+            key=f"operation_eta_{job_id}",
+            placeholder="2026-09-05T19:00:00+03:00",
+        )
+        if st.button("Konum / ETA Güncelle", key=f"save_eta_{job_id}"):
+            payload: dict[str, Any] = {}
+            if location.strip():
+                payload["current_location"] = location.strip()
+            if eta.strip():
+                payload["current_eta"] = eta.strip()
+            try:
+                _post_json(api_base_url, f"/mina-jobs/{job_id}/operation", payload)
+                st.success("Konum / ETA güncellendi.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.error(str(exc))
+
+    if stage == "delivery" and not snapshot.get("delivered_at"):
+        if st.button("Teslim Gerçekleşti — Şimdi", key=f"delivered_now_{job_id}"):
+            try:
+                _post_json(
+                    api_base_url, f"/mina-jobs/{job_id}/operation",
+                    {"delivered_at": _operation_now_iso()},
+                )
+                st.success("Teslim kanıtı kaydedildi.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.error(str(exc))
+
+    if stage in {"delivered", "pod_cmr_pending", "closing_review"}:
+        doc_cols = st.columns(2)
+        if not snapshot.get("cmr_received_at"):
+            if doc_cols[0].button("CMR Alındı — Şimdi", key=f"cmr_now_{job_id}"):
+                try:
+                    _post_json(
+                        api_base_url, f"/mina-jobs/{job_id}/operation",
+                        {"cmr_received_at": _operation_now_iso()},
+                    )
+                    st.success("CMR kanıtı kaydedildi.")
+                    st.rerun()
+                except (requests.RequestException, RuntimeError) as exc:
+                    st.error(str(exc))
+        if not snapshot.get("pod_received_at"):
+            if doc_cols[1].button("POD Alındı — Şimdi", key=f"pod_now_{job_id}"):
+                try:
+                    _post_json(
+                        api_base_url, f"/mina-jobs/{job_id}/operation",
+                        {"pod_received_at": _operation_now_iso()},
+                    )
+                    st.success("POD kanıtı kaydedildi.")
+                    st.rerun()
+                except (requests.RequestException, RuntimeError) as exc:
+                    st.error(str(exc))
+
+    st.divider()
+    st.markdown("### İstisnalar & Gecikmeler")
+    impact_labels = {
+        "deviation": "Sapma",
+        "delivery_risk": "Teslim Riski",
+        "actual_delay": "Gerçek Gecikme",
+    }
+    type_labels = {
+        "border_congestion": "Sınır yoğunluğu", "breakdown": "Arıza",
+        "documentation": "Evrak", "customs": "Gümrük", "appointment": "Randevu",
+        "route_deviation": "Rota sapması", "weather": "Hava", "loading": "Yükleme",
+        "delivery": "Teslimat", "damage": "Hasar", "other": "Diğer",
+    }
+    for incident in reversed(exceptions):
+        status_text = "Açık" if incident.get("status") == "open" else "Çözüldü"
+        with st.expander(
+            f"{impact_labels.get(incident.get('impact_level'), incident.get('impact_level'))} — "
+            f"{type_labels.get(incident.get('exception_type'), incident.get('exception_type'))} — {status_text}"
+        ):
+            st.write(f"**Sebep:** {incident.get('cause') or '-'}")
+            st.write(f"**Konum:** {incident.get('location') or '-'}")
+            if incident.get("old_eta") or incident.get("new_eta"):
+                st.write(
+                    f"**ETA:** {_format_time(incident.get('old_eta'))} → "
+                    f"{_format_time(incident.get('new_eta'))}"
+                )
+            if incident.get("customer_impact_summary"):
+                st.write(f"**Müşteri etkisi:** {incident.get('customer_impact_summary')}")
+            if incident.get("next_action"):
+                st.write(f"**Sonraki aksiyon:** {incident.get('next_action')}")
+            if incident.get("status") == "open":
+                resolution = st.text_input(
+                    "Çözüm notu", key=f"exception_resolution_{incident.get('exception_id')}",
+                )
+                if st.button(
+                    "İstisnayı Kapat", key=f"resolve_exception_{incident.get('exception_id')}"
+                ):
+                    try:
+                        _post_json(
+                            api_base_url,
+                            f"/mina-jobs/{job_id}/exceptions/{incident.get('exception_id')}/resolve",
+                            {"resolution_note": resolution},
+                        )
+                        st.success("İstisna çözüldü olarak kapatıldı.")
+                        st.rerun()
+                    except (requests.RequestException, RuntimeError) as exc:
+                        st.error(str(exc))
+
+    if not job.get("is_closed") and stage in {
+        "operation_opened", "supplier_confirmation_pending", "vehicle_details_pending",
+        "vehicle_assigned", "pre_loading_check", "ready_for_loading", "loaded",
+        "in_transit", "delivery", "delivered", "pod_cmr_pending", "closing_review",
+    }:
+        st.markdown("#### Yeni İstisna")
+        with st.form(f"new_exception_{job_id}"):
+            c1, c2, c3 = st.columns(3)
+            exception_type = c1.selectbox(
+                "Tür", list(type_labels), format_func=lambda value: type_labels[value]
+            )
+            impact = c2.selectbox(
+                "Etki", list(impact_labels), format_func=lambda value: impact_labels[value]
+            )
+            source = c3.selectbox(
+                "Kaynak",
+                ["supplier_email", "supplier_phone", "whatsapp", "gps", "operator", "other"],
+            )
+            cause = st.text_area("Sebep")
+            location = st.text_input("Konum")
+            eta_cols = st.columns(2)
+            old_eta = eta_cols[0].text_input("Eski ETA (opsiyonel ISO)")
+            new_eta = eta_cols[1].text_input("Yeni ETA (opsiyonel ISO)")
+            customer_impact = st.text_area("Müşteri etkisi")
+            next_action = st.text_area("Sonraki aksiyon")
+            submitted = st.form_submit_button("İstisna Aç")
+        if submitted:
+            payload: dict[str, Any] = {
+                "entry_id": str(uuid4()), "exception_type": exception_type,
+                "impact_level": impact, "cause": cause, "source_type": source,
+                "reported_at": _operation_now_iso(),
+            }
+            if location.strip():
+                payload["location"] = location.strip()
+            if old_eta.strip():
+                payload["old_eta"] = old_eta.strip()
+            if new_eta.strip():
+                payload["new_eta"] = new_eta.strip()
+            if customer_impact.strip():
+                payload["customer_impact_summary"] = customer_impact.strip()
+            if next_action.strip():
+                payload["next_action"] = next_action.strip()
+            try:
+                _post_json(api_base_url, f"/mina-jobs/{job_id}/exceptions", payload)
+                st.success("Operasyon istisnası açıldı.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.error(str(exc))
 
 def _render_suppliers(
     api_base_url: str, job_id: str, detail: dict[str, Any]

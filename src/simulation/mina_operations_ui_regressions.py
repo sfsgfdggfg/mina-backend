@@ -43,7 +43,7 @@ def evaluate_mina_operations_ui_regressions() -> dict:
         all(
             label in ui_text
             for label in (
-                '"Genel"', '"Tedarikçiler"', '"Teklif"',
+                '"Genel"', '"Tedarikçiler"', '"Operasyon"', '"Teklif"',
                 '"Zaman Çizelgesi"', '"Kontroller"',
             )
         ),
@@ -59,6 +59,17 @@ def evaluate_mina_operations_ui_regressions() -> dict:
         "supplier price sources fixed rates and manual price entry are wired to controlled APIs",
     )
 
+    check(
+        "Operasyon Yürütme" in ui_text
+        and "İstisnalar & Gecikmeler" in ui_text
+        and "Araç Bilgisini Kaydet" in ui_text
+        and "Yükleme Gerçekleşti — Şimdi" in ui_text
+        and "Teslim Gerçekleşti — Şimdi" in ui_text
+        and "CMR Alındı — Şimdi" in ui_text
+        and "/operation" in ui_text
+        and "/exceptions" in ui_text,
+        "operation execution evidence and exception controls are wired to controlled APIs",
+    )
     check(
         "Reminder Önizle" in ui_text
         and "Reminder'ı Şimdi Gönder" in ui_text

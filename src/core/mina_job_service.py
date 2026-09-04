@@ -407,7 +407,7 @@ def set_mina_job_owners(
 def transition_mina_job_stage(
     *, repository: MinaJobRepository, mina_code: str,
     target_stage: MinaJobStage, actor: str, reason: str | None = None,
-    occurred_at: datetime | None = None,
+    occurred_at: datetime | None = None, operation_execution_repository=None,
 ) -> MinaJob:
     timestamp = aware_utc(occurred_at)
     normalized_actor = _normalized_actor(actor)
@@ -422,6 +422,12 @@ def transition_mina_job_stage(
         if target_stage not in allowed:
             raise MinaJobTransitionError(
                 f"MINA job cannot transition from {job.stage} to {target_stage}."
+            )
+        if operation_execution_repository is not None and job.lifecycle_version == 2:
+            from src.core.operation_execution_service import validate_operation_transition_evidence
+            validate_operation_transition_evidence(
+                execution_repository=operation_execution_repository,
+                job_id=job.job_id, target_stage=target_stage,
             )
         closed_at = timestamp if target_stage in _terminal_stages(job) else None
         updated = MinaJob.model_validate(job.model_copy(update={

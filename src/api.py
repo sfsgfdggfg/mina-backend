@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 import json
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -179,6 +179,17 @@ from src.core.supplier_price_service import (
     set_supplier_fixed_rate_active,
     use_fixed_rate_for_job,
 )
+from src.core.operation_execution_repository import (
+    OperationExecutionConflictError,
+    SQLiteOperationExecutionRepository,
+)
+from src.core.operation_execution_service import (
+    build_operation_execution_view,
+    create_operation_exception,
+    resolve_operation_exception,
+    update_operation_exception,
+    update_operation_execution,
+)
 from src.core.master_data import (
     MasterContact,
     SupplierGeographyCapability,
@@ -309,6 +320,7 @@ quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
+operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
@@ -479,6 +491,65 @@ class MinaJobStageTransitionRequest(BaseModel):
         "lost", "cancelled",
     ]
     reason: Optional[str] = None
+
+
+class OperationExecutionUpdateRequest(BaseModel):
+    supplier_confirmed_at: Optional[datetime] = None
+    vehicle_plate: Optional[str] = Field(default=None, max_length=80)
+    driver_name: Optional[str] = Field(default=None, max_length=200)
+    driver_phone: Optional[str] = Field(default=None, max_length=80)
+    vehicle_assigned_at: Optional[datetime] = None
+    loading_appointment_at: Optional[datetime] = None
+    loaded_at: Optional[datetime] = None
+    current_location: Optional[str] = Field(default=None, max_length=300)
+    current_eta: Optional[datetime] = None
+    delivery_appointment_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+    pod_received_at: Optional[datetime] = None
+    cmr_received_at: Optional[datetime] = None
+
+
+class OperationExceptionCreateRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    exception_type: Literal[
+        "border_congestion", "breakdown", "documentation", "customs", "appointment",
+        "route_deviation", "weather", "loading", "delivery", "damage", "other",
+    ]
+    impact_level: Literal["deviation", "delivery_risk", "actual_delay"]
+    cause: str = Field(min_length=1, max_length=1200)
+    location: Optional[str] = Field(default=None, max_length=300)
+    old_eta: Optional[datetime] = None
+    new_eta: Optional[datetime] = None
+    customer_impact_summary: Optional[str] = Field(default=None, max_length=1200)
+    next_action: Optional[str] = Field(default=None, max_length=1200)
+    source_type: Literal[
+        "supplier_email", "supplier_phone", "whatsapp", "gps", "operator", "system", "other"
+    ]
+    source_reference: Optional[str] = Field(default=None, max_length=300)
+    reported_at: Optional[datetime] = None
+
+
+class OperationExceptionUpdateRequest(BaseModel):
+    exception_type: Optional[Literal[
+        "border_congestion", "breakdown", "documentation", "customs", "appointment",
+        "route_deviation", "weather", "loading", "delivery", "damage", "other",
+    ]] = None
+    impact_level: Optional[Literal["deviation", "delivery_risk", "actual_delay"]] = None
+    cause: Optional[str] = Field(default=None, min_length=1, max_length=1200)
+    location: Optional[str] = Field(default=None, max_length=300)
+    old_eta: Optional[datetime] = None
+    new_eta: Optional[datetime] = None
+    customer_impact_summary: Optional[str] = Field(default=None, max_length=1200)
+    next_action: Optional[str] = Field(default=None, max_length=1200)
+    source_type: Optional[Literal[
+        "supplier_email", "supplier_phone", "whatsapp", "gps", "operator", "system", "other"
+    ]] = None
+    source_reference: Optional[str] = Field(default=None, max_length=300)
+    reported_at: Optional[datetime] = None
+
+
+class OperationExceptionResolveRequest(BaseModel):
+    resolution_note: str = Field(min_length=1, max_length=1200)
 
 
 class PreviewAttachmentReviewRequest(BaseModel):
@@ -1447,10 +1518,121 @@ def get_mina_job(job_id: str):
             price_repository=supplier_price_repository,
             master_data_repository=master_data_repository,
             agency_policy_repository=agency_automation_policy_repository,
+            operation_execution_repository=operation_execution_repository,
             job_id=job_id,
         )
     except MinaJobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/mina-jobs/{job_id}/operation")
+def get_mina_job_operation(job_id: str):
+    try:
+        return build_operation_execution_view(
+            execution_repository=operation_execution_repository,
+            mina_repository=mina_job_repository, job_id=job_id,
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/operation")
+def update_mina_job_operation(
+    job_id: str, request: OperationExecutionUpdateRequest, http_request: Request,
+):
+    try:
+        snapshot = update_operation_execution(
+            execution_repository=operation_execution_repository,
+            mina_repository=mina_job_repository, job_id=job_id,
+            updated_by=_authenticated_operator(http_request),
+            changes=request.model_dump(exclude_unset=True),
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return snapshot.model_dump()
+
+
+@app.get("/mina-jobs/{job_id}/exceptions")
+def list_mina_job_exceptions(job_id: str):
+    try:
+        return build_operation_execution_view(
+            execution_repository=operation_execution_repository,
+            mina_repository=mina_job_repository, job_id=job_id,
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/exceptions")
+def create_mina_job_exception(
+    job_id: str, request: OperationExceptionCreateRequest, http_request: Request,
+):
+    try:
+        incident = create_operation_exception(
+            execution_repository=operation_execution_repository,
+            mina_repository=mina_job_repository, job_id=job_id,
+            created_by=_authenticated_operator(http_request),
+            **request.model_dump(),
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except OperationExecutionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return incident.model_dump()
+
+
+@app.post("/mina-jobs/{job_id}/exceptions/{exception_id}")
+def update_mina_job_exception(
+    job_id: str, exception_id: str, request: OperationExceptionUpdateRequest,
+    http_request: Request,
+):
+    try:
+        incident = update_operation_exception(
+            execution_repository=operation_execution_repository,
+            mina_repository=mina_job_repository, job_id=job_id, exception_id=exception_id,
+            updated_by=_authenticated_operator(http_request),
+            changes=request.model_dump(exclude_unset=True),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Operation exception not found: {exception_id}") from exc
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return incident.model_dump()
+
+
+@app.post("/mina-jobs/{job_id}/exceptions/{exception_id}/resolve")
+def resolve_mina_job_exception(
+    job_id: str, exception_id: str, request: OperationExceptionResolveRequest,
+    http_request: Request,
+):
+    try:
+        incident = resolve_operation_exception(
+            execution_repository=operation_execution_repository,
+            mina_repository=mina_job_repository, job_id=job_id, exception_id=exception_id,
+            resolved_by=_authenticated_operator(http_request),
+            resolution_note=request.resolution_note,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Operation exception not found: {exception_id}") from exc
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return incident.model_dump()
 
 
 @app.post("/mina-jobs/{job_id}/automation-overrides")
@@ -1527,6 +1709,7 @@ def update_mina_job_stage(
             target_stage=request.target_stage,
             actor=_authenticated_operator(http_request),
             reason=request.reason,
+            operation_execution_repository=operation_execution_repository,
         )
     except MinaJobTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

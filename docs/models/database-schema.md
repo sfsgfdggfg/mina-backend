@@ -804,3 +804,9 @@ Persistent namespaces: `customer_master_profiles`, `customer_master_by_entry`, `
 `AgencyAutomationPolicy` is a durable singleton record in namespace `agency_automation_policy`. It stores optional `supplier_reminder_mode` and `customer_deadline_update_mode`, plus authenticated update actor/time evidence. `CustomerMasterProfile` carries optional action modes for the same actions. `MinaJobAutomationOverrides` carries optional job-level action modes while retaining the prior legacy disable booleans.
 
 `EffectiveAutomationPolicy` is a computed read model, not a separate persisted authority. It records the action, effective mode, resolution source (`job`, `job_legacy_disable`, `customer`, `agency`, or `legacy_dispatch`), each candidate policy value, matched customer identity when applicable, and the legacy dispatch fallback value. Planner, scheduler, Job Detail and operational-work views must derive behavior from this resolver rather than independently interpreting policy fields.
+
+## P2-05 Operation Execution and Exception Layer
+
+`OperationExecutionSnapshot` is one durable current-state record per lifecycle-v2 MINA job. It stores structured supplier-confirmation, vehicle/driver, loading, current location/ETA, delivery-appointment, delivered, POD and CMR timestamps together with authenticated update evidence. It is persisted under `operation_execution_snapshots`.
+
+`OperationException` is a durable incident record keyed by `exception_id` plus an idempotent client `entry_id`. It stores MINA identity, stage-at-report, exception type, explicit impact (`deviation`, `delivery_risk`, `actual_delay`), cause, optional location and ETA change, customer impact, next action, source evidence and open/resolved lifecycle metadata. Persistent namespaces are `operation_exceptions` and `operation_exception_by_entry`. These records are operational evidence and are excluded from ordinary pilot state retention purges.
