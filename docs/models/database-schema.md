@@ -837,3 +837,9 @@ P2-08 adds no new persistent namespace. Approval-required supplier reminders and
 `ScheduledAutomationAction.trigger_mode` now also supports `operator_approved`. Operator-approved records require authenticated `triggered_by_operator` evidence. A successful approval transitions the action through `reserved` to `sent`; a provider failure becomes `failed`; a stale pre-send state becomes `cancelled` with `state_changed_before_approved_send`.
 
 An explicit rejection is stored as a terminal `cancelled` action with `failure_code=operator_rejected`, authenticated operator identity, decision time and a bounded reason in the MINA job timeline. Rendered message bodies are not persisted as approval evidence. Read-only preview creates no action record.
+
+## P2-09 Pilot Web Session Model
+
+P2-09 intentionally adds no durable database namespace. Browser sessions are process-local runtime records containing only an opaque session ID, user email identity, bounded operator name, CSRF token, creation time, absolute expiry and last-seen time. Session cookies contain only the opaque ID plus an HMAC signature and do not contain passwords, bearer tokens, CSRF tokens or operational data.
+
+The external web-user configuration is keyed by normalized email and contains a bounded operator name, supported scrypt password hash and active flag. `MINAI_WEB_SESSION_SECRET` signs cookie session IDs. Login-failure throttle state is also process-local and contains only a bounded client key plus failure timestamps. Restart clears sessions and throttle state.

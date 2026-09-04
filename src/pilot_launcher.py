@@ -13,6 +13,11 @@ from src.core.pilot_access import (
     validate_pilot_configuration,
 )
 from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
+from src.core.web_session import (
+    WebSessionConfigurationError,
+    validate_web_session_configuration,
+    web_shell_enabled,
+)
 from src.core.operational_data import (
     OperationalDataSourceConfigurationError,
     operational_data_sources_from_environment,
@@ -44,10 +49,12 @@ def _load_pilot_port(environ: Mapping[str, str]) -> int:
 def _load_pilot_tls_configuration(
     environ: Mapping[str, str],
     host: str,
+    *,
+    require_tls: bool = False,
 ) -> tuple[str | None, str | None]:
     bind_ip = ipaddress.ip_address(host)
 
-    if bind_ip.is_loopback:
+    if bind_ip.is_loopback and not require_tls:
         return None, None
 
     raw_cert = (
@@ -106,6 +113,13 @@ def run(environ: Mapping[str, str] | None = None) -> None:
         )
 
     validate_pilot_configuration(env)
+    if web_shell_enabled(env):
+        try:
+            validate_web_session_configuration(env)
+        except WebSessionConfigurationError as exc:
+            raise PilotAccessConfigurationError(
+                "Controlled pilot web-shell configuration is invalid."
+            ) from exc
     try:
         resolve_supplier_dispatch_policy(env)
     except ValueError as exc:
@@ -128,6 +142,7 @@ def run(environ: Mapping[str, str] | None = None) -> None:
         _load_pilot_tls_configuration(
             env,
             host,
+            require_tls=web_shell_enabled(env),
         )
     )
 
