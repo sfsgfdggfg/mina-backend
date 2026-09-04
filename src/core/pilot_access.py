@@ -31,6 +31,8 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("GET", re.compile(r"^/health$")),
     ("GET", re.compile(r"^/runtime/release$")),
     ("GET", re.compile(r"^/automation/status$")),
+    ("GET", re.compile(r"^/reports$")),
+    ("GET", re.compile(r"^/reports/[a-z_]+$")),
     ("GET", re.compile(r"^/automation-policy/agency$")),
     ("POST", re.compile(r"^/automation-policy/agency$")),
     ("GET", re.compile(r"^/mina-jobs/[^/]+/automation-policy$")),
