@@ -196,7 +196,7 @@ def evaluate_pilot_web_shell_regressions() -> dict:
             set_cookie = logged_in.headers.get("set-cookie", "")
             check(
                 logged_in.status_code == 303
-                and logged_in.headers.get("location") == "/app/jobs"
+                and logged_in.headers.get("location") == "/app/dashboard"
                 and "minai_session=" in set_cookie
                 and "HttpOnly" in set_cookie
                 and "Secure" in set_cookie

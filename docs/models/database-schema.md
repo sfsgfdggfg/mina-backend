@@ -843,3 +843,9 @@ An explicit rejection is stored as a terminal `cancelled` action with `failure_c
 P2-09 intentionally adds no durable database namespace. Browser sessions are process-local runtime records containing only an opaque session ID, user email identity, bounded operator name, CSRF token, creation time, absolute expiry and last-seen time. Session cookies contain only the opaque ID plus an HMAC signature and do not contain passwords, bearer tokens, CSRF tokens or operational data.
 
 The external web-user configuration is keyed by normalized email and contains a bounded operator name, supported scrypt password hash and active flag. `MINAI_WEB_SESSION_SECRET` signs cookie session IDs. Login-failure throttle state is also process-local and contains only a bounded client key plus failure timestamps. Restart clears sessions and throttle state.
+
+## P2-10 Operations Dashboard Read Model
+
+P2-10 adds no persistent database namespace. `build_operations_dashboard()` is a read-only projection over durable MINA jobs and operation-execution snapshots/exceptions.
+
+The projection contains a bounded three-to-five-day Europe/Istanbul window, calendar milestone rows, explicit attention rows, unscheduled active-job rows and summary counts. Date-only shipment values enter the calendar only when they are exact ISO dates; timezone-aware timestamps are converted to Europe/Istanbul before day bucketing. No dashboard mutation becomes business authority.

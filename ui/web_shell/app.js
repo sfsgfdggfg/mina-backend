@@ -52,6 +52,96 @@ function showError(error) {
   setStatus("Hata", false);
 }
 
+function dashboardJobTarget(jobId) {
+  window.location.assign(`/app/jobs/${encodeURIComponent(jobId)}`);
+}
+
+function dashboardEntry(entry) {
+  const card = node("button", "", `calendar-entry ${entry.has_attention ? "attention" : ""}`);
+  card.type = "button";
+  const top = node("div", "", "calendar-entry-top");
+  top.append(node("strong", entry.mina_code || "MINA"), node("span", entry.label || entry.kind || "-", "badge"));
+  card.append(top);
+  card.append(node("div", entry.customer_name || "-", "calendar-customer"));
+  card.append(node("div", entry.route || "-", "small"));
+  const when = entry.all_day ? "Tüm gün" : formatDate(entry.at);
+  card.append(node("div", when, "calendar-time"));
+  card.addEventListener("click", () => dashboardJobTarget(entry.job_id));
+  return card;
+}
+
+function attentionCard(item, unscheduled = false) {
+  const card = node("button", "", `attention-card ${item.severity || ""}`);
+  card.type = "button";
+  card.append(node("strong", `${item.mina_code || "MINA"} · ${item.customer_name || "-"}`));
+  card.append(node("div", item.route || "-", "small"));
+  const reasons = unscheduled ? [item.reason || "Plan tarihi yok"] : (item.reasons || []);
+  card.append(node("div", reasons.join(" · "), "attention-reason"));
+  card.addEventListener("click", () => dashboardJobTarget(item.job_id));
+  return card;
+}
+
+function renderDashboard(data, selectedDays = 5) {
+  title.textContent = "Ana Ekran";
+  const root = node("div", "", "dashboard");
+  const summary = data.summary || {};
+  const metrics = node("div", "", "grid dashboard-metrics");
+  metrics.append(
+    metric("Aktif iş", summary.active_jobs ?? 0),
+    metric("Takvim olayı", summary.calendar_entries ?? 0),
+    metric("Dikkat gereken", summary.attention_jobs ?? 0),
+    metric("Tarihi net değil", summary.unscheduled_jobs ?? 0)
+  );
+  root.append(metrics);
+
+  const toolbar = node("div", "", "dashboard-toolbar");
+  const period = node("div", "", "dashboard-period");
+  period.append(node("h2", "Operasyon Takvimi"));
+  period.append(node("div", `${data.anchor_date || ""} → ${data.window_end_date || ""}`, "small"));
+  const controls = node("div", "", "segment-control");
+  [3, 5].forEach(days => {
+    const button = actionButton(`${days} Gün`, days === selectedDays ? "active" : "", () => loadDashboard(days));
+    controls.append(button);
+  });
+  toolbar.append(period, controls); root.append(toolbar);
+
+  const calendar = node("div", "", `calendar-grid days-${selectedDays}`);
+  (data.days || []).forEach(day => {
+    const column = node("section", "", `calendar-day ${day.is_today ? "today" : ""}`);
+    const heading = node("div", "", "calendar-day-heading");
+    heading.append(node("strong", day.weekday || ""), node("span", day.date || "", "small"));
+    column.append(heading);
+    (day.entries || []).forEach(entry => column.append(dashboardEntry(entry)));
+    if (!(day.entries || []).length) column.append(node("div", "Planlı kayıt yok", "calendar-empty"));
+    calendar.append(column);
+  });
+  root.append(calendar);
+
+  const attention = data.attention || [];
+  const attentionSection = node("section", "", "section");
+  attentionSection.append(node("h2", "Dikkat Gerekenler"));
+  const attentionGrid = node("div", "", "attention-grid");
+  attention.forEach(item => attentionGrid.append(attentionCard(item)));
+  if (!attention.length) attentionGrid.append(node("div", "Kritik veya riskli aktif kayıt yok.", "muted"));
+  attentionSection.append(attentionGrid); root.append(attentionSection);
+
+  const unscheduled = data.unscheduled || [];
+  const unscheduledSection = node("section", "", "section");
+  unscheduledSection.append(node("h2", "Tarihi Netleşmemiş Aktif İşler"));
+  const unscheduledGrid = node("div", "", "attention-grid");
+  unscheduled.forEach(item => unscheduledGrid.append(attentionCard(item, true)));
+  if (!unscheduled.length) unscheduledGrid.append(node("div", "Tüm aktif işlerde yapılandırılmış tarih kanıtı var.", "muted"));
+  unscheduledSection.append(unscheduledGrid); root.append(unscheduledSection);
+  content.replaceChildren(root);
+}
+
+async function loadDashboard(days = 5) {
+  try {
+    const data = await api(`/operations-dashboard?days=${days}`);
+    renderDashboard(data, days); setStatus("Güncel");
+  } catch (error) { showError(error); }
+}
+
 function renderJobs(data) {
   title.textContent = "MINA İşleri";
   const toolbar = node("div", "", "toolbar");
@@ -271,7 +361,9 @@ function renderReports(data) {
 async function boot() {
   const page = document.body.dataset.page;
   try {
-    if (page === "jobs") {
+    if (page === "dashboard") {
+      await loadDashboard(5); return;
+    } else if (page === "jobs") {
       renderJobs(await api("/mina-jobs"));
     } else if (page === "job") {
       await loadJob(document.body.dataset.jobId || ""); return;
