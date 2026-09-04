@@ -3737,3 +3737,13 @@ An operator's measurable first-look interval is the durable elapsed time from `a
 Assignment release, shift handoff and lease expiry are coordination events only. They must never be interpreted as workflow completion or successful action completion. Future operator-performance reporting must derive completion time and outcome from the underlying durable workflow/action evidence appropriate to that work type, while preserving handoff, takeover and stale-assignment history separately.
 
 Browser work-queue filters and labels are presentation aids. Backend priority score/band, assignment ownership, lease status, workflow guards and authenticated operator identity remain authoritative. A future feature that assigns work directly to another person must validate the target against an authoritative operator directory and a defined permission policy; arbitrary browser-supplied operator names are not assignment authority.
+
+## RULE-194 — Operator Performance Metrics Must Preserve Evidence Coverage and SLA Authority
+
+Operator work-assignment reporting must deduplicate durable assignment history by work ID plus assignment generation. Repeated saves caused by acknowledgement, renewal or release are state history for one generation and must not be counted as separate assigned tasks.
+
+First-look time is measured only from durable `assigned_at` to durable `acknowledged_at`. Reports must expose acknowledgement/first-look coverage so assignments without acknowledgement evidence do not silently become zero-second responses.
+
+No first-look SLA compliance percentage may be calculated until an explicit SLA threshold policy exists. The assignment lease duration is coordination safety, not an SLA target, and must never be substituted for one.
+
+Release, handoff, expiry and reassignment must not be treated as task completion. Completion-time and completion-SLA metrics require work-type-specific durable completion evidence. Operator speed metrics are descriptive and must not be used alone as a quality ranking.

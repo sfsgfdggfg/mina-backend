@@ -11,6 +11,8 @@ from src.core.mina_job_repository import InMemoryMinaJobRepository
 from src.core.models import CustomerQuote, Shipment, SupplierQuote
 from src.core.operation_execution import OperationException, OperationExecutionSnapshot
 from src.core.operation_execution_repository import InMemoryOperationExecutionRepository
+from src.core.operational_work_assignment import OperationalWorkAssignment
+from src.core.operational_work_assignment_repository import InMemoryOperationalWorkAssignmentRepository
 from src.core.pilot_access import route_allowed
 from src.core.quote_case import (
     CustomerQuoteAutomatedSentEvidence,
@@ -247,10 +249,41 @@ def evaluate_reporting_read_model_regressions() -> dict:
         (passes if condition else failures).append(label)
 
     jobs, quotes, rfqs, prices, operations, masters, learning, fixture_jobs = _build_fixture()
+    assignments = InMemoryOperationalWorkAssignmentRepository()
+
+    def save_generation(work_id, operator, generation, assigned_at, acknowledged_after=None, release_reason=None):
+        base = OperationalWorkAssignment(
+            work_id=work_id, assigned_to=operator, assigned_at=assigned_at,
+            generation=generation, work_state_sha256=(str(generation % 10) * 64),
+        )
+        assignments.save(base)
+        current = base
+        if acknowledged_after is not None:
+            acknowledged_at = assigned_at + timedelta(seconds=acknowledged_after)
+            current = base.model_copy(update={
+                "status": "acknowledged", "acknowledged_at": acknowledged_at,
+                "last_renewed_at": acknowledged_at,
+            })
+            assignments.save(current)
+        if release_reason is not None:
+            current = current.model_copy(update={
+                "status": "released",
+                "released_at": assigned_at + timedelta(minutes=20),
+                "released_by": operator, "release_reason": release_reason,
+            })
+            assignments.save(current)
+
+    save_generation("work-a", "Operator Alpha", 1, NOW + timedelta(minutes=10), acknowledged_after=75)
+    save_generation("work-b", "Operator Alpha", 1, NOW + timedelta(minutes=20))
+    save_generation("work-c", "Operator Beta", 1, NOW + timedelta(minutes=30), acknowledged_after=300, release_reason="shift_handoff")
+    save_generation("work-c", "Operator Gamma", 2, NOW + timedelta(minutes=50), acknowledged_after=60, release_reason="operator_release")
+    save_generation("work-old", "Old Operator", 1, NOW - timedelta(days=2), acknowledged_after=30)
+
     report = build_reporting_read_model(
         mina_repository=jobs, quote_case_repository=quotes, supplier_rfq_repository=rfqs,
         supplier_price_repository=prices, operation_execution_repository=operations,
         master_data_repository=masters, learning_fact_repository=learning,
+        operational_work_assignment_repository=assignments,
         start_date=date(2026, 9, 4), end_date=date(2026, 9, 4), as_of=NOW + timedelta(days=1),
     )
     check(
@@ -301,6 +334,36 @@ def evaluate_reporting_read_model_regressions() -> dict:
         and ozan["average_operation_cycle_hours"] == 34.0
         and ozan["on_time_delivery_percent"] == 100.0,
         "operations-person read model combines workload completion and exception outcomes",
+    )
+    assignment_perf = report["operations"]["work_assignment_performance"]
+    alpha_perf = next(row for row in assignment_perf["rows"] if row["name"] == "Operator Alpha")
+    beta_perf = next(row for row in assignment_perf["rows"] if row["name"] == "Operator Beta")
+    gamma_perf = next(row for row in assignment_perf["rows"] if row["name"] == "Operator Gamma")
+    check(
+        assignment_perf["period_basis"] == "assignment_assigned_at_istanbul"
+        and assignment_perf["summary"]["assignment_generation_count"] == 4
+        and assignment_perf["summary"]["acknowledged_generation_count"] == 3
+        and assignment_perf["summary"]["first_look_coverage_percent"] == 75.0
+        and assignment_perf["summary"]["average_first_look_seconds"] == 145.0
+        and assignment_perf["summary"]["median_first_look_seconds"] == 75.0
+        and all(row["name"] != "Old Operator" for row in assignment_perf["rows"]),
+        "operator assignment performance deduplicates assignment snapshots and filters by assigned-at Istanbul date",
+    )
+    check(
+        alpha_perf["assignment_generation_count"] == 2
+        and alpha_perf["acknowledged_generation_count"] == 1
+        and alpha_perf["first_look_coverage_percent"] == 50.0
+        and alpha_perf["average_first_look_seconds"] == 75.0
+        and beta_perf["shift_handoff_count"] == 1
+        and gamma_perf["operator_release_count"] == 1
+        and gamma_perf["reassignment_generation_count"] == 1,
+        "operator rows preserve first-look evidence handoff release and reassignment semantics",
+    )
+    check(
+        assignment_perf["first_look_sla_status"] == "threshold_not_configured"
+        and assignment_perf["completion_metric_status"] == "work_type_completion_mapping_not_configured"
+        and all(row["first_look_sla_percent"] is None for row in assignment_perf["rows"]),
+        "operator performance does not invent SLA or completion authority before thresholds and work-type mappings exist",
     )
     acme = next(row for row in report["customers"]["rows"] if row["name"] == "Acme")
     route_de = next(row for row in report["routes"]["rows"] if row["name"] == "Türkiye → Germany")
@@ -374,13 +437,15 @@ def evaluate_reporting_read_model_regressions() -> dict:
         api.mina_job_repository, api.quote_case_repository, api.supplier_rfq_repository,
         api.supplier_price_repository, api.operation_execution_repository,
         api.master_data_repository, api.learning_fact_repository,
+        api.operational_work_assignment_repository,
     )
     try:
         (
             api.mina_job_repository, api.quote_case_repository, api.supplier_rfq_repository,
             api.supplier_price_repository, api.operation_execution_repository,
             api.master_data_repository, api.learning_fact_repository,
-        ) = (jobs, quotes, rfqs, prices, operations, masters, learning)
+            api.operational_work_assignment_repository,
+        ) = (jobs, quotes, rfqs, prices, operations, masters, learning, assignments)
         api_report = api.get_reporting_read_model(start_date=date(2026, 9, 4), end_date=date(2026, 9, 4))
         api_financial = api.get_reporting_section("financial", start_date=date(2026, 9, 4), end_date=date(2026, 9, 4))
     finally:
@@ -388,6 +453,7 @@ def evaluate_reporting_read_model_regressions() -> dict:
             api.mina_job_repository, api.quote_case_repository, api.supplier_rfq_repository,
             api.supplier_price_repository, api.operation_execution_repository,
             api.master_data_repository, api.learning_fact_repository,
+            api.operational_work_assignment_repository,
         ) = originals
     check(
         api_report["overview"]["job_count"] == 3

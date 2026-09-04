@@ -1509,6 +1509,7 @@ def get_reporting_read_model(
             operation_execution_repository=operation_execution_repository,
             master_data_repository=master_data_repository,
             learning_fact_repository=learning_fact_repository,
+            operational_work_assignment_repository=operational_work_assignment_repository,
             start_date=start_date, end_date=end_date,
         )
     except ValueError as exc:
@@ -1530,6 +1531,7 @@ def get_reporting_section(
             operation_execution_repository=operation_execution_repository,
             master_data_repository=master_data_repository,
             learning_fact_repository=learning_fact_repository,
+            operational_work_assignment_repository=operational_work_assignment_repository,
             start_date=start_date, end_date=end_date,
         )
     except ValueError as exc:
