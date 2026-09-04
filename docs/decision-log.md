@@ -6422,3 +6422,15 @@ P2-05 adds a durable operation-execution layer to lifecycle-v2 MINA jobs. The MI
 Operational exceptions are separate durable records layered over the current job stage. An in-transit job may therefore simultaneously carry a deviation, delivery risk or actual delay without transitioning into a synthetic `delay` stage. Exception impact is explicit evidence and must not be inferred solely from a date-only promised-delivery field. `deviation` means the customer promise is not currently threatened, `delivery_risk` means the promise may be missed, and `actual_delay` means a promised delivery will or has been missed.
 
 Lifecycle-v2 API transitions may require structured execution evidence. Vehicle assignment requires durable plate, driver and assignment time; loaded requires loading-time evidence; delivered requires delivery-time evidence; closing review requires delivery plus POD or CMR receipt; and normal completion is blocked while any operation exception remains open. Lifecycle-v1 records retain their pre-P2-05 transition semantics. Lost/cancelled jobs may still resolve a pre-existing exception with explicit resolution evidence, but closed jobs cannot receive new execution facts or new exceptions.
+
+
+## DEC-173 — Learned Facts Require Explicit Evidence and Human Confirmation Before Runtime Authority
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-06 introduces durable `LearningFact` records for customer, supplier, route and operation knowledge. A fact stores one bounded subject/key/value assertion together with confidence, source type and one or more bounded evidence references. Confidence is advisory only: a `proposed` fact is never runtime-authoritative, even at very high confidence. Runtime authority begins only after explicit human confirmation with actor, time and review note.
+
+Learning history is append-oriented. A changed fact must not silently overwrite a previously confirmed value. A replacement is created as a new proposed fact with an explicit `supersedes_fact_id`; confirmation atomically supersedes the prior confirmed fact and makes the replacement the single active runtime authority for that subject/key. Rejected and superseded facts remain durable historical evidence.
+
+P2-06 establishes fact authority, evidence, review lifecycle, APIs and UI review. It does not yet authorize autonomous extraction from historical inboxes, automatic master-data mutation, or automatic use of proposed facts in pricing, supplier selection or external communication. Those require separate evidence-backed integrations.

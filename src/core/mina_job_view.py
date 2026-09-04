@@ -9,6 +9,8 @@ from src.core.automation_policy_service import resolve_effective_automation_poli
 from src.core.master_data_repository import MasterDataRepository
 from src.core.operation_execution_repository import OperationExecutionRepository
 from src.core.operation_execution_service import build_operation_execution_view
+from src.core.learning_fact_repository import LearningFactRepository
+from src.core.learning_fact_service import build_learning_fact_view
 from src.core.automation_planning import customer_deadline_plan, supplier_reminder_plan
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.mina_job_service import (
@@ -58,6 +60,7 @@ def build_mina_job_detail(
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
     operation_execution_repository: OperationExecutionRepository | None = None,
+    learning_fact_repository: LearningFactRepository | None = None,
     job_id: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -169,6 +172,13 @@ def build_mina_job_detail(
         if operation_execution_repository is not None
         else None
     )
+    learning = (
+        build_learning_fact_view(
+            repository=learning_fact_repository, subject_type="operation", subject_id=job.job_id,
+        )
+        if learning_fact_repository is not None
+        else None
+    )
     return {
         "job": job.model_dump(),
         "summary": {
@@ -196,6 +206,7 @@ def build_mina_job_detail(
         "suppliers": supplier_rows,
         "supplier_prices": supplier_prices,
         "operation": operation,
+        "learning": learning,
         "quote": quote_summary,
         "timeline": timeline,
         "controls": {

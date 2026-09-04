@@ -3680,3 +3680,12 @@ For lifecycle-v2 jobs, controlled API stage transitions must fail closed when th
 An operation exception must retain incident type, explicit impact level, cause, source, report time and stage-at-report. Optional location, old/new ETA, customer-impact summary and next action may be stored when evidenced. `delivery_risk` and `actual_delay` recommend customer attention; `deviation` does not by itself require a customer message. The raw supplier message must not be copied into timeline metadata; timeline events should contain bounded incident classification and changed-field evidence only.
 
 Exception creation is idempotent by client entry identity. Open exceptions may be corrected or escalated, but once resolved their incident data is frozen. Resolution requires actor, time and a non-empty resolution note. Execution snapshots and exception records are durable operational evidence and survive ordinary pilot retention purges.
+
+
+## RULE-188 — Confidence Must Never Substitute for Fact Authority
+
+MINAI may propose a learning fact from manual input, Excel import, email evidence, operation history, portal evidence, system evidence or an AI inference. Every fact must retain at least one bounded evidence item containing source type, an opaque/bounded source reference, observation time and a concise evidence summary. Raw supplier/customer message bodies must not be copied into learning evidence merely to preserve provenance; references and bounded summaries should be used instead.
+
+`proposed` facts are suggestions and must not alter runtime decisions. `confirmed` facts are the only learning facts eligible for runtime use. `rejected` facts cannot later be revived as confirmed; a new proposal is required. `superseded` facts remain immutable history and are excluded from runtime authority. At most one confirmed fact may own a given subject + fact key. A changed value requires explicit replacement/supersession rather than in-place mutation.
+
+Customer and supplier facts must reference existing durable master-data identities. Operation facts must reference an existing MINA job when a job repository is available. Route facts may use a deterministic route identity without requiring a separate route-master table. Learning records and their idempotency indexes survive ordinary pilot retention purges.

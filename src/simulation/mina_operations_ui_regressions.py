@@ -71,6 +71,14 @@ def evaluate_mina_operations_ui_regressions() -> dict:
         "operation execution evidence and exception controls are wired to controlled APIs",
     )
     check(
+        "MINAI Öğrenimleri" in ui_text
+        and "Öğrenimi Onayla" in ui_text
+        and "Öğrenimi Reddet" in ui_text
+        and "Confidence yalnız güven sinyalidir" in ui_text
+        and "/learning-facts" in ui_text,
+        "operation learning facts expose proposed confirmed review semantics",
+    )
+    check(
         "Reminder Önizle" in ui_text
         and "Reminder'ı Şimdi Gönder" in ui_text
         and "/reminder-preview" in ui_text

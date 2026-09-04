@@ -37,6 +37,8 @@ PERSISTENT_STATE_NAMESPACES = (
     "operation_execution_snapshots",
     "operation_exceptions",
     "operation_exception_by_entry",
+    "learning_facts",
+    "learning_fact_by_entry",
 )
 
 

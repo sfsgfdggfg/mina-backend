@@ -190,6 +190,19 @@ from src.core.operation_execution_service import (
     update_operation_exception,
     update_operation_execution,
 )
+from src.core.learning_fact import LearningEvidence
+from src.core.learning_fact_repository import (
+    LearningFactConflictError,
+    SQLiteLearningFactRepository,
+)
+from src.core.learning_fact_service import (
+    LearningFactNotFoundError,
+    build_learning_fact_view,
+    confirm_learning_fact,
+    create_learning_fact,
+    list_learning_facts,
+    reject_learning_fact,
+)
 from src.core.master_data import (
     MasterContact,
     SupplierGeographyCapability,
@@ -321,6 +334,7 @@ mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
 operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
+learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
@@ -550,6 +564,26 @@ class OperationExceptionUpdateRequest(BaseModel):
 
 class OperationExceptionResolveRequest(BaseModel):
     resolution_note: str = Field(min_length=1, max_length=1200)
+
+
+class LearningFactCreateRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    subject_type: Literal["customer", "supplier", "route", "operation"]
+    subject_id: str = Field(min_length=1, max_length=300)
+    subject_label: str = Field(min_length=1, max_length=300)
+    fact_key: str = Field(pattern=r"^[a-z0-9][a-z0-9_.-]{1,119}$")
+    value: Any
+    value_unit: Optional[str] = Field(default=None, max_length=80)
+    confidence: float = Field(ge=0, le=1)
+    source_type: Literal[
+        "manual", "excel_import", "email", "operation_history", "portal", "system", "minai_inference"
+    ]
+    evidence: list[LearningEvidence] = Field(min_length=1, max_length=20)
+    supersedes_fact_id: Optional[str] = Field(default=None, max_length=100)
+
+
+class LearningFactReviewRequest(BaseModel):
+    review_note: str = Field(min_length=1, max_length=1200)
 
 
 class PreviewAttachmentReviewRequest(BaseModel):
@@ -1391,6 +1425,106 @@ def runtime_release():
     return runtime_release_payload()
 
 
+@app.get("/learning-facts")
+def get_learning_facts(
+    subject_type: Optional[Literal["customer", "supplier", "route", "operation"]] = None,
+    subject_id: Optional[str] = None,
+    status: Optional[Literal["proposed", "confirmed", "rejected", "superseded"]] = None,
+    runtime_only: bool = False,
+):
+    items = list_learning_facts(
+        repository=learning_fact_repository, subject_type=subject_type,
+        subject_id=subject_id, status=status, runtime_only=runtime_only,
+    )
+    return {"facts": [item.model_dump() for item in items]}
+
+
+@app.post("/learning-facts")
+def post_learning_fact(request: LearningFactCreateRequest, http_request: Request):
+    try:
+        fact = create_learning_fact(
+            repository=learning_fact_repository, created_by=_authenticated_operator(http_request),
+            master_repository=master_data_repository, mina_repository=mina_job_repository,
+            **request.model_dump(),
+        )
+    except LearningFactConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return fact.model_dump()
+
+
+@app.get("/learning-facts/{fact_id}")
+def get_learning_fact(fact_id: str):
+    fact = learning_fact_repository.get(fact_id)
+    if fact is None:
+        raise HTTPException(status_code=404, detail=f"Learning fact not found: {fact_id}")
+    return fact.model_dump()
+
+
+@app.post("/learning-facts/{fact_id}/confirm")
+def confirm_learning_fact_api(
+    fact_id: str, request: LearningFactReviewRequest, http_request: Request,
+):
+    try:
+        fact = confirm_learning_fact(
+            repository=learning_fact_repository, fact_id=fact_id,
+            reviewed_by=_authenticated_operator(http_request), review_note=request.review_note,
+        )
+    except LearningFactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Learning fact not found: {fact_id}") from exc
+    except LearningFactConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return fact.model_dump()
+
+
+@app.post("/learning-facts/{fact_id}/reject")
+def reject_learning_fact_api(
+    fact_id: str, request: LearningFactReviewRequest, http_request: Request,
+):
+    try:
+        fact = reject_learning_fact(
+            repository=learning_fact_repository, fact_id=fact_id,
+            reviewed_by=_authenticated_operator(http_request), review_note=request.review_note,
+        )
+    except LearningFactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Learning fact not found: {fact_id}") from exc
+    except LearningFactConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return fact.model_dump()
+
+
+@app.get("/master-data/customers/{customer_id}/learning-facts")
+def get_customer_learning_facts(customer_id: str):
+    if master_data_repository.get_customer(customer_id) is None:
+        raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}")
+    return build_learning_fact_view(
+        repository=learning_fact_repository, subject_type="customer", subject_id=customer_id,
+    )
+
+
+@app.get("/master-data/suppliers/{supplier_id}/learning-facts")
+def get_supplier_learning_facts(supplier_id: str):
+    if master_data_repository.get_supplier(supplier_id) is None:
+        raise HTTPException(status_code=404, detail=f"Supplier master not found: {supplier_id}")
+    return build_learning_fact_view(
+        repository=learning_fact_repository, subject_type="supplier", subject_id=supplier_id,
+    )
+
+
+@app.get("/mina-jobs/{job_id}/learning-facts")
+def get_mina_job_learning_facts(job_id: str):
+    if mina_job_repository.get(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    return build_learning_fact_view(
+        repository=learning_fact_repository, subject_type="operation", subject_id=job_id,
+    )
+
+
 @app.get("/mina-jobs")
 def list_mina_jobs():
     return build_mina_job_list(mina_job_repository)
@@ -1519,6 +1653,7 @@ def get_mina_job(job_id: str):
             master_data_repository=master_data_repository,
             agency_policy_repository=agency_automation_policy_repository,
             operation_execution_repository=operation_execution_repository,
+            learning_fact_repository=learning_fact_repository,
             job_id=job_id,
         )
     except MinaJobNotFoundError as exc:
