@@ -855,3 +855,9 @@ The projection contains a bounded three-to-five-day Europe/Istanbul window, cale
 P2-12 does not add a mutable performance table. Operator performance is a read model over durable `operational_work_assignment` history. Historical snapshots are grouped by `(work_id, generation)` and projected into per-operator assignment count, acknowledgement coverage, first-look timing, release/handoff counts and reassignment-generation evidence.
 
 The activity-period basis for this projection is `assigned_at` converted to `Europe/Istanbul`. First-look timing uses the exact durable `assigned_at → acknowledged_at` interval. SLA compliance and completion duration are intentionally absent until explicit SLA thresholds and work-type completion-event mappings exist.
+
+## P2-13 Agency Branding Settings
+
+`AgencyBrandingSettings` is a durable singleton record in namespace `agency_branding_settings` with record key `current`. It stores bounded `company_name`, optional validated `logo_data_uri`, `primary_color`, `secondary_accent_color`, timezone-aware `updated_at`, authenticated `updated_by` and a fixed source marker.
+
+Derived primary/secondary contrast, soft and hover colors are read-model values and are not separate mutable authority. The current branding record survives ordinary state-retention cleanup; update saves also create normal pilot audit events. Critical success/warning/danger status colors are not branding fields and cannot be persisted through this model.

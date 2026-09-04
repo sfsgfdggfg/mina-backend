@@ -3747,3 +3747,11 @@ First-look time is measured only from durable `assigned_at` to durable `acknowle
 No first-look SLA compliance percentage may be calculated until an explicit SLA threshold policy exists. The assignment lease duration is coordination safety, not an SLA target, and must never be substituted for one.
 
 Release, handoff, expiry and reassignment must not be treated as task completion. Completion-time and completion-SLA metrics require work-type-specific durable completion evidence. Operator speed metrics are descriptive and must not be used alone as a quality ranking.
+
+## RULE-195 — Branding Must Preserve Security, Contrast, and Semantic Status Colors
+
+Agency branding may define a bounded company name, optional logo, primary color and secondary accent color only. Colors must use exact `#RRGGBB` values. The backend derives ordinary contrast, soft and hover tones; the browser must not reinterpret branding as workflow, risk or SLA authority.
+
+Uploaded logos must be validated as PNG, JPEG or WebP by both declared MIME type and file magic bytes and must not exceed 256 KB. SVG, HTML or other active-content formats are prohibited. User-controlled branding text must be rendered as text, never executable HTML.
+
+Success, warning and danger colors are semantic system status colors and must remain independent from agency branding. A branding update requires authenticated operator identity and CSRF protection in the browser shell and must retain update actor/time evidence. Branding changes must not mutate MINA jobs, approvals, automation policy, operational work assignments, commercial evidence or reporting outcomes.

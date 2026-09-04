@@ -70,8 +70,8 @@ def _shell_html(*, page: str, operator_name: str, csrf_token: str, job_id: str =
 <meta name="csrf-token" content="{html.escape(csrf_token)}"><title>MINAI</title>
 <link rel="stylesheet" href="/app/assets/app.css"></head>
 <body data-page="{html.escape(page)}" data-job-id="{safe_job_id}"><div class="shell">
-<aside><a class="brand" href="/app/dashboard"><span class="brand-mark small">M</span><strong>MINAI</strong></a>
-<nav><a href="/app/dashboard">Ana Ekran</a><a href="/app/work">İş Kuyruğu</a><a href="/app/jobs">MINA İşleri</a><a href="/app/reports">Raporlar</a></nav>
+<aside><a class="brand" href="/app/dashboard"><span class="brand-mark small" id="shell-brand-mark">M</span><strong id="shell-brand-name">MINAI</strong></a>
+<nav><a href="/app/dashboard">Ana Ekran</a><a href="/app/work">İş Kuyruğu</a><a href="/app/jobs">MINA İşleri</a><a href="/app/reports">Raporlar</a><a href="/app/settings">Ayarlar</a></nav>
 <div class="sidebar-footer"><span>{operator}</span><form method="post" action="/app/logout">
 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}"><button class="link-button" type="submit">Çıkış</button></form></div></aside>
 <main><header><div><p class="eyebrow">Operasyon Merkezi</p><h1 id="page-title">MINAI</h1></div>
@@ -207,3 +207,8 @@ async def web_job_detail(request: Request, job_id: str):
 @router.get("/app/reports")
 async def web_reports(request: Request):
     return _shell_response(request, page="reports")
+
+
+@router.get("/app/settings")
+async def web_settings(request: Request):
+    return _shell_response(request, page="settings")
