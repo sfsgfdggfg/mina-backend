@@ -6376,3 +6376,16 @@ Lifecycle v2 distinguishes `price_request` from `approved_job`. A price request 
 The v2 operational lifecycle is deliberately explicit: `operation_opened` → `supplier_confirmation_pending` → `vehicle_details_pending` → `vehicle_assigned` → `pre_loading_check` → `ready_for_loading` → `loaded` → `in_transit` → `delivery` → `delivered` → `pod_cmr_pending` → `closing_review` → `completed`. In lifecycle v2, `delivered` is not terminal. Normal completion requires POD/CMR follow-up and closing review; only `completed`, `lost` and `cancelled` close a v2 job.
 
 A MINA job may also retain durable `sales_owner` and `operations_owner` responsibility independently from temporary operational-work assignment leases. Owner changes require authenticated actor evidence and append-only timeline events containing the prior and new bounded owner values. The backend remains authoritative for allowed next stages, and UI controls must derive or filter actions using that backend transition authority.
+
+## DEC-169 — Supplier Price Acquisition Is Source-Neutral and Fixed Rates Materialize Into Job Offers
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-02 broadens supplier pricing beyond RFQ responses without weakening the existing RFQ lifecycle. A reusable `SupplierFixedRate` represents an agreed price with explicit lane, optional city/region/service/equipment scope, commercial terms, validity dates and evidence source. A `SupplierPriceOffer` represents a price candidate for one durable MINA job and may originate from RFQ/email, phone, WhatsApp, portal, API, manual entry or an applicable fixed rate.
+
+Using a fixed rate does not mutate or consume the reusable agreement. The system deterministically verifies the rate against the job shipment and validity window, then materializes one job-specific price offer that retains the fixed-rate identity as provenance. Route, date, service or equipment uncertainty fails closed rather than broadening the agreement. Exact stored region labels may match explicit shipment area fields; semantic region inference (for example mapping a postcode to DACH/Bavaria) is intentionally deferred until supplier/customer master-data provides an authoritative geography model. Fixed-rate commercial terms are immutable evidence; an agreement may be explicitly activated/deactivated, while changed price/scope/validity requires a new rate record.
+
+RFQ-derived, direct and fixed-rate offers may be projected into the same multi-criteria supplier quote comparison engine. The selected `SupplierQuote` can retain the normalized price-offer ID, source type and source reference so later quote approval and audit do not lose how the supplier cost was obtained. Existing RFQ quote selection remains backward compatible.
+
+Fixed rates and job-specific supplier price offers are durable commercial/operational evidence and survive the ordinary pilot state retention purge. Client-generated entry identities make fixed-rate creation and direct price entry idempotent, while a given fixed rate may materialize at most once for the same MINA job. P2-02 does not introduce supplier master-data, geographic-strength learning or automatic region inference; those remain P2-03 scope.

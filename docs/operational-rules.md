@@ -3646,3 +3646,13 @@ A lifecycle-v2 job must have exactly one durable intake identity: an email extra
 Lifecycle-v2 operational state must progress through the controlled backend transition graph. Delivery confirmation alone must not close the job. `delivered` must progress to `pod_cmr_pending`, then `closing_review`, then `completed`. Invalid stage skipping must fail closed. `lost` and `cancelled` remain explicit terminal alternatives where permitted and retain mandatory reason evidence.
 
 `Sales_owner` and `operations_owner` are durable job responsibility fields and are separate from temporary operational-work claim/lease state. An authenticated owner change must persist the new responsibility and append timeline evidence of old/new values. Closed jobs must reject ownership changes. UI lifecycle controls must be filtered by backend-provided allowed next stages so the UI cannot invent transition authority.
+
+## RULE-184 — Supplier Price Sources Must Preserve Provenance and Fixed Rates Must Match Deterministically
+
+Supplier pricing must not require a fresh RFQ when a valid agreed fixed rate already covers the shipment. Price evidence may come from RFQ/email, direct email, phone, WhatsApp, portal, API, manual entry or a fixed-rate agreement. Every job-specific price candidate must preserve its source type and bounded source reference; direct operator-recorded prices must use authenticated operator identity.
+
+A fixed rate is usable only when it is active, inside its inclusive validity window and deterministically matches its stored origin/destination scope plus any explicitly constrained transport mode, service type, city, exact region/area label and equipment. Missing or conflicting shipment evidence must not be interpreted as a match. A fixed rate may be explicitly deactivated when an agreement is withdrawn; price, lane and validity changes require a new fixed-rate record rather than rewriting historical terms. Applying a fixed rate creates a separate job-specific offer while preserving the reusable rate unchanged and may occur at most once per job/rate pair.
+
+Direct/manual price entry and fixed-rate use are initial supplier-pricing actions and are allowed only while the job remains in a commercial price-sourcing stage. Once the operation has opened, P2-02 must not silently reopen initial supplier sourcing; later operational re-sourcing requires a separately controlled exception workflow.
+
+RFQ-derived, manual/direct and fixed-rate offers are commercially comparable through the same scoring mechanics. Source type by itself must not make a price win or lose. Commercial safety, supplier suitability, actual price and transit evidence remain the decision inputs, and the chosen supplier quote must retain price-source provenance.

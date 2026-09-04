@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -166,6 +167,17 @@ from src.core.supplier_rfq_lifecycle import (
 from src.core.supplier_rfq_repository import (
     DuplicateSupplierRFQResponseError,
 )
+from src.core.supplier_price_repository import (
+    SQLiteSupplierPriceRepository,
+    SupplierPriceIdempotencyConflictError,
+)
+from src.core.supplier_price_service import (
+    build_job_supplier_price_view,
+    create_direct_supplier_price_offer,
+    create_supplier_fixed_rate,
+    set_supplier_fixed_rate_active,
+    use_fixed_rate_for_job,
+)
 from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.operational_work_queue import build_operational_work_queue
 from src.core.operational_work_assignment_service import (
@@ -272,6 +284,7 @@ quote_approval_repository = SQLiteQuoteApprovalRepository(pilot_store)
 quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
+supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
 automation_action_repository = SQLiteAutomationActionRepository(pilot_store)
@@ -350,6 +363,57 @@ class MinaJobManualCreateRequest(BaseModel):
     shipment: Shipment
     sales_owner: Optional[str] = Field(default=None, max_length=200)
     operations_owner: Optional[str] = Field(default=None, max_length=200)
+
+
+class SupplierFixedRateCreateRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    supplier_name: str = Field(min_length=1, max_length=200)
+    origin_country: str = Field(min_length=1, max_length=100)
+    destination_country: str = Field(min_length=1, max_length=100)
+    origin_city: Optional[str] = Field(default=None, max_length=120)
+    destination_city: Optional[str] = Field(default=None, max_length=120)
+    origin_region: Optional[str] = Field(default=None, max_length=120)
+    destination_region: Optional[str] = Field(default=None, max_length=120)
+    transport_mode: Optional[Literal["road", "rail", "sea", "air", "multimodal"]] = None
+    service_type: Optional[str] = Field(default=None, max_length=80)
+    equipment_type: Optional[str] = Field(default=None, max_length=120)
+    cost: float = Field(gt=0)
+    currency: str = "EUR"
+    transit_time: Optional[str] = Field(default=None, max_length=120)
+    pricing_basis: Optional[Literal["all_in", "base_freight_plus_extras"]] = None
+    included_costs: Optional[list[str]] = None
+    excluded_costs: Optional[list[str]] = None
+    valid_from: date
+    valid_to: date
+    evidence_source: Literal["agreement", "email", "phone", "whatsapp", "portal", "excel", "manual"]
+    evidence_reference: Optional[str] = Field(default=None, max_length=300)
+    notes: Optional[str] = Field(default=None, max_length=2000)
+    active: bool = True
+
+
+class SupplierDirectPriceCreateRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    supplier_name: str = Field(min_length=1, max_length=200)
+    source_type: Literal["email", "phone", "whatsapp", "portal", "api", "manual"]
+    source_reference_id: Optional[str] = Field(default=None, max_length=300)
+    cost: float = Field(gt=0)
+    currency: str = "EUR"
+    transit_time: Optional[str] = Field(default=None, max_length=120)
+    validity_date: Optional[str] = Field(default=None, max_length=80)
+    vehicle_available_date: Optional[str] = Field(default=None, max_length=80)
+    equipment_type: Optional[str] = Field(default=None, max_length=120)
+    pricing_basis: Optional[Literal["all_in", "base_freight_plus_extras"]] = None
+    included_costs: Optional[list[str]] = None
+    excluded_costs: Optional[list[str]] = None
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+
+class SupplierFixedRateUseRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+
+
+class SupplierFixedRateStatusRequest(BaseModel):
+    active: bool
 
 
 class MinaJobAutomationOverrideRequest(BaseModel):
@@ -900,6 +964,99 @@ def create_manual_job(request: MinaJobManualCreateRequest, http_request: Request
     return job.model_dump()
 
 
+@app.post("/supplier-fixed-rates")
+def create_fixed_rate(request: SupplierFixedRateCreateRequest, http_request: Request):
+    try:
+        rate = create_supplier_fixed_rate(
+            repository=supplier_price_repository,
+            recorded_by=_authenticated_operator(http_request),
+            **request.model_dump(),
+        )
+    except SupplierPriceIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return rate.model_dump()
+
+
+@app.get("/supplier-fixed-rates")
+def list_fixed_rates():
+    return {
+        "fixed_rates": [item.model_dump() for item in supplier_price_repository.list_fixed_rates()]
+    }
+
+
+@app.post("/supplier-fixed-rates/{rate_id}/status")
+def update_fixed_rate_status(
+    rate_id: str, request: SupplierFixedRateStatusRequest, http_request: Request,
+):
+    try:
+        rate = set_supplier_fixed_rate_active(
+            repository=supplier_price_repository, rate_id=rate_id, active=request.active,
+            updated_by=_authenticated_operator(http_request),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return rate.model_dump()
+
+
+@app.get("/mina-jobs/{job_id}/supplier-prices")
+def get_mina_job_supplier_prices(job_id: str):
+    try:
+        return build_job_supplier_price_view(
+            price_repository=supplier_price_repository,
+            mina_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            job_id=job_id,
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/supplier-prices/manual")
+def create_mina_job_supplier_price(
+    job_id: str, request: SupplierDirectPriceCreateRequest, http_request: Request,
+):
+    try:
+        offer = create_direct_supplier_price_offer(
+            price_repository=supplier_price_repository,
+            mina_repository=mina_job_repository,
+            job_id=job_id, recorded_by=_authenticated_operator(http_request),
+            **request.model_dump(),
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SupplierPriceIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return offer.model_dump()
+
+
+@app.post("/mina-jobs/{job_id}/supplier-prices/fixed-rate/{rate_id}")
+def use_mina_job_fixed_rate(
+    job_id: str, rate_id: str, request: SupplierFixedRateUseRequest, http_request: Request,
+):
+    try:
+        offer = use_fixed_rate_for_job(
+            price_repository=supplier_price_repository,
+            mina_repository=mina_job_repository,
+            job_id=job_id, rate_id=rate_id, entry_id=request.entry_id,
+            recorded_by=_authenticated_operator(http_request),
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SupplierPriceIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return offer.model_dump()
+
+
 @app.get("/mina-jobs/{job_id}")
 def get_mina_job(job_id: str):
     try:
@@ -908,6 +1065,7 @@ def get_mina_job(job_id: str):
             supplier_repository=supplier_rfq_repository,
             quote_case_repository=quote_case_repository,
             action_repository=automation_action_repository,
+            price_repository=supplier_price_repository,
             job_id=job_id,
         )
     except MinaJobNotFoundError as exc:

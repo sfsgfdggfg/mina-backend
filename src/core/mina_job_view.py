@@ -14,6 +14,8 @@ from src.core.mina_job_service import (
 )
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
+from src.core.supplier_price_repository import SupplierPriceRepository
+from src.core.supplier_price_service import PRICE_SOURCING_STAGES, build_job_supplier_price_view
 
 
 def _route_text(job) -> str:
@@ -49,6 +51,7 @@ def build_mina_job_detail(
     supplier_repository: SupplierRFQRepository,
     quote_case_repository: QuoteCaseRepository,
     action_repository: AutomationActionRepository,
+    price_repository: SupplierPriceRepository | None = None,
     job_id: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -132,6 +135,14 @@ def build_mina_job_detail(
             "automated_send_count": len(quote_case.automated_sent_evidence),
         }
     timeline = [event.model_dump() for event in repository.list_events(job.job_id)]
+    supplier_prices = (
+        build_job_supplier_price_view(
+            price_repository=price_repository, mina_repository=repository,
+            supplier_repository=supplier_repository, job_id=job.job_id,
+        )
+        if price_repository is not None
+        else None
+    )
     return {
         "job": job.model_dump(),
         "summary": {
@@ -155,6 +166,7 @@ def build_mina_job_detail(
             "customer_deadline_plan": customer_plan,
         },
         "suppliers": supplier_rows,
+        "supplier_prices": supplier_prices,
         "quote": quote_summary,
         "timeline": timeline,
         "controls": {
@@ -162,5 +174,6 @@ def build_mina_job_detail(
             "stage_transition_available": not job.is_closed,
             "allowed_next_stages": allowed_next_stages(job),
             "supplier_reminder_preview_available": not job.is_closed,
+            "supplier_price_entry_available": (not job.is_closed and job.stage in PRICE_SOURCING_STAGES),
         },
     }

@@ -25,6 +25,7 @@ from src.simulation.supplier_primary_dispatch_regressions import evaluate_suppli
 from src.simulation.automatic_followup_deadline_regressions import evaluate_automatic_followup_deadline_regressions
 from src.simulation.mina_job_case_regressions import evaluate_mina_job_case_regressions
 from src.simulation.mina_operations_ui_regressions import evaluate_mina_operations_ui_regressions
+from src.simulation.supplier_price_source_regressions import evaluate_supplier_price_source_regressions
 from src.simulation.human_operational_flow_regressions import evaluate_human_operational_flow_regressions
 from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
@@ -222,6 +223,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Automatic supplier follow-up and customer quote deadline", evaluate_automatic_followup_deadline_regressions),
     Suite("MINA job and case model", evaluate_mina_job_case_regressions),
     Suite("MINA operations development UI", evaluate_mina_operations_ui_regressions),
+    Suite("Supplier price sources and fixed rates", evaluate_supplier_price_source_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),
     Suite("Pricing policy resolution", evaluate_pricing_policy_regressions),
     Suite(

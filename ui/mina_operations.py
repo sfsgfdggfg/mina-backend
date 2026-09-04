@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import requests
@@ -308,6 +309,9 @@ def _render_job_overview(detail: dict[str, Any]) -> None:
 def _render_suppliers(
     api_base_url: str, job_id: str, detail: dict[str, Any]
 ) -> None:
+    _render_supplier_prices(api_base_url, job_id, detail)
+    st.divider()
+    st.markdown("### RFQ Takibi")
     suppliers = detail.get("suppliers") or []
     if not suppliers:
         st.info("Bu iş için henüz supplier RFQ kaydı yok.")
@@ -342,6 +346,100 @@ def _render_suppliers(
             _render_supplier_reminder_controls(
                 api_base_url, job_id, supplier
             )
+
+
+def _render_supplier_prices(
+    api_base_url: str, job_id: str, detail: dict[str, Any]
+) -> None:
+    price_view = detail.get("supplier_prices") or {}
+    offers = price_view.get("price_offers") or []
+    fixed_rates = price_view.get("applicable_fixed_rates") or []
+    controls = detail.get("controls") or {}
+    entry_allowed = bool(controls.get("supplier_price_entry_available"))
+
+    st.markdown("### Tedarikçi Fiyatları")
+    if offers:
+        rows = []
+        source_labels = {
+            "rfq_email": "RFQ / E-posta", "rfq_portal": "RFQ / Portal",
+            "rfq_api": "RFQ / API", "rfq_manual": "RFQ / Manuel",
+            "email": "E-posta", "phone": "Telefon", "whatsapp": "WhatsApp",
+            "portal": "Portal", "api": "API", "manual": "Manuel",
+            "fixed_rate": "Sabit / Anlaşmalı",
+        }
+        for offer in offers:
+            rows.append({
+                "Tedarikçi": offer.get("supplier_name"),
+                "Kaynak": source_labels.get(offer.get("source_type"), offer.get("source_type")),
+                "Fiyat": offer.get("cost"),
+                "Döviz": offer.get("currency"),
+                "Transit": offer.get("transit_time") or "-",
+                "Geçerlilik": offer.get("validity_date") or "-",
+            })
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    else:
+        st.info("Henüz kullanılabilir tedarikçi fiyatı kaydedilmedi.")
+
+    if fixed_rates:
+        st.markdown("#### Uygun Sabit Fiyatlar")
+        for item in fixed_rates:
+            rate = item.get("rate") or {}
+            cols = st.columns([3, 2, 2])
+            cols[0].write(
+                f"**{rate.get('supplier_name') or '-'}** — "
+                f"{rate.get('origin_country') or '-'} → {rate.get('destination_country') or '-'}"
+            )
+            cols[1].write(f"**{rate.get('cost')} {rate.get('currency')}**")
+            cols[1].caption(f"{rate.get('valid_from')} – {rate.get('valid_to')}")
+            if entry_allowed and cols[2].button(
+                "Bu Fiyatı Kullan", key=f"use_fixed_{job_id}_{rate.get('rate_id')}"
+            ):
+                try:
+                    _post_json(
+                        api_base_url,
+                        f"/mina-jobs/{job_id}/supplier-prices/fixed-rate/{rate.get('rate_id')}",
+                        {"entry_id": str(uuid4())},
+                    )
+                    st.success("Sabit fiyat işe eklendi.")
+                    st.rerun()
+                except (requests.RequestException, RuntimeError) as exc:
+                    st.warning(str(exc))
+
+    if not entry_allowed:
+        return
+
+    with st.expander("Manuel / Harici Fiyat Gir", expanded=False):
+        with st.form(f"supplier_price_form_{job_id}"):
+            supplier_name = st.text_input("Tedarikçi")
+            source_label = st.selectbox(
+                "Kaynak", ["Telefon", "WhatsApp", "E-posta", "Portal", "Manuel"]
+            )
+            c1, c2 = st.columns(2)
+            cost = c1.number_input("Fiyat", min_value=0.01, step=50.0)
+            currency = c2.text_input("Döviz", value="EUR", max_chars=3)
+            transit = st.text_input("Transit", placeholder="Örn. 4 gün")
+            equipment = st.text_input("Ekipman", placeholder="Örn. Tenteli")
+            notes = st.text_area("Not")
+            submitted = st.form_submit_button("Fiyatı Kaydet")
+        if submitted:
+            source_map = {
+                "Telefon": "phone", "WhatsApp": "whatsapp", "E-posta": "email",
+                "Portal": "portal", "Manuel": "manual",
+            }
+            try:
+                _post_json(
+                    api_base_url, f"/mina-jobs/{job_id}/supplier-prices/manual",
+                    {
+                        "entry_id": str(uuid4()), "supplier_name": supplier_name,
+                        "source_type": source_map[source_label], "cost": cost,
+                        "currency": currency, "transit_time": transit or None,
+                        "equipment_type": equipment or None, "notes": notes or None,
+                    },
+                )
+                st.success("Tedarikçi fiyatı kaydedildi.")
+                st.rerun()
+            except (requests.RequestException, RuntimeError) as exc:
+                st.warning(str(exc))
 
 
 def _render_supplier_reminder_controls(

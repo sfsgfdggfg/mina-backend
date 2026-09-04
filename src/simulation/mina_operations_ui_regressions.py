@@ -51,6 +51,15 @@ def evaluate_mina_operations_ui_regressions() -> dict:
     )
 
     check(
+        "Tedarikçi Fiyatları" in ui_text
+        and "Bu Fiyatı Kullan" in ui_text
+        and "Manuel / Harici Fiyat Gir" in ui_text
+        and "/supplier-prices/manual" in ui_text
+        and "/supplier-prices/fixed-rate/" in ui_text,
+        "supplier price sources fixed rates and manual price entry are wired to controlled APIs",
+    )
+
+    check(
         "Reminder Önizle" in ui_text
         and "Reminder'ı Şimdi Gönder" in ui_text
         and "/reminder-preview" in ui_text

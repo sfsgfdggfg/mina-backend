@@ -19,8 +19,14 @@ PERSISTENT_STATE_NAMESPACES = (
     "mina_jobs",
     "mina_job_sequences",
     "mina_job_by_proposal",
+    "mina_job_by_manual_intake",
     "mina_job_by_code",
     "mina_job_timeline_events",
+    "supplier_fixed_rates",
+    "supplier_fixed_rate_by_entry",
+    "supplier_price_offers",
+    "supplier_price_offer_by_entry",
+    "supplier_price_offer_by_job_fixed_rate",
 )
 
 
