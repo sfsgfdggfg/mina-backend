@@ -71,7 +71,7 @@ def _shell_html(*, page: str, operator_name: str, csrf_token: str, job_id: str =
 <link rel="stylesheet" href="/app/assets/app.css"></head>
 <body data-page="{html.escape(page)}" data-job-id="{safe_job_id}"><div class="shell">
 <aside><a class="brand" href="/app/dashboard"><span class="brand-mark small">M</span><strong>MINAI</strong></a>
-<nav><a href="/app/dashboard">Ana Ekran</a><a href="/app/jobs">MINA İşleri</a><a href="/app/reports">Raporlar</a></nav>
+<nav><a href="/app/dashboard">Ana Ekran</a><a href="/app/work">İş Kuyruğu</a><a href="/app/jobs">MINA İşleri</a><a href="/app/reports">Raporlar</a></nav>
 <div class="sidebar-footer"><span>{operator}</span><form method="post" action="/app/logout">
 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}"><button class="link-button" type="submit">Çıkış</button></form></div></aside>
 <main><header><div><p class="eyebrow">Operasyon Merkezi</p><h1 id="page-title">MINAI</h1></div>
@@ -94,7 +94,7 @@ async def web_login_page(request: Request):
     if not web_shell_enabled():
         return Response(status_code=404)
     if _session_from_request(request) is not None:
-        return RedirectResponse("/app/jobs", status_code=303)
+        return RedirectResponse("/app/dashboard", status_code=303)
     nonce = secrets.token_urlsafe(24)
     response = _secure_headers(HTMLResponse(_login_html(nonce=nonce)))
     response.set_cookie(
@@ -187,6 +187,11 @@ async def web_root(request: Request):
 @router.get("/app/dashboard")
 async def web_dashboard(request: Request):
     return _shell_response(request, page="dashboard")
+
+
+@router.get("/app/work")
+async def web_work_queue(request: Request):
+    return _shell_response(request, page="work")
 
 
 @router.get("/app/jobs")

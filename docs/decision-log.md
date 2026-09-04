@@ -6486,3 +6486,14 @@ P2-10 changes the authenticated pilot shell's default landing page from the flat
 Date authority is fail-closed. Exact ISO dates and timezone-aware timestamps may be placed on the calendar; vague strings such as `next Friday` remain visible as unscheduled work rather than being interpreted by the browser or silently guessed by the backend. Closed MINA jobs are excluded from active workload counts.
 
 Open `delivery_risk` and `actual_delay` operation exceptions remain separate authority from the calendar and are surfaced in a dedicated attention area. Overdue customer quote deadlines and overdue required-delivery dates may also create attention without fabricating a new lifecycle state. The existing MINA Jobs list remains available for search/detail navigation and the reporting workspace remains separate.
+
+## DEC-178 — Pilot Operator Work Queue Reuses Durable Coordination Authority and Starts With Self-Claim
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-11 exposes the existing unified operational work queue and durable work-assignment authority in the authenticated pilot web shell. The browser does not create a second task system, recompute priority, or infer ownership. It reads the backend queue and authenticated operator's my-work view, then calls the existing controlled assign, acknowledge, renew, takeover and release APIs.
+
+The first pilot browser assignment model is self-claim. An authenticated operator may claim unassigned work for themselves and may take over an expired assignment through the existing lease guard. P2-11 does not let one ordinary operator type an arbitrary name and assign work to another person. Directed person-to-person assignment requires a future authoritative operator directory plus an explicit permission model so identity and assignment authority cannot be fabricated in the browser.
+
+The work-queue workspace provides bounded coordination views such as all open work, my assigned work, approval/confirmation work and unassigned critical work. These are presentation filters over the backend-authoritative item fields and ordering; they do not alter workflow state or priority authority.

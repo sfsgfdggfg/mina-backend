@@ -189,6 +189,224 @@ async function loadDashboard(days = 5) {
   } catch (error) { showError(error); }
 }
 
+
+const WORK_TYPE_LABELS = {
+  attachment_review: "Ek inceleme",
+  customer_extraction_confirmation: "Talep doğrulama",
+  supplier_follow_up: "Tedarikçi takip",
+  supplier_clarification_gap: "Tedarikçi açıklama",
+  supplier_contact_escalation: "Tedarikçi eskalasyon",
+  customer_deadline_update: "Müşteri bilgilendirme",
+  quote_approval: "Teklif onayı",
+};
+
+const WORK_ACTION_LABELS = {
+  inspect_attachment_review: "Eki incele",
+  confirm_extraction: "Talebi doğrula",
+  approve_supplier_follow_up: "Tedarikçi takibini onayla",
+  send_supplier_follow_up: "Tedarikçi takibini gönder",
+  inspect_supplier_follow_up: "Tedarikçi takip durumunu incele",
+  inspect_supplier_clarification: "Tedarikçi açıklamasını incele",
+  send_supplier_reminder_manually: "Tedarikçiye manuel hatırlatma gönder",
+  review_and_approve_supplier_reminder: "Tedarikçi hatırlatmasını onayla",
+  contact_supplier_phone_or_whatsapp: "Tedarikçiyi ara / WhatsApp ile takip et",
+  inspect_supplier_automation_delivery: "Tedarikçi gönderim hatasını incele",
+  inspect_supplier_automation_state: "Tedarikçi otomasyon durumunu incele",
+  inspect_supplier_contact_data: "Tedarikçi iletişim bilgisini kontrol et",
+  inspect_supplier_calendar: "Tedarikçi çalışma takvimini kontrol et",
+  contact_customer_manually: "Müşteriyi bilgilendir",
+  review_and_approve_customer_update: "Müşteri bilgilendirmesini onayla",
+  inspect_customer_update_delivery: "Müşteri gönderim hatasını incele",
+  inspect_customer_update_state: "Müşteri otomasyon durumunu incele",
+  inspect_customer_contact_data: "Müşteri iletişim bilgisini kontrol et",
+  decide_quote_approval: "Teklif onayını kararlaştır",
+  inspect_quote_approval_state: "Teklif onayı durumunu incele",
+};
+
+const APPROVAL_WORK_ACTIONS = new Set([
+  "confirm_extraction",
+  "approve_supplier_follow_up",
+  "review_and_approve_supplier_reminder",
+  "review_and_approve_customer_update",
+  "decide_quote_approval",
+]);
+
+const WORK_PRIORITY_LABELS = {
+  critical: "Kritik",
+  high: "Yüksek",
+  normal: "Normal",
+  low: "Düşük",
+};
+
+let operationalWorkView = "all";
+
+function codeLabel(value) {
+  return String(value || "-").replaceAll("_", " ");
+}
+
+function workTypeLabel(item) {
+  return WORK_TYPE_LABELS[item.work_type] || codeLabel(item.work_type);
+}
+
+function workActionLabel(item) {
+  return WORK_ACTION_LABELS[item.next_action] || codeLabel(item.next_action);
+}
+
+function durationLabel(seconds) {
+  const value = Math.max(0, Number(seconds) || 0);
+  if (value < 60) return `${Math.floor(value)} sn`;
+  if (value < 3600) return `${Math.floor(value / 60)} dk`;
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  return minutes ? `${hours} sa ${minutes} dk` : `${hours} sa`;
+}
+
+function ageLabel(item) {
+  const hours = item.age_hours;
+  if (hours == null) return "Bekleme süresi bilinmiyor";
+  if (hours < 1) return "1 saatten azdır bekliyor";
+  if (hours < 24) return `${hours} saattir bekliyor`;
+  return `${Math.floor(hours / 24)} gün ${hours % 24} saattir bekliyor`;
+}
+
+function isApprovalWork(item) {
+  return APPROVAL_WORK_ACTIONS.has(item.next_action);
+}
+
+async function mutateOperationalWork(item, suffix, refresh, confirmText = "") {
+  if (confirmText && !window.confirm(confirmText)) return;
+  try {
+    await api(`/operational-work-items/${encodeURIComponent(item.work_id)}/${suffix}`, { method: "POST" });
+    await refresh();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function workAssignmentSummary(item, isMine) {
+  const status = item.assignment_status || "unassigned";
+  if (status === "unassigned") return "Sahipsiz";
+  if (status === "expired") return `${item.assigned_to || "Atanan kişi"} · atama süresi doldu`;
+  const remaining = item.lease_seconds_remaining == null
+    ? ""
+    : ` · ${durationLabel(item.lease_seconds_remaining)} kaldı`;
+  const owner = isMine ? "Bende" : (item.assigned_to || "Atandı");
+  return `${owner}${remaining}`;
+}
+
+function workCard(item, myIds, refresh) {
+  const isMine = myIds.has(item.work_id);
+  const card = node("article", "", `work-card ${item.priority_band || "normal"}`);
+  const heading = node("div", "", "work-card-heading");
+  const headingText = node("div");
+  headingText.append(
+    node("div", workTypeLabel(item), "work-type"),
+    node("strong", workActionLabel(item), "work-action")
+  );
+  const priority = node("span", WORK_PRIORITY_LABELS[item.priority_band] || "Normal", `badge priority-${item.priority_band || "normal"}`);
+  heading.append(headingText, priority);
+  card.append(heading);
+
+  const meta = node("div", "", "work-meta");
+  meta.append(
+    node("span", ageLabel(item)),
+    node("span", `Skor ${item.priority_score ?? "-"}`),
+    node("span", `Alan: ${codeLabel(item.route)}`)
+  );
+  if ((item.blocker_count || 0) > 0) meta.append(node("span", `${item.blocker_count} blocker`, "work-blocker"));
+  if ((item.warning_count || 0) > 0) meta.append(node("span", `${item.warning_count} uyarı`, "work-warning"));
+  card.append(meta);
+
+  const assignment = node("div", "", "work-assignment");
+  assignment.append(node("strong", "Atama"), node("span", workAssignmentSummary(item, isMine)));
+  if (item.first_look_seconds != null) {
+    assignment.append(node("span", `İlk bakış: ${durationLabel(item.first_look_seconds)}`, "work-first-look"));
+  } else if (isMine && item.assignment_status === "assigned") {
+    assignment.append(node("span", "İlk bakış henüz kaydedilmedi", "work-first-look pending"));
+  }
+  card.append(assignment);
+
+  const actions = node("div", "", "actions work-actions");
+  if (item.assignment_status === "unassigned") {
+    actions.append(actionButton("Üstlen", "approve", () => mutateOperationalWork(item, "assign-to-me", refresh)));
+  } else if (item.assignment_status === "expired") {
+    actions.append(actionButton("Devral", "approve", () => mutateOperationalWork(item, "takeover", refresh)));
+  } else if (isMine && item.assignment_status === "assigned") {
+    actions.append(actionButton("Gördüm / Üzerindeyim", "approve", () => mutateOperationalWork(item, "acknowledge", refresh)));
+  } else if (isMine && item.assignment_status === "acknowledged") {
+    actions.append(actionButton("Süreyi Yenile", "", () => mutateOperationalWork(item, "renew", refresh)));
+  }
+  if (isMine && ["assigned", "acknowledged"].includes(item.assignment_status)) {
+    actions.append(actionButton(
+      "Bırak", "",
+      () => mutateOperationalWork(item, "release", refresh, "Bu işi sahipsiz bırakmak istiyor musun? Bu işlem işi tamamlandı olarak işaretlemez.")
+    ));
+  }
+  if (actions.childElementCount) card.append(actions);
+  return card;
+}
+
+function renderOperationalWork(queue, mine) {
+  title.textContent = "İş Kuyruğu";
+  const root = node("div", "", "work-page");
+  const items = queue.items || [];
+  const myIds = new Set((mine.items || []).map(item => item.work_id));
+  const approvalCount = items.filter(isApprovalWork).length;
+  const unassignedCriticalCount = items.filter(item =>
+    item.priority_band === "critical" && item.assignment_status === "unassigned"
+  ).length;
+
+  const metrics = node("div", "", "grid work-metrics");
+  metrics.append(
+    metric("Açık iş", queue.pending_count ?? items.length),
+    metric("Bana atanan", mine.active_count ?? myIds.size),
+    metric("Onay bekleyen", approvalCount),
+    metric("Sahipsiz kritik", unassignedCriticalCount)
+  );
+  root.append(metrics);
+
+  root.append(node(
+    "div",
+    "Atama koordinasyon içindir. Bir işi bırakmak veya devretmek, o işi tamamlandı olarak işaretlemez.",
+    "notice work-authority-note"
+  ));
+
+  const filters = [
+    ["all", "Tümü", item => true],
+    ["mine", "Bana Atananlar", item => myIds.has(item.work_id)],
+    ["approval", "Onay Bekleyenler", item => isApprovalWork(item)],
+    ["critical", "Sahipsiz Kritikler", item => item.priority_band === "critical" && item.assignment_status === "unassigned"],
+  ];
+  const tabs = node("div", "", "work-tabs");
+  for (const [key, label, predicate] of filters) {
+    const count = items.filter(predicate).length;
+    tabs.append(actionButton(`${label} · ${count}`, key === operationalWorkView ? "active" : "", () => {
+      operationalWorkView = key;
+      renderOperationalWork(queue, mine);
+    }));
+  }
+  root.append(tabs);
+
+  const activeFilter = filters.find(([key]) => key === operationalWorkView) || filters[0];
+  const visible = items.filter(activeFilter[2]);
+  const list = node("div", "", "work-list");
+  const refresh = () => loadOperationalWork(operationalWorkView);
+  visible.forEach(item => list.append(workCard(item, myIds, refresh)));
+  if (!visible.length) list.append(node("div", "Bu görünümde bekleyen iş yok.", "work-empty"));
+  root.append(list);
+  content.replaceChildren(root);
+}
+
+async function loadOperationalWork(view = operationalWorkView) {
+  operationalWorkView = view;
+  const [queue, mine] = await Promise.all([
+    api("/operational-work-queue"),
+    api("/operational-work-my"),
+  ]);
+  renderOperationalWork(queue, mine);
+  setStatus("Güncel");
+}
+
 function renderJobs(data) {
   title.textContent = "MINA İşleri";
   const toolbar = node("div", "", "toolbar");
@@ -410,6 +628,8 @@ async function boot() {
   try {
     if (page === "dashboard") {
       await loadDashboard(5); return;
+    } else if (page === "work") {
+      await loadOperationalWork(); return;
     } else if (page === "jobs") {
       renderJobs(await api("/mina-jobs"));
     } else if (page === "job") {

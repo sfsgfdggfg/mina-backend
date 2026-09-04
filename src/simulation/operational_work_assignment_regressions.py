@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -15,6 +16,7 @@ from src.core.operational_work_assignment_service import (
     OperationalWorkAssignmentNotFoundError,
     acknowledge_operational_work,
     assign_operational_work_to_me,
+    assignment_public_payload,
     decorate_operational_work_queue,
     release_operational_work,
 )
@@ -93,26 +95,29 @@ def evaluate_operational_work_assignment_regressions():
         second_blocked = False
     check(second_blocked, "another operator cannot claim the same current work state")
 
+    ack_time = NOW + timedelta(seconds=75)
     try:
         acknowledge_operational_work(
-            work_id=work_id, operator_name="Operator Beta", now=NOW, **service_args
+            work_id=work_id, operator_name="Operator Beta", now=ack_time, **service_args
         )
     except OperationalWorkAssignmentConflictError:
         foreign_ack_blocked = True
     else:
         foreign_ack_blocked = False
     ack = acknowledge_operational_work(
-        work_id=work_id, operator_name="Operator Alpha", now=NOW, **service_args
+        work_id=work_id, operator_name="Operator Alpha", now=ack_time, **service_args
     )
     ack_again = acknowledge_operational_work(
-        work_id=work_id, operator_name="Operator Alpha", now=NOW, **service_args
+        work_id=work_id, operator_name="Operator Alpha", now=ack_time, **service_args
     )
+    ack_payload = assignment_public_payload(ack, now=ack_time)
     check(
         foreign_ack_blocked
         and ack.status == "acknowledged"
         and ack.acknowledged_at is not None
-        and ack_again.acknowledged_at == ack.acknowledged_at,
-        "only assignee may acknowledge and acknowledgement is idempotent",
+        and ack_again.acknowledged_at == ack.acknowledged_at
+        and ack_payload.get("first_look_seconds") == 75,
+        "only assignee may acknowledge and acknowledgement durably measures first-look time",
     )
 
     try:
@@ -120,7 +125,7 @@ def evaluate_operational_work_assignment_regressions():
             work_id=work_id,
             operator_name="Operator Beta",
             assignment_repository=assignments,
-            now=NOW,
+            now=ack_time,
         )
     except OperationalWorkAssignmentConflictError:
         foreign_release_blocked = True
@@ -130,10 +135,10 @@ def evaluate_operational_work_assignment_regressions():
         work_id=work_id,
         operator_name="Operator Alpha",
         assignment_repository=assignments,
-        now=NOW,
+        now=ack_time,
     )
     beta = assign_operational_work_to_me(
-        work_id=work_id, operator_name="Operator Beta", now=NOW, **service_args
+        work_id=work_id, operator_name="Operator Beta", now=ack_time, **service_args
     )
     check(
         foreign_release_blocked
