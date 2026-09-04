@@ -80,14 +80,34 @@ function dashboardEntry(entry) {
 }
 
 function attentionCard(item, unscheduled = false) {
-  const card = node("button", "", `attention-card ${item.severity || ""}`);
+  const severity = unscheduled ? "warning" : (item.severity || "");
+  const card = node("button", "", `attention-card ${severity}`);
   card.type = "button";
   card.append(node("strong", `${item.mina_code || "MINA"} · ${item.customer_name || "-"}`));
   card.append(node("div", item.route || "-", "small"));
-  const reasons = unscheduled ? [item.reason || "Plan tarihi yok"] : (item.reasons || []);
+  const reasons = unscheduled
+    ? ["Plan tarihi eksik", item.reason || "Kesin tarih bekleniyor"]
+    : (item.reasons || []);
   card.append(node("div", reasons.join(" · "), "attention-reason"));
   card.addEventListener("click", () => dashboardJobTarget(item.job_id));
   return card;
+}
+
+function appendDashboardEntries(column, entries, selectedDays) {
+  const visibleLimit = selectedDays === 5 ? 2 : 4;
+  const cards = entries.map(dashboardEntry);
+  cards.forEach((card, index) => {
+    if (index >= visibleLimit) card.hidden = true;
+    column.append(card);
+  });
+  if (cards.length <= visibleLimit) return;
+  const hiddenCount = cards.length - visibleLimit;
+  const more = actionButton(`+${hiddenCount} kayıt daha`, "calendar-more", () => {
+    const collapsed = cards.slice(visibleLimit).some(card => card.hidden);
+    cards.slice(visibleLimit).forEach(card => { card.hidden = !collapsed; });
+    more.textContent = collapsed ? "Daralt" : `+${hiddenCount} kayıt daha`;
+  });
+  column.append(more);
 }
 
 function renderDashboard(data, selectedDays = 5) {
@@ -104,17 +124,29 @@ function renderDashboard(data, selectedDays = 5) {
   root.append(metrics);
 
   const attention = data.attention || [];
+  const unscheduled = data.unscheduled || [];
   const attentionSection = node("section", "", "dashboard-attention");
-  if (attention.length) {
+  if (attention.length || unscheduled.length) {
     attentionSection.append(node("h2", "Dikkat Gerekenler"));
-    const attentionGrid = node("div", "", "attention-grid");
-    attention.forEach(item => attentionGrid.append(attentionCard(item)));
+    const attentionGrid = node("div", "", "attention-grid dashboard-attention-grid");
+    const unscheduledByJob = new Map(unscheduled.map(item => [item.job_id, item]));
+    attention.forEach(item => {
+      const missing = unscheduledByJob.get(item.job_id);
+      if (missing) {
+        const merged = { ...item, reasons: [...(item.reasons || []), "Plan tarihi eksik", missing.reason || "Kesin tarih bekleniyor"] };
+        attentionGrid.append(attentionCard(merged));
+        unscheduledByJob.delete(item.job_id);
+      } else {
+        attentionGrid.append(attentionCard(item));
+      }
+    });
+    unscheduledByJob.forEach(item => attentionGrid.append(attentionCard(item, true)));
     attentionSection.append(attentionGrid);
   } else {
     const clear = node("div", "", "dashboard-clear");
     clear.append(
       node("strong", "Dikkat Gerekenler"),
-      node("span", "Kritik veya riskli aktif kayıt yok.")
+      node("span", "Kritik, riskli veya plan tarihi eksik aktif kayıt yok.")
     );
     attentionSection.append(clear);
   }
@@ -141,21 +173,12 @@ function renderDashboard(data, selectedDays = 5) {
     const heading = node("div", "", "calendar-day-heading");
     heading.append(node("strong", day.weekday || ""), node("span", formatDashboardDate(day.date), "small"));
     column.append(heading);
-    (day.entries || []).forEach(entry => column.append(dashboardEntry(entry)));
-    if (!(day.entries || []).length) column.append(node("div", "Planlı kayıt yok", "calendar-empty"));
+    const entries = day.entries || [];
+    appendDashboardEntries(column, entries, selectedDays);
+    if (!entries.length) column.append(node("div", "Planlı kayıt yok", "calendar-empty"));
     calendar.append(column);
   });
   root.append(calendar);
-
-  const unscheduled = data.unscheduled || [];
-  if (unscheduled.length) {
-    const unscheduledSection = node("section", "", "section dashboard-unscheduled");
-    unscheduledSection.append(node("h2", "Tarihi Netleşmemiş Aktif İşler"));
-    const unscheduledGrid = node("div", "", "attention-grid");
-    unscheduled.forEach(item => unscheduledGrid.append(attentionCard(item, true)));
-    unscheduledSection.append(unscheduledGrid);
-    root.append(unscheduledSection);
-  }
   content.replaceChildren(root);
 }
 
