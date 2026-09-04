@@ -101,13 +101,16 @@ from src.core.mina_job_actions import (
 from src.core.mina_job_service import (
     MinaJobNotFoundError,
     MinaJobTransitionError,
+    create_manual_mina_job,
     set_mina_job_automation_overrides,
+    set_mina_job_owners,
     transition_mina_job_stage,
 )
 from src.core.mina_job_view import build_mina_job_detail, build_mina_job_list
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
+    Shipment,
     SupplierQuote,
 )
 from src.core.pricing_policy import PricingFormula
@@ -340,15 +343,33 @@ class ConfirmExtractionRequest(BaseModel):
     corrections: dict[str, Any] = Field(default_factory=dict)
 
 
+class MinaJobManualCreateRequest(BaseModel):
+    manual_intake_id: str = Field(min_length=1, max_length=300)
+    job_kind: Literal["price_request", "approved_job"]
+    intake_channel: Literal["phone", "whatsapp", "portal", "face_to_face", "other"]
+    shipment: Shipment
+    sales_owner: Optional[str] = Field(default=None, max_length=200)
+    operations_owner: Optional[str] = Field(default=None, max_length=200)
+
+
 class MinaJobAutomationOverrideRequest(BaseModel):
     disable_supplier_reminders: bool = False
     disable_customer_deadline_updates: bool = False
 
 
+class MinaJobOwnersRequest(BaseModel):
+    sales_owner: Optional[str] = Field(default=None, max_length=200)
+    operations_owner: Optional[str] = Field(default=None, max_length=200)
+
+
 class MinaJobStageTransitionRequest(BaseModel):
     target_stage: Literal[
         "pricing", "quote_ready", "quote_sent", "negotiation",
-        "accepted", "operations", "in_transit", "delivered",
+        "accepted", "operations", "operation_opened",
+        "supplier_confirmation_pending", "vehicle_details_pending",
+        "vehicle_assigned", "pre_loading_check", "ready_for_loading",
+        "loaded", "in_transit", "delivery", "delivered",
+        "pod_cmr_pending", "closing_review", "completed",
         "lost", "cancelled",
     ]
     reason: Optional[str] = None
@@ -861,6 +882,24 @@ def list_mina_jobs():
     return build_mina_job_list(mina_job_repository)
 
 
+@app.post("/mina-jobs/manual")
+def create_manual_job(request: MinaJobManualCreateRequest, http_request: Request):
+    try:
+        job = create_manual_mina_job(
+            repository=mina_job_repository,
+            manual_intake_id=request.manual_intake_id,
+            intake_channel=request.intake_channel,
+            job_kind=request.job_kind,
+            shipment=request.shipment,
+            opened_by=_authenticated_operator(http_request),
+            sales_owner=request.sales_owner,
+            operations_owner=request.operations_owner,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return job.model_dump()
+
+
 @app.get("/mina-jobs/{job_id}")
 def get_mina_job(job_id: str):
     try:
@@ -890,6 +929,26 @@ def update_mina_job_automation_overrides(
             actor=_authenticated_operator(http_request),
             disable_supplier_reminders=request.disable_supplier_reminders,
             disable_customer_deadline_updates=request.disable_customer_deadline_updates,
+        )
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return updated.model_dump()
+
+
+@app.post("/mina-jobs/{job_id}/owners")
+def update_mina_job_owners(
+    job_id: str, request: MinaJobOwnersRequest, http_request: Request,
+):
+    job = mina_job_repository.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    try:
+        updated = set_mina_job_owners(
+            repository=mina_job_repository,
+            mina_code=job.mina_code,
+            actor=_authenticated_operator(http_request),
+            sales_owner=request.sales_owner,
+            operations_owner=request.operations_owner,
         )
     except MinaJobTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

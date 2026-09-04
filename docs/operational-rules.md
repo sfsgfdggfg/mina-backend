@@ -3636,3 +3636,13 @@ UI mutations must call the existing controlled API actions; the UI must not writ
 Manual UI lifecycle controls must represent real operational facts rather than editable cosmetic status. Quote-ready/quote-sent progression should continue from quote workflow evidence; the operator UI may record customer acceptance, operations start, in-transit, delivered, lost or cancelled only through valid backend transitions. Lost/cancelled reason evidence remains mandatory.
 
 The development UI must not contain pilot bearer tokens, customer raw target-price evidence or internal release/fingerprint metadata. Timeline rendering must be curated and work timestamps must use Europe/Istanbul. Streamlit remains non-pilot-approved until a separate authenticated browser/session boundary is explicitly validated.
+
+## RULE-183 — Lifecycle v2 Separates Intake, Commercial Path, Operational Milestones, and Final Closure
+
+Every new P2-01 MINA job uses lifecycle v2 while persisted pre-P2-01 jobs remain lifecycle v1 unless a future explicit migration is designed. V1 behavior is compatibility evidence, not authority for new V2 jobs. In particular, the V1 rule that `delivered` is terminal is superseded for lifecycle v2 only.
+
+A lifecycle-v2 job must have exactly one durable intake identity: an email extraction proposal or a manual intake ID. Manual intake must be idempotent and must share the same atomic yearly MINA number sequence as email-confirmed work. `price_request` jobs may enter customer quote states. `approved_job` jobs must still pass supplier pricing but must not enter `quote_ready`, `quote_sent`, `negotiation` or `accepted`; after pricing they may open the operation directly.
+
+Lifecycle-v2 operational state must progress through the controlled backend transition graph. Delivery confirmation alone must not close the job. `delivered` must progress to `pod_cmr_pending`, then `closing_review`, then `completed`. Invalid stage skipping must fail closed. `lost` and `cancelled` remain explicit terminal alternatives where permitted and retain mandatory reason evidence.
+
+`Sales_owner` and `operations_owner` are durable job responsibility fields and are separate from temporary operational-work claim/lease state. An authenticated owner change must persist the new responsibility and append timeline evidence of old/new values. Closed jobs must reject ownership changes. UI lifecycle controls must be filtered by backend-provided allowed next stages so the UI cannot invent transition authority.

@@ -6363,3 +6363,16 @@ The job-detail UX exposes only deliberate human controls already authorized by P
 Streamlit remains a development-only UI and is not promoted to controlled-pilot authority by P1-76. It does not embed pilot bearer credentials or bypass authentication. Real mutations remain enforced by the authenticated API and existing lifecycle guards. A future pilot-approved browser shell must add its own authenticated session/binding controls before this UI can become the live operator surface.
 
 Timeline rendering is deliberately curated rather than a raw metadata dump. It may show operational event meaning, time, actor and bounded safe summaries, but not internal fingerprints, provider credentials or protected commercial-release evidence. MINA timestamps are rendered in Europe/Istanbul regardless of workstation timezone.
+
+## DEC-168 — MINA Lifecycle v2 Extends One Durable Job Through Documented Operational Closure
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-01 introduces versioned MINA job lifecycle semantics so the Freight OS can grow without rewriting or invalidating persisted pilot jobs. Records created before P2-01 remain lifecycle v1 by default and retain the P1-75 behavior in which `delivered` is terminal. Newly created jobs use lifecycle v2. No bulk migration of legacy jobs is implied by this decision.
+
+Lifecycle v2 distinguishes `price_request` from `approved_job`. A price request follows supplier pricing and the customer quote lifecycle before operation. An approved job still requires supplier pricing but may move from `pricing` directly to `operation_opened`; it must not be forced through customer quote states. Email-confirmed jobs retain extraction-proposal identity, while phone, WhatsApp, portal, face-to-face and other manual intake may create a job with a separate idempotent manual intake identity rather than fabricating an email proposal.
+
+The v2 operational lifecycle is deliberately explicit: `operation_opened` → `supplier_confirmation_pending` → `vehicle_details_pending` → `vehicle_assigned` → `pre_loading_check` → `ready_for_loading` → `loaded` → `in_transit` → `delivery` → `delivered` → `pod_cmr_pending` → `closing_review` → `completed`. In lifecycle v2, `delivered` is not terminal. Normal completion requires POD/CMR follow-up and closing review; only `completed`, `lost` and `cancelled` close a v2 job.
+
+A MINA job may also retain durable `sales_owner` and `operations_owner` responsibility independently from temporary operational-work assignment leases. Owner changes require authenticated actor evidence and append-only timeline events containing the prior and new bounded owner values. The backend remains authoritative for allowed next stages, and UI controls must derive or filter actions using that backend transition authority.
