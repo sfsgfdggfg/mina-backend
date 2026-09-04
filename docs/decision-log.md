@@ -6411,3 +6411,14 @@ P2-04 introduces a durable automation-policy hierarchy for external operational 
 `approval_required` is distinct from both manual and automatic execution. The automation planner must create an explicit human-review state and the automatic scheduler must not send the external message. P2-04 establishes policy authority, planner states, scheduler enforcement and operational-work queue visibility; a generalized one-click outbound approval/execution workflow remains a separate controlled implementation concern rather than being fabricated inside the scheduler.
 
 Persisted jobs and older API clients remain backward compatible. Existing `disable_supplier_reminders` and `disable_customer_deadline_updates` fields remain supported and act as job-level manual fail-safes when no modern explicit mode exists. Partial policy updates must preserve fields omitted by older or narrower clients. A durable agency policy containing no explicit mode for an action falls back to the existing supplier dispatch policy instead of silently changing current pilot behavior.
+
+## DEC-172 — Operation Execution Evidence and Exceptions Are Separate From the MINA Lifecycle State
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-05 adds a durable operation-execution layer to lifecycle-v2 MINA jobs. The MINA stage remains the coarse workflow authority, while `OperationExecutionSnapshot` stores the current structured operational evidence such as supplier confirmation, vehicle/driver assignment, loading, location/ETA, delivery and POD/CMR receipt. This avoids turning every operational fact into a lifecycle state.
+
+Operational exceptions are separate durable records layered over the current job stage. An in-transit job may therefore simultaneously carry a deviation, delivery risk or actual delay without transitioning into a synthetic `delay` stage. Exception impact is explicit evidence and must not be inferred solely from a date-only promised-delivery field. `deviation` means the customer promise is not currently threatened, `delivery_risk` means the promise may be missed, and `actual_delay` means a promised delivery will or has been missed.
+
+Lifecycle-v2 API transitions may require structured execution evidence. Vehicle assignment requires durable plate, driver and assignment time; loaded requires loading-time evidence; delivered requires delivery-time evidence; closing review requires delivery plus POD or CMR receipt; and normal completion is blocked while any operation exception remains open. Lifecycle-v1 records retain their pre-P2-05 transition semantics. Lost/cancelled jobs may still resolve a pre-existing exception with explicit resolution evidence, but closed jobs cannot receive new execution facts or new exceptions.
