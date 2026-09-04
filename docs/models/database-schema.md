@@ -790,3 +790,11 @@ Sonraki schema geliştirme alanları:
 `SupplierPriceOffer` is a job-specific price candidate keyed by `offer_id` and an idempotent `entry_id`. It stores MINA job identity, supplier, normalized source type/reference, optional RFQ or fixed-rate provenance, commercial price/transit/equipment fields and authenticated recording evidence. RFQ responses can be normalized into deterministic read projections without duplicating the RFQ repository; direct and fixed-rate offers are persisted.
 
 Persistent namespaces: `supplier_fixed_rates`, `supplier_fixed_rate_by_entry`, `supplier_price_offers`, `supplier_price_offer_by_entry`, and `supplier_price_offer_by_job_fixed_rate`. These namespaces are excluded from ordinary pilot state purging because agreed rates may remain valid longer than 30 days and open-job price evidence belongs to the durable MINA case.
+
+## P2-03 Customer / Supplier Master Data and Geography
+
+`CustomerMasterProfile` is durable customer identity and operating context keyed by `customer_id` plus idempotent `entry_id`. It stores canonical customer name, aliases, trusted sender addresses/domains, structured contacts and authority roles, responsible sales owner, customer pricing policy, operational defaults, sensitivity fields, notes, source and authenticated update evidence.
+
+`SupplierMasterProfile` is durable supplier identity keyed by `supplier_id` plus idempotent `entry_id`. It stores canonical supplier name, role, structured contacts, service/equipment/special capabilities, explicit geography capabilities, priority routes, legacy region tags, selection score inputs, notes, source and authenticated update evidence. `SupplierGeographyCapability` stores `country` or `region` scope, explicit country membership, business strength and evidence source.
+
+Persistent namespaces: `customer_master_profiles`, `customer_master_by_entry`, `customer_master_by_name`, `supplier_master_profiles`, `supplier_master_by_entry`, and `supplier_master_by_name`. These records and identity indexes are excluded from ordinary pilot state purging.

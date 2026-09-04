@@ -6389,3 +6389,14 @@ Using a fixed rate does not mutate or consume the reusable agreement. The system
 RFQ-derived, direct and fixed-rate offers may be projected into the same multi-criteria supplier quote comparison engine. The selected `SupplierQuote` can retain the normalized price-offer ID, source type and source reference so later quote approval and audit do not lose how the supplier cost was obtained. Existing RFQ quote selection remains backward compatible.
 
 Fixed rates and job-specific supplier price offers are durable commercial/operational evidence and survive the ordinary pilot state retention purge. Client-generated entry identities make fixed-rate creation and direct price entry idempotent, while a given fixed rate may materialize at most once for the same MINA job. P2-02 does not introduce supplier master-data, geographic-strength learning or automatic region inference; those remain P2-03 scope.
+
+## DEC-170 — Customer and Supplier Master Data Become Durable Domain Records Without Immediate Pilot Cutover
+
+**Status:** Accepted
+**Date:** 2026-09-04
+
+P2-03 introduces durable `CustomerMasterProfile` and `SupplierMasterProfile` records as the future first-class identity and capability layer for the Freight OS. Customer master data carries stable identity, aliases, trusted sender evidence, contact/authority roles, responsible sales owner, customer pricing policy, operational defaults and notes. Supplier master data carries stable identity, contacts, service/equipment capabilities, commercial performance inputs and explicit geography capabilities with business-strength labels (`main_market`, `strong`, `works`, `limited`).
+
+The existing `customer_memory.json` and `supplier_capabilities.json` datasets are not removed or silently rewritten by P2-03. They remain the current pilot-compatible operational datasets and may be imported through an explicit, authenticated, idempotent legacy bootstrap into the durable master repository. Compatibility projections back to the current customer-memory and supplier-capability contracts must remain valid before any runtime cutover is authorized.
+
+Master profile names are stable identifiers in P2-03 and cannot be silently renamed. Future rename/merge requires a separately controlled identity operation because existing jobs, quotes, emails and audit evidence may refer to the prior name. Master records and their identity indexes are durable evidence and survive ordinary pilot retention purges.
