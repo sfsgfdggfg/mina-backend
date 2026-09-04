@@ -15,9 +15,20 @@ STAGE_LABELS = {
     "quote_sent": "Teklif gönderildi",
     "negotiation": "Revizyon / görüşme",
     "accepted": "Müşteri kabul etti",
-    "operations": "Operasyon",
+    "operations": "Operasyon (legacy)",
+    "operation_opened": "Operasyon açıldı",
+    "supplier_confirmation_pending": "Tedarikçi teyidi bekleniyor",
+    "vehicle_details_pending": "Araç bilgileri bekleniyor",
+    "vehicle_assigned": "Araç atandı",
+    "pre_loading_check": "Yükleme öncesi kontrol",
+    "ready_for_loading": "Yüklemeye hazır",
+    "loaded": "Yüklendi",
     "in_transit": "Yolda",
+    "delivery": "Teslimat",
     "delivered": "Teslim edildi",
+    "pod_cmr_pending": "POD / CMR bekleniyor",
+    "closing_review": "Kapanış kontrolü",
+    "completed": "Tamamlandı",
     "lost": "Kaybedildi",
     "cancelled": "İptal edildi",
 }
@@ -43,12 +54,31 @@ EVENT_LABELS = {
     "stage_changed": "İş aşaması değiştirildi",
 }
 
-MANUAL_STAGE_ACTIONS = {
+V1_MANUAL_STAGE_ACTIONS = {
     "quote_sent": [("accepted", "Müşteri kabul etti")],
     "negotiation": [("accepted", "Müşteri kabul etti")],
     "accepted": [("operations", "Operasyonu başlat")],
     "operations": [("in_transit", "Araç yola çıktı")],
     "in_transit": [("delivered", "Teslim edildi")],
+}
+
+V2_MANUAL_STAGE_ACTIONS = {
+    "pricing": [("operation_opened", "Operasyonu başlat")],
+    "quote_sent": [("accepted", "Müşteri kabul etti")],
+    "negotiation": [("accepted", "Müşteri kabul etti")],
+    "accepted": [("operation_opened", "Operasyonu başlat")],
+    "operation_opened": [("supplier_confirmation_pending", "Tedarikçi teyidi bekleniyor")],
+    "supplier_confirmation_pending": [("vehicle_details_pending", "Araç bilgilerini bekle")],
+    "vehicle_details_pending": [("vehicle_assigned", "Araç atandı")],
+    "vehicle_assigned": [("pre_loading_check", "Yükleme öncesi kontrol")],
+    "pre_loading_check": [("ready_for_loading", "Yüklemeye hazır")],
+    "ready_for_loading": [("loaded", "Yüklendi")],
+    "loaded": [("in_transit", "Transit başlat")],
+    "in_transit": [("delivery", "Teslimat aşamasına geç")],
+    "delivery": [("delivered", "Teslim edildi")],
+    "delivered": [("pod_cmr_pending", "POD / CMR bekleniyor")],
+    "pod_cmr_pending": [("closing_review", "Kapanış kontrolü")],
+    "closing_review": [("completed", "Operasyonu tamamla")],
 }
 
 
@@ -94,7 +124,7 @@ def _stage_label(stage: str | None) -> str:
 
 def _status_icon(job: dict[str, Any]) -> str:
     if job.get("is_closed"):
-        return "✅" if job.get("stage") == "delivered" else "⚪"
+        return "✅" if job.get("stage") in {"delivered", "completed"} else "⚪"
     if job.get("stage") in {"quote_ready", "quote_sent", "negotiation"}:
         return "🟡"
     if job.get("stage") in {"accepted", "operations", "in_transit"}:
@@ -490,15 +520,29 @@ def _render_stage_actions(
     api_base_url: str, job_id: str, detail: dict[str, Any]
 ) -> None:
     job = detail.get("job") or {}
+    controls = detail.get("controls") or {}
     stage = str(job.get("stage") or "")
+    allowed_next = set(controls.get("allowed_next_stages") or [])
     st.markdown("### Operasyon Aşaması")
-    actions = MANUAL_STAGE_ACTIONS.get(stage, [])
+    lifecycle_version = int(job.get("lifecycle_version") or 1)
+    if lifecycle_version == 2:
+        actions = V2_MANUAL_STAGE_ACTIONS.get(stage, [])
+        if stage == "pricing" and job.get("job_kind") != "approved_job":
+            actions = []
+    else:
+        actions = V1_MANUAL_STAGE_ACTIONS.get(stage, [])
+    actions = [
+        (target_stage, label)
+        for target_stage, label in actions
+        if target_stage in allowed_next
+    ]
     if actions:
         for target_stage, label in actions:
             if st.button(label, key=f"stage_{job_id}_{target_stage}"):
                 _transition_stage(api_base_url, job_id, target_stage)
 
-    if stage not in {"delivered", "lost", "cancelled"}:
+    close_allowed = bool({"lost", "cancelled"} & allowed_next)
+    if not job.get("is_closed") and close_allowed:
         st.markdown("#### İşi kapat")
         close_reason = st.text_input(
             "Kapatma nedeni",
@@ -506,15 +550,16 @@ def _render_stage_actions(
             help="Kaybedilen veya iptal edilen işte neden zorunludur.",
         )
         close_columns = st.columns(2)
-        if stage in {"inquiry_confirmed", "pricing", "quote_ready", "quote_sent", "negotiation"}:
+        if "lost" in allowed_next:
             if close_columns[0].button("Teklif / İş Kaybedildi", key=f"lost_{job_id}"):
                 _transition_stage(
                     api_base_url, job_id, "lost", reason=close_reason
                 )
-        if close_columns[1].button("İşi İptal Et", key=f"cancel_{job_id}"):
-            _transition_stage(
-                api_base_url, job_id, "cancelled", reason=close_reason
-            )
+        if "cancelled" in allowed_next:
+            if close_columns[1].button("İşi İptal Et", key=f"cancel_{job_id}"):
+                _transition_stage(
+                    api_base_url, job_id, "cancelled", reason=close_reason
+                )
 
 
 def _transition_stage(

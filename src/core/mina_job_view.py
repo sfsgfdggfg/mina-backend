@@ -7,6 +7,7 @@ from src.core.automation_action_repository import AutomationActionRepository
 from src.core.automation_planning import customer_deadline_plan, supplier_reminder_plan
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.mina_job_service import (
+    allowed_next_stages,
     customer_deadline_updates_enabled_for_job,
     get_mina_job_or_raise,
     supplier_reminders_enabled_for_job,
@@ -29,6 +30,11 @@ def build_mina_job_list(repository: MinaJobRepository) -> dict[str, Any]:
             "mina_code": job.mina_code,
             "stage": job.stage,
             "is_closed": job.is_closed,
+            "lifecycle_version": job.lifecycle_version,
+            "job_kind": job.job_kind,
+            "intake_channel": job.intake_channel,
+            "sales_owner": job.sales_owner,
+            "operations_owner": job.operations_owner,
             "customer_name": job.shipment.customer_name,
             "route": _route_text(job),
             "transport_mode": job.shipment.transport_mode,
@@ -132,6 +138,11 @@ def build_mina_job_detail(
             "mina_code": job.mina_code,
             "stage": job.stage,
             "is_closed": job.is_closed,
+            "lifecycle_version": job.lifecycle_version,
+            "job_kind": job.job_kind,
+            "intake_channel": job.intake_channel,
+            "sales_owner": job.sales_owner,
+            "operations_owner": job.operations_owner,
             "customer_name": job.shipment.customer_name,
             "route": _route_text(job),
             "transport_mode": job.shipment.transport_mode,
@@ -149,6 +160,7 @@ def build_mina_job_detail(
         "controls": {
             "automation_overrides_editable": not job.is_closed,
             "stage_transition_available": not job.is_closed,
+            "allowed_next_stages": allowed_next_stages(job),
             "supplier_reminder_preview_available": not job.is_closed,
         },
     }

@@ -89,6 +89,7 @@ class SQLiteMinaJobRepository:
     JOB_NAMESPACE = "mina_jobs"
     SEQUENCE_NAMESPACE = "mina_job_sequences"
     PROPOSAL_INDEX_NAMESPACE = "mina_job_by_proposal"
+    MANUAL_INTAKE_INDEX_NAMESPACE = "mina_job_by_manual_intake"
     CODE_INDEX_NAMESPACE = "mina_job_by_code"
     EVENT_NAMESPACE = "mina_job_timeline_events"
 
@@ -97,7 +98,9 @@ class SQLiteMinaJobRepository:
 
     def _create_for_proposal(
         self, *, proposal_id: str, shipment: Shipment, opened_by: str,
-        opened_at: datetime, sequence_year: int,
+        opened_at: datetime, sequence_year: int, lifecycle_version: int,
+        job_kind, sales_owner: str | None = None,
+        operations_owner: str | None = None,
     ) -> tuple[MinaJob, bool]:
         existing = self.find_by_proposal_id(proposal_id)
         if existing is not None:
@@ -110,8 +113,10 @@ class SQLiteMinaJobRepository:
         mina_code = f"MINA{sequence_year}/{sequence_number}"
         job = MinaJob(
             mina_code=mina_code, sequence_year=sequence_year,
-            sequence_number=sequence_number, source_proposal_id=proposal_id,
-            shipment=shipment.model_copy(deep=True), opened_by=opened_by,
+            sequence_number=sequence_number, lifecycle_version=lifecycle_version,
+            job_kind=job_kind, intake_channel="email", source_proposal_id=proposal_id,
+            shipment=shipment.model_copy(deep=True), sales_owner=sales_owner,
+            operations_owner=operations_owner, opened_by=opened_by,
             opened_at=opened_at, updated_at=opened_at,
         )
         self.store.upsert(
@@ -140,18 +145,90 @@ class SQLiteMinaJobRepository:
 
     def create_for_proposal(
         self, *, proposal_id: str, shipment: Shipment, opened_by: str,
-        opened_at: datetime, sequence_year: int,
+        opened_at: datetime, sequence_year: int, lifecycle_version: int,
+        job_kind, sales_owner: str | None = None,
+        operations_owner: str | None = None,
     ) -> tuple[MinaJob, bool]:
         if self.store.transaction_active:
             return self._create_for_proposal(
                 proposal_id=proposal_id, shipment=shipment, opened_by=opened_by,
                 opened_at=opened_at, sequence_year=sequence_year,
+                lifecycle_version=lifecycle_version, job_kind=job_kind,
+                sales_owner=sales_owner, operations_owner=operations_owner,
             )
         with self.store.transaction():
             return self._create_for_proposal(
                 proposal_id=proposal_id, shipment=shipment, opened_by=opened_by,
                 opened_at=opened_at, sequence_year=sequence_year,
+                lifecycle_version=lifecycle_version, job_kind=job_kind,
+                sales_owner=sales_owner, operations_owner=operations_owner,
             )
+
+    def _create_manual(
+        self, *, manual_intake_id: str, intake_channel, job_kind,
+        shipment: Shipment, opened_by: str, opened_at: datetime,
+        sequence_year: int, lifecycle_version: int,
+        sales_owner: str | None = None, operations_owner: str | None = None,
+    ) -> tuple[MinaJob, bool]:
+        existing = self.find_by_manual_intake_id(manual_intake_id)
+        if existing is not None:
+            return existing, False
+        sequence_key = str(sequence_year)
+        sequence = self.store.get(
+            namespace=self.SEQUENCE_NAMESPACE, record_key=sequence_key
+        ) or {"last_sequence_number": 0}
+        sequence_number = int(sequence.get("last_sequence_number", 0)) + 1
+        mina_code = f"MINA{sequence_year}/{sequence_number}"
+        job = MinaJob(
+            mina_code=mina_code, sequence_year=sequence_year,
+            sequence_number=sequence_number, lifecycle_version=lifecycle_version,
+            job_kind=job_kind, intake_channel=intake_channel,
+            manual_intake_id=manual_intake_id, shipment=shipment.model_copy(deep=True),
+            sales_owner=sales_owner, operations_owner=operations_owner,
+            opened_by=opened_by, opened_at=opened_at, updated_at=opened_at,
+        )
+        self.store.upsert(
+            namespace=self.SEQUENCE_NAMESPACE, record_key=sequence_key,
+            payload={"last_sequence_number": sequence_number},
+            event_type="mina_job_sequence_advanced", entity_type="mina_job_sequence",
+        )
+        if not self.store.insert_once(
+            namespace=self.JOB_NAMESPACE, record_key=job.job_id,
+            payload=_model_payload(job), event_type="mina_job_created",
+            entity_type="mina_job",
+        ):
+            raise RuntimeError("MINA job identifier collision.")
+        if not self.store.insert_once(
+            namespace=self.MANUAL_INTAKE_INDEX_NAMESPACE, record_key=manual_intake_id,
+            payload={"job_id": job.job_id}, event_type="mina_job_manual_intake_indexed",
+            entity_type="mina_job_index",
+        ):
+            raise RuntimeError("MINA manual intake identity collision.")
+        if not self.store.insert_once(
+            namespace=self.CODE_INDEX_NAMESPACE, record_key=mina_code.upper(),
+            payload={"job_id": job.job_id}, event_type="mina_job_code_indexed",
+            entity_type="mina_job_index",
+        ):
+            raise RuntimeError("MINA job code collision.")
+        return job, True
+
+    def create_manual(
+        self, *, manual_intake_id: str, intake_channel, job_kind,
+        shipment: Shipment, opened_by: str, opened_at: datetime,
+        sequence_year: int, lifecycle_version: int,
+        sales_owner: str | None = None, operations_owner: str | None = None,
+    ) -> tuple[MinaJob, bool]:
+        kwargs = dict(
+            manual_intake_id=manual_intake_id, intake_channel=intake_channel,
+            job_kind=job_kind, shipment=shipment, opened_by=opened_by,
+            opened_at=opened_at, sequence_year=sequence_year,
+            lifecycle_version=lifecycle_version, sales_owner=sales_owner,
+            operations_owner=operations_owner,
+        )
+        if self.store.transaction_active:
+            return self._create_manual(**kwargs)
+        with self.store.transaction():
+            return self._create_manual(**kwargs)
 
     def save(self, job: MinaJob) -> MinaJob:
         payload = _model_payload(job)
@@ -176,6 +253,11 @@ class SQLiteMinaJobRepository:
 
     def find_by_proposal_id(self, proposal_id: str) -> MinaJob | None:
         return self._job_from_index(self.PROPOSAL_INDEX_NAMESPACE, proposal_id)
+
+    def find_by_manual_intake_id(self, manual_intake_id: str) -> MinaJob | None:
+        return self._job_from_index(
+            self.MANUAL_INTAKE_INDEX_NAMESPACE, manual_intake_id
+        )
 
     def list_all(self) -> list[MinaJob]:
         jobs = [

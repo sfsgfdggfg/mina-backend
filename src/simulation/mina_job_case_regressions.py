@@ -10,15 +10,19 @@ from src.core.automation_planning import supplier_reminder_plan
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
 from src.core.extraction_confirmation_repository import InMemoryExtractionProposalRepository
 from src.core.mail import InboundMailEnvelope, MailSendResult
+from src.core.mina_job import MinaJob
 from src.core.mina_job_actions import MinaJobActionError, preview_supplier_reminder_now, send_supplier_reminder_now
 from src.core.mina_job_repository import InMemoryMinaJobRepository
 from src.core.mina_job_service import (
     MinaJobTransitionError,
+    allowed_next_stages,
+    create_manual_mina_job,
     create_mina_job_for_confirmed_proposal,
     link_mina_job_quote_case,
     link_mina_job_workflow,
     record_mina_job_quote_revision,
     set_mina_job_automation_overrides,
+    set_mina_job_owners,
     transition_mina_job_stage,
 )
 from src.core.mina_job_view import build_mina_job_detail
@@ -132,6 +136,74 @@ def evaluate_mina_job_case_regressions() -> dict:
         "MINA numbering is idempotent per inquiry and resets by Istanbul year",
     )
 
+    manual_repo = InMemoryMinaJobRepository()
+    manual_job = create_manual_mina_job(
+        repository=manual_repo, manual_intake_id="phone-order-1",
+        intake_channel="phone", job_kind="approved_job",
+        shipment=_shipment("Approved Job Customer"), opened_by="Operator One",
+        opened_at=NOW, sales_owner="Sales One", operations_owner="Ops One",
+    )
+    repeated_manual = create_manual_mina_job(
+        repository=manual_repo, manual_intake_id="phone-order-1",
+        intake_channel="phone", job_kind="approved_job",
+        shipment=_shipment("Approved Job Customer"), opened_by="Operator One",
+        opened_at=NOW, sales_owner="Sales One", operations_owner="Ops One",
+    )
+    manual_job = transition_mina_job_stage(
+        repository=manual_repo, mina_code=manual_job.mina_code, target_stage="pricing",
+        actor="Operator One", occurred_at=NOW + timedelta(minutes=1),
+    )
+    approved_allowed = allowed_next_stages(manual_job)
+    try:
+        transition_mina_job_stage(
+            repository=manual_repo, mina_code=manual_job.mina_code, target_stage="quote_ready",
+            actor="Operator One", occurred_at=NOW + timedelta(minutes=2),
+        )
+        approved_quote_blocked = False
+    except MinaJobTransitionError:
+        approved_quote_blocked = True
+    manual_job = transition_mina_job_stage(
+        repository=manual_repo, mina_code=manual_job.mina_code,
+        target_stage="operation_opened", actor="Operator One",
+        occurred_at=NOW + timedelta(minutes=2),
+    )
+    manual_job = set_mina_job_owners(
+        repository=manual_repo, mina_code=manual_job.mina_code, actor="Manager One",
+        sales_owner="Sales Two", operations_owner="Ops Two",
+        occurred_at=NOW + timedelta(minutes=3),
+    )
+    manual_events = manual_repo.list_events(manual_job.job_id)
+    check(
+        repeated_manual.job_id == manual_job.job_id
+        and manual_job.mina_code == "MINA2026/1"
+        and manual_job.source_proposal_id is None
+        and manual_job.manual_intake_id == "phone-order-1"
+        and manual_job.job_kind == "approved_job"
+        and manual_job.intake_channel == "phone"
+        and "operation_opened" in approved_allowed
+        and "quote_ready" not in approved_allowed
+        and approved_quote_blocked
+        and manual_job.stage == "operation_opened"
+        and manual_job.sales_owner == "Sales Two"
+        and manual_job.operations_owner == "Ops Two"
+        and any(e.event_type == "job_sales_owner_changed" for e in manual_events)
+        and any(e.event_type == "job_operations_owner_changed" for e in manual_events),
+        "approved manual jobs are idempotent skip customer quote lifecycle and audit ownership",
+    )
+
+    legacy_payload = {
+        "mina_code": "MINA2026/99", "sequence_year": 2026, "sequence_number": 99,
+        "source_proposal_id": "legacy-proposal", "shipment": _shipment("Legacy Customer"),
+        "stage": "delivered", "opened_by": "Legacy Operator",
+        "opened_at": NOW, "updated_at": NOW, "closed_at": NOW,
+    }
+    legacy_job = MinaJob.model_validate(legacy_payload)
+    check(
+        legacy_job.lifecycle_version == 1 and legacy_job.is_closed
+        and legacy_job.job_kind == "price_request" and legacy_job.intake_channel == "email",
+        "persisted pre-P2-01 jobs deserialize as lifecycle v1 with delivered terminal",
+    )
+
     with tempfile.TemporaryDirectory() as temp_dir:
         store = SQLitePilotStore(Path(temp_dir) / "concurrent.sqlite3", retention_days=365)
         sqlite_jobs = SQLiteMinaJobRepository(store)
@@ -160,6 +232,70 @@ def evaluate_mina_job_case_regressions() -> dict:
         check(
             not errors and sorted(codes) == ["MINA2026/1", "MINA2026/2"],
             "concurrent job creation reserves unique durable MINA numbers",
+        )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        store = SQLitePilotStore(Path(temp_dir) / "mixed-concurrent.sqlite3", retention_days=365)
+        mixed_jobs = SQLiteMinaJobRepository(store)
+        barrier = threading.Barrier(2)
+        mixed_codes: list[str] = []
+        mixed_errors: list[str] = []
+
+        def create_email_job():
+            try:
+                barrier.wait()
+                job = create_mina_job_for_confirmed_proposal(
+                    repository=mixed_jobs, proposal_id="mixed-email",
+                    shipment=_shipment("Mixed Email"), opened_by="Operator One", opened_at=NOW,
+                )
+                mixed_codes.append(job.mina_code)
+            except Exception as exc:
+                mixed_errors.append(type(exc).__name__)
+
+        def create_manual_job():
+            try:
+                barrier.wait()
+                job = create_manual_mina_job(
+                    repository=mixed_jobs, manual_intake_id="mixed-phone",
+                    intake_channel="phone", job_kind="approved_job",
+                    shipment=_shipment("Mixed Manual"), opened_by="Operator Two", opened_at=NOW,
+                )
+                mixed_codes.append(job.mina_code)
+            except Exception as exc:
+                mixed_errors.append(type(exc).__name__)
+
+        threads = [threading.Thread(target=create_email_job), threading.Thread(target=create_manual_job)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        check(
+            not mixed_errors and sorted(mixed_codes) == ["MINA2026/1", "MINA2026/2"],
+            "email and manual intake share one concurrency-safe MINA sequence",
+        )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        store = SQLitePilotStore(Path(temp_dir) / "ownership.sqlite3", retention_days=365)
+        durable_jobs = SQLiteMinaJobRepository(store)
+        durable_job = create_manual_mina_job(
+            repository=durable_jobs, manual_intake_id="durable-owner",
+            intake_channel="whatsapp", job_kind="approved_job",
+            shipment=_shipment("Durable Owner"), opened_by="Operator One", opened_at=NOW,
+            sales_owner="Sales One", operations_owner="Ops One",
+        )
+        durable_job = set_mina_job_owners(
+            repository=durable_jobs, mina_code=durable_job.mina_code, actor="Manager One",
+            sales_owner="Sales Durable", operations_owner="Ops Durable",
+            occurred_at=NOW + timedelta(minutes=1),
+        )
+        reopened_jobs = SQLiteMinaJobRepository(store)
+        reopened = reopened_jobs.get(durable_job.job_id)
+        check(
+            reopened is not None
+            and reopened.sales_owner == "Sales Durable"
+            and reopened.operations_owner == "Ops Durable"
+            and len(reopened_jobs.list_events(durable_job.job_id)) >= 3,
+            "job ownership and its audit trail survive SQLite repository reopen",
         )
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -368,7 +504,26 @@ def evaluate_mina_job_case_regressions() -> dict:
     )
 
     current = first_job
-    for target in ("quote_sent", "accepted", "operations", "in_transit", "delivered"):
+    for target in (
+        "quote_sent", "accepted", "operation_opened",
+        "supplier_confirmation_pending", "vehicle_details_pending",
+        "vehicle_assigned", "pre_loading_check", "ready_for_loading",
+        "loaded", "in_transit", "delivery", "delivered",
+    ):
+        current = transition_mina_job_stage(
+            repository=job_repo,
+            mina_code=current.mina_code,
+            target_stage=target,
+            actor="Operator One",
+            occurred_at=current.updated_at + timedelta(minutes=1),
+        )
+    check(
+        current.stage == "delivered"
+        and not current.is_closed
+        and current.closed_at is None,
+        "lifecycle v2 delivery remains open until POD CMR and closing review complete",
+    )
+    for target in ("pod_cmr_pending", "closing_review", "completed"):
         current = transition_mina_job_stage(
             repository=job_repo,
             mina_code=current.mina_code,
@@ -388,11 +543,11 @@ def evaluate_mina_job_case_regressions() -> dict:
     except MinaJobTransitionError:
         closed_override_blocked = True
     check(
-        current.stage == "delivered"
+        current.stage == "completed"
         and current.is_closed
         and current.closed_at is not None
         and closed_override_blocked,
-        "delivered shipment closes the MINA job and freezes job-specific automation overrides",
+        "lifecycle v2 completes only after POD CMR and closing review and then freezes overrides",
     )
 
     try:
@@ -452,6 +607,21 @@ def evaluate_mina_job_case_regressions() -> dict:
         api_stage = api.update_mina_job_stage(
             api_job.job_id, api.MinaJobStageTransitionRequest(target_stage="pricing"), request
         )
+        api_manual = api.create_manual_job(
+            api.MinaJobManualCreateRequest(
+                manual_intake_id="api-phone-1", job_kind="approved_job",
+                intake_channel="phone", shipment=_shipment("API Manual Customer"),
+                sales_owner="API Sales", operations_owner="API Ops",
+            ),
+            request,
+        )
+        api_owned = api.update_mina_job_owners(
+            api_manual["job_id"],
+            api.MinaJobOwnersRequest(
+                sales_owner="API Sales Two", operations_owner="API Ops Two"
+            ),
+            request,
+        )
     finally:
         (api.mina_job_repository, api.supplier_rfq_repository,
          api.quote_case_repository, api.automation_action_repository) = original_api_repositories
@@ -459,14 +629,20 @@ def evaluate_mina_job_case_regressions() -> dict:
         api_list["jobs"][0]["mina_code"] == api_job.mina_code
         and api_detail["job"]["job_id"] == api_job.job_id
         and api_override["automation_overrides"]["disable_supplier_reminders"] is True
-        and api_stage["stage"] == "pricing",
-        "MINA API list detail override and lifecycle wiring use the same durable job",
+        and api_stage["stage"] == "pricing"
+        and api_manual["job_kind"] == "approved_job"
+        and api_manual["intake_channel"] == "phone"
+        and api_owned["sales_owner"] == "API Sales Two"
+        and api_owned["operations_owner"] == "API Ops Two",
+        "MINA API list detail manual intake ownership and lifecycle use the durable job model",
     )
 
     check(
         route_allowed("GET", "/mina-jobs")
+        and route_allowed("POST", "/mina-jobs/manual")
         and route_allowed("GET", "/mina-jobs/job-1")
         and route_allowed("POST", "/mina-jobs/job-1/automation-overrides")
+        and route_allowed("POST", "/mina-jobs/job-1/owners")
         and route_allowed("POST", "/mina-jobs/job-1/stage")
         and route_allowed("GET", "/mina-jobs/job-1/supplier-rfqs/rfq-1/reminder-preview")
         and route_allowed("POST", "/mina-jobs/job-1/supplier-rfqs/rfq-1/reminder-now"),
