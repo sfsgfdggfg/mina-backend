@@ -103,7 +103,10 @@ def evaluate_pilot_regression_suite_regressions() -> dict:
         network_attempts.append((args, kwargs))
         raise AssertionError("external network attempted")
 
-    with patch.dict(os.environ, {}, clear=True), patch.object(socket, "create_connection", reject_network), patch.object(socket.socket, "connect", reject_network):
+    # This check is specifically about API-key independence. Preserve ordinary
+    # process environment such as HOME/TMPDIR/CI because clearing the entire
+    # environment changes filesystem/evidence semantics unrelated to OpenAI.
+    with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False), patch.object(socket, "create_connection", reject_network), patch.object(socket.socket, "connect", reject_network):
         smoke_output = io.StringIO()
         smoke_code = run_suites(CANONICAL_SUITES, smoke_output)
     if smoke_code != 0:
