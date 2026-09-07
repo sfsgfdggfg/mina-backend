@@ -9,7 +9,7 @@ from src.core.automation_policy import (
     EffectiveAutomationPolicy,
 )
 from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
-from src.core.master_data import CustomerMasterProfile, normalize_master_text
+from src.core.master_data import CustomerMasterProfile, SupplierMasterProfile, normalize_master_text
 from src.core.master_data_repository import MasterDataRepository
 from src.core.mina_job_repository import MinaJobRepository
 
@@ -74,6 +74,24 @@ def find_customer_policy_profile(
     return None
 
 
+
+def find_supplier_policy_profile(
+    repository: MasterDataRepository | None,
+    supplier_name: str | None,
+) -> SupplierMasterProfile | None:
+    if repository is None or not supplier_name or not supplier_name.strip():
+        return None
+    direct = repository.find_supplier_by_name(supplier_name)
+    if direct is not None and direct.active:
+        return direct
+    target = normalize_master_text(supplier_name)
+    matches = [
+        profile for profile in repository.list_suppliers()
+        if profile.active and normalize_master_text(profile.supplier_name) == target
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _mode_for_action(container, action: AutomationPolicyAction) -> AutomationMode | None:
     if container is None:
         return None
@@ -98,6 +116,7 @@ def resolve_effective_automation_policy(
     job_id: str | None = None,
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
+    supplier_name: str | None = None,
 ) -> EffectiveAutomationPolicy:
     job = (
         mina_job_repository.get(job_id)
@@ -114,6 +133,11 @@ def resolve_effective_automation_policy(
         None if job is None else job.shipment.customer_name,
     )
     customer_mode = _mode_for_action(customer, action)
+    supplier = find_supplier_policy_profile(master_data_repository, supplier_name)
+    supplier_mode = (
+        None if supplier is None or action != "supplier_reminder"
+        else supplier.relationship.supplier_reminder_mode
+    )
     agency_policy = (
         agency_policy_repository.get()
         if agency_policy_repository is not None
@@ -127,6 +151,9 @@ def resolve_effective_automation_policy(
     elif legacy_job_disabled:
         mode = "manual"
         resolved_from = "job_legacy_disable"
+    elif supplier_mode is not None:
+        mode = supplier_mode
+        resolved_from = "supplier"
     elif customer_mode is not None:
         mode = customer_mode
         resolved_from = "customer"
@@ -143,6 +170,8 @@ def resolve_effective_automation_policy(
         resolved_from=resolved_from,
         job_mode=job_mode,
         legacy_job_disabled=legacy_job_disabled,
+        supplier_mode=supplier_mode,
+        supplier_id=None if supplier is None else supplier.supplier_id,
         customer_mode=customer_mode,
         customer_id=None if customer is None else customer.customer_id,
         agency_mode=agency_mode,

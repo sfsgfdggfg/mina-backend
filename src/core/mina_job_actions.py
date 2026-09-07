@@ -175,6 +175,7 @@ def send_supplier_reminder_now(
         job_id=job.job_id,
         master_data_repository=master_data_repository,
         agency_policy_repository=agency_policy_repository,
+        supplier_name=draft.supplier_name,
     )
     if effective_policy.effective_mode == "approval_required":
         raise MinaJobActionError(
@@ -231,6 +232,7 @@ def send_supplier_reminder_now(
             job_id=current_job.job_id,
             master_data_repository=master_data_repository,
             agency_policy_repository=agency_policy_repository,
+            supplier_name=current_draft.supplier_name,
         )
         valid_to_send = (
             is_supplier_business_time(current)

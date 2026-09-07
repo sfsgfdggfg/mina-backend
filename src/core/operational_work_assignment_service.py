@@ -110,10 +110,17 @@ def _repo_args(assignment_repository, attachment_repository, proposal_repository
     )
 
 
-def _new_assignment(*, work_id: str, operator_name: str, fingerprint: str, generation: int, timestamp: datetime) -> OperationalWorkAssignment:
+def _new_assignment(
+    *, work_id: str, operator_name: str, fingerprint: str, generation: int, timestamp: datetime,
+    assigned_by: str | None = None, reassigned_from: str | None = None,
+    assignment_reason: str | None = None,
+) -> OperationalWorkAssignment:
     return OperationalWorkAssignment(
         work_id=work_id,
         assigned_to=operator_name,
+        assigned_by=assigned_by or operator_name,
+        reassigned_from=reassigned_from,
+        assignment_reason=assignment_reason,
         assigned_at=timestamp,
         last_renewed_at=timestamp,
         lease_expires_at=_lease_expiry(timestamp),
@@ -148,6 +155,57 @@ def assign_operational_work_to_me(
         generation = 1 if current is None else current.generation + 1
         return assignment_repository.save(_new_assignment(work_id=work_id, operator_name=operator_name, fingerprint=fingerprint, generation=generation, timestamp=timestamp))
 
+
+
+def assign_operational_work_to_operator(
+    *,
+    work_id: str,
+    target_operator_name: str,
+    assigned_by: str,
+    assignment_repository: OperationalWorkAssignmentRepository,
+    attachment_repository: AttachmentInterpretationReviewRepository,
+    proposal_repository: ExtractionProposalRepository,
+    supplier_repository: SupplierRFQRepository,
+    approval_repository: QuoteApprovalRepository,
+    quote_case_repository: QuoteCaseRepository,
+    reason: str | None = None,
+    now: datetime | None = None,
+) -> OperationalWorkAssignment:
+    timestamp = _now(now)
+    target = str(target_operator_name or "").strip()
+    actor = str(assigned_by or "").strip()
+    normalized_reason = None if reason is None else reason.strip() or None
+    if not target or not actor:
+        raise ValueError("Directed assignment requires target and assigning operator identities.")
+    with atomic_repository_transaction(*_repo_args(
+        assignment_repository, attachment_repository, proposal_repository,
+        supplier_repository, approval_repository, quote_case_repository
+    )):
+        item = _current_item(
+            work_id=work_id, attachment_repository=attachment_repository,
+            proposal_repository=proposal_repository, supplier_repository=supplier_repository,
+            approval_repository=approval_repository, quote_case_repository=quote_case_repository,
+            now=timestamp,
+        )
+        fingerprint = work_state_fingerprint(item)
+        current = assignment_repository.get(work_id)
+        if (
+            current is not None and current.status != "released"
+            and current.work_state_sha256 == fingerprint
+            and current.assigned_to == target
+            and not assignment_lease_expired(current, now=timestamp)
+        ):
+            return current
+        generation = 1 if current is None else current.generation + 1
+        prior = (
+            None if current is None or current.status == "released"
+            else current.assigned_to
+        )
+        return assignment_repository.save(_new_assignment(
+            work_id=work_id, operator_name=target, fingerprint=fingerprint,
+            generation=generation, timestamp=timestamp, assigned_by=actor,
+            reassigned_from=prior, assignment_reason=normalized_reason,
+        ))
 
 def acknowledge_operational_work(
     *,

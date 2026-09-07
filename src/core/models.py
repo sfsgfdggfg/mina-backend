@@ -30,11 +30,17 @@ class Shipment(BaseModel):
     pickup_city: Optional[str] = None
     pickup_area: Optional[str] = None
     pickup_postcode: Optional[str] = None
+    pickup_address: Optional[str] = None
+    pickup_contact_name: Optional[str] = None
+    pickup_contact_phone: Optional[str] = None
 
     delivery_country: Optional[str] = None
     delivery_city: Optional[str] = None
     delivery_area: Optional[str] = None
     delivery_postcode: Optional[str] = None
+    delivery_address: Optional[str] = None
+    delivery_contact_name: Optional[str] = None
+    delivery_contact_phone: Optional[str] = None
 
     commodity: Optional[str] = None
     gtip_code: Optional[str] = None

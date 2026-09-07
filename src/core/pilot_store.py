@@ -35,9 +35,11 @@ PERSISTENT_STATE_NAMESPACES = (
     "supplier_master_by_name",
     "agency_automation_policy",
     "agency_branding_settings",
+    "agency_performance_settings",
     "operation_execution_snapshots",
     "operation_exceptions",
     "operation_exception_by_entry",
+    "operation_start_messages",
     "learning_facts",
     "learning_fact_by_entry",
 )

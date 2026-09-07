@@ -103,10 +103,14 @@ class ShipmentExtractionProposal(BaseModel):
     @property
     def unknown_fields(self) -> list[str]:
         proposed_data = self.proposed_shipment.model_dump()
+        optional_operation_fields = {
+            "pickup_address", "pickup_contact_name", "pickup_contact_phone",
+            "delivery_address", "delivery_contact_name", "delivery_contact_phone",
+        }
         return sorted(
             field_name
             for field_name, value in proposed_data.items()
-            if value is None
+            if value is None and field_name not in optional_operation_fields
         )
 
     @computed_field

@@ -344,3 +344,31 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
   .settings-tabs { overflow-x: auto; }
 }
 .jobs-empty-cell { text-align: center; padding: 28px 12px; }
+
+/* Ops phase: small-agency settings and operation-start controls */
+.settings-subsection, .supplier-settings-editor, .supplier-learning {
+  border-top: 1px solid #edf0f5; padding-top: 16px; margin-top: 4px; display: grid; gap: 12px;
+}
+.settings-subsection h3, .settings-subheading h3 { margin: 0 0 4px; font-size: 15px; }
+.settings-subsection p, .settings-subheading p { margin: 0; font-size: 12px; }
+.settings-inline-editor, .supplier-relationship-form { display: grid; gap: 13px; }
+.settings-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.channel-fieldset { border: 1px solid var(--line); border-radius: 11px; padding: 11px 12px; display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.channel-fieldset legend { padding: 0 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.check-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.check-label input { width: auto; margin: 0; }
+.supplier-profile-summary { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.supplier-profile-readonly { padding: 10px 12px; border-radius: 9px; background: #f8fafc; line-height: 1.5; }
+.learning-fact-list { display: grid; gap: 8px; }
+.learning-fact-card { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; display: grid; gap: 5px; }
+.learning-fact-card .actions { margin-top: 5px; }
+.performance-setting-row { display: grid; grid-template-columns: minmax(220px,.8fr) minmax(220px,1fr); gap: 14px; align-items: end; max-width: 760px; }
+.direct-assign { display: flex; gap: 7px; margin-top: 10px; }
+.direct-assign select { min-width: 0; }
+.operation-start-message, .operation-start-launch { border: 1px solid var(--line); border-radius: 13px; padding: 15px; margin-top: 11px; }
+.operation-start-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 8px; }
+@media (max-width: 720px) {
+  .settings-two-col, .performance-setting-row, .supplier-profile-summary { grid-template-columns: 1fr; }
+  .direct-assign { flex-direction: column; }
+  .operation-start-head { align-items: flex-start; flex-direction: column; }
+}

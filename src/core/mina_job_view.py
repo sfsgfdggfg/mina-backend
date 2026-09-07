@@ -8,6 +8,8 @@ from src.core.automation_policy_repository import AgencyAutomationPolicyReposito
 from src.core.automation_policy_service import resolve_effective_automation_policy
 from src.core.master_data_repository import MasterDataRepository
 from src.core.operation_execution_repository import OperationExecutionRepository
+from src.core.operation_start_repository import OperationStartMessageRepository
+from src.core.operation_start_service import build_operation_start_view
 from src.core.operation_execution_service import build_operation_execution_view
 from src.core.learning_fact_repository import LearningFactRepository
 from src.core.learning_fact_service import build_learning_fact_view
@@ -60,6 +62,7 @@ def build_mina_job_detail(
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
     operation_execution_repository: OperationExecutionRepository | None = None,
+    operation_start_message_repository: OperationStartMessageRepository | None = None,
     learning_fact_repository: LearningFactRepository | None = None,
     job_id: str,
     now: datetime | None = None,
@@ -172,6 +175,10 @@ def build_mina_job_detail(
         if operation_execution_repository is not None
         else None
     )
+    operation_start = (
+        build_operation_start_view(operation_start_message_repository, job_id=job.job_id)
+        if operation_start_message_repository is not None else None
+    )
     learning = (
         build_learning_fact_view(
             repository=learning_fact_repository, subject_type="operation", subject_id=job.job_id,
@@ -206,6 +213,7 @@ def build_mina_job_detail(
         "suppliers": supplier_rows,
         "supplier_prices": supplier_prices,
         "operation": operation,
+        "operation_start": operation_start,
         "learning": learning,
         "quote": quote_summary,
         "timeline": timeline,
@@ -215,5 +223,6 @@ def build_mina_job_detail(
             "allowed_next_stages": allowed_next_stages(job),
             "supplier_reminder_preview_available": not job.is_closed,
             "supplier_price_entry_available": (not job.is_closed and job.stage in PRICE_SOURCING_STAGES),
+            "operation_start_available": (not job.is_closed and job.stage == "accepted"),
         },
     }

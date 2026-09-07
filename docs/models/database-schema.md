@@ -861,3 +861,17 @@ The activity-period basis for this projection is `assigned_at` converted to `Eur
 `AgencyBrandingSettings` is a durable singleton record in namespace `agency_branding_settings` with record key `current`. It stores bounded `company_name`, optional validated `logo_data_uri`, `primary_color`, `secondary_accent_color`, timezone-aware `updated_at`, authenticated `updated_by` and a fixed source marker.
 
 Derived primary/secondary contrast, soft and hover colors are read-model values and are not separate mutable authority. The current branding record survives ordinary state-retention cleanup; update saves also create normal pilot audit events. Critical success/warning/danger status colors are not branding fields and cannot be persisted through this model.
+
+## P2-14 Small-Agency Operations Workflow and Supplier Relationship Layer
+
+`SupplierMasterProfile.relationship` is a durable nested `SupplierRelationshipSettings` record. It may store preferred contact channels, preferred language, communication timing/tone notes, supplier reminder mode, first-reminder and acknowledged-wait durations, zero/one email reminder preference, phone/WhatsApp escalation timing, management escalation permission, selected-supplier operation-email mode, non-selected supplier closure-email mode, automatic-contact block, negotiation/commercial/operational/relationship notes, payment terms, detention notes and vehicle-information behavior. Existing supplier profiles deserialize with safe defaults.
+
+`OperationStartMessage` is durable outbound-operation evidence stored in namespace `operation_start_messages`. A deterministic `message_id` binds one MINA job + supplier + message kind (`selected_supplier_confirmation` or `supplier_closure`). State is `approval_required`, `manual_required`, `sending`, `sent`, `rejected` or `failed`; send/decision/provider evidence is stored only according to valid state. `sending` is a durable duplicate-send reservation rather than successful-delivery evidence.
+
+`PerformanceSettings` is one durable agency singleton under namespace `agency_performance_settings`, record key `current`. It stores optional first-look and decision target minutes plus authenticated update actor/time. Null target means that SLA target is disabled. Reporting remains a computed read model; no employee score table is added.
+
+`OperationalWorkAssignment` adds `assigned_by`, `reassigned_from` and optional `assignment_reason` to each assignment generation. Active web users are the directory used to resolve directed assignees; the directory itself remains external web-user configuration rather than a second employee database.
+
+`Shipment` adds optional exact `pickup_address`, `delivery_address`, pickup/delivery contact name and phone fields. These are backward-compatible operational facts used when evidenced for pickup/delivery instructions; absence remains null and must not be guessed.
+
+Supplier-history analysis writes ordinary `LearningFact` records with subject type `supplier` and source `minai_inference`, retaining the existing proposed/confirmed/rejected/superseded authority model. No second supplier-learning persistence model is created.

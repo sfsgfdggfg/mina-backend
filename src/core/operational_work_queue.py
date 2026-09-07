@@ -17,6 +17,7 @@ from src.core.extraction_confirmation_repository import ExtractionProposalReposi
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.master_data_repository import MasterDataRepository
 from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
+from src.core.operation_start_repository import OperationStartMessageRepository
 from src.core.operational_priority import (
     PRIORITY_RANK,
     age_score,
@@ -373,8 +374,8 @@ def _automation_attention_items(
             "supplier_reminder_requires_human_approval",
         ),
         "human_contact_required": (
-            "contact_supplier_phone_or_whatsapp", 80,
-            "supplier_phone_or_whatsapp_contact_required",
+            "contact_supplier_using_profile", 80,
+            "supplier_profile_contact_required",
         ),
         "automation_delivery_attention": (
             "inspect_supplier_automation_delivery", 85,
@@ -555,6 +556,56 @@ def _quote_approval_item(
     )
 
 
+
+def _operation_start_item(message, *, now: datetime) -> dict[str, Any]:
+    age_hours = _age_hours(message.created_at, now=now)
+    selected = message.kind == "selected_supplier_confirmation"
+    score = 52 if selected else 22
+    reasons = [
+        "selected_supplier_operation_confirmation_pending"
+        if selected else "supplier_relationship_closure_pending"
+    ]
+    score = _add_age(score, reasons, age_hours)
+    warning_count = 0
+    blocker_count = 0
+    if message.status == "failed":
+        score += 25
+        blocker_count = 1
+        reasons.append("operation_start_delivery_failed")
+    elif message.status == "sending":
+        score += 18
+        warning_count += 1
+        reasons.append("operation_start_send_outcome_pending")
+    elif message.status == "approval_required":
+        score += 10
+        reasons.append("operator_approval_required")
+    elif message.status == "manual_required":
+        reasons.append("manual_external_send_required")
+    if message.attention_reason:
+        warning_count += 1
+        reasons.append("operation_start_attention_reason_present")
+    if message.status == "failed":
+        next_action = "retry_operation_start_message"
+    elif message.status == "sending":
+        next_action = "inspect_operation_start_send_reservation"
+    elif message.status == "approval_required":
+        next_action = (
+            "approve_selected_supplier_operation_email"
+            if selected else "approve_supplier_closure_email"
+        )
+    else:
+        next_action = (
+            "send_selected_supplier_operation_email_manually"
+            if selected else "send_supplier_closure_email_manually"
+        )
+    return _final_item(
+        work_type="operation_start_message", resource_type="operation_start_message",
+        resource_id=message.message_id, route="supplier_operation", status=message.status,
+        next_action=next_action, created_at=message.created_at, age_hours=age_hours,
+        score=score, reasons=reasons, blocker_count=blocker_count,
+        warning_count=warning_count,
+    )
+
 def build_operational_work_queue(
     *,
     attachment_repository: AttachmentInterpretationReviewRepository,
@@ -566,6 +617,7 @@ def build_operational_work_queue(
     mina_job_repository: MinaJobRepository | None = None,
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
+    operation_start_repository: OperationStartMessageRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = aware_utc(now or datetime.now(timezone.utc))
@@ -587,6 +639,7 @@ def build_operational_work_queue(
     resolved_mina_job_repository = mina_job_repository
     resolved_master_data_repository = master_data_repository
     resolved_agency_policy_repository = agency_policy_repository
+    resolved_operation_start_repository = operation_start_repository
     if getattr(supplier_repository, "store", None) is not None:
         from src.core.sqlite_repositories import (
             SQLiteAutomationActionRepository,
@@ -594,6 +647,7 @@ def build_operational_work_queue(
         )
         from src.core.master_data_repository import SQLiteMasterDataRepository
         from src.core.automation_policy_repository import SQLiteAgencyAutomationPolicyRepository
+        from src.core.operation_start_repository import SQLiteOperationStartMessageRepository
         if resolved_automation_repository is None:
             resolved_automation_repository = SQLiteAutomationActionRepository(
                 supplier_repository.store
@@ -610,6 +664,10 @@ def build_operational_work_queue(
             resolved_agency_policy_repository = SQLiteAgencyAutomationPolicyRepository(
                 supplier_repository.store
             )
+        if resolved_operation_start_repository is None:
+            resolved_operation_start_repository = SQLiteOperationStartMessageRepository(
+                supplier_repository.store
+            )
     if resolved_automation_repository is not None:
         items.extend(_automation_attention_items(
             supplier_repository=supplier_repository,
@@ -619,6 +677,13 @@ def build_operational_work_queue(
             master_data_repository=resolved_master_data_repository,
             agency_policy_repository=resolved_agency_policy_repository,
         ))
+
+    if resolved_operation_start_repository is not None:
+        items.extend(
+            _operation_start_item(message, now=current)
+            for message in resolved_operation_start_repository.list_all()
+            if message.status in {"approval_required", "manual_required", "sending", "failed"}
+        )
 
     follow_ups = supplier_repository.list_follow_up_drafts()
     active_follow_up_counts: dict[str, int] = {}

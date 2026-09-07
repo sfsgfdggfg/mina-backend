@@ -49,7 +49,7 @@ function modeLabel(value) {
   return ({ automatic: "Otomatik", approval_required: "Operatör Onayı", manual: "Manuel" })[value] || "Üst kural";
 }
 function policySourceLabel(value) {
-  return ({ job: "Bu iş", job_legacy_disable: "Bu iş · devre dışı", customer: "Müşteri", agency: "Ajans", legacy_dispatch: "Sistem varsayılanı" })[value] || codeLabel(value);
+  return ({ job: "Bu iş", job_legacy_disable: "Bu iş · devre dışı", supplier: "Tedarikçi", customer: "Müşteri", agency: "Ajans", legacy_dispatch: "Sistem varsayılanı" })[value] || codeLabel(value);
 }
 function transportLabel(value) {
   return ({ road: "Karayolu", rail: "Demiryolu", sea: "Denizyolu", air: "Havayolu", multimodal: "Multimodal" })[value] || codeLabel(value);
@@ -58,11 +58,12 @@ function reminderStateLabel(value) {
   return ({
     waiting: "Bekliyor", manual_reminder_due: "Manuel hatırlatma zamanı",
     approval_required_supplier_reminder_due: "Hatırlatma onay bekliyor", automatic_reminder_due: "Otomatik hatırlatma zamanı",
-    human_contact_required: "Telefon / WhatsApp takibi gerekli", outside_business_hours_waiting: "Çalışma saati bekleniyor",
+    human_contact_required: "Manuel tedarikçi takibi gerekli", waiting_supplier_contact_escalation: "Tedarikçi temas zamanı bekleniyor", outside_business_hours_waiting: "Çalışma saati bekleniyor",
     commercial_response_present: "Yanıt alındı", not_waiting_for_response: "Yanıt beklenmiyor",
     approval_rejected_no_send: "Hatırlatma reddedildi", automation_delivery_attention: "Gönderim hatası",
     automation_cancelled_manual_attention: "Manuel takip gerekli", missing_supplier_recipient_manual_attention: "Tedarikçi e-postası eksik",
-    supplier_calendar_unavailable_manual_attention: "Çalışma takvimi doğrulanamadı", not_automation_eligible: "Otomasyon dışı"
+    supplier_calendar_unavailable_manual_attention: "Çalışma takvimi doğrulanamadı", not_automation_eligible: "Otomasyon dışı",
+    procurement_closed: "Fiyat toplama kapandı"
   })[value] || codeLabel(value);
 }
 function moneyLabel(value, currency = "") {
@@ -260,6 +261,7 @@ const WORK_TYPE_LABELS = {
   supplier_contact_escalation: "Tedarikçi eskalasyon",
   customer_deadline_update: "Müşteri bilgilendirme",
   quote_approval: "Teklif onayı",
+  operation_start_message: "Operasyon başlangıcı",
 };
 
 const WORK_ACTION_LABELS = {
@@ -272,6 +274,7 @@ const WORK_ACTION_LABELS = {
   send_supplier_reminder_manually: "Tedarikçiye manuel hatırlatma gönder",
   review_and_approve_supplier_reminder: "Tedarikçi hatırlatmasını onayla",
   contact_supplier_phone_or_whatsapp: "Tedarikçiyi ara / WhatsApp ile takip et",
+  contact_supplier_using_profile: "Tedarikçiyi profilindeki kanalla takip et",
   inspect_supplier_automation_delivery: "Tedarikçi gönderim hatasını incele",
   inspect_supplier_automation_state: "Tedarikçi otomasyon durumunu incele",
   inspect_supplier_contact_data: "Tedarikçi iletişim bilgisini kontrol et",
@@ -283,6 +286,12 @@ const WORK_ACTION_LABELS = {
   inspect_customer_contact_data: "Müşteri iletişim bilgisini kontrol et",
   decide_quote_approval: "Teklif onayını kararlaştır",
   inspect_quote_approval_state: "Teklif onayı durumunu incele",
+  retry_operation_start_message: "Operasyon e-postasını yeniden gönder",
+  inspect_operation_start_send_reservation: "Operasyon maili gönderim sonucunu kontrol et",
+  approve_selected_supplier_operation_email: "Tedarikçi onay / toplama mailini onayla",
+  approve_supplier_closure_email: "Tedarikçi teşekkür kapanışını onayla",
+  send_selected_supplier_operation_email_manually: "Onay / toplama mailini manuel gönder",
+  send_supplier_closure_email_manually: "Tedarikçi kapanışını manuel gönder",
 };
 
 const APPROVAL_WORK_ACTIONS = new Set([
@@ -291,6 +300,8 @@ const APPROVAL_WORK_ACTIONS = new Set([
   "review_and_approve_supplier_reminder",
   "review_and_approve_customer_update",
   "decide_quote_approval",
+  "approve_selected_supplier_operation_email",
+  "approve_supplier_closure_email",
 ]);
 
 const WORK_PRIORITY_LABELS = {
@@ -356,7 +367,7 @@ function workAssignmentSummary(item, isMine) {
   return `${owner}${remaining}`;
 }
 
-function workCard(item, myIds, refresh) {
+function workCard(item, myIds, refresh, operators = []) {
   const isMine = myIds.has(item.work_id);
   const card = node("article", "", `work-card ${item.priority_band || "normal"}`);
   const heading = node("div", "", "work-card-heading");
@@ -404,14 +415,35 @@ function workCard(item, myIds, refresh) {
       () => mutateOperationalWork(item, "release", refresh, "Bu işi sahipsiz bırakmak istiyor musun? Bu işlem işi tamamlandı olarak işaretlemez.")
     ));
   }
+  if (operators.length > 1) {
+    const assignWrap = node("div", "", "direct-assign");
+    const select = document.createElement("select");
+    const placeholder = document.createElement("option"); placeholder.value = ""; placeholder.textContent = "Başka operatöre ata…"; select.append(placeholder);
+    operators.forEach(operator => {
+      const option = document.createElement("option"); option.value = operator.email; option.textContent = operator.operator_name; select.append(option);
+    });
+    const assign = actionButton("Ata", "", async () => {
+      if (!select.value) return;
+      assign.disabled = true;
+      try {
+        await api(`/operational-work-items/${encodeURIComponent(item.work_id)}/assign`, {
+          method: "POST", body: JSON.stringify({ target_email: select.value })
+        });
+        await refresh();
+      } catch (error) { showError(error); }
+      finally { assign.disabled = false; }
+    });
+    assignWrap.append(select, assign); card.append(assignWrap);
+  }
   if (actions.childElementCount) card.append(actions);
   return card;
 }
 
-function renderOperationalWork(queue, mine) {
+function renderOperationalWork(queue, mine, operatorsPayload = {}) {
   title.textContent = "İş Kuyruğu";
   const root = node("div", "", "work-page");
   const items = queue.items || [];
+  const operators = operatorsPayload.operators || [];
   const myIds = new Set((mine.items || []).map(item => item.work_id));
   const approvalCount = items.filter(isApprovalWork).length;
   const unassignedCriticalCount = items.filter(item =>
@@ -444,7 +476,7 @@ function renderOperationalWork(queue, mine) {
     const count = items.filter(predicate).length;
     tabs.append(actionButton(`${label} · ${count}`, key === operationalWorkView ? "active" : "", () => {
       operationalWorkView = key;
-      renderOperationalWork(queue, mine);
+      renderOperationalWork(queue, mine, operatorsPayload);
     }));
   }
   root.append(tabs);
@@ -453,7 +485,7 @@ function renderOperationalWork(queue, mine) {
   const visible = items.filter(activeFilter[2]);
   const list = node("div", "", "work-list");
   const refresh = () => loadOperationalWork(operationalWorkView);
-  visible.forEach(item => list.append(workCard(item, myIds, refresh)));
+  visible.forEach(item => list.append(workCard(item, myIds, refresh, operators)));
   if (!visible.length) list.append(node("div", "Bu görünümde bekleyen iş yok.", "work-empty"));
   root.append(list);
   content.replaceChildren(root);
@@ -461,11 +493,12 @@ function renderOperationalWork(queue, mine) {
 
 async function loadOperationalWork(view = operationalWorkView) {
   operationalWorkView = view;
-  const [queue, mine] = await Promise.all([
+  const [queue, mine, operatorsPayload] = await Promise.all([
     api("/operational-work-queue"),
     api("/operational-work-my"),
+    api("/operators"),
   ]);
-  renderOperationalWork(queue, mine);
+  renderOperationalWork(queue, mine, operatorsPayload);
   setStatus("Güncel");
 }
 
@@ -645,6 +678,8 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     reminderLine.append(node("strong", reminderStateLabel(reminder.state)));
     if (reminder.due_at) reminderLine.append(node("span", ` · ${formatDate(reminder.due_at)}`, "small"));
     if (reminder.resume_at) reminderLine.append(node("span", ` · devam ${formatDate(reminder.resume_at)}`, "small"));
+    if (reminder.escalation_due_at) reminderLine.append(node("span", ` · temas ${formatDate(reminder.escalation_due_at)}`, "small"));
+    if ((reminder.preferred_contact_channels || []).length) reminderLine.append(node("span", ` · kanal: ${reminder.preferred_contact_channels.join(" / ")}`, "small"));
     card.append(reminderLine);
   }
 
@@ -717,6 +752,10 @@ function renderShipmentSection(container, data) {
     summaryItem("Servis", shipment.service_type || "-"),
     summaryItem("Ekipman", shipment.equipment_type || "-"),
     summaryItem("Emtia", shipment.commodity || "-"),
+    summaryItem("Yükleme adresi", shipment.pickup_address || "-"),
+    summaryItem("Yükleme irtibatı", [shipment.pickup_contact_name, shipment.pickup_contact_phone].filter(Boolean).join(" · ") || "-"),
+    summaryItem("Teslim adresi", shipment.delivery_address || "-"),
+    summaryItem("Teslim irtibatı", [shipment.delivery_contact_name, shipment.delivery_contact_phone].filter(Boolean).join(" · ") || "-"),
     summaryItem("Brüt ağırlık", shipment.gross_weight_kg == null ? "-" : `${moneyLabel(shipment.gross_weight_kg)} kg${shipment.weight_is_approximate ? " ~" : ""}`),
     summaryItem("Hazır tarihi", formatDateOnly(shipment.cargo_ready_date)),
     summaryItem("Teslim beklentisi", formatDateOnly(shipment.required_delivery_date)),
@@ -910,6 +949,108 @@ async function renderQuoteSection(container, data, refresh) {
   section.append(decision); container.append(section);
 }
 
+function operationStartStatusLabel(value) {
+  return ({
+    approval_required: "Operatör onayı bekliyor", manual_required: "Manuel gönderim bekliyor",
+    sending: "Gönderim sonucu bekleniyor", sent: "Gönderildi", rejected: "Reddedildi", failed: "Gönderim başarısız"
+  })[value] || codeLabel(value);
+}
+
+function operationStartMessageCard(message, refresh) {
+  const card = node("div", "", "operation-start-message approval-focused");
+  const head = node("div", "", "operation-start-head");
+  const kind = message.kind === "selected_supplier_confirmation" ? "Seçilen tedarikçi" : "Teklif kapanışı";
+  head.append(node("strong", `${kind} · ${message.supplier_name}`), node("span", operationStartStatusLabel(message.status), "badge"));
+  card.append(head, node("div", message.subject || "-", "quote-subject"), node("div", message.body_text || "", "preview approval-message-body"));
+  card.append(node("div", `Mod: ${modeLabel(message.outbound_mode)} · Alıcı: ${message.recipient_email || "-"}`, "small policy-evidence"));
+  if (message.attention_reason) card.append(node("div", message.attention_reason, "notice"));
+  if (message.status === "sent") {
+    card.append(node("div", `Gönderildi · ${formatDate(message.sent_at)} · ${message.sent_by || "-"}`, "notice success-notice"));
+    return card;
+  }
+  if (message.status === "rejected") {
+    card.append(node("div", `Reddedildi${message.decision_reason ? ` · ${message.decision_reason}` : ""}`, "notice"));
+    return card;
+  }
+  if (message.status === "sending") {
+    card.append(node("div", "Gönderim rezervasyonu var. Provider sonucu kesinleşmeden aynı mesaj tekrar gönderilmez. Uzun süre bu durumda kalırsa gönderilmiş öğeleri kontrol et.", "notice"));
+  }
+  const feedback = node("div", "", "muted approval-feedback");
+  const actions = node("div", "", "actions");
+  if (["approval_required", "failed"].includes(message.status)) {
+    const approveLabel = message.status === "failed" ? "Yeniden Gönder" : "Onayla ve Gönder";
+    const approve = actionButton(approveLabel, "approve", async () => {
+      approve.disabled = true; feedback.textContent = "Kurallar yeniden doğrulanıyor…";
+      try {
+        await api(`/operation-start-messages/${encodeURIComponent(message.message_id)}/decision`, {
+          method: "POST", body: JSON.stringify({ decision: "approve" })
+        });
+        await refresh();
+      } catch (error) { feedback.textContent = error.message || String(error); approve.disabled = false; }
+    });
+    const reject = actionButton("Reddet", "reject", () => { rejectPanel.hidden = false; reason.focus(); });
+    actions.append(approve, reject);
+  }
+  if (["manual_required", "failed"].includes(message.status)) {
+    actions.append(actionButton("Harici Gönderildi Olarak Kaydet", "", async event => {
+      const button = event.currentTarget; button.disabled = true; feedback.textContent = "Gönderim kanıtı kaydediliyor…";
+      try {
+        await api(`/operation-start-messages/${encodeURIComponent(message.message_id)}/record-manually-sent`, { method: "POST" });
+        await refresh();
+      } catch (error) { feedback.textContent = error.message || String(error); button.disabled = false; }
+    }));
+  }
+  const rejectPanel = node("div", "", "approval-reject-panel"); rejectPanel.hidden = true;
+  const reasonLabel = node("label", "Reddetme nedeni"); const reason = document.createElement("textarea");
+  reason.rows = 3; reason.maxLength = 1000; reasonLabel.append(reason);
+  const rejectActions = node("div", "", "actions");
+  rejectActions.append(
+    actionButton("Vazgeç", "", () => { rejectPanel.hidden = true; reason.value = ""; }),
+    actionButton("Reddi Kaydet", "reject", async () => {
+      const value = reason.value.trim(); if (!value) { feedback.textContent = "Reddetme nedeni gerekli."; return; }
+      try {
+        await api(`/operation-start-messages/${encodeURIComponent(message.message_id)}/decision`, {
+          method: "POST", body: JSON.stringify({ decision: "reject", reason: value })
+        });
+        await refresh();
+      } catch (error) { feedback.textContent = error.message || String(error); }
+    })
+  );
+  rejectPanel.append(reasonLabel, rejectActions);
+  if (actions.childElementCount) card.append(actions);
+  card.append(rejectPanel, feedback); return card;
+}
+
+function renderOperationStartSection(container, data, jobId, refresh) {
+  const section = sectionBlock("Operasyonu Başlat", "Müşteri kabulünden sonra seçilen tedarikçiye onay + toplama talimatı, fiyat vermiş diğer tedarikçilere nazik kapanış.");
+  const view = data.operation_start || {};
+  const messages = view.messages || [];
+  if (data.controls?.operation_start_available && !messages.length) {
+    const box = node("div", "", "operation-start-launch approval-focused");
+    box.append(node("div", "Bu aksiyon fiyat toplamayı kapatır ve seçilmiş tedarikçiyi operasyon akışına devreder.", "notice"));
+    const reasonLabel = node("label", "Diğer tedarikçilere kapanış nedeni (opsiyonel)");
+    const reason = document.createElement("textarea"); reason.rows = 2; reason.maxLength = 1000;
+    reason.placeholder = "Boş bırakılırsa MINAI nötr bir açıklama kullanır; sebep uydurmaz."; reasonLabel.append(reason);
+    const feedback = node("div", "", "muted approval-feedback");
+    const start = actionButton("Operasyonu Başlat", "approve", async () => {
+      if (!window.confirm("Operasyonu başlatmak ve fiyat toplama sürecini kapatmak istiyor musun?")) return;
+      start.disabled = true; feedback.textContent = "Seçili tedarikçi ve fiyat kanıtı doğrulanıyor…";
+      try {
+        await api(`/mina-jobs/${encodeURIComponent(jobId)}/operation-start`, {
+          method: "POST", body: JSON.stringify({ closure_reason: reason.value.trim() || null })
+        });
+        await refresh();
+      } catch (error) { feedback.textContent = error.message || String(error); start.disabled = false; }
+    });
+    box.append(reasonLabel, start, feedback); section.append(box);
+  }
+  messages.forEach(message => section.append(operationStartMessageCard(message, refresh)));
+  if (!messages.length && !data.controls?.operation_start_available) {
+    section.append(emptyState("Operasyon başlangıcı henüz hazır değil", "Müşteri teklifi kabul edildiğinde bu kontrol açılır."));
+  }
+  container.append(section);
+}
+
 function renderOperationSection(container, data) {
   const operation = data.operation || {};
   const section = sectionBlock("Operasyon", "Araç, sürücü, ETA, teslim ve istisna kanıtları.");
@@ -989,6 +1130,7 @@ async function renderJob(data, jobId) {
     suppliers, jobId, supplier, async () => loadJob(jobId), data.automation?.supplier_reminder_policy || null
   );
   if (!(data.suppliers || []).length) suppliers.append(emptyState("Henüz tedarikçi çalışması yok")); root.append(suppliers);
+  renderOperationStartSection(root, data, jobId, async () => loadJob(jobId));
   renderOperationSection(root, data); timeline(root, data.timeline || []); content.replaceChildren(root);
 }
 
@@ -1005,66 +1147,37 @@ function metric(label, value) {
 
 function renderOperatorPerformance(section) {
   const wrap = node("section", "", "section report-operator-performance");
-  wrap.append(node("h2", "Operatör İş Kuyruğu Performansı"));
+  wrap.append(node("h2", "Operasyon Gerçek Metrikleri"));
   const performance = section?.work_assignment_performance || {};
   const summary = performance.summary || {};
   const summaryGrid = node("div", "", "grid report-performance-metrics");
   summaryGrid.append(
-    metric("Atama generation", summary.assignment_generation_count ?? 0),
+    metric("Atama", summary.assignment_generation_count ?? 0),
     metric("İlk bakış kaydı", summary.acknowledged_generation_count ?? 0),
     metric("İlk bakış kapsamı %", summary.first_look_coverage_percent ?? "-"),
     metric("Ort. ilk bakış", summary.average_first_look_seconds == null ? "-" : durationLabel(summary.average_first_look_seconds)),
-    metric("Medyan ilk bakış", summary.median_first_look_seconds == null ? "-" : durationLabel(summary.median_first_look_seconds))
+    metric("Medyan ilk bakış", summary.median_first_look_seconds == null ? "-" : durationLabel(summary.median_first_look_seconds)),
+    metric("P90 ilk bakış", summary.p90_first_look_seconds == null ? "-" : durationLabel(summary.p90_first_look_seconds)),
+    metric("Hedef içinde %", summary.first_look_sla_percent ?? "-")
   );
   wrap.append(summaryGrid);
+  wrap.append(node("div", `İlk bakış hedefi: ${summary.first_look_target_minutes == null ? "kapalı" : `${summary.first_look_target_minutes} dk`} · Hız metrikleri personel puanı değildir.`, "notice report-performance-note"));
 
-  const authority = node("div", "", "notice report-performance-note");
-  const slaText = performance.first_look_sla_status === "threshold_not_configured"
-    ? "İlk bakış SLA eşiği henüz tanımlı değil; SLA yüzdesi üretilmiyor."
-    : `İlk bakış SLA durumu: ${codeLabel(performance.first_look_sla_status)}`;
-  const completionText = performance.completion_metric_status === "work_type_completion_mapping_not_configured"
-    ? "Release/handoff tamamlanma sayılmaz; work-type completion eşlemesi henüz tanımlı değil."
-    : `Tamamlanma metriği: ${codeLabel(performance.completion_metric_status)}`;
-  authority.append(
-    node("div", `Dönem temeli: ${codeLabel(performance.period_basis)}`),
-    node("div", slaText),
-    node("div", completionText)
-  );
-  wrap.append(authority);
+  const decision = section?.decision_performance || {}; const ds=decision.summary||{};
+  const decisionGrid=node("div","","grid report-performance-metrics report-secondary-metrics");
+  decisionGrid.append(metric("Karar adedi",ds.decision_count??0),metric("Ort. karar",ds.average_decision_seconds==null?"-":durationLabel(ds.average_decision_seconds)),metric("Medyan karar",ds.median_decision_seconds==null?"-":durationLabel(ds.median_decision_seconds)),metric("P90 karar",ds.p90_decision_seconds==null?"-":durationLabel(ds.p90_decision_seconds)),metric("Karar hedefi içinde %",ds.decision_sla_percent??"-"));
+  wrap.append(node("h3","Onay / Karar Süreleri"),decisionGrid,node("div",`Karar hedefi: ${decision.decision_target_minutes==null?"kapalı":`${decision.decision_target_minutes} dk`}`,"small muted"));
+
+  const milestones=section?.milestone_performance||{}; const m=milestones.metrics||{};
+  const milestoneGrid=node("div","","grid milestone-metrics");
+  const names={operation_start_to_supplier_confirmation_seconds:"Operasyon açılışı → tedarikçi teyidi",supplier_confirmation_to_vehicle_assignment_seconds:"Tedarikçi teyidi → araç ataması",vehicle_assignment_to_loaded_seconds:"Araç ataması → yükleme",loaded_to_delivered_seconds:"Yükleme → teslim"};
+  Object.entries(names).forEach(([key,label])=>{const v=m[key]||{};const card=node("div","","metric milestone-metric");card.append(node("span",label),node("strong",v.median==null?"-":durationLabel(v.median)),node("small",`Ort ${v.average==null?"-":durationLabel(v.average)} · P90 ${v.p90==null?"-":durationLabel(v.p90)} · n=${v.count??0}`,"muted"));milestoneGrid.append(card);});
+  wrap.append(node("h3","Operasyon Aşama Süreleri"),milestoneGrid);
 
   const rows = performance.rows || [];
-  if (!rows.length) {
-    wrap.append(node("div", "Bu dönem için ölçülebilir assignment performans kaydı yok.", "muted report-performance-empty"));
-    return wrap;
+  if (rows.length) {
+    const tableWrap=node("div","","table-wrap report-performance-table");const table=document.createElement("table");const thead=document.createElement("thead");const hr=document.createElement("tr");["Operatör","Atama","İlk bakış","Kapsam %","Ort.","Medyan","P90","Hedef %","Handoff","Yeniden atama"].forEach(l=>hr.append(node("th",l)));thead.append(hr);table.append(thead);const tbody=document.createElement("tbody");rows.forEach(row=>{const tr=document.createElement("tr");tr.append(node("td",row.name||"-"),node("td",row.assignment_generation_count??0),node("td",row.acknowledged_generation_count??0),node("td",row.first_look_coverage_percent??"-"),node("td",row.average_first_look_seconds==null?"-":durationLabel(row.average_first_look_seconds)),node("td",row.median_first_look_seconds==null?"-":durationLabel(row.median_first_look_seconds)),node("td",row.p90_first_look_seconds==null?"-":durationLabel(row.p90_first_look_seconds)),node("td",row.first_look_sla_percent??"-"),node("td",row.shift_handoff_count??0),node("td",row.reassignment_generation_count??0));tbody.append(tr);});table.append(tbody);tableWrap.append(table);wrap.append(tableWrap);
   }
-  const tableWrap = node("div", "", "table-wrap report-performance-table");
-  const table = document.createElement("table");
-  const thead = document.createElement("thead");
-  const headRow = document.createElement("tr");
-  ["Operatör", "Atama", "İlk Bakış", "Kapsam %", "Ort. İlk Bakış", "Medyan", "Handoff", "Bırakma", "Reassignment"].forEach(label => {
-    headRow.append(node("th", label));
-  });
-  thead.append(headRow);
-  table.append(thead);
-  const tbody = document.createElement("tbody");
-  for (const row of rows) {
-    const tr = document.createElement("tr");
-    tr.append(
-      node("td", row.name || "-"),
-      node("td", row.assignment_generation_count ?? 0),
-      node("td", row.acknowledged_generation_count ?? 0),
-      node("td", row.first_look_coverage_percent ?? "-"),
-      node("td", row.average_first_look_seconds == null ? "-" : durationLabel(row.average_first_look_seconds)),
-      node("td", row.median_first_look_seconds == null ? "-" : durationLabel(row.median_first_look_seconds)),
-      node("td", row.shift_handoff_count ?? 0),
-      node("td", row.operator_release_count ?? 0),
-      node("td", row.reassignment_generation_count ?? 0)
-    );
-    tbody.append(tr);
-  }
-  table.append(tbody);
-  tableWrap.append(table);
-  wrap.append(tableWrap);
   return wrap;
 }
 
@@ -1215,56 +1328,125 @@ function policySelect(labelText, currentValue, fallbackValue) {
   select.value = currentValue || "inherit"; label.append(select); return { label, select };
 }
 
-function renderAutomationSettings(policyPayload) {
+function textareaLines(labelText, values = [], rows = 3) {
+  const label = node("label", labelText);
+  const input = document.createElement("textarea"); input.rows = rows;
+  input.value = (values || []).join("\n"); label.append(input);
+  return { label, input, value: () => input.value.split("\n").map(v => v.trim()).filter(Boolean) };
+}
+
+function numberField(labelText, value, min, max) {
+  const label = node("label", labelText); const input = document.createElement("input");
+  input.type = "number"; input.min = String(min); input.max = String(max); input.value = value ?? ""; label.append(input);
+  return { label, input, value: () => input.value === "" ? null : Number(input.value) };
+}
+
+function automationModeSelect(labelText, value, inheritText = "Üst kuralı kullan") {
+  const label = node("label", labelText); const select = document.createElement("select");
+  [["inherit", inheritText], ["manual", "Manuel"], ["approval_required", "Operatör onayı"], ["automatic", "Otomatik"]].forEach(([v,t]) => {
+    const option = document.createElement("option"); option.value=v; option.textContent=t; select.append(option);
+  });
+  select.value = value || "inherit"; label.append(select); return { label, select, value: () => select.value === "inherit" ? null : select.value };
+}
+
+function renderCustomerAutomationExceptions(customers = []) {
+  const box = node("div", "", "settings-subsection customer-exceptions");
+  box.append(node("h3", "Müşteri İstisnaları"), node("p", "Yalnız ajans genel kuralından farklı davranacak müşteriler için kullan. Boş müşteriler listeyi kalabalıklaştırmaz.", "muted"));
+  const active = customers.filter(c => c.active !== false);
+  const selectorLabel = node("label", "Müşteri"); const selector = document.createElement("select");
+  const ph = document.createElement("option"); ph.value=""; ph.textContent="Müşteri seç…"; selector.append(ph);
+  active.forEach(c => { const o=document.createElement("option"); o.value=c.customer_id; o.textContent=c.customer_name; selector.append(o); });
+  selectorLabel.append(selector); box.append(selectorLabel);
+  const editor = node("div", "", "settings-inline-editor"); box.append(editor);
+  function draw() {
+    editor.replaceChildren(); const customer=active.find(c=>c.customer_id===selector.value); if (!customer) return;
+    const supplier=automationModeSelect("Tedarikçi hatırlatmaları", customer.supplier_reminder_mode, "Ajans ayarını kullan");
+    const deadline=automationModeSelect("Müşteri deadline bilgilendirmesi", customer.customer_deadline_update_mode, "Ajans ayarını kullan");
+    const controls=node("div","","settings-two-col"); controls.append(supplier.label, deadline.label); editor.append(controls);
+    const fb=node("div","","muted settings-feedback"); const save=actionButton("Müşteri İstisnasını Kaydet","primary",async()=>{
+      save.disabled=true; fb.textContent="Kaydediliyor…";
+      try { const r=await api(`/master-data/customers/${encodeURIComponent(customer.customer_id)}/automation-policy`,{method:"POST",body:JSON.stringify({supplier_reminder_mode:supplier.value(),customer_deadline_update_mode:deadline.value()})});
+        Object.assign(customer,r); fb.textContent="Müşteri otomasyon istisnası kaydedildi."; setStatus("Kaydedildi");
+      } catch(e){fb.textContent=e.message||String(e); setStatus("Hata",false);} finally{save.disabled=false;}
+    }); editor.append(save,fb);
+  }
+  selector.addEventListener("change",draw); return box;
+}
+
+function renderAutomationSettings(policyPayload, customers = []) {
   const panel = node("section", "", "settings-panel");
   const heading = node("div", "", "settings-heading");
-  heading.append(node("h2", "Otomasyon"), node("p", "Ajans genelinde MINAI aksiyonlarının otomatik, onaylı veya manuel çalışmasını belirler. İşe özel ayar daha yüksek önceliklidir.", "muted"));
-  panel.append(heading);
-  const current = policyPayload?.policy || {};
-  const fallback = policyPayload?.legacy_fallback || {};
+  heading.append(node("h2", "Otomasyon"), node("p", "Ajans genel kuralı basit kalır; müşteri ve iş istisnaları gerektiğinde üstüne yazılır.", "muted")); panel.append(heading);
+  const current = policyPayload?.policy || {}; const fallback = policyPayload?.legacy_fallback || {};
   const form = node("div", "", "automation-settings-form");
   const supplier = policySelect("Tedarikçi hatırlatmaları", current.supplier_reminder_mode, fallback.supplier_reminder_mode);
   const customer = policySelect("Müşteri deadline bilgilendirmeleri", current.customer_deadline_update_mode, fallback.customer_deadline_update_mode);
   const explainer = node("div", "", "automation-mode-explainer");
-  explainer.append(
-    node("div", "Manuel · MINAI hazırlar/izler, otomatik gönderim yapmaz.", "small"),
-    node("div", "Operatör onayı · MINAI mesajı hazırlar, gönderimden önce insan kararı gerekir.", "small"),
-    node("div", "Otomatik · mevcut güvenlik, takvim ve state kontrolleri izin verirse sistem gönderir.", "small")
-  );
-  const actions = node("div", "", "actions");
-  const save = node("button", "Otomasyon Ayarlarını Kaydet", "primary"); save.type = "button"; actions.append(save);
-  const feedback = node("div", "", "muted settings-feedback");
-  if (current.updated_by) feedback.textContent = `Son değişiklik: ${current.updated_by} · ${formatDate(current.updated_at)}`;
-  save.addEventListener("click", async () => {
-    save.disabled = true; feedback.textContent = "Kaydediliyor…";
-    const value = select => select.value === "inherit" ? null : select.value;
-    try {
-      const saved = await api("/automation-policy/agency", { method: "POST", body: JSON.stringify({
-        supplier_reminder_mode: value(supplier.select), customer_deadline_update_mode: value(customer.select)
-      }) });
-      feedback.textContent = `Kaydedildi · ${saved.updated_by || "operatör"} · ${formatDate(saved.updated_at)}`; setStatus("Kaydedildi");
-    } catch (error) { feedback.textContent = error.message || String(error); setStatus("Hata", false); }
-    finally { save.disabled = false; }
-  });
-  form.append(supplier.label, customer.label, explainer, actions, feedback); panel.append(form); return panel;
+  explainer.append(node("div", "Manuel · MINAI izler ve hazırlar; göndermez.", "small"), node("div", "Operatör onayı · MINAI hazırlar, insan kararı gerekir.", "small"), node("div", "Otomatik · güvenlik/state/takvim izin verirse gönderir.", "small"));
+  const save=actionButton("Ajans Otomasyonunu Kaydet","primary",async()=>{ save.disabled=true; feedback.textContent="Kaydediliyor…"; const value=s=>s.value==="inherit"?null:s.value;
+    try{const r=await api("/automation-policy/agency",{method:"POST",body:JSON.stringify({supplier_reminder_mode:value(supplier.select),customer_deadline_update_mode:value(customer.select)})}); feedback.textContent=`Kaydedildi · ${r.updated_by||"operatör"} · ${formatDate(r.updated_at)}`; setStatus("Kaydedildi");}
+    catch(e){feedback.textContent=e.message||String(e);setStatus("Hata",false);}finally{save.disabled=false;}});
+  const feedback=node("div","","muted settings-feedback"); if(current.updated_by) feedback.textContent=`Son değişiklik: ${current.updated_by} · ${formatDate(current.updated_at)}`;
+  form.append(supplier.label,customer.label,explainer,save,feedback); panel.append(form,renderCustomerAutomationExceptions(customers)); return panel;
 }
 
-function renderSettings(branding, automationPolicy) {
-  setPageContext("Ayarlar", "Sistem Ayarları");
-  const page = node("div", "", "settings-page");
-  const tabs = node("div", "", "settings-tabs");
-  const body = node("div", "", "settings-tab-body");
-  const panels = { automation: () => renderAutomationSettings(automationPolicy), branding: () => renderBrandingPanel(branding) };
-  let selected = "automation";
-  function draw() {
-    tabs.replaceChildren();
-    [["automation", "Otomasyon"], ["branding", "Branding"]].forEach(([key, label]) => {
-      const button = actionButton(label, key === selected ? "active" : "", () => { selected = key; draw(); });
-      tabs.append(button);
-    });
-    body.replaceChildren(panels[selected]());
+function renderSupplierLearning(container, supplier) {
+  const area=node("div","","supplier-learning"); container.append(area);
+  async function load(){
+    area.replaceChildren(node("div","Öğrenilen tedarikçi davranışları yükleniyor…","muted"));
+    try { const data=await api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/learning-facts`); area.replaceChildren();
+      const head=node("div","","settings-subheading"); head.append(node("h3","MINAI Geçmiş Gözlemleri"),node("p","Geçmiş mail/operasyon kanıtından türetilen gözlemler öneridir; operatör doğrulamadan kalıcı kural olmaz.","muted"));
+      const derive=actionButton("Geçmişten Gözlem Üret","",async()=>{derive.disabled=true;try{await api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/derive-learning`,{method:"POST"});await load();}catch(e){area.append(node("div",e.message||String(e),"error"));}finally{derive.disabled=false;}}); head.append(derive); area.append(head);
+      const facts=data.facts||[]; if(!facts.length){area.append(emptyState("Henüz öğrenilmiş gözlem yok","Geçmiş RFQ/yanıt kanıtı oluştukça MINAI öneriler üretebilir."));return;}
+      const list=node("div","","learning-fact-list"); facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
+        card.append(node("strong",f.fact_key),node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small"));
+        if(f.status==="proposed"){const a=node("div","","actions"); a.append(actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"Tedarikçi profili ekranında operatör tarafından doğrulandı."})});await load();}),actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"Tedarikçi profili ekranında operatör tarafından reddedildi."})});await load();}));card.append(a);} list.append(card);}); area.append(list);
+    } catch(e){area.replaceChildren(node("div",e.message||String(e),"error"));}
+  } load();
+}
+
+function renderSupplierSettings(suppliersPayload = {}) {
+  const panel=node("section","","settings-panel"); const suppliers=(suppliersPayload.suppliers||[]).filter(s=>s.active!==false);
+  const heading=node("div","","settings-heading"); heading.append(node("h2","Tedarikçiler"),node("p","Karayolu tedarikçi ilişkileri kişiye/firmaya özgü olabilir. Ayrıntılar opsiyoneldir; boş alanlarda genel MINAI davranışı kullanılır.","muted")); panel.append(heading);
+  const label=node("label","Tedarikçi"); const select=document.createElement("select"); const ph=document.createElement("option");ph.value="";ph.textContent="Tedarikçi seç…";select.append(ph);suppliers.forEach(s=>{const o=document.createElement("option");o.value=s.supplier_id;o.textContent=s.supplier_name;select.append(o);});label.append(select);panel.append(label);
+  const editor=node("div","","supplier-settings-editor"); panel.append(editor);
+  function draw(){editor.replaceChildren();const supplier=suppliers.find(s=>s.supplier_id===select.value);if(!supplier)return;const r=supplier.relationship||{};
+    const meta=node("div","","detail-grid supplier-profile-summary");meta.append(summaryItem("Rol",codeLabel(supplier.role)),summaryItem("Güvenilirlik",supplier.reliability_score),summaryItem("Fiyat",supplier.price_score),summaryItem("Hız",supplier.speed_score));editor.append(meta);
+    const contacts=node("div","", "small supplier-profile-readonly"); contacts.textContent=`Kontaklar: ${(supplier.contacts||[]).map(c=>[c.contact_name,c.email,c.phone].filter(Boolean).join(" / ")).join(" · ")||"-"} | Güçlü rotalar: ${(supplier.priority_routes||[]).join(" · ")||"-"}`;editor.append(contacts);
+    const form=node("div","","supplier-relationship-form");
+    const channels=node("fieldset","","channel-fieldset");channels.append(node("legend","Tercih edilen iletişim kanalları"));const channelChecks={};["email","phone","whatsapp"].forEach(ch=>{const l=node("label", "", "check-label");const i=document.createElement("input");i.type="checkbox";i.checked=(r.preferred_contact_channels||["email","phone","whatsapp"]).includes(ch);channelChecks[ch]=i;l.append(i,node("span",ch==="email"?"E-posta":ch==="phone"?"Telefon":"WhatsApp"));channels.append(l);});
+    const languageLabel=node("label","Tercih edilen dil");const language=document.createElement("input");language.value=r.preferred_language||"";language.maxLength=80;languageLabel.append(language);
+    const reminder=automationModeSelect("Hatırlatma modu",r.supplier_reminder_mode,"İş/Müşteri/Ajans kuralını kullan"); const opMode=automationModeSelect("Yük onayı + toplama maili",r.operation_email_mode||"approval_required","Operatör onayı"); const closeMode=automationModeSelect("Teklif kapanış / teşekkür maili",r.closure_email_mode||"approval_required","Operatör onayı");
+    const first=numberField("İlk reminder (dk)",r.first_reminder_minutes,5,480), ack=numberField("‘Çalışıyoruz’ sonrası bekleme (dk)",r.acknowledged_wait_minutes,15,720), max=numberField("E-posta reminder (0=atma, 1=bir kez)",r.max_email_reminders,0,1), phone=numberField("Reminder sonrası telefon eskalasyonu (dk)",r.phone_escalation_after_minutes,5,720), wa=numberField("Reminder sonrası WhatsApp eskalasyonu (dk)",r.whatsapp_escalation_after_minutes,5,720);
+    const managementLabel=node("label","Yönetici/patron eskalasyonu");const management=document.createElement("select");[["inherit","Belirtilmedi"],["yes","Uygun"],["no","Kullanma"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;management.append(o);});management.value=r.management_escalation_allowed==null?"inherit":(r.management_escalation_allowed?"yes":"no");managementLabel.append(management);
+    const blockedLabel=node("label","", "check-label");const blocked=document.createElement("input");blocked.type="checkbox";blocked.checked=!!r.automatic_contact_blocked;blockedLabel.append(blocked,node("span","Bu tedarikçiye otomatik temas gönderme"));
+    const tone=textareaLines("Hitap / ton notları",r.communication_tone_notes), time=textareaLines("İletişim zamanı notları",r.communication_time_notes), nego=textareaLines("Pazarlık davranışı",r.negotiation_notes), commercial=textareaLines("Ticari notlar",r.commercial_notes), behavior=textareaLines("Operasyon davranışı",r.operational_behavior_notes), relation=textareaLines("İlişki notları",r.relationship_notes);
+    const paymentLabel=node("label","Ödeme/vade notu");const payment=document.createElement("textarea");payment.rows=2;payment.value=r.payment_terms_note||"";paymentLabel.append(payment); const detentionLabel=node("label","Detention notu");const detention=document.createElement("textarea");detention.rows=2;detention.value=r.detention_notes||"";detentionLabel.append(detention); const vehicleLabel=node("label","Araç bilgisi davranış notu");const vehicle=document.createElement("textarea");vehicle.rows=2;vehicle.value=r.vehicle_information_notes||"";vehicleLabel.append(vehicle);
+    const grid=node("div","","settings-two-col");grid.append(languageLabel,reminder.label,opMode.label,closeMode.label,first.label,ack.label,max.label,phone.label,wa.label,managementLabel);form.append(channels,grid,blockedLabel,tone.label,time.label,nego.label,commercial.label,behavior.label,relation.label,paymentLabel,detentionLabel,vehicleLabel);
+    const fb=node("div","","muted settings-feedback");const save=actionButton("Tedarikçi Profilini Kaydet","primary",async()=>{const chosen=Object.entries(channelChecks).filter(([,i])=>i.checked).map(([k])=>k);if(!chosen.length){fb.textContent="En az bir iletişim kanalı seç.";return;}save.disabled=true;fb.textContent="Kaydediliyor…";
+      const relationship={...r,preferred_contact_channels:chosen,preferred_language:language.value.trim()||null,supplier_reminder_mode:reminder.value(),first_reminder_minutes:first.value(),acknowledged_wait_minutes:ack.value(),max_email_reminders:max.value(),phone_escalation_after_minutes:phone.value(),whatsapp_escalation_after_minutes:wa.value(),management_escalation_allowed:management.value==="inherit"?null:management.value==="yes",operation_email_mode:opMode.value()||"approval_required",closure_email_mode:closeMode.value()||"approval_required",automatic_contact_blocked:blocked.checked,communication_tone_notes:tone.value(),communication_time_notes:time.value(),negotiation_notes:nego.value(),commercial_notes:commercial.value(),operational_behavior_notes:behavior.value(),relationship_notes:relation.value(),payment_terms_note:payment.value.trim()||null,detention_notes:detention.value.trim()||null,vehicle_information_notes:vehicle.value.trim()||null};
+      const payload={supplier_name:supplier.supplier_name,active:supplier.active,role:supplier.role,contacts:supplier.contacts||[],geographies:supplier.geographies||[],service_types:supplier.service_types||[],equipment_types:supplier.equipment_types||[],special_capabilities:supplier.special_capabilities||[],priority_routes:supplier.priority_routes||[],legacy_region_tags:supplier.legacy_region_tags||[],reliability_score:supplier.reliability_score,price_score:supplier.price_score,speed_score:supplier.speed_score,relationship,notes:supplier.notes};
+      try{const saved=await api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}`,{method:"POST",body:JSON.stringify(payload)});Object.assign(supplier,saved);fb.textContent="Tedarikçi ilişki profili kaydedildi.";setStatus("Kaydedildi");}catch(e){fb.textContent=e.message||String(e);setStatus("Hata",false);}finally{save.disabled=false;}});
+    form.append(save,fb);editor.append(form);renderSupplierLearning(editor,supplier);
   }
-  page.append(tabs, body); content.replaceChildren(page); draw();
+  select.addEventListener("change",draw); if(suppliers.length===1){select.value=suppliers[0].supplier_id;draw();} return panel;
+}
+
+function renderPerformanceSettings(settings = {}) {
+  const panel=node("section","","settings-panel");const h=node("div","","settings-heading");h.append(node("h2","Performans"),node("p","Tek personel puanı yok. MINAI gerçek süreleri ölçer; hedefler yalnız süreç darboğazını görmek içindir.","muted"));panel.append(h);
+  const firstEnabled=document.createElement("input");firstEnabled.type="checkbox";firstEnabled.checked=settings.first_look_target_minutes!=null;const first=numberField("İlk bakış hedefi (dk)",settings.first_look_target_minutes??15,1,240);const firstRow=node("div","","performance-setting-row");const firstToggle=node("label","","check-label");firstToggle.append(firstEnabled,node("span","İlk bakış hedefini kullan"));firstRow.append(firstToggle,first.label);
+  const decisionEnabled=document.createElement("input");decisionEnabled.type="checkbox";decisionEnabled.checked=settings.decision_target_minutes!=null;const decision=numberField("Onay/karar hedefi (dk)",settings.decision_target_minutes??15,1,480);const decisionRow=node("div","","performance-setting-row");const decisionToggle=node("label","","check-label");decisionToggle.append(decisionEnabled,node("span","Karar hedefini kullan"));decisionRow.append(decisionToggle,decision.label);
+  const note=node("div","Gerçek raporlar ortalama, medyan ve P90 sürelerini ayrı gösterir. Görev bırakma/devretme tamamlanma değildir.","notice");const fb=node("div","","muted settings-feedback");if(settings.updated_by)fb.textContent=`Son değişiklik: ${settings.updated_by} · ${formatDate(settings.updated_at)}`;
+  const save=actionButton("Performans Hedeflerini Kaydet","primary",async()=>{save.disabled=true;fb.textContent="Kaydediliyor…";try{const r=await api("/settings/performance",{method:"POST",body:JSON.stringify({first_look_target_minutes:firstEnabled.checked?first.value():null,decision_target_minutes:decisionEnabled.checked?decision.value():null})});fb.textContent=`Kaydedildi · ${r.updated_by} · ${formatDate(r.updated_at)}`;setStatus("Kaydedildi");}catch(e){fb.textContent=e.message||String(e);setStatus("Hata",false);}finally{save.disabled=false;}});
+  panel.append(firstRow,decisionRow,note,save,fb);return panel;
+}
+
+let settingsSelectedTab="automation";
+function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}) {
+  setPageContext("Ayarlar", "Sistem Ayarları"); const page=node("div","","settings-page");const tabs=node("div","","settings-tabs");const body=node("div","","settings-tab-body");
+  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding)};
+  function draw(){tabs.replaceChildren();[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["performance","Performans"],["branding","Branding"]].forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));body.replaceChildren(panels[settingsSelectedTab]());}
+  page.append(tabs,body);content.replaceChildren(page);draw();
 }
 
 async function boot() {
@@ -1285,8 +1467,11 @@ async function boot() {
     } else if (page === "reports") {
       renderReports(await api("/reports"));
     } else if (page === "settings") {
-      const automationPolicy = await api("/automation-policy/agency");
-      renderSettings(branding, automationPolicy);
+      const [automationPolicy, customersPayload, suppliersPayload, performanceSettings] = await Promise.all([
+        api("/automation-policy/agency"), api("/master-data/customers"),
+        api("/master-data/suppliers"), api("/settings/performance")
+      ]);
+      renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings);
     }
     setStatus("Güncel");
   } catch (error) { showError(error); }

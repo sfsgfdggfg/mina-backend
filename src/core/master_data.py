@@ -16,6 +16,7 @@ MasterDataSource = Literal["manual", "legacy_json", "excel_import"]
 ContactRole = Literal[
     "pricing", "operations", "finance", "decision_maker", "management", "other"
 ]
+SupplierContactChannel = Literal["email", "phone", "whatsapp"]
 
 GEOGRAPHY_STRENGTH_SCORE = {
     "main_market": 1.0,
@@ -74,6 +75,49 @@ class MasterContact(BaseModel):
             self.email = self.email.casefold()
         self.roles = list(dict.fromkeys(self.roles))
         return self
+
+
+class SupplierRelationshipSettings(BaseModel):
+    preferred_contact_channels: list[SupplierContactChannel] = Field(default_factory=lambda: ["email", "phone", "whatsapp"])
+    preferred_language: str | None = Field(default=None, max_length=80)
+    communication_tone_notes: list[str] = Field(default_factory=list, max_length=20)
+    communication_time_notes: list[str] = Field(default_factory=list, max_length=20)
+    supplier_reminder_mode: AutomationMode | None = None
+    first_reminder_minutes: int | None = Field(default=None, ge=5, le=480)
+    acknowledged_wait_minutes: int | None = Field(default=None, ge=15, le=720)
+    max_email_reminders: int | None = Field(default=None, ge=0, le=1)
+    phone_escalation_after_minutes: int | None = Field(default=None, ge=5, le=720)
+    whatsapp_escalation_after_minutes: int | None = Field(default=None, ge=5, le=720)
+    management_escalation_allowed: bool | None = None
+    operation_email_mode: AutomationMode = "approval_required"
+    closure_email_mode: AutomationMode = "approval_required"
+    automatic_contact_blocked: bool = False
+    negotiation_notes: list[str] = Field(default_factory=list, max_length=30)
+    commercial_notes: list[str] = Field(default_factory=list, max_length=30)
+    operational_behavior_notes: list[str] = Field(default_factory=list, max_length=30)
+    relationship_notes: list[str] = Field(default_factory=list, max_length=30)
+    payment_terms_note: str | None = Field(default=None, max_length=1000)
+    detention_notes: str | None = Field(default=None, max_length=1000)
+    vehicle_information_notes: str | None = Field(default=None, max_length=1000)
+
+    @field_validator(
+        "communication_tone_notes", "communication_time_notes", "negotiation_notes",
+        "commercial_notes", "operational_behavior_notes", "relationship_notes", mode="before"
+    )
+    @classmethod
+    def clean_note_lists(cls, value):
+        if value is None:
+            return []
+        cleaned = [str(item).strip() for item in value if str(item).strip()]
+        if any(len(item) > 500 for item in cleaned):
+            raise ValueError("Supplier relationship note items must not exceed 500 characters.")
+        return list(dict.fromkeys(cleaned))
+
+    @field_validator("preferred_contact_channels", mode="before")
+    @classmethod
+    def unique_channels(cls, value):
+        items = list(value or ["email", "phone", "whatsapp"])
+        return list(dict.fromkeys(items))
 
 
 class SupplierGeographyCapability(BaseModel):
@@ -164,6 +208,7 @@ class SupplierMasterProfile(BaseModel):
     reliability_score: float = Field(default=0.5, ge=0, le=1)
     price_score: float = Field(default=0.5, ge=0, le=1)
     speed_score: float = Field(default=0.5, ge=0, le=1)
+    relationship: SupplierRelationshipSettings = Field(default_factory=SupplierRelationshipSettings)
     notes: str = Field(default="Master supplier profile.", min_length=1, max_length=2000)
     source: MasterDataSource = "manual"
     created_at: datetime
