@@ -165,6 +165,28 @@ _DUMMY_PASSWORD_HASH = hash_password(
 )
 
 
+def list_active_web_operators(
+    *, environ: Mapping[str, str] | None = None,
+) -> list[dict[str, str]]:
+    env = environ if environ is not None else os.environ
+    users = _load_web_users(env)
+    return sorted(
+        [
+            {"email": user.email, "operator_name": user.operator_name}
+            for user in users.values() if user.active
+        ],
+        key=lambda item: (item["operator_name"].casefold(), item["email"]),
+    )
+
+
+def resolve_active_web_operator(
+    email: str, *, environ: Mapping[str, str] | None = None,
+) -> WebUser | None:
+    env = environ if environ is not None else os.environ
+    user = _load_web_users(env).get((email or "").strip().lower())
+    return user if user is not None and user.active else None
+
+
 def authenticate_web_user(
     email: str, password: str, *, environ: Mapping[str, str] | None = None,
 ) -> WebUser | None:

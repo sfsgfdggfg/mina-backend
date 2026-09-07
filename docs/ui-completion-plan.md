@@ -32,3 +32,13 @@ Bu belge, daha önce verilmiş ürün kararlarını tek bir browser UI tamamlama
 - Supplier bazlı kalıcı reminder override: mevcut iş-geneli override korunur; supplier-level persistent ayar ayrı ürün kararıdır.
 - “Operasyonu Başlat” butonunun tam yan etkisi: mevcut stage endpoint yalnız lifecycle geçişi yapıyor; ilk supplier send/timer başlatma semantiği ayrı backend orkestrasyonu gerektiriyorsa bunu UI butonuyla taklit etmeyeceğiz.
 - Müşteri-bazlı otomasyon policy düzenleme ekranının yeri: backend authority mevcut, fakat ayrı müşteri master/browser workspace kararı bu fazın kapsamını aşar; ajans + iş override akışı tamamlanır.
+
+## Karar Parkı Sonuçları — 2026-09-07
+
+Önceki karar parkındaki ana maddeler kullanıcıyla birlikte kapatıldı ve P2-14 küçük-acenta operasyon fazına alındı:
+
+- `Operasyonu Başlat`: müşteri kabulü + seçilmiş tedarikçi + kabul edilmiş tedarikçi fiyatından sonra çalışır; seçilen tedarikçiye tek onay/toplama maili ve araç bilgisi talebi, fiyat veren diğerlerine nazik kapanış üretir.
+- Doğrudan operatör atama: aktif login kullanıcıları basit operatör dizinidir; kişi→kişi atama audit generation ile yapılır, rol hiyerarşisi eklenmez.
+- Müşteri otomasyon istisnaları: Ayarlar→Otomasyon içinde kalır; ayrı büyük müşteri yönetim ekranı gerekmez.
+- Tedarikçi bazlı kalıcı ayarlar: karayolu tedarikçi ilişkilerinin değişkenliği nedeniyle zengin supplier relationship profile temel ürün özelliğidir; geçmiş supplier yazışma/yanıtları MINAI için öneri kaynağıdır.
+- Performans: tek personel puanı yoktur; ilk bakış, karar ve operasyon milestone gerçek süreleri, ortalama/medyan/P90 ve açıkça tanımlanmış hedefler raporlanır.

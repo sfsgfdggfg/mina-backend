@@ -82,6 +82,7 @@ from src.core.pilot_access import (
 )
 from src.core.web_session import (
     CSRF_HEADER_NAME, SESSION_COOKIE_NAME, WebSessionConfigurationError,
+    list_active_web_operators, resolve_active_web_operator,
     validate_web_session_configuration, web_session_store, web_shell_enabled,
 )
 from src.web_shell import router as web_shell_router
@@ -198,6 +199,11 @@ from src.core.operation_execution_repository import (
     OperationExecutionConflictError,
     SQLiteOperationExecutionRepository,
 )
+from src.core.operation_start_repository import SQLiteOperationStartMessageRepository
+from src.core.operation_start_service import (
+    OperationStartError, build_operation_start_view, decide_operation_start_message,
+    record_operation_start_message_manually_sent, start_operation,
+)
 from src.core.operation_execution_service import (
     build_operation_execution_view,
     create_operation_exception,
@@ -218,6 +224,7 @@ from src.core.learning_fact_service import (
     list_learning_facts,
     reject_learning_fact,
 )
+from src.core.supplier_learning_service import derive_supplier_history_learning
 from src.core.reporting_read_model import (
     REPORTING_SECTIONS,
     build_reporting_read_model,
@@ -227,6 +234,7 @@ from src.core.operations_dashboard import build_operations_dashboard
 from src.core.master_data import (
     MasterContact,
     SupplierGeographyCapability,
+    SupplierRelationshipSettings,
 )
 from src.core.master_data_repository import (
     MasterDataConflictError,
@@ -243,6 +251,8 @@ from src.core.master_data_service import (
 from src.core.automation_policy_repository import (
     SQLiteAgencyAutomationPolicyRepository,
 )
+from src.core.performance_settings import PerformanceSettings, default_performance_settings
+from src.core.performance_settings_repository import SQLitePerformanceSettingsRepository
 from src.core.agency_branding import (
     AgencyBrandingSettings,
     AgencyBrandingUpdate,
@@ -262,6 +272,7 @@ from src.core.operational_work_assignment_service import (
     OperationalWorkAssignmentTransitionError,
     acknowledge_operational_work,
     assign_operational_work_to_me,
+    assign_operational_work_to_operator,
     build_my_operational_work_view,
     decorate_operational_work_queue,
     handoff_operational_work,
@@ -393,10 +404,12 @@ mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
 operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
+operation_start_message_repository = SQLiteOperationStartMessageRepository(pilot_store)
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
+performance_settings_repository = SQLitePerformanceSettingsRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
 automation_action_repository = SQLiteAutomationActionRepository(pilot_store)
@@ -544,6 +557,11 @@ class AutomationApprovalDecisionRequest(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=800)
 
 
+class PerformanceSettingsRequest(BaseModel):
+    first_look_target_minutes: Optional[int] = Field(default=15, ge=1, le=240)
+    decision_target_minutes: Optional[int] = Field(default=15, ge=1, le=480)
+
+
 class AgencyAutomationPolicyRequest(BaseModel):
     supplier_reminder_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
     customer_deadline_update_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
@@ -552,6 +570,11 @@ class AgencyAutomationPolicyRequest(BaseModel):
 class CustomerAutomationPolicyRequest(BaseModel):
     supplier_reminder_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
     customer_deadline_update_mode: Optional[Literal["manual", "approval_required", "automatic"]] = None
+
+
+class DirectedWorkAssignmentRequest(BaseModel):
+    target_email: str = Field(min_length=3, max_length=254)
+    reason: Optional[str] = Field(default=None, max_length=500)
 
 
 class MinaJobOwnersRequest(BaseModel):
@@ -570,6 +593,15 @@ class MinaJobStageTransitionRequest(BaseModel):
         "lost", "cancelled",
     ]
     reason: Optional[str] = None
+
+
+class OperationStartRequest(BaseModel):
+    closure_reason: Optional[str] = Field(default=None, max_length=1000)
+
+
+class OperationStartDecisionRequest(BaseModel):
+    decision: Literal["approve", "reject"]
+    reason: Optional[str] = Field(default=None, max_length=1000)
 
 
 class OperationExecutionUpdateRequest(BaseModel):
@@ -806,6 +838,7 @@ class SupplierMasterCreateRequest(BaseModel):
     reliability_score: float = Field(default=0.5, ge=0, le=1)
     price_score: float = Field(default=0.5, ge=0, le=1)
     speed_score: float = Field(default=0.5, ge=0, le=1)
+    relationship: SupplierRelationshipSettings = Field(default_factory=SupplierRelationshipSettings)
     notes: str = Field(default="Master supplier profile.", min_length=1, max_length=2000)
 
 
@@ -823,6 +856,7 @@ class SupplierMasterUpdateRequest(BaseModel):
     reliability_score: float = Field(default=0.5, ge=0, le=1)
     price_score: float = Field(default=0.5, ge=0, le=1)
     speed_score: float = Field(default=0.5, ge=0, le=1)
+    relationship: SupplierRelationshipSettings = Field(default_factory=SupplierRelationshipSettings)
     notes: str = Field(default="Master supplier profile.", min_length=1, max_length=2000)
 
 
@@ -1385,6 +1419,25 @@ def update_agency_branding_settings(
     return branding_public_payload(stored)
 
 
+@app.get("/settings/performance")
+def get_performance_settings():
+    settings = performance_settings_repository.get() or default_performance_settings()
+    return settings.model_dump()
+
+
+@app.post("/settings/performance")
+def update_performance_settings(
+    request: PerformanceSettingsRequest, http_request: Request,
+):
+    settings = PerformanceSettings(
+        first_look_target_minutes=request.first_look_target_minutes,
+        decision_target_minutes=request.decision_target_minutes,
+        updated_at=datetime.now(timezone.utc),
+        updated_by=_authenticated_operator(http_request),
+    )
+    return performance_settings_repository.save(settings).model_dump()
+
+
 @app.get("/automation-policy/agency")
 def get_agency_automation_policy():
     policy = agency_automation_policy_repository.get()
@@ -1537,6 +1590,8 @@ def get_reporting_read_model(
             master_data_repository=master_data_repository,
             learning_fact_repository=learning_fact_repository,
             operational_work_assignment_repository=operational_work_assignment_repository,
+            operation_start_message_repository=operation_start_message_repository,
+            performance_settings_repository=performance_settings_repository,
             start_date=start_date, end_date=end_date,
         )
     except ValueError as exc:
@@ -1559,6 +1614,8 @@ def get_reporting_section(
             master_data_repository=master_data_repository,
             learning_fact_repository=learning_fact_repository,
             operational_work_assignment_repository=operational_work_assignment_repository,
+            operation_start_message_repository=operation_start_message_repository,
+            performance_settings_repository=performance_settings_repository,
             start_date=start_date, end_date=end_date,
         )
     except ValueError as exc:
@@ -1646,6 +1703,20 @@ def get_customer_learning_facts(customer_id: str):
     return build_learning_fact_view(
         repository=learning_fact_repository, subject_type="customer", subject_id=customer_id,
     )
+
+
+@app.post("/master-data/suppliers/{supplier_id}/derive-learning")
+def derive_supplier_learning_from_history(supplier_id: str, http_request: Request):
+    try:
+        return derive_supplier_history_learning(
+            supplier_id=supplier_id, master_repository=master_data_repository,
+            supplier_repository=supplier_rfq_repository, learning_repository=learning_fact_repository,
+            created_by=_authenticated_operator(http_request),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Supplier master not found: {supplier_id}") from exc
+    except (LearningFactConflictError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/master-data/suppliers/{supplier_id}/learning-facts")
@@ -1794,11 +1865,71 @@ def get_mina_job(job_id: str):
             master_data_repository=master_data_repository,
             agency_policy_repository=agency_automation_policy_repository,
             operation_execution_repository=operation_execution_repository,
+            operation_start_message_repository=operation_start_message_repository,
             learning_fact_repository=learning_fact_repository,
             job_id=job_id,
         )
     except MinaJobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/mina-jobs/{job_id}/operation-start")
+def get_mina_job_operation_start(job_id: str):
+    if mina_job_repository.get(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    return build_operation_start_view(operation_start_message_repository, job_id=job_id)
+
+
+@app.post("/mina-jobs/{job_id}/operation-start")
+def start_mina_job_operation(
+    job_id: str, request: OperationStartRequest, http_request: Request,
+):
+    try:
+        return start_operation(
+            mina_repository=mina_job_repository,
+            quote_case_repository=quote_case_repository,
+            supplier_repository=supplier_rfq_repository,
+            master_repository=master_data_repository,
+            message_repository=operation_start_message_repository,
+            sender=outbound_mail_sender, job_id=job_id,
+            actor=_authenticated_operator(http_request),
+            closure_reason=request.closure_reason,
+        )
+    except OperationStartError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (MinaJobTransitionError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/operation-start-messages/{message_id}/decision")
+def decide_operation_start_message_endpoint(
+    message_id: str, request: OperationStartDecisionRequest, http_request: Request,
+):
+    try:
+        result = decide_operation_start_message(
+            repository=operation_start_message_repository,
+            mina_repository=mina_job_repository, sender=outbound_mail_sender,
+            message_id=message_id, decision=request.decision,
+            actor=_authenticated_operator(http_request), reason=request.reason,
+        )
+    except OperationStartError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return result.model_dump()
+
+
+@app.post("/operation-start-messages/{message_id}/record-manually-sent")
+def record_operation_start_message_manually_sent_endpoint(
+    message_id: str, http_request: Request,
+):
+    try:
+        result = record_operation_start_message_manually_sent(
+            repository=operation_start_message_repository,
+            mina_repository=mina_job_repository, message_id=message_id,
+            actor=_authenticated_operator(http_request),
+        )
+    except OperationStartError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return result.model_dump()
 
 
 @app.get("/mina-jobs/{job_id}/operation")
@@ -2032,6 +2163,7 @@ def send_mina_job_supplier_reminder_now(
             job_id=job.job_id,
             master_data_repository=master_data_repository,
             agency_policy_repository=agency_automation_policy_repository,
+            supplier_name=draft.supplier_name,
         )
         if effective.effective_mode == "approval_required":
             raise HTTPException(
@@ -2566,6 +2698,11 @@ def list_attachment_review_queue():
     )
 
 
+@app.get("/operators")
+def list_active_operator_directory():
+    return {"operators": list_active_web_operators()}
+
+
 @app.get("/operational-work-queue")
 def list_operational_work_queue():
     queue = build_operational_work_queue(
@@ -2756,6 +2893,30 @@ def assign_operational_work_endpoint(work_id: str, http_request: Request):
             **_work_assignment_args(work_id),
         )
     except (OperationalWorkAssignmentNotFoundError, OperationalWorkAssignmentConflictError, OperationalWorkAssignmentTransitionError) as exc:
+        _assignment_error(exc)
+    return result.model_dump(exclude={"work_state_sha256"})
+
+
+@app.post("/operational-work-items/{work_id}/assign")
+def assign_operational_work_to_operator_endpoint(
+    work_id: str, request: DirectedWorkAssignmentRequest, http_request: Request,
+):
+    target = resolve_active_web_operator(request.target_email)
+    if target is None:
+        raise HTTPException(status_code=422, detail="Target operator is not an active login user.")
+    try:
+        result = assign_operational_work_to_operator(
+            target_operator_name=target.operator_name,
+            assigned_by=_authenticated_operator(http_request),
+            reason=request.reason,
+            **_work_assignment_args(work_id),
+        )
+    except (
+        OperationalWorkAssignmentNotFoundError, OperationalWorkAssignmentConflictError,
+        OperationalWorkAssignmentTransitionError, ValueError,
+    ) as exc:
+        if isinstance(exc, ValueError):
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         _assignment_error(exc)
     return result.model_dump(exclude={"work_state_sha256"})
 

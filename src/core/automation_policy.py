@@ -14,6 +14,7 @@ AutomationPolicyAction = Literal[
 AutomationPolicySource = Literal[
     "job",
     "job_legacy_disable",
+    "supplier",
     "customer",
     "agency",
     "legacy_dispatch",
@@ -45,6 +46,8 @@ class EffectiveAutomationPolicy(BaseModel):
     resolved_from: AutomationPolicySource
     job_mode: AutomationMode | None = None
     legacy_job_disabled: bool = False
+    supplier_mode: AutomationMode | None = None
+    supplier_id: str | None = None
     customer_mode: AutomationMode | None = None
     customer_id: str | None = None
     agency_mode: AutomationMode | None = None

@@ -6519,3 +6519,58 @@ P2-13 adds one durable agency-level branding record exposed under `Ayarlar → B
 
 Brand colors affect product chrome and ordinary primary/accent presentation only. Critical semantic status colors for success, warning and danger remain system-controlled and cannot be overridden by agency branding. Backend code derives contrast, soft and hover tones from the two accepted brand colors so accessible text/background choices are not delegated to arbitrary browser calculations.
 Logo upload is intentionally restricted to validated PNG, JPEG or WebP bytes and a 256 KB bound; SVG is not accepted. Branding changes require authenticated operator evidence and persist update actor/time with the current agency record. P2-13 does not change MINA lifecycle, automation, assignment, approval, SLA, commercial or exception authority.
+
+## DEC-181 — Operation Start Begins After Customer Acceptance and Supplier Award
+
+**Status:** Accepted
+**Date:** 2026-09-07
+
+`Operasyonu Başlat` is a post-award operation handoff, not a supplier-sourcing action. It is available only when the customer quote has been accepted and durable QuoteCase evidence identifies the selected supplier and accepted supplier cost. Starting operation closes the quote-procurement follow-up lifecycle and transitions the MINA job into operation execution.
+
+The first operation-start communication to the selected supplier is one combined acceptance + pickup instruction email. It states that the supplier's offer is accepted, may restate only the supplier's own agreed price, provides evidenced loading/delivery instructions, and asks for vehicle plate, driver name, driver phone and required equipment confirmation. Customer sell price and margin must never be disclosed to the supplier.
+
+Suppliers that actually submitted a usable quote but were not selected receive a courteous closure message. When an evidenced closure reason exists it may be stated; otherwise MINAI uses a neutral explanation and must not invent a reason. The message thanks the supplier and expresses intent to work together on future loads. Suppliers that never quoted or never responded do not require a closure email.
+
+Operation-start messages obey supplier-specific outbound mode, contact blocks, business calendar, authenticated operator decisions and provider-send idempotency. The selected-supplier message moving to durable sent evidence advances the job to supplier-confirmation-pending; repeated or concurrent clicks must not duplicate provider delivery.
+
+## DEC-182 — Small-Agency Operator Assignment Uses the Active Login Directory
+
+**Status:** Accepted
+**Date:** 2026-09-07
+
+MINAI's primary agency target is a small or medium freight forwarder, commonly with one or two operations people. Assignment therefore stays intentionally simple. Active login users form the authoritative operator directory; the browser never accepts an arbitrary free-text assignee identity.
+
+An operational work item may be self-claimed or directly assigned/reassigned to another active operator. Directed assignment records assigning actor, target, prior assignee when applicable, reason and a new assignment generation. Release, reassignment, handoff and lease expiry remain coordination events and never imply workflow completion.
+
+No team hierarchy, department model, manager-only assignment permission or complex role matrix is introduced in this phase. Those are deferred until real agency usage demonstrates a need.
+
+## DEC-183 — Customer Automation Exceptions Stay Inside Simple Automation Settings
+
+**Status:** Accepted
+**Date:** 2026-09-07
+
+Automation policy remains `Job → Customer → Agency → legacy fallback` for customer-scoped actions. The pilot Settings workspace exposes customer exceptions inside the Automation section rather than introducing a separate heavyweight customer administration product.
+
+Only customers that need behavior different from agency defaults require explicit configuration. Each customer may independently inherit or set supplier-reminder and customer-deadline-update modes. Job-level overrides remain the most specific customer/job control.
+
+## DEC-184 — Supplier Relationship Profiles Are First-Class Freight OS Authority
+
+**Status:** Accepted
+**Date:** 2026-09-07
+
+Road supplier behavior varies materially by supplier, so supplier-level persistent relationship settings are part of the core product rather than a later exception. `SupplierMasterProfile` carries optional communication channels/language/timing notes, reminder policy and timing, phone/WhatsApp/management escalation preferences, operation-start and closure-mail modes, automatic-contact block, negotiation/commercial/operational/relationship notes, payment/detention notes and vehicle-information behavior.
+
+Supplier reminder resolution may use `Job → Supplier → Customer → Agency → legacy fallback` for supplier-reminder actions, while customer-deadline actions remain `Job → Customer → Agency → legacy fallback`. Supplier-specific reminder timing may override the generic 30-minute first reminder and two-hour acknowledged wait. The current road follow-up model supports zero or one email reminder before human contact escalation; supplier profiles may choose zero.
+
+Historical supplier RFQ/response evidence is a first-class learning source. MINAI may derive evidence-backed proposed LearningFacts such as response-time and usable-quote-rate observations, but AI-derived observations remain non-authoritative until a human explicitly confirms them. Supplier relationship knowledge must distinguish operator-defined rules from MINAI observations.
+
+## DEC-185 — Performance Reporting Uses Real Process Metrics, Not Staff Scores
+
+**Status:** Accepted
+**Date:** 2026-09-07
+
+MINAI does not create a single employee performance score or rank staff by speed. It reports real operational evidence that can be used to improve the process: first-look time, decision time, queue workload/age and operation milestone durations. Reports expose average, median and P90 where useful so outliers do not distort the whole picture.
+
+Agency-wide first-look and decision targets are simple optional settings. The initial default is 15 minutes for each, and an agency may disable either target. SLA percentages are calculated only against these explicit configured targets; the 30-minute work-assignment lease is never an SLA.
+
+Automatic system actions are not counted as operator decision time. Assignment release, handoff or reassignment are not completion evidence. Operation milestone duration uses durable workflow evidence such as operation start, supplier confirmation, vehicle assignment, loading and delivery rather than inferred task completion.

@@ -3755,3 +3755,41 @@ Agency branding may define a bounded company name, optional logo, primary color 
 Uploaded logos must be validated as PNG, JPEG or WebP by both declared MIME type and file magic bytes and must not exceed 256 KB. SVG, HTML or other active-content formats are prohibited. User-controlled branding text must be rendered as text, never executable HTML.
 
 Success, warning and danger colors are semantic system status colors and must remain independent from agency branding. A branding update requires authenticated operator identity and CSRF protection in the browser shell and must retain update actor/time evidence. Branding changes must not mutate MINA jobs, approvals, automation policy, operational work assignments, commercial evidence or reporting outcomes.
+
+## RULE-196 — Operation Start Must Be Award-Backed, Idempotent, and Relationship-Safe
+
+Operation start requires an accepted MINA job, a linked QuoteCase, durable selected-supplier evidence, accepted supplier-price evidence and a verified supplier recipient. It must fail closed when those authorities disagree or are missing.
+
+The selected supplier receives one combined acceptance + pickup instruction communication. The message may include only evidenced shipment/address/contact instructions and the supplier's own agreed commercial terms; it must not expose customer sell price or margin. It requests plate, driver identity, driver phone and required vehicle/equipment confirmation.
+
+Only non-selected suppliers with usable quoted-price evidence are eligible for courtesy closure. A closure reason may be stated only when supplied or evidenced; otherwise use a neutral statement. No-response suppliers are not automatically mailed merely to close the sourcing workflow.
+
+Operation-start outbound messages use deterministic identities and a durable send-reservation state so concurrent approvals/clicks cannot produce duplicate provider delivery. Supplier business hours and holiday coverage remain authoritative. Operation start closes quote-procurement reminder/deadline automation for that job.
+
+## RULE-197 — Directed Work Assignment Must Resolve Against Active Login Identity
+
+A directed work assignment target must resolve to an active configured web user. Free-text or browser-invented operator names are not authority. Each new assignment generation records assigned-to, assigned-by, prior assignee when relevant and optional bounded reason.
+
+Self-claim, directed assignment, reassignment, acknowledge, renew, takeover and release remain coordination operations over the current work-state fingerprint. None of them changes the underlying freight workflow result or counts as task completion.
+
+## RULE-198 — Supplier Reminder Policy May Be Supplier-Specific Without Weakening Job Overrides
+
+For supplier reminders the effective policy order is `Job → legacy job disable → Supplier → Customer → Agency → legacy dispatch fallback`. An explicit job rule remains strongest. Supplier policy applies only when one active supplier master profile is deterministically matched to the supplier name.
+
+Supplier relationship settings may change first-reminder wait, acknowledged wait, zero/one email-reminder preference and later phone/WhatsApp/management escalation behavior. `max_email_reminders=0` bypasses reminder email and creates human supplier-contact work when due. Missing supplier-specific timing falls back to the existing workflow dispatch policy.
+
+Supplier-specific policy never bypasses business-calendar, recipient, stale-state, response, usable-price, approval or duplicate-send guards.
+
+## RULE-199 — Supplier Learning Must Preserve Human Authority
+
+Historical supplier interaction analysis may create proposed evidence-backed LearningFacts only. Raw message bodies are not required as durable learning evidence; bounded references, timestamps, counts and summaries are preferred. Derived response speed, acknowledged-to-quote timing, usable-quote rate or similar behavioral observations must remain `proposed` until explicitly confirmed by an authenticated operator.
+
+AI confidence does not promote a supplier observation to a permanent relationship rule. Confirmed LearningFacts and operator-entered supplier relationship settings must remain distinguishable authorities.
+
+## RULE-200 — Performance Metrics Must Measure Process Evidence and Exclude Automatic Decisions
+
+First-look is `assigned_at → acknowledged_at` for one assignment generation. Decision time uses actions where a human actually decided an approval/rejection or equivalent controlled decision; system-automatic sends must not be attributed as operator decision performance.
+
+Configured first-look/decision targets may produce SLA percentages, but missing targets produce no SLA percentage. Reports should include evidence coverage and may expose average, median and P90. Assignment release, handoff, takeover or reassignment are not completion evidence.
+
+Operation milestone duration is computed only from durable freight-operation timestamps. MINAI must not synthesize a single employee performance score from these metrics; the purpose is to identify operational bottlenecks and improvement opportunities.

@@ -10,6 +10,9 @@ from src.core.master_data import normalize_country, normalize_master_text
 from src.core.master_data_repository import MasterDataRepository
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.operation_execution_repository import OperationExecutionRepository
+from src.core.performance_settings import default_performance_settings
+from src.core.operation_start_repository import OperationStartMessageRepository
+from src.core.performance_settings_repository import PerformanceSettingsRepository
 from src.core.operational_work_assignment_repository import OperationalWorkAssignmentRepository
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_price_repository import SupplierPriceRepository
@@ -70,11 +73,20 @@ def _median(values: list[float]) -> float | None:
     return round((ordered[middle - 1] + ordered[middle]) / 2, 2)
 
 
+
+def _p90(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = max(0, min(len(ordered) - 1, int((len(ordered) - 1) * 0.9 + 0.999999)))
+    return round(ordered[index], 2)
+
 def _operator_assignment_performance(
     repository: OperationalWorkAssignmentRepository | None,
     *,
     start_date: date | None,
     end_date: date | None,
+    first_look_target_minutes: int | None = None,
 ) -> dict[str, Any]:
     if repository is None:
         return {
@@ -82,7 +94,9 @@ def _operator_assignment_performance(
             "status": "assignment_repository_unavailable",
             "rows": [],
             "summary": {"assignment_generation_count": 0, "acknowledged_generation_count": 0},
-            "first_look_sla_status": "threshold_not_configured",
+            "first_look_sla_status": (
+                "threshold_not_configured" if first_look_target_minutes is None else "configured"
+            ),
             "completion_metric_status": "work_type_completion_mapping_not_configured",
         }
 
@@ -145,7 +159,14 @@ def _operator_assignment_performance(
         )
         row["average_first_look_seconds"] = _avg(first_look)
         row["median_first_look_seconds"] = _median(first_look)
-        row["first_look_sla_percent"] = None
+        row["p90_first_look_seconds"] = _p90(first_look)
+        row["first_look_sla_percent"] = (
+            None if first_look_target_minutes is None
+            else _ratio(
+                sum(value <= first_look_target_minutes * 60 for value in first_look),
+                len(first_look),
+            )
+        )
         rows.append(row)
     rows.sort(key=lambda row: (-row["assignment_generation_count"], row["name"]))
 
@@ -167,13 +188,140 @@ def _operator_assignment_performance(
             "first_look_coverage_percent": _ratio(acknowledged_count, assigned_count),
             "average_first_look_seconds": _avg(all_first_look),
             "median_first_look_seconds": _median(all_first_look),
+            "p90_first_look_seconds": _p90(all_first_look),
+            "first_look_sla_percent": (
+                None if first_look_target_minutes is None
+                else _ratio(
+                    sum(value <= first_look_target_minutes * 60 for value in all_first_look),
+                    len(all_first_look),
+                )
+            ),
+            "first_look_target_minutes": first_look_target_minutes,
         },
         "rows": rows,
-        "first_look_sla_status": "threshold_not_configured",
+        "first_look_sla_status": (
+            "threshold_not_configured" if first_look_target_minutes is None else "configured"
+        ),
         "completion_metric_status": "work_type_completion_mapping_not_configured",
         "note": "Speed metrics are descriptive evidence only; assignment release/handoff are not workflow completion.",
     }
 
+
+
+def _decision_performance(
+    *, quote_case_repository: QuoteCaseRepository,
+    operation_start_repository: OperationStartMessageRepository | None,
+    start_date: date | None, end_date: date | None, decision_target_minutes: int | None,
+) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    seen_approvals: set[str] = set()
+    for case in quote_case_repository.list_all():
+        approval = case.quote_approval
+        if approval is None or approval.approval_id in seen_approvals:
+            continue
+        seen_approvals.add(approval.approval_id)
+        decided_at = approval.approved_at or approval.rejected_at
+        decided_by = approval.approved_by or approval.rejected_by
+        if decided_at is None or not decided_by:
+            continue
+        if start_date is not None and _istanbul_date(approval.created_at) < start_date:
+            continue
+        if end_date is not None and _istanbul_date(approval.created_at) > end_date:
+            continue
+        seconds = _seconds(approval.created_at, decided_at)
+        if seconds is not None:
+            records.append({"operator": decided_by, "seconds": seconds, "kind": "customer_quote_approval"})
+    if operation_start_repository is not None:
+        for message in operation_start_repository.list_all():
+            # Only a message that actually required operator approval contributes
+            # to human decision-time metrics. Automatic delivery and manual-send
+            # evidence are operational actions, not approval decisions.
+            if message.outbound_mode != "approval_required":
+                continue
+            if message.decided_at is None or not message.decided_by:
+                continue
+            if start_date is not None and _istanbul_date(message.created_at) < start_date:
+                continue
+            if end_date is not None and _istanbul_date(message.created_at) > end_date:
+                continue
+            seconds = _seconds(message.created_at, message.decided_at)
+            if seconds is not None:
+                records.append({"operator": message.decided_by, "seconds": seconds, "kind": message.kind})
+    grouped: dict[str, list[float]] = defaultdict(list)
+    for record in records:
+        grouped[record["operator"]].append(record["seconds"])
+    rows = []
+    for name, values in grouped.items():
+        rows.append({
+            "name": name, "decision_count": len(values),
+            "average_decision_seconds": _avg(values),
+            "median_decision_seconds": _median(values),
+            "p90_decision_seconds": _p90(values),
+            "decision_sla_percent": (
+                None if decision_target_minutes is None
+                else _ratio(sum(value <= decision_target_minutes * 60 for value in values), len(values))
+            ),
+        })
+    rows.sort(key=lambda row: (-row["decision_count"], row["name"]))
+    all_values = [record["seconds"] for record in records]
+    return {
+        "decision_target_minutes": decision_target_minutes,
+        "decision_sla_status": "configured" if decision_target_minutes is not None else "threshold_not_configured",
+        "summary": {
+            "decision_count": len(all_values),
+            "average_decision_seconds": _avg(all_values),
+            "median_decision_seconds": _median(all_values),
+            "p90_decision_seconds": _p90(all_values),
+            "decision_sla_percent": (
+                None if decision_target_minutes is None
+                else _ratio(sum(value <= decision_target_minutes * 60 for value in all_values), len(all_values))
+            ),
+        },
+        "rows": rows,
+        "note": "Decision metrics are evidence-based and are not a staff score.",
+    }
+
+
+def _operation_milestone_performance(
+    *, jobs, mina_repository: MinaJobRepository, operation_repository: OperationExecutionRepository,
+) -> dict[str, Any]:
+    metrics = {
+        "operation_start_to_supplier_confirmation_seconds": [],
+        "supplier_confirmation_to_vehicle_assignment_seconds": [],
+        "vehicle_assignment_to_loaded_seconds": [],
+        "loaded_to_delivered_seconds": [],
+    }
+    measurable_jobs = 0
+    for job in jobs:
+        snapshot = operation_repository.get_snapshot(job.job_id)
+        if snapshot is None:
+            continue
+        events = mina_repository.list_events(job.job_id)
+        operation_opened = _event_time(events, target_stage="operation_opened")
+        pairs = [
+            ("operation_start_to_supplier_confirmation_seconds", operation_opened, snapshot.supplier_confirmed_at),
+            ("supplier_confirmation_to_vehicle_assignment_seconds", snapshot.supplier_confirmed_at, snapshot.vehicle_assigned_at),
+            ("vehicle_assignment_to_loaded_seconds", snapshot.vehicle_assigned_at, snapshot.loaded_at),
+            ("loaded_to_delivered_seconds", snapshot.loaded_at, snapshot.delivered_at),
+        ]
+        had = False
+        for key, start, end in pairs:
+            seconds = _seconds(start, end)
+            if seconds is not None:
+                metrics[key].append(seconds)
+                had = True
+        measurable_jobs += int(had)
+    summary = {}
+    for key, values in metrics.items():
+        summary[key] = {
+            "count": len(values), "average": _avg(values),
+            "median": _median(values), "p90": _p90(values),
+        }
+    return {
+        "measurable_job_count": measurable_jobs,
+        "metrics": summary,
+        "note": "Milestone durations use durable operation evidence; no completion is inferred from assignment release.",
+    }
 
 def _ratio(numerator: int, denominator: int) -> float | None:
     return None if denominator <= 0 else round(100 * numerator / denominator, 2)
@@ -295,6 +443,8 @@ def build_reporting_read_model(
     master_data_repository: MasterDataRepository,
     learning_fact_repository: LearningFactRepository,
     operational_work_assignment_repository: OperationalWorkAssignmentRepository | None = None,
+    operation_start_message_repository: OperationStartMessageRepository | None = None,
+    performance_settings_repository: PerformanceSettingsRepository | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
     as_of: datetime | None = None,
@@ -676,8 +826,23 @@ def build_reporting_read_model(
     missing_sales_owner = sum(not job.sales_owner for job in jobs)
     missing_operations_owner = sum(not job.operations_owner for job in jobs)
     parseable_delivery = sum(_parse_iso_date(job.shipment.required_delivery_date) is not None for job in jobs)
+    performance_settings = (
+        None if performance_settings_repository is None
+        else (performance_settings_repository.get() or default_performance_settings())
+    )
+    first_look_target = None if performance_settings is None else performance_settings.first_look_target_minutes
+    decision_target = None if performance_settings is None else performance_settings.decision_target_minutes
     assignment_performance = _operator_assignment_performance(
-        operational_work_assignment_repository, start_date=start_date, end_date=end_date
+        operational_work_assignment_repository, start_date=start_date, end_date=end_date,
+        first_look_target_minutes=first_look_target,
+    )
+    decision_performance = _decision_performance(
+        quote_case_repository=quote_case_repository,
+        operation_start_repository=operation_start_message_repository,
+        start_date=start_date, end_date=end_date, decision_target_minutes=decision_target,
+    )
+    milestone_performance = _operation_milestone_performance(
+        jobs=jobs, mina_repository=mina_repository, operation_repository=operation_execution_repository,
     )
 
     return {
@@ -712,6 +877,8 @@ def build_reporting_read_model(
             "rows": _sorted_rows(operations_groups),
             "unassigned_job_count": missing_operations_owner,
             "work_assignment_performance": assignment_performance,
+            "decision_performance": decision_performance,
+            "milestone_performance": milestone_performance,
         },
         "customers": {"rows": _sorted_rows(customer_groups)},
         "suppliers": {

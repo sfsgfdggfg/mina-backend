@@ -219,10 +219,10 @@ def evaluate_automatic_followup_deadline_regressions() -> dict:
     check(
         any(
             item["work_type"] == "supplier_contact_escalation"
-            and item["next_action"] == "contact_supplier_phone_or_whatsapp"
+            and item["next_action"] == "contact_supplier_using_profile"
             for item in queue["items"]
         ),
-        "silence after automatic reminder becomes phone or WhatsApp human work",
+        "silence after automatic reminder becomes supplier-profile contact work",
     )
 
     ack_repo = InMemorySupplierRFQRepository()

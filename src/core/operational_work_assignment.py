@@ -8,7 +8,10 @@ from pydantic import BaseModel, Field
 
 class OperationalWorkAssignment(BaseModel):
     work_id: str = Field(min_length=3, max_length=512)
-    assigned_to: str = Field(min_length=3, max_length=200)
+    assigned_to: str = Field(min_length=2, max_length=200)
+    assigned_by: str | None = Field(default=None, min_length=2, max_length=200)
+    reassigned_from: str | None = Field(default=None, min_length=2, max_length=200)
+    assignment_reason: str | None = Field(default=None, max_length=500)
     status: Literal["assigned", "acknowledged", "released"] = "assigned"
     assigned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     acknowledged_at: datetime | None = None

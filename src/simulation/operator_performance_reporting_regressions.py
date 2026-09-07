@@ -23,17 +23,20 @@ def evaluate_operator_performance_reporting_regressions() -> dict:
         "operator performance is a backend-authoritative assignment-evidence read model",
     )
     check(
-        "threshold_not_configured" in model
+        "first_look_target_minutes" in model
+        and "first_look_sla_percent" in model
         and "work_type_completion_mapping_not_configured" in model
-        and '"first_look_sla_percent"] = None' in model,
-        "reporting refuses to invent SLA or completion authority",
+        and "default_performance_settings" in model,
+        "reporting uses explicit configurable targets while refusing to invent completion authority",
     )
     check(
         "renderOperatorPerformance" in browser
-        and "first_look_sla_status" in browser
-        and "completion_metric_status" in browser
+        and "first_look_sla_percent" in browser
+        and "p90_first_look_seconds" in browser
+        and "decision_performance" in browser
+        and "milestone_performance" in browser
         and "durationLabel(summary.average_first_look_seconds)" in browser,
-        "pilot browser renders backend operator-performance metrics without recomputing KPI authority",
+        "pilot browser renders backend real metrics without recomputing KPI authority",
     )
     check(
         "_render_operator_assignment_performance" in dev_ui

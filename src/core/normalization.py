@@ -128,11 +128,17 @@ def normalize_shipment(shipment: Shipment) -> Shipment:
     shipment.pickup_city = normalize_text(shipment.pickup_city)
     shipment.pickup_area = normalize_text(shipment.pickup_area)
     shipment.pickup_postcode = normalize_text(shipment.pickup_postcode)
+    shipment.pickup_address = normalize_text(shipment.pickup_address)
+    shipment.pickup_contact_name = normalize_text(shipment.pickup_contact_name)
+    shipment.pickup_contact_phone = normalize_text(shipment.pickup_contact_phone)
 
     shipment.delivery_country = map_value(shipment.delivery_country, COUNTRY_MAP)
     shipment.delivery_city = normalize_text(shipment.delivery_city)
     shipment.delivery_area = normalize_text(shipment.delivery_area)
     shipment.delivery_postcode = normalize_text(shipment.delivery_postcode)
+    shipment.delivery_address = normalize_text(shipment.delivery_address)
+    shipment.delivery_contact_name = normalize_text(shipment.delivery_contact_name)
+    shipment.delivery_contact_phone = normalize_text(shipment.delivery_contact_phone)
 
     shipment.commodity = map_value(shipment.commodity, COMMODITY_MAP)
 

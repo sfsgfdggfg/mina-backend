@@ -75,11 +75,17 @@ class _ShipmentExtractionFields(BaseModel):
     pickup_city: Optional[str] = None
     pickup_area: Optional[str] = None
     pickup_postcode: Optional[str] = None
+    pickup_address: Optional[str] = Field(default=None, description="Exact pickup/loading address when explicitly present")
+    pickup_contact_name: Optional[str] = Field(default=None, description="Pickup contact name when explicitly present")
+    pickup_contact_phone: Optional[str] = Field(default=None, description="Pickup contact phone when explicitly present")
 
     delivery_country: Optional[str] = None
     delivery_city: Optional[str] = None
     delivery_area: Optional[str] = None
     delivery_postcode: Optional[str] = None
+    delivery_address: Optional[str] = Field(default=None, description="Exact delivery address when explicitly present")
+    delivery_contact_name: Optional[str] = Field(default=None, description="Delivery contact name when explicitly present")
+    delivery_contact_phone: Optional[str] = Field(default=None, description="Delivery contact phone when explicitly present")
 
     commodity: Optional[str] = Field(
         default=None,
