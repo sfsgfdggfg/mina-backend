@@ -1,10 +1,10 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import json
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Any, List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
@@ -31,6 +31,10 @@ from src.ai.email_parser import (
 from src.ai.supplier_response_parser import (
     OpenAISupplierResponseParser,
 )
+from src.ai.relationship_history_analyzer import (
+    OpenAIRelationshipHistoryAnalyzer,
+    RelationshipHistoryAnalyzerUnavailableError,
+)
 from src.workflow.pipeline import process_shipment
 from src.workflow.supplier_rfq_progression import (
     SupplierRFQWorkflowProgressionError,
@@ -52,6 +56,10 @@ from src.workflow.mail_ingestion import (
 )
 from src.workflow.outlook_pull import (
     pull_controlled_outlook_inbox,
+)
+from src.workflow.relationship_onboarding import (
+    RelationshipOnboardingAuthorizationError,
+    run_outlook_relationship_onboarding,
 )
 from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
@@ -478,6 +486,42 @@ class OutlookPullRequest(BaseModel):
         le=MAX_PULL_MESSAGES,
     )
     interpret_attachments: bool = False
+
+
+class RelationshipOnboardingOutlookRequest(BaseModel):
+    start_at: datetime
+    end_at: datetime
+    max_messages: int = Field(default=5000, ge=1, le=10000)
+    authorization_confirmed: bool = False
+    include_ai_observations: bool = False
+    agency_alias_addresses: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("start_at", "end_at")
+    @classmethod
+    def require_aware_history_time(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("Relationship onboarding timestamps must be timezone-aware.")
+        return value
+
+    @field_validator("agency_alias_addresses")
+    @classmethod
+    def validate_alias_addresses(cls, values: list[str]) -> list[str]:
+        normalized = []
+        for value in values:
+            item = value.strip().casefold()
+            if item.count("@") != 1 or any(ch.isspace() for ch in item):
+                raise ValueError("Agency alias addresses must be valid email addresses.")
+            if item not in normalized:
+                normalized.append(item)
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_history_window(self):
+        if self.end_at <= self.start_at:
+            raise ValueError("Relationship onboarding end_at must be after start_at.")
+        if self.end_at - self.start_at > timedelta(days=370):
+            raise ValueError("Relationship onboarding range must not exceed 370 days.")
+        return self
 
 
 class ConfirmExtractionRequest(BaseModel):
@@ -1621,6 +1665,65 @@ def get_reporting_section(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return reporting_section(report, section)
+
+
+@app.get("/relationship-onboarding/status")
+def get_relationship_onboarding_status():
+    try:
+        MicrosoftAuthConfig.from_environment()
+        outlook_configured = True
+    except MicrosoftAuthConfigurationError:
+        outlook_configured = False
+    facts = learning_fact_repository.list_all()
+    return {
+        "outlook_configured": outlook_configured,
+        "customer_master_count": len(master_data_repository.list_customers()),
+        "supplier_master_count": len(master_data_repository.list_suppliers()),
+        "proposed_customer_fact_count": sum(item.subject_type == "customer" and item.status == "proposed" for item in facts),
+        "proposed_supplier_fact_count": sum(item.subject_type == "supplier" and item.status == "proposed" for item in facts),
+        "raw_history_persisted": False,
+        "max_history_days": 370,
+        "max_history_messages": 10000,
+    }
+
+
+@app.post("/relationship-onboarding/outlook/analyze")
+def analyze_outlook_relationship_history(
+    request: RelationshipOnboardingOutlookRequest, http_request: Request,
+):
+    if request.authorization_confirmed is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="historical_mailbox_authorization_required",
+        )
+    try:
+        config = MicrosoftAuthConfig.from_environment()
+        ai_analyzer = (
+            OpenAIRelationshipHistoryAnalyzer()
+            if request.include_ai_observations else None
+        )
+        return run_outlook_relationship_onboarding(
+            config=config, start_at=request.start_at, end_at=request.end_at,
+            max_messages=request.max_messages,
+            authorization_confirmed=request.authorization_confirmed,
+            master_repository=master_data_repository,
+            learning_repository=learning_fact_repository,
+            created_by=_authenticated_operator(http_request),
+            ai_analyzer=ai_analyzer,
+            agency_addresses=request.agency_alias_addresses,
+        )
+    except RelationshipOnboardingAuthorizationError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except MicrosoftAuthConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="outlook_history_not_configured") from exc
+    except MicrosoftAuthenticationError as exc:
+        raise HTTPException(status_code=503, detail=f"outlook_history_authentication_failed:{exc.code}") from exc
+    except OutlookGraphReadError as exc:
+        raise HTTPException(status_code=503, detail=f"outlook_history_read_failed:{exc.code}") from exc
+    except RelationshipHistoryAnalyzerUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/learning-facts")

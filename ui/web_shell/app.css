@@ -372,3 +372,30 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
   .direct-assign { flex-direction: column; }
   .operation-start-head { align-items: flex-start; flex-direction: column; }
 }
+
+.relationship-onboarding-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+.relationship-history-summary,
+.relationship-onboarding-health {
+  margin: 12px 0;
+}
+.relationship-onboarding-result,
+.relationship-subject-list {
+  display: grid;
+  gap: 12px;
+}
+.relationship-subject-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--surface);
+}
+.relationship-subject-card h3 { margin: 0 0 6px; }
+.relationship-subject-facts { display: grid; gap: 8px; margin-top: 10px; }
+.relationship-unmatched { overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .relationship-onboarding-form .settings-two-col { grid-template-columns: 1fr; }
+}

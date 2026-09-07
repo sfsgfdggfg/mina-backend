@@ -6574,3 +6574,32 @@ MINAI does not create a single employee performance score or rank staff by speed
 Agency-wide first-look and decision targets are simple optional settings. The initial default is 15 minutes for each, and an agency may disable either target. SLA percentages are calculated only against these explicit configured targets; the 30-minute work-assignment lease is never an SLA.
 
 Automatic system actions are not counted as operator decision time. Assignment release, handoff or reassignment are not completion evidence. Operation milestone duration uses durable workflow evidence such as operation start, supplier confirmation, vehicle assignment, loading and delivery rather than inferred task completion.
+
+## DEC-186 — Historical Relationship Onboarding Is an Explicit, Separate Mailbox Workflow
+
+**Status:** Accepted
+**Date:** 2026-09-07
+
+MINAI may analyze historical customer and supplier email relationships as an onboarding activity, but this is separate from the ordinary bounded daily inbox pull. Historical onboarding is started explicitly by an authenticated operator for a bounded date range and message count. Opening Settings or reading onboarding status must not access the mailbox.
+
+The initial Outlook history surface covers Inbox and Sent Items so both counterparty-response and agency-response behavior can be measured. Historical mailbox access requires an explicit operator confirmation that the selected mailbox/range is authorized for analysis before any access token is acquired or any Graph request is made.
+
+Historical onboarding does not automatically create or classify customer/supplier master records. Existing master-data identity remains authoritative. Unmatched addresses are surfaced as candidates; addresses or domains that resolve to conflicting master owners remain ambiguous and are not guessed.
+
+## DEC-187 — Relationship Memory Separates Measured Evidence From AI Observation
+
+**Status:** Accepted
+**Date:** 2026-09-07
+
+Historical relationship learning has two distinct evidence classes. Deterministic measurements such as message counts, normalized thread counts, active weekdays and observed response-time distributions are derived directly from timestamp/address/thread evidence. Interpretive patterns such as negotiation behavior, communication style, quote preference or vehicle-information behavior may be proposed by the AI only from privacy-transformed historical text.
+
+Both classes enter the existing LearningFact lifecycle as `proposed` observations and require explicit human confirmation before becoming runtime-authoritative learning. AI confidence alone never promotes a relationship observation. If newly analyzed history conflicts with an already confirmed fact, MINAI creates an explicit replacement proposal referencing the confirmed fact instead of silently overwriting authority.
+
+## DEC-188 — Historical Raw Mail Is Transient; Durable Memory Stores Derived Evidence Only
+
+**Status:** Accepted
+**Date:** 2026-09-07
+
+P2-15 does not introduce a durable historical-mail-body store. Raw message bodies fetched for onboarding are transient processing inputs and are cleared after analysis. Durable LearningFact evidence stores bounded aggregate summaries, source fingerprints/hashes, subject identity and derived values rather than copied historical message text.
+
+AI relationship analysis receives only the approved privacy-transformed source bundle. Historical messages with unknown or conflicting master-data identity may contribute to unmatched/ambiguous coverage reporting but must not become relationship learning for an arbitrarily selected party.
