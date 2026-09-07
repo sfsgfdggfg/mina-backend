@@ -875,3 +875,13 @@ Derived primary/secondary contrast, soft and hover colors are read-model values 
 `Shipment` adds optional exact `pickup_address`, `delivery_address`, pickup/delivery contact name and phone fields. These are backward-compatible operational facts used when evidenced for pickup/delivery instructions; absence remains null and must not be guessed.
 
 Supplier-history analysis writes ordinary `LearningFact` records with subject type `supplier` and source `minai_inference`, retaining the existing proposed/confirmed/rejected/superseded authority model. No second supplier-learning persistence model is created.
+
+## P2-15 Historical Customer and Supplier Relationship Onboarding
+
+P2-15 intentionally adds no durable raw-email-history namespace. `HistoricalMailMessage` is a transient provider-neutral processing contract carrying a bounded source reference, aware timestamp, sender/recipients, subject and body. Outlook history reading returns these records in memory from bounded Inbox and Sent Items queries; the onboarding workflow clears the batch after analysis.
+
+Durable relationship memory reuses the existing `LearningFact` and `LearningEvidence` persistence model. Deterministic history facts may include bounded email/message/thread counts, active-weekday lists, counterparty/agency response-time aggregates and last-observed timestamps. AI relationship facts use the existing `minai_inference` source and allowed `relationship.*` keys. Evidence stores a bounded aggregate summary and SHA-256 source fingerprint rather than raw message text.
+
+Existing confirmed LearningFacts remain runtime authority. If a new historical analysis produces a changed value for the same subject/fact key, the new proposed LearningFact carries `supersedes_fact_id` and cannot replace the confirmed value until the ordinary human confirmation lifecycle succeeds.
+
+No customer/supplier identity is created by historical-email persistence. Identity matching reads P2-03 master-data addresses/domains transiently; unmatched and ambiguous addresses are returned as onboarding coverage only.

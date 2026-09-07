@@ -4,7 +4,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote, urlsplit
 
 import requests
@@ -24,6 +24,7 @@ from src.core.attachment_intake_policy import (
     MAX_ATTACHMENT_FILE_BYTES,
     assess_attachment_intake,
 )
+from src.core.relationship_history import HistoricalMailMessage
 from src.core.mail import (
     MAX_ATTACHMENT_MANIFEST_ITEMS,
     InboundAttachmentMetadata,
@@ -38,12 +39,17 @@ GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0"
 GRAPH_PROVIDER_NAME = "microsoft_graph"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 MAX_PULL_MESSAGES = 50
+MAX_HISTORY_MESSAGES = 10_000
+_HISTORY_PAGE_SIZE = 50
 _ATTACHMENT_SELECT_FIELDS = "name,contentType,size,isInline"
 _ATTACHMENT_RETRIEVAL_SELECT_FIELDS = "id,name,contentType,size,isInline"
 
 _GRAPH_SELECT_FIELDS = (
     "id,subject,body,from,toRecipients,"
     "receivedDateTime,hasAttachments,isDraft"
+)
+_HISTORY_GRAPH_SELECT_FIELDS = (
+    "id,subject,body,from,toRecipients,receivedDateTime,sentDateTime,isDraft"
 )
 
 _GRAPH_PREFER = (
@@ -336,6 +342,46 @@ def normalize_graph_message(
         raise OutlookGraphMessageError(
             "graph_message_contract_invalid"
         ) from exc
+
+
+
+def normalize_graph_history_message(
+    raw_message: dict[str, Any], *, mailbox_id: str, folder: Literal["inbox", "sentitems"],
+) -> HistoricalMailMessage:
+    if not isinstance(raw_message, dict):
+        raise OutlookGraphMessageError("graph_message_not_object")
+    message_id = _required_text(raw_message.get("id"), code="graph_message_id_missing")
+    is_draft = raw_message.get("isDraft")
+    if not isinstance(is_draft, bool):
+        raise OutlookGraphMessageError("graph_message_draft_state_missing")
+    if is_draft:
+        raise OutlookGraphMessageError("graph_draft_message_rejected")
+    body = raw_message.get("body")
+    if not isinstance(body, dict):
+        raise OutlookGraphMessageError("graph_message_body_missing")
+    content_type = _required_text(body.get("contentType"), code="graph_message_body_type_missing").lower()
+    if content_type != "text":
+        raise OutlookGraphMessageError("graph_non_text_body_rejected")
+    body_text = body.get("content")
+    if not isinstance(body_text, str):
+        raise OutlookGraphMessageError("graph_message_body_missing")
+    sender_address, _ = _graph_email_address(raw_message.get("from"), code="graph_sender_missing")
+    raw_recipients = raw_message.get("toRecipients")
+    if not isinstance(raw_recipients, list):
+        raise OutlookGraphMessageError("graph_recipients_missing")
+    recipients = [
+        _graph_email_address(item, code="graph_recipient_invalid")[0]
+        for item in raw_recipients
+    ]
+    timestamp_field = "receivedDateTime" if folder == "inbox" else "sentDateTime"
+    sent_at = _required_text(raw_message.get(timestamp_field), code="graph_history_time_missing")
+    subject = _optional_text(raw_message.get("subject"), code="graph_subject_invalid") or ""
+    normalized_mailbox = _required_text(mailbox_id, code="graph_mailbox_id_missing").lower()
+    return HistoricalMailMessage(
+        source_reference=f"microsoft_graph:{normalized_mailbox}:{message_id}",
+        sent_at=sent_at, sender_address=sender_address, recipient_addresses=recipients,
+        subject=subject, body_text=body_text.strip(), source="authorized_mailbox",
+    )
 
 
 def _validated_next_link(value: Any) -> str | None:
@@ -851,6 +897,60 @@ class OutlookGraphReadClient:
             params = None
 
         return messages
+
+
+    def list_relationship_history(
+        self, *, start_at: datetime, end_at: datetime, max_messages: int = 5000,
+    ) -> list[HistoricalMailMessage]:
+        if start_at.tzinfo is None or end_at.tzinfo is None:
+            raise ValueError("Historical Graph range requires timezone-aware timestamps.")
+        start = start_at.astimezone(timezone.utc)
+        end = end_at.astimezone(timezone.utc)
+        if end <= start:
+            raise ValueError("Historical Graph end_at must be after start_at.")
+        if isinstance(max_messages, bool) or not isinstance(max_messages, int) or not (1 <= max_messages <= MAX_HISTORY_MESSAGES):
+            raise ValueError(f"Historical Graph max_messages must be between 1 and {MAX_HISTORY_MESSAGES}.")
+
+        collected: dict[str, HistoricalMailMessage] = {}
+        self.last_message_rejections = []
+        for folder, time_field in (("inbox", "receivedDateTime"), ("sentitems", "sentDateTime")):
+            if len(collected) >= max_messages:
+                break
+            url = f"{GRAPH_API_BASE_URL}/me/mailFolders/{folder}/messages"
+            params: dict[str, Any] | None = {
+                "$select": _HISTORY_GRAPH_SELECT_FIELDS,
+                "$orderby": f"{time_field} asc",
+                "$filter": (
+                    f"{time_field} ge {start.isoformat().replace('+00:00','Z')} and "
+                    f"{time_field} lt {end.isoformat().replace('+00:00','Z')}"
+                ),
+                "$top": min(_HISTORY_PAGE_SIZE, max_messages - len(collected)),
+            }
+            while url and len(collected) < max_messages:
+                payload = self._get_json(url, params=params)
+                raw_items = payload.get("value")
+                if not isinstance(raw_items, list):
+                    raise OutlookGraphReadError("microsoft_graph_messages_missing")
+                for raw_item in raw_items:
+                    if len(collected) >= max_messages:
+                        break
+                    try:
+                        message = normalize_graph_history_message(
+                            raw_item, mailbox_id=self.mailbox_id, folder=folder,
+                        )
+                    except OutlookGraphMessageError as exc:
+                        raw_id = raw_item.get("id") if isinstance(raw_item, dict) else None
+                        raw_time = raw_item.get(time_field) if isinstance(raw_item, dict) else None
+                        self.last_message_rejections.append(OutlookGraphMessageRejection(
+                            external_message_id=str(raw_id or "unavailable"),
+                            received_at=str(raw_time or "unavailable"), reason_code=exc.code,
+                        ))
+                        continue
+                    collected[message.source_reference] = message
+                next_link = _validated_next_link(payload.get("@odata.nextLink"))
+                url = next_link
+                params = None
+        return sorted(collected.values(), key=lambda item: (item.sent_at, item.source_reference))
 
 
 class OutlookGraphSendClient:

@@ -1434,6 +1434,111 @@ function renderSupplierSettings(suppliersPayload = {}) {
   select.addEventListener("change",draw); if(suppliers.length===1){select.value=suppliers[0].supplier_id;draw();} return panel;
 }
 
+
+function localDateTimeValue(date) {
+  const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return adjusted.toISOString().slice(0, 16);
+}
+
+async function renderRelationshipFactReview(container, subject) {
+  container.replaceChildren(node("div", "Gözlemler yükleniyor…", "muted"));
+  try {
+    const base = subject.subject_type === "supplier" ? "/master-data/suppliers" : "/master-data/customers";
+    const data = await api(`${base}/${encodeURIComponent(subject.subject_id)}/learning-facts`);
+    container.replaceChildren();
+    const facts = (data.facts || []).slice().reverse();
+    if (!facts.length) { container.append(emptyState("Bu taraf için gözlem yok")); return; }
+    facts.forEach(f => {
+      const card=node("div","","learning-fact-card");
+      card.append(
+        node("strong",f.fact_key),
+        node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),
+        node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small")
+      );
+      if(f.status==="proposed"){
+        const actions=node("div","","actions");
+        actions.append(
+          actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"İlişki Hafızası ekranında operatör tarafından doğrulandı."})});await renderRelationshipFactReview(container,subject);}),
+          actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"İlişki Hafızası ekranında operatör tarafından reddedildi."})});await renderRelationshipFactReview(container,subject);})
+        ); card.append(actions);
+      }
+      container.append(card);
+    });
+  } catch (e) { container.replaceChildren(node("div",e.message||String(e),"error")); }
+}
+
+function renderRelationshipOnboardingResult(container, result) {
+  container.replaceChildren();
+  const summary=node("div","","summary-grid relationship-history-summary");
+  summary.append(
+    summaryItem("Okunan benzersiz mail",result.unique_message_count??0),
+    summaryItem("Eşleşen mail",result.matched_message_count??0),
+    summaryItem("Eşleşmeyen",result.unmatched_message_count??0),
+    summaryItem("Belirsiz eşleşme",result.ambiguous_message_count??0),
+    summaryItem("Yeni öneri",result.proposed_fact_count??0),
+    summaryItem("AI gözlemi",result.ai_observation_count??0)
+  ); container.append(summary);
+  if (result.raw_messages_persisted === false || result.raw_body_persisted === false) {
+    container.append(node("div","Ham geçmiş mail gövdeleri onboarding state’inde saklanmadı.","notice"));
+  }
+  const unmatched=result.unmatched_addresses||[];
+  if(unmatched.length) container.append(node("div",`Eşleşmeyen karşı taraf adayları: ${unmatched.slice(0,20).join(" · ")}${unmatched.length>20?` · +${unmatched.length-20}`:""}`,"small relationship-unmatched"));
+  const ambiguous=result.ambiguous_addresses||[];
+  if(ambiguous.length) container.append(node("div",`Çakışan master-data adresleri: ${ambiguous.join(" · ")}`,"warning small"));
+  const subjects=result.subjects||[];
+  const list=node("div","","relationship-subject-list");
+  subjects.forEach(subject=>{
+    const card=node("section","","relationship-subject-card");
+    card.append(
+      node("h3",subject.subject_label||"-"),
+      node("div",`${subject.subject_type==="supplier"?"Tedarikçi":"Müşteri"} · ${subject.message_count} mail · ${subject.thread_count} konu · karşı taraf cevap örneği ${subject.counterparty_response_sample_count} · ajans cevap örneği ${subject.agency_response_sample_count}`,"muted small")
+    );
+    const facts=node("div","","relationship-subject-facts");
+    const toggle=actionButton("Gözlemleri Aç","",async()=>{toggle.disabled=true;await renderRelationshipFactReview(facts,subject);toggle.disabled=false;});
+    card.append(toggle,facts); list.append(card);
+  });
+  if(!subjects.length) list.append(emptyState("Master-data ile eşleşen ilişki bulunamadı","Eşleşmeyen adresleri kontrol edip müşteri/tedarikçi master kaydı oluşturduktan sonra analiz tekrar çalıştırılabilir."));
+  container.append(list);
+}
+
+function renderRelationshipOnboardingSettings(status = {}) {
+  const panel=node("section","","settings-panel");
+  const h=node("div","","settings-heading");
+  h.append(node("h2","İlişki Hafızası"),node("p","Müşteri ve tedarikçi geçmiş e-postalarından ölçülebilir ilişki davranışları ve doğrulama bekleyen MINAI gözlemleri üretir. Normal günlük inbox pull’undan ayrıdır.","muted"));panel.append(h);
+  const health=node("div","","summary-grid relationship-onboarding-health");
+  health.append(
+    summaryItem("Outlook",status.outlook_configured?"Hazır":"Yapılandırma eksik"),
+    summaryItem("Müşteri master",status.customer_master_count??0),
+    summaryItem("Tedarikçi master",status.supplier_master_count??0),
+    summaryItem("Bekleyen müşteri gözlemi",status.proposed_customer_fact_count??0),
+    summaryItem("Bekleyen tedarikçi gözlemi",status.proposed_supplier_fact_count??0)
+  ); panel.append(health);
+  panel.append(node("div","Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz. Eşleşmeyen taraflar otomatik müşteri/tedarikçi yapılmaz.","notice"));
+
+  const form=node("div","","relationship-onboarding-form");
+  const now=new Date(); const startDefault=new Date(now.getTime()-180*24*60*60*1000);
+  const startLabel=node("label","Başlangıç");const start=document.createElement("input");start.type="datetime-local";start.value=localDateTimeValue(startDefault);startLabel.append(start);
+  const endLabel=node("label","Bitiş");const end=document.createElement("input");end.type="datetime-local";end.value=localDateTimeValue(now);endLabel.append(end);
+  const limit=numberField("Maksimum mesaj",5000,1,status.max_history_messages||10000);
+  const aliases=textareaLines("Ajansın ek e-posta adresleri / alias’ları",[],2);
+  const authorizedLabel=node("label","","check-label");const authorized=document.createElement("input");authorized.type="checkbox";authorizedLabel.append(authorized,node("span","Bu mailbox geçmişini seçilen tarih aralığında analiz etmeye yetkim var."));
+  const aiLabel=node("label","","check-label");const ai=document.createElement("input");ai.type="checkbox";aiLabel.append(ai,node("span","AI davranış gözlemlerini de üret (privacy transform sonrası OpenAI çağrısı yapılır)."));
+  const grid=node("div","","settings-two-col");grid.append(startLabel,endLabel,limit.label,aliases.label);form.append(grid,authorizedLabel,aiLabel);
+  const feedback=node("div","","muted settings-feedback");const result=node("div","","relationship-onboarding-result");
+  const run=actionButton("Geçmiş Outlook Analizini Başlat","primary",async()=>{
+    if(!authorized.checked){feedback.textContent="Analiz için yetki onay kutusunu işaretlemelisin.";return;}
+    if(!start.value||!end.value){feedback.textContent="Başlangıç ve bitiş tarihi gerekli.";return;}
+    run.disabled=true;feedback.textContent="Geçmiş e-postalar okunuyor ve ilişki kanıtı çıkarılıyor…";result.replaceChildren();
+    try{
+      const response=await api("/relationship-onboarding/outlook/analyze",{method:"POST",body:JSON.stringify({
+        start_at:new Date(start.value).toISOString(),end_at:new Date(end.value).toISOString(),max_messages:limit.value(),authorization_confirmed:true,include_ai_observations:ai.checked,agency_alias_addresses:aliases.value()
+      })});
+      feedback.textContent=`Analiz tamamlandı · ${response.unique_message_count??0} benzersiz mail · ${response.proposed_fact_count??0} yeni öneri.`;renderRelationshipOnboardingResult(result,response);setStatus("Analiz tamamlandı");
+    }catch(e){feedback.textContent=e.message||String(e);setStatus("Hata",false);}finally{run.disabled=false;}
+  });
+  form.append(run,feedback,result);panel.append(form);return panel;
+}
+
 function renderPerformanceSettings(settings = {}) {
   const panel=node("section","","settings-panel");const h=node("div","","settings-heading");h.append(node("h2","Performans"),node("p","Tek personel puanı yok. MINAI gerçek süreleri ölçer; hedefler yalnız süreç darboğazını görmek içindir.","muted"));panel.append(h);
   const firstEnabled=document.createElement("input");firstEnabled.type="checkbox";firstEnabled.checked=settings.first_look_target_minutes!=null;const first=numberField("İlk bakış hedefi (dk)",settings.first_look_target_minutes??15,1,240);const firstRow=node("div","","performance-setting-row");const firstToggle=node("label","","check-label");firstToggle.append(firstEnabled,node("span","İlk bakış hedefini kullan"));firstRow.append(firstToggle,first.label);
@@ -1444,10 +1549,10 @@ function renderPerformanceSettings(settings = {}) {
 }
 
 let settingsSelectedTab="automation";
-function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}) {
+function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}) {
   setPageContext("Ayarlar", "Sistem Ayarları"); const page=node("div","","settings-page");const tabs=node("div","","settings-tabs");const body=node("div","","settings-tab-body");
-  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding)};
-  function draw(){tabs.replaceChildren();[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["performance","Performans"],["branding","Branding"]].forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));body.replaceChildren(panels[settingsSelectedTab]());}
+  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding)};
+  function draw(){tabs.replaceChildren();[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"]].forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));body.replaceChildren(panels[settingsSelectedTab]());}
   page.append(tabs,body);content.replaceChildren(page);draw();
 }
 
@@ -1469,11 +1574,11 @@ async function boot() {
     } else if (page === "reports") {
       renderReports(await api("/reports"));
     } else if (page === "settings") {
-      const [automationPolicy, customersPayload, suppliersPayload, performanceSettings] = await Promise.all([
+      const [automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus] = await Promise.all([
         api("/automation-policy/agency"), api("/master-data/customers"),
-        api("/master-data/suppliers"), api("/settings/performance")
+        api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status")
       ]);
-      renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings);
+      renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus);
     }
     setStatus("Güncel");
   } catch (error) { showError(error); }

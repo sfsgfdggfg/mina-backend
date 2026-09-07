@@ -3793,3 +3793,29 @@ First-look is `assigned_at → acknowledged_at` for one assignment generation. D
 Configured first-look/decision targets may produce SLA percentages, but missing targets produce no SLA percentage. Reports should include evidence coverage and may expose average, median and P90. Assignment release, handoff, takeover or reassignment are not completion evidence.
 
 Operation milestone duration is computed only from durable freight-operation timestamps. MINAI must not synthesize a single employee performance score from these metrics; the purpose is to identify operational bottlenecks and improvement opportunities.
+
+## RULE-201 — Historical Mailbox Analysis Requires Explicit Authorization Before Access
+
+Historical customer/supplier mailbox onboarding must not acquire a provider token, call the mailbox API or fetch history until an authenticated operator explicitly confirms authorization for the selected mailbox and date range. The status/readiness view may inspect configuration metadata only and must not itself read messages.
+
+The initial controlled range is at most 370 days and 10,000 messages per explicit run. Historical onboarding is independent from the normal daily Outlook pull limit and must not expand the ordinary operational inbox-pull semantics.
+
+## RULE-202 — Historical Relationship Identity Must Resolve Through Master Data or Remain Unknown
+
+A historical message may contribute to customer/supplier relationship learning only when its non-agency participant identity deterministically resolves to exactly one existing master-data subject. Customer trusted sender addresses, trusted domains and active contact emails may be used; supplier active contact emails may be used.
+
+If an address/domain belongs to multiple possible master subjects, or a message contains conflicting recognized counterparties, MINAI must not choose one. Unmatched and ambiguous addresses remain visible onboarding coverage gaps. Historical analysis must not auto-create customer or supplier master records.
+
+## RULE-203 — Historical Mail Bodies Are Transient Inputs, Not Durable Learning Storage
+
+Raw historical subject/body content may be held only long enough to perform the explicitly authorized onboarding analysis. It must not be written to onboarding state, LearningFact values, LearningEvidence summaries or new historical-message database tables merely for relationship learning.
+
+Durable deterministic evidence should contain bounded counts, timing metrics, normalized thread evidence and SHA-256 fingerprints/references. After the workflow completes or fails, the transient historical message batch must be released.
+
+## RULE-204 — AI Relationship Observation Requires Privacy Transformation and Human Review
+
+Any historical relationship text sent to an AI service must pass through the approved privacy transform and be represented by `PrivacySafeText`. Email content is untrusted data and cannot instruct the analyzer or grant commercial/workflow authority.
+
+AI may propose bounded relationship observations only in the allowed behavioral categories. It must not invent identities, legal/compliance facts, financial authority, personal traits or sensitive characteristics. AI-derived relationship observations remain `proposed` until an authenticated operator confirms them.
+
+When a proposed fact differs from an existing confirmed subject/key value, the proposal must explicitly target that confirmed fact for replacement; existing confirmed authority remains active until the replacement is reviewed and confirmed.

@@ -42,3 +42,16 @@ Bu belge, daha önce verilmiş ürün kararlarını tek bir browser UI tamamlama
 - Müşteri otomasyon istisnaları: Ayarlar→Otomasyon içinde kalır; ayrı büyük müşteri yönetim ekranı gerekmez.
 - Tedarikçi bazlı kalıcı ayarlar: karayolu tedarikçi ilişkilerinin değişkenliği nedeniyle zengin supplier relationship profile temel ürün özelliğidir; geçmiş supplier yazışma/yanıtları MINAI için öneri kaynağıdır.
 - Performans: tek personel puanı yoktur; ilk bakış, karar ve operasyon milestone gerçek süreleri, ortalama/medyan/P90 ve açıkça tanımlanmış hedefler raporlanır.
+
+## P2-15 İlişki Hafızası — 2026-09-07
+
+- [x] Ayarlar içine ayrı `İlişki Hafızası` sekmesi; sayfa açılışı mailbox geçmişini okumaz.
+- [x] Tarih aralığı, mesaj sınırı ve açık yetki onayıyla kontrollü Outlook geçmiş analizi.
+- [x] Inbox + Sent Items üzerinden müşteri ve tedarikçi için iki yönlü cevap süresi/iletişim kanıtı.
+- [x] Master-data ile deterministik taraf eşleştirmesi; eşleşmeyen/çakışan adreslerde otomatik sınıflandırma yok.
+- [x] Ham geçmiş mail gövdeleri kalıcı onboarding state'ine yazılmaz.
+- [x] Deterministik ilişki metrikleri ile AI davranış gözlemleri ayrı kaynaklar olarak üretilir.
+- [x] AI analizi ayrı opt-in; yalnız privacy-transformed `PrivacySafeText` kullanır.
+- [x] Tüm yeni gözlemler mevcut LearningFact review akışında `proposed` başlar; doğrula/reddet UI'ı korunur.
+- [x] Onaylı bilgi değişiyorsa sessiz overwrite yerine replacement proposal üretilir.
+- [x] Normal günlük Outlook pull limiti ve ingestion davranışı değiştirilmez.
