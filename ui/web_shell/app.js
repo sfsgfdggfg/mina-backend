@@ -1166,7 +1166,9 @@ function renderOperatorPerformance(section) {
   const decision = section?.decision_performance || {}; const ds=decision.summary||{};
   const decisionGrid=node("div","","grid report-performance-metrics report-secondary-metrics");
   decisionGrid.append(metric("Karar adedi",ds.decision_count??0),metric("Ort. karar",ds.average_decision_seconds==null?"-":durationLabel(ds.average_decision_seconds)),metric("Medyan karar",ds.median_decision_seconds==null?"-":durationLabel(ds.median_decision_seconds)),metric("P90 karar",ds.p90_decision_seconds==null?"-":durationLabel(ds.p90_decision_seconds)),metric("Karar hedefi içinde %",ds.decision_sla_percent??"-"));
-  wrap.append(node("h3","Onay / Karar Süreleri"),decisionGrid,node("div",`Karar hedefi: ${decision.decision_target_minutes==null?"kapalı":`${decision.decision_target_minutes} dk`}`,"small muted"));
+  const excludedDecisionEvidence=(decision.excluded_unlinked_quote_decision_count??0)+(decision.excluded_unlinked_operation_start_decision_count??0);
+  const decisionNote=`Karar hedefi: ${decision.decision_target_minutes==null?"kapalı":`${decision.decision_target_minutes} dk`}${excludedDecisionEvidence?` · ${excludedDecisionEvidence} bağlantısız legacy karar kanıtı metrik dışında.`:""}`;
+  wrap.append(node("h3","Onay / Karar Süreleri"),decisionGrid,node("div",decisionNote,"small muted"));
 
   const milestones=section?.milestone_performance||{}; const m=milestones.metrics||{};
   const milestoneGrid=node("div","","grid milestone-metrics");

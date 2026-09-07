@@ -211,10 +211,13 @@ def _operator_assignment_performance(
 def _decision_performance(
     *, quote_case_repository: QuoteCaseRepository,
     operation_start_repository: OperationStartMessageRepository | None,
+    valid_job_ids: set[str],
     start_date: date | None, end_date: date | None, decision_target_minutes: int | None,
 ) -> dict[str, Any]:
     records: list[dict[str, Any]] = []
     seen_approvals: set[str] = set()
+    excluded_unlinked_quote_decisions = 0
+    excluded_unlinked_operation_start_decisions = 0
     for case in quote_case_repository.list_all():
         approval = case.quote_approval
         if approval is None or approval.approval_id in seen_approvals:
@@ -223,6 +226,9 @@ def _decision_performance(
         decided_at = approval.approved_at or approval.rejected_at
         decided_by = approval.approved_by or approval.rejected_by
         if decided_at is None or not decided_by:
+            continue
+        if case.mina_job_id not in valid_job_ids:
+            excluded_unlinked_quote_decisions += 1
             continue
         if start_date is not None and _istanbul_date(approval.created_at) < start_date:
             continue
@@ -239,6 +245,9 @@ def _decision_performance(
             if message.outbound_mode != "approval_required":
                 continue
             if message.decided_at is None or not message.decided_by:
+                continue
+            if message.job_id not in valid_job_ids:
+                excluded_unlinked_operation_start_decisions += 1
                 continue
             if start_date is not None and _istanbul_date(message.created_at) < start_date:
                 continue
@@ -265,8 +274,11 @@ def _decision_performance(
     rows.sort(key=lambda row: (-row["decision_count"], row["name"]))
     all_values = [record["seconds"] for record in records]
     return {
+        "period_basis": "decision_created_at_istanbul",
         "decision_target_minutes": decision_target_minutes,
         "decision_sla_status": "configured" if decision_target_minutes is not None else "threshold_not_configured",
+        "excluded_unlinked_quote_decision_count": excluded_unlinked_quote_decisions,
+        "excluded_unlinked_operation_start_decision_count": excluded_unlinked_operation_start_decisions,
         "summary": {
             "decision_count": len(all_values),
             "average_decision_seconds": _avg(all_values),
@@ -278,7 +290,10 @@ def _decision_performance(
             ),
         },
         "rows": rows,
-        "note": "Decision metrics are evidence-based and are not a staff score.",
+        "note": (
+            "Decision metrics are evidence-based and are not a staff score. "
+            "Legacy/unlinked decision evidence is reported as excluded coverage and does not enter operator timing."
+        ),
     }
 
 
@@ -454,8 +469,10 @@ def build_reporting_read_model(
     now = _aware(as_of or datetime.now(timezone.utc))
     assert now is not None
 
+    all_jobs = mina_repository.list_all()
+    all_job_ids = {job.job_id for job in all_jobs}
     jobs = [
-        job for job in mina_repository.list_all()
+        job for job in all_jobs
         if (start_date is None or _istanbul_date(job.opened_at) >= start_date)
         and (end_date is None or _istanbul_date(job.opened_at) <= end_date)
     ]
@@ -839,6 +856,7 @@ def build_reporting_read_model(
     decision_performance = _decision_performance(
         quote_case_repository=quote_case_repository,
         operation_start_repository=operation_start_message_repository,
+        valid_job_ids=all_job_ids,
         start_date=start_date, end_date=end_date, decision_target_minutes=decision_target,
     )
     milestone_performance = _operation_milestone_performance(

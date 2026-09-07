@@ -109,6 +109,9 @@ from src.simulation.operator_work_queue_web_regressions import (
 from src.simulation.operator_performance_reporting_regressions import (
     evaluate_operator_performance_reporting_regressions,
 )
+from src.simulation.decision_performance_scope_regressions import (
+    evaluate_decision_performance_scope_regressions,
+)
 from src.simulation.ui_completion_regressions import (
     evaluate_ui_completion_regressions,
 )
@@ -372,6 +375,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Operator performance and first-look reporting",
         evaluate_operator_performance_reporting_regressions,
+    ),
+    Suite(
+        "Decision performance linked-job scope",
+        evaluate_decision_performance_scope_regressions,
     ),
     Suite(
         "Pilot browser UI completion",

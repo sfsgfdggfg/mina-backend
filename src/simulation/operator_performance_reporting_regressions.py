@@ -34,6 +34,8 @@ def evaluate_operator_performance_reporting_regressions() -> dict:
         and "first_look_sla_percent" in browser
         and "p90_first_look_seconds" in browser
         and "decision_performance" in browser
+        and "excluded_unlinked_quote_decision_count" in browser
+        and "bağlantısız legacy karar kanıtı metrik dışında" in browser
         and "milestone_performance" in browser
         and "durationLabel(summary.average_first_look_seconds)" in browser,
         "pilot browser renders backend real metrics without recomputing KPI authority",
