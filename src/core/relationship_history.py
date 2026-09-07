@@ -284,6 +284,12 @@ def _propose_fact(
     digest: str, created_by: str, occurred_at: datetime, source_type: str = "email",
     value_unit: str | None = None,
 ) -> LearningFact | None:
+    entry_id = f"email-history:{subject_type}:{subject_id}:{fact_key}:{digest[:20]}"
+    # The same historical evidence may be intentionally re-analyzed in phases
+    # (deterministic first, AI observations later). One evidence digest + fact key
+    # is one immutable proposal identity; reruns must neither duplicate nor drift it.
+    if learning_repository.find_by_entry_id(entry_id) is not None:
+        return None
     confirmed = [
         item for item in learning_repository.list_all()
         if item.status == "confirmed" and item.subject_type == subject_type
@@ -294,7 +300,7 @@ def _propose_fact(
         return None
     return create_learning_fact(
         repository=learning_repository,
-        entry_id=f"email-history:{subject_type}:{subject_id}:{fact_key}:{digest[:20]}",
+        entry_id=entry_id,
         subject_type=subject_type, subject_id=subject_id, subject_label=subject_label,
         fact_key=fact_key, value=value, value_unit=value_unit, confidence=confidence,
         source_type=source_type, evidence=[evidence], created_by=created_by,

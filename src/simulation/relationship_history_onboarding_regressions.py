@@ -147,6 +147,43 @@ def evaluate_relationship_history_onboarding_regressions():
         "AI relationship observations receive privacy-safe history and remain proposed facts",
     )
 
+    # The product deliberately supports a deterministic first pass followed by an AI-on rerun
+    # over the exact same historical evidence. Existing metric proposals must be reused/skipped,
+    # while only previously absent AI categories are created.
+    phased_learning=InMemoryLearningFactRepository()
+    first_pass=analyze_relationship_history(
+        messages=_history(),agency_addresses=[AGENCY],master_repository=masters,
+        learning_repository=phased_learning,created_by="Tester",ai_analyzer=None,
+        occurred_at=NOW+timedelta(hours=10),
+    )
+    first_count=len(phased_learning.list_all())
+    phased_ai=_AI()
+    second_pass=analyze_relationship_history(
+        messages=_history(),agency_addresses=[AGENCY],master_repository=masters,
+        learning_repository=phased_learning,created_by="Tester",ai_analyzer=phased_ai,
+        occurred_at=NOW+timedelta(hours=11),
+    )
+    after_second=phased_learning.list_all()
+    second_count=len(after_second)
+    second_ai_keys={
+        item.fact_key for item in after_second if item.source_type=="minai_inference"
+    }
+    third_ai=_AI()
+    third_pass=analyze_relationship_history(
+        messages=_history(),agency_addresses=[AGENCY],master_repository=masters,
+        learning_repository=phased_learning,created_by="Tester",ai_analyzer=third_ai,
+        occurred_at=NOW+timedelta(hours=12),
+    )
+    check(
+        first_pass.ai_observation_count==0
+        and second_pass.ai_observation_count==2
+        and second_count==first_count+2
+        and second_ai_keys=={"relationship.negotiation_behavior","relationship.quote_preference"}
+        and third_pass.proposed_fact_count==0
+        and len(phased_learning.list_all())==second_count,
+        "phased deterministic then AI history reruns are idempotent and add only missing observation categories",
+    )
+
     confirmed=confirm_learning_fact(
         repository=learning,fact_id=supplier_response.fact_id,reviewed_by="Tester",
         review_note="Synthetic confirmation",occurred_at=NOW+timedelta(hours=5),
