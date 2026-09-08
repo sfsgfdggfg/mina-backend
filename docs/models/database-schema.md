@@ -885,3 +885,11 @@ Durable relationship memory reuses the existing `LearningFact` and `LearningEvid
 Existing confirmed LearningFacts remain runtime authority. If a new historical analysis produces a changed value for the same subject/fact key, the new proposed LearningFact carries `supersedes_fact_id` and cannot replace the confirmed value until the ordinary human confirmation lifecycle succeeds.
 
 No customer/supplier identity is created by historical-email persistence. Identity matching reads P2-03 master-data addresses/domains transiently; unmatched and ambiguous addresses are returned as onboarding coverage only.
+
+## P2-16.4 — Pilot Store Envelope and Retention Classes
+
+`state_records` now includes `schema_version INTEGER NOT NULL`. Existing databases created before P2-16.4 are migrated in place by adding the column with legacy value `0`; newly created, inserted, or updated state records use version `1`. Repository model validation happens only after this storage-version boundary accepts/migrates the payload. Unknown future storage versions are rejected rather than interpreted as the current schema.
+
+Ordinary retention continues to purge transient state and audit events. Durable state namespaces additionally include `operational_work_assignments`, `operational_shift_close_receipts`, and `operational_shift_open_acceptance_receipts`; their corresponding continuity event types are also retained so assignment generations and shift reconciliation remain auditable. This storage exception does not create a historical raw-mail archive.
+
+In controlled pilot mode the SQLite file is deployment-owned external state: `MINAI_PILOT_DB_PATH` is mandatory, absolute, and outside the repository. Repository-local SQLite and ad-hoc backup files are development artifacts only and are excluded from source control.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
@@ -56,7 +56,7 @@ def record_customer_quote_manually_sent(
     if not normalized_operator:
         raise ValueError("Customer quote send recorder identity is required.")
 
-    timestamp = sent_at or datetime.utcnow()
+    timestamp = sent_at or datetime.now(timezone.utc)
 
     with atomic_repository_transaction(
         quote_case_repository,

@@ -19,6 +19,7 @@ def _valid_env(
         "MINAI_PILOT_MODE": "1",
         "MINAI_PILOT_BIND_HOST": host,
         "MINAI_PILOT_DATA_DIR": str(data_dir),
+        "MINAI_PILOT_DB_PATH": str(data_dir.parent / "pilot-state.sqlite3"),
         "MINAI_PILOT_ALLOWED_NETWORKS": "127.0.0.1/32,10.42.0.0/16",
         "MINAI_PILOT_OPERATORS_JSON": json.dumps(
             {"Pilot Operator": "fake-pilot-token-0000000000000000"}
@@ -149,6 +150,28 @@ def evaluate_pilot_launcher_regressions() -> dict:
                         k: v
                         for k, v in base_env.items()
                         if k != "MINAI_PILOT_BIND_HOST"
+                    },
+                ),
+                (
+                    "missing pilot database path",
+                    {
+                        k: v
+                        for k, v in base_env.items()
+                        if k != "MINAI_PILOT_DB_PATH"
+                    },
+                ),
+                (
+                    "relative pilot database path",
+                    {**base_env, "MINAI_PILOT_DB_PATH": "relative/pilot.sqlite3"},
+                ),
+                (
+                    "repository-owned pilot database",
+                    {
+                        **base_env,
+                        "MINAI_PILOT_DB_PATH": str(
+                            Path(__file__).resolve().parents[2]
+                            / "data" / "pilot" / "unsafe.sqlite3"
+                        ),
                     },
                 ),
                 (

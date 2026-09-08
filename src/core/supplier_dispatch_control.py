@@ -170,7 +170,7 @@ def record_supplier_acknowledgement(
         )
     evidence = SupplierRFQAcknowledgementEvidence(
         rfq_id=rfq_id,
-        acknowledged_at=acknowledged_at or datetime.utcnow(),
+        acknowledged_at=acknowledged_at or datetime.now(timezone.utc),
         channel=normalized_channel,
         recorded_by=actor,
     )
@@ -209,7 +209,7 @@ def authorize_secondary_after_price_negotiation(
     evidence = SupplierSecondaryDispatchAuthorization(
         workflow_id=workflow_id,
         authorized_by=actor,
-        authorized_at=authorized_at or datetime.utcnow(),
+        authorized_at=authorized_at or datetime.now(timezone.utc),
     )
     with atomic_repository_transaction(repository):
         if repository.get_workflow(workflow_id) is None:

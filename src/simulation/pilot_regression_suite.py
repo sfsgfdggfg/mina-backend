@@ -162,6 +162,7 @@ from src.simulation.pilot_data_pack_intake_regressions import evaluate_pilot_dat
 from src.simulation.pilot_readiness_regressions import evaluate_pilot_readiness_regressions
 from src.simulation.pilot_readiness_evidence_regressions import evaluate_pilot_readiness_evidence_regressions
 from src.simulation.pilot_persistence_regressions import evaluate_pilot_persistence_regressions
+from src.simulation.persistence_housekeeping_regressions import evaluate_persistence_housekeeping_regressions
 from src.simulation.pilot_scope_regressions import evaluate_pilot_scope_regressions
 from src.simulation.privacy_boundary_regressions import evaluate_privacy_boundary_regressions
 from src.simulation.pricing_policy_regressions import evaluate_pricing_policy_regressions
@@ -239,6 +240,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Operational data injection", evaluate_operational_data_injection_regressions),
     Suite("Pilot scope", evaluate_pilot_scope_regressions),
     Suite("Durable pilot persistence", evaluate_pilot_persistence_regressions),
+    Suite("Pilot persistence housekeeping", evaluate_persistence_housekeeping_regressions),
     Suite("Durable provenance recovery", evaluate_provenance_recovery_regressions),
     Suite("Atomic workflow transitions", evaluate_atomic_transition_regressions),
     Suite(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -241,7 +241,7 @@ def revise_quote_case(
             "Revised final price must be positive."
         )
 
-    now = edited_at or datetime.utcnow()
+    now = edited_at or datetime.now(timezone.utc)
 
     with atomic_repository_transaction(
         quote_case_repository,

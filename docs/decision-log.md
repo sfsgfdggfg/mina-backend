@@ -6678,3 +6678,18 @@ When Master Data authority is supplied, runtime must not silently consult legacy
 RFQ email replies, operator-recorded phone/WhatsApp/manual prices, portal/API prices, and explicitly materialized applicable fixed rates are supplier-price evidence for the same MINA job. They are compared through the existing multi-criteria supplier quote engine; a source-neutral winner becomes the SupplierQuote while preserving its source type and source reference.
 
 A non-email price must not remain a display-only side record. Once selected it enters the normal customer pricing, QuoteCase, human approval and send-safety lifecycle. MINAI must not invent a customer markup when no verified customer/agency pricing policy exists; an operator may provide an explicit job-level pricing override.
+
+## DEC-197 — Pilot Persistence Is External, Versioned, UTC-Consistent, and Retention-Classed
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+A real controlled pilot must not silently create its SQLite database inside the Git repository. When `MINAI_PILOT_MODE` is enabled, `MINAI_PILOT_DB_PATH` is mandatory, must be an absolute path, and must resolve outside the repository. The repository-owned default remains available only for development/synthetic compatibility when pilot mode is disabled. The launcher validates this before starting Uvicorn and the SQLite store enforces the same boundary again at runtime.
+
+Ordinary privacy-minimized pilot state and audit events keep the configured retention window, default 30 days. Durable operational continuity is a separate retention class: MINA job/case identity and timeline, master/commercial authority, operator configuration, execution/exception evidence, learning facts, operational work assignments, and shift-close/open acceptance receipts survive the ordinary purge. Assignment and shift-continuity event history also survives because later handoff/reconciliation depends on generation history. This exception does not authorize indefinite raw-mail retention and does not replace the agency's approved deletion policy.
+
+Persistent `state_records` now carry an explicit storage schema version. Existing pre-version rows are treated as legacy v0 and remain readable through a migration boundary; new or updated rows are written as v1. Unknown future versions fail closed instead of being parsed as today's model. Payload migration remains separate from model lifecycle fields such as `MinaJob.lifecycle_version`.
+
+New quote, RFQ, supplier-response and dispatch timestamps must be emitted as timezone-aware UTC. Existing naive historical timestamps may remain readable only through explicit compatibility logic; new writes must not extend that debt.
+
+Ad-hoc repository backup JSON files are not runtime authority and must not be tracked. Backup/export artifacts and live SQLite files belong in approved external storage and are ignored by Git. Intentional legacy/synthetic compatibility code may remain when it is still covered and explicitly selected; housekeeping does not delete compatibility behavior merely because it is old.
