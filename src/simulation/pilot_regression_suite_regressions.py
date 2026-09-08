@@ -65,7 +65,7 @@ def evaluate_pilot_regression_suite_regressions() -> dict:
 
     names = {suite.name.lower() for suite in CANONICAL_SUITES}
     required_areas = {
-        "privacy", "pilot access", "pilot launcher", "safe api",
+        "privacy", "pilot access", "pilot launcher", "deployment profile", "safe api",
         "extraction confirmation", "customer identity", "data provenance",
         "repository data path normalization",
         "operational data injection",

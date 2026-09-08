@@ -6693,3 +6693,16 @@ Persistent `state_records` now carry an explicit storage schema version. Existin
 New quote, RFQ, supplier-response and dispatch timestamps must be emitted as timezone-aware UTC. Existing naive historical timestamps may remain readable only through explicit compatibility logic; new writes must not extend that debt.
 
 Ad-hoc repository backup JSON files are not runtime authority and must not be tracked. Backup/export artifacts and live SQLite files belong in approved external storage and are ignored by Git. Intentional legacy/synthetic compatibility code may remain when it is still covered and explicitly selected; housekeeping does not delete compatibility behavior merely because it is old.
+
+## DEC-198 — Controlled Pilot Deployment Uses One Core Profile Plus Non-Authoritative Overlays
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+A controlled pilot launch must select exactly one core environment profile for operational authority. The core profile owns pilot mode, database path, operational data pack, retention, operator/network authority, outbound runtime mode, pricing/dispatch policy, Outlook identity/token paths and OpenAI provider configuration. A secondary web/transport overlay may add or change presentation and transport settings such as bind port, TLS and web-shell configuration, but it must not redefine core state, data or provider authority.
+
+Primary shadow-pilot and Outlook smoke environments are separate core profiles. A smoke profile must never be sourced after a primary pilot profile as an overlay because that can silently replace the active database, data pack or provider identity. The same web overlay may be used with either core profile when its keys remain non-authoritative.
+
+The profile launcher reads only explicitly named external env files, rejects repository-contained or symlink-traversed profile files, blocks protected keys in overlays and supports a check-only mode that validates the normal pilot-launcher preflight without starting Uvicorn. Its diagnostic summary may expose selected non-secret profile metadata such as DB/data paths, port and outbound mode, but must not print tokens, passwords, operator credentials or provider secrets.
+
+Legacy shell-escaped JSON values used by existing controlled env files remain accepted through a narrow compatibility normalization. This compatibility must not execute env-file shell code or weaken the single-core-profile rule.
