@@ -81,6 +81,16 @@ def record_customer_quote_manually_sent(
             )
 
         revision_number = len(quote_case.quote_revisions)
+        send_state = quote_case.automated_send_state
+        if (
+            send_state is not None
+            and send_state.approval_id == normalized_approval_id
+            and send_state.revision_number == revision_number
+            and send_state.status in {"sending", "delivery_outcome_unknown"}
+        ):
+            raise CustomerQuoteManualSentTransitionError(
+                "Automated customer quote delivery is in flight or has an unknown provider outcome; manual send evidence is blocked until reconciled."
+            )
         if any(
             item.approval_id == normalized_approval_id
             and item.revision_number == revision_number

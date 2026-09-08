@@ -80,6 +80,8 @@ from src.workflow.extraction_confirmation import (
     resume_confirmed_extraction,
 )
 from src.core.pilot_store import SQLitePilotStore
+from src.core.outbound_runtime import resolve_outbound_runtime_policy
+from src.core.customer_recipient_authority import build_customer_quote_recipient_authority
 from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
 from src.core.business_calendar import supplier_calendar_metadata
 from src.core.runtime_release import runtime_release_payload
@@ -161,6 +163,7 @@ from src.core.quote_final_output import (
 from src.core.quote_automated_sent import (
     CustomerQuoteAutomatedSentNotFoundError,
     CustomerQuoteAutomatedSentTransitionError,
+    reconcile_customer_quote_delivery,
     send_customer_quote_and_record,
 )
 from src.core.quote_manual_sent import (
@@ -186,6 +189,8 @@ from src.core.supplier_rfq_lifecycle import (
     approve_supplier_rfq,
     approve_supplier_rfq_follow_up,
     attach_supplier_rfq_response,
+    reconcile_supplier_rfq_follow_up_send,
+    reconcile_supplier_rfq_send,
     record_supplier_rfq_follow_up_manually_sent,
     record_supplier_rfq_manually_sent,
 )
@@ -210,6 +215,7 @@ from src.core.operation_execution_repository import (
 from src.core.operation_start_repository import SQLiteOperationStartMessageRepository
 from src.core.operation_start_service import (
     OperationStartError, build_operation_start_view, decide_operation_start_message,
+    reconcile_operation_start_message_delivery,
     record_operation_start_message_manually_sent, start_operation,
 )
 from src.core.operation_execution_service import (
@@ -404,6 +410,22 @@ def _authenticated_operator(
     return normalized
 
 
+def _runtime_outbound_delivery_enabled() -> bool:
+    if not pilot_mode_enabled():
+        return True
+    return outbound_runtime_policy.delivery_enabled
+
+
+def _require_runtime_outbound_delivery() -> None:
+    if not _runtime_outbound_delivery_enabled():
+        raise HTTPException(
+            status_code=409,
+            detail="outbound_delivery_disabled_by_shadow_mode",
+        )
+
+
+outbound_runtime_policy = resolve_outbound_runtime_policy()
+
 pilot_store = SQLitePilotStore()
 operational_data_sources = operational_data_sources_from_environment()
 quote_approval_repository = SQLiteQuoteApprovalRepository(pilot_store)
@@ -424,10 +446,13 @@ automation_action_repository = SQLiteAutomationActionRepository(pilot_store)
 operational_work_assignment_repository = SQLiteOperationalWorkAssignmentRepository(pilot_store)
 operational_shift_close_receipt_repository = SQLiteOperationalShiftCloseReceiptRepository(pilot_store)
 operational_shift_open_acceptance_repository = SQLiteOperationalShiftOpenAcceptanceReceiptRepository(pilot_store)
-try:
-    outbound_mail_sender: OutboundMailSender | None = outlook_graph_sender_from_environment()
-except MicrosoftAuthConfigurationError:
-    outbound_mail_sender = None
+if pilot_mode_enabled() and not outbound_runtime_policy.delivery_enabled:
+    outbound_mail_sender: OutboundMailSender | None = None
+else:
+    try:
+        outbound_mail_sender = outlook_graph_sender_from_environment()
+    except MicrosoftAuthConfigurationError:
+        outbound_mail_sender = None
 
 automation_scheduler = AutomationScheduler(
     supplier_repository=supplier_rfq_repository,
@@ -441,7 +466,7 @@ automation_scheduler = AutomationScheduler(
 
 @app.on_event("startup")
 def start_controlled_automation_scheduler():
-    if pilot_mode_enabled():
+    if pilot_mode_enabled() and outbound_runtime_policy.delivery_enabled:
         automation_scheduler.start()
 
 
@@ -458,6 +483,8 @@ def get_automation_status():
     return {
         **status,
         "legacy_workflows_not_auto_activated": True,
+        "outbound_runtime_mode": outbound_runtime_policy.mode,
+        "outbound_delivery_enabled": _runtime_outbound_delivery_enabled(),
         "supplier_reminders_default_enabled": policy.automatic_supplier_reminders_enabled,
         "customer_deadline_updates_default_enabled": policy.automatic_customer_deadline_updates_enabled,
         "durable_agency_policy": None if durable_policy is None else durable_policy.model_dump(),
@@ -770,6 +797,19 @@ class QuoteCaseManualSentRequest(BaseModel):
 class QuoteCaseAutomatedSendRequest(BaseModel):
     expected_approval_id: str
     recipient_email: str
+
+
+class QuoteCaseSendReconciliationRequest(BaseModel):
+    expected_approval_id: str
+    outcome: Literal["confirmed_sent", "confirmed_not_sent"]
+    observed_sent_at: Optional[datetime] = None
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class SupplierSendReconciliationRequest(BaseModel):
+    outcome: Literal["confirmed_sent", "confirmed_not_sent"]
+    observed_sent_at: Optional[datetime] = None
+    note: Optional[str] = Field(default=None, max_length=1000)
 
 
 class QuoteApprovalApproveRequest(BaseModel):
@@ -1997,6 +2037,7 @@ def start_mina_job_operation(
             sender=outbound_mail_sender, job_id=job_id,
             actor=_authenticated_operator(http_request),
             closure_reason=request.closure_reason,
+            allow_automatic_delivery=_runtime_outbound_delivery_enabled(),
         )
     except OperationStartError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -2008,6 +2049,8 @@ def start_mina_job_operation(
 def decide_operation_start_message_endpoint(
     message_id: str, request: OperationStartDecisionRequest, http_request: Request,
 ):
+    if request.decision == "approve":
+        _require_runtime_outbound_delivery()
     try:
         result = decide_operation_start_message(
             repository=operation_start_message_repository,
@@ -2018,6 +2061,26 @@ def decide_operation_start_message_endpoint(
     except OperationStartError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return result.model_dump()
+
+
+@app.post("/operation-start-messages/{message_id}/send-reconciliation")
+def reconcile_operation_start_message_send_endpoint(
+    message_id: str, request: SupplierSendReconciliationRequest, http_request: Request,
+):
+    try:
+        return reconcile_operation_start_message_delivery(
+            repository=operation_start_message_repository,
+            mina_repository=mina_job_repository,
+            message_id=message_id,
+            outcome=request.outcome,
+            observed_sent_at=request.observed_sent_at,
+            note=request.note,
+            actor=_authenticated_operator(http_request),
+        ).model_dump()
+    except OperationStartError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/operation-start-messages/{message_id}/record-manually-sent")
@@ -2251,6 +2314,7 @@ def preview_mina_job_supplier_reminder(job_id: str, rfq_id: str):
 def send_mina_job_supplier_reminder_now(
     job_id: str, rfq_id: str, http_request: Request,
 ):
+    _require_runtime_outbound_delivery()
     job = mina_job_repository.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
@@ -2315,6 +2379,8 @@ def decide_mina_job_supplier_reminder_approval(
     job_id: str, rfq_id: str, request: AutomationApprovalDecisionRequest,
     http_request: Request,
 ):
+    if request.decision == "approve":
+        _require_runtime_outbound_delivery()
     try:
         result = decide_supplier_reminder_approval(
             mina_job_repository=mina_job_repository,
@@ -2355,6 +2421,8 @@ def preview_mina_job_customer_deadline_approval(job_id: str):
 def decide_mina_job_customer_deadline_approval(
     job_id: str, request: AutomationApprovalDecisionRequest, http_request: Request,
 ):
+    if request.decision == "approve":
+        _require_runtime_outbound_delivery()
     try:
         result = decide_customer_deadline_update_approval(
             mina_job_repository=mina_job_repository,
@@ -2472,8 +2540,20 @@ def record_quote_case_manually_sent(
 def send_quote_case_endpoint(
     case_id: str,
     request: QuoteCaseAutomatedSendRequest,
+    http_request: Request = None,
 ):
+    _require_runtime_outbound_delivery()
     try:
+        recipient_authority = build_customer_quote_recipient_authority(
+            quote_case_repository=quote_case_repository,
+            supplier_repository=supplier_rfq_repository,
+            master_repository=master_data_repository,
+            case_id=case_id,
+        )
+        if not recipient_authority.allows(request.recipient_email):
+            raise CustomerQuoteAutomatedSentTransitionError(
+                "Customer quote recipient is not authorized by the trusted inbound or active customer-contact evidence."
+            )
         result = send_customer_quote_and_record(
             quote_case_repository=quote_case_repository,
             approval_repository=quote_approval_repository,
@@ -2482,6 +2562,34 @@ def send_quote_case_endpoint(
             recipient_email=request.recipient_email,
             sender=outbound_mail_sender,
             mina_job_repository=mina_job_repository,
+            triggered_by=_authenticated_operator(http_request, "MINAI direct send"),
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CustomerQuoteAutomatedSentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CustomerQuoteAutomatedSentTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result.model_dump()
+
+
+@app.post("/quote-cases/{case_id}/send-reconciliation")
+def reconcile_quote_case_send_endpoint(
+    case_id: str, request: QuoteCaseSendReconciliationRequest, http_request: Request = None,
+):
+    try:
+        result = reconcile_customer_quote_delivery(
+            quote_case_repository=quote_case_repository,
+            approval_repository=quote_approval_repository,
+            mina_job_repository=mina_job_repository,
+            case_id=case_id,
+            expected_approval_id=request.expected_approval_id,
+            outcome=request.outcome,
+            observed_sent_at=request.observed_sent_at,
+            note=request.note,
+            reconciled_by=_authenticated_operator(http_request, "MINAI reconciliation"),
         )
     except CustomerQuoteAutomatedSentNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -2517,6 +2625,19 @@ def get_quote_case_final_output(case_id: str):
         ) from exc
 
     return result.model_dump()
+
+
+@app.get("/quote-cases/{case_id}/recipient-authority")
+def get_quote_case_recipient_authority(case_id: str):
+    try:
+        return build_customer_quote_recipient_authority(
+            quote_case_repository=quote_case_repository,
+            supplier_repository=supplier_rfq_repository,
+            master_repository=master_data_repository,
+            case_id=case_id,
+        ).model_dump()
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/quote-cases/{case_id}/revise")
@@ -3395,13 +3516,17 @@ def approve_supplier_rfq_follow_up_endpoint(
 
 
 @app.post("/supplier-rfq-follow-ups/{follow_up_id}/send")
-def send_supplier_rfq_follow_up_endpoint(follow_up_id: str):
+def send_supplier_rfq_follow_up_endpoint(
+    follow_up_id: str, http_request: Request = None,
+):
+    _require_runtime_outbound_delivery()
     try:
         result = send_supplier_rfq_follow_up_via_mail(
             repository=supplier_rfq_repository,
             follow_up_id=follow_up_id,
             sender=outbound_mail_sender,
             enforce_business_hours=True,
+            triggered_by=_authenticated_operator(http_request, "MINAI direct send"),
         )
     except SupplierRFQFollowUpNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -3414,6 +3539,27 @@ def send_supplier_rfq_follow_up_endpoint(follow_up_id: str):
     if result.delivery.status != "sent":
         raise HTTPException(status_code=503, detail=result.delivery.reason)
     return result.model_dump()
+
+
+@app.post("/supplier-rfq-follow-ups/{follow_up_id}/send-reconciliation")
+def reconcile_supplier_rfq_follow_up_send_endpoint(
+    follow_up_id: str, request: SupplierSendReconciliationRequest, http_request: Request = None,
+):
+    try:
+        return reconcile_supplier_rfq_follow_up_send(
+            supplier_rfq_repository,
+            follow_up_id,
+            outcome=request.outcome,
+            observed_sent_at=request.observed_sent_at,
+            note=request.note,
+            reconciled_by=_authenticated_operator(http_request, "MINAI reconciliation"),
+        ).model_dump()
+    except SupplierRFQFollowUpNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/supplier-rfq-follow-ups/{follow_up_id}/record-manually-sent")
@@ -3511,13 +3657,15 @@ def approve_supplier_rfq_endpoint(
 
 
 @app.post("/supplier-rfqs/{rfq_id}/send")
-def send_supplier_rfq_endpoint(rfq_id: str):
+def send_supplier_rfq_endpoint(rfq_id: str, http_request: Request = None):
+    _require_runtime_outbound_delivery()
     try:
         result = send_supplier_rfq_via_mail(
             repository=supplier_rfq_repository,
             rfq_id=rfq_id,
             sender=outbound_mail_sender,
             enforce_business_hours=True,
+            triggered_by=_authenticated_operator(http_request, "MINAI direct send"),
         )
         if result.delivery.status == "rejected_before_provider":
             raise HTTPException(
@@ -3530,6 +3678,27 @@ def send_supplier_rfq_endpoint(rfq_id: str):
                 detail=result.delivery.reason,
             )
         return result.model_dump()
+    except SupplierRFQNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfqs/{rfq_id}/send-reconciliation")
+def reconcile_supplier_rfq_send_endpoint(
+    rfq_id: str, request: SupplierSendReconciliationRequest, http_request: Request = None,
+):
+    try:
+        return reconcile_supplier_rfq_send(
+            supplier_rfq_repository,
+            rfq_id,
+            outcome=request.outcome,
+            observed_sent_at=request.observed_sent_at,
+            note=request.note,
+            reconciled_by=_authenticated_operator(http_request, "MINAI reconciliation"),
+        ).model_dump()
     except SupplierRFQNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except SupplierRFQTransitionError as exc:

@@ -6635,3 +6635,28 @@ The canonical controlled-pilot regression gate must distinguish product regressi
 macOS temporary paths may be presented through aliases such as `/var` → `/private/var`. Production evidence, token-cache and live-smoke destination guards continue to reject symlink-bearing paths. Regression fixtures that need a normal external path must instead present the resolved physical temporary path. No runtime symlink/security validation is weakened to make tests pass.
 
 The target canonical baseline before real-agency shadow pilot work is zero failed deterministic suites. External live credentials, network access and OpenAI keys are not prerequisites for the deterministic canonical gate; those integrations are exercised with controlled offline/fake boundaries while true live evidence remains a separate authorized activity.
+
+## DEC-192 — Shadow Pilot Is a Runtime Delivery Mode, Not a Policy Convention
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+A real-agency Shadow Pilot must fail closed at the outbound runtime boundary. The default pilot outbound mode is `shadow`; connecting an Outlook sender, starting the outbound scheduler, or invoking a provider-backed send requires the explicit `controlled_send` runtime mode. Per-job, customer, supplier, or agency automation settings cannot override this runtime barrier.
+
+Shadow mode may still read mail, create jobs, prepare drafts, collect approvals and create operational tasks. Operation-start preparation may also proceed, but provider delivery remains impossible until the runtime mode explicitly permits it.
+
+## DEC-193 — Provider Delivery Is Reserved Before Send and Unknown Outcomes Require Human Reconciliation
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+Customer quote, initial Supplier RFQ and Supplier RFQ follow-up delivery reserve durable state before calling the mail provider. A concurrent attempt cannot reach the provider while that reservation is active. Confirmed provider failure may reopen the same approved message; an uncertain provider outcome must remain locked and must not be retried automatically.
+
+An operator may reconcile an uncertain outcome only after checking Outlook Sent Items. `confirmed_sent` requires the observed sent timestamp and advances the relevant lifecycle without inventing provider identifiers. `confirmed_not_sent` preserves operator evidence and reopens delivery. Customer quote recipients are restricted to bounded trusted evidence: the linked trusted inbound sender, active customer master contacts, or explicit trusted sender addresses; a trusted domain alone does not authorize an arbitrary outbound recipient.
+
+## DEC-194 — Operation-Start Delivery Uses the Same Unknown-Outcome Reconciliation Boundary
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+Operation-start supplier confirmation and quoted-supplier closure messages keep their existing reserve-before-provider concurrency guard. If provider delivery becomes uncertain, the message enters `delivery_outcome_unknown` instead of ordinary failure. It cannot be rejected, retried, or overwritten with manual-send evidence until an authenticated operator reconciles Outlook Sent Items. Confirmed sent reconciliation requires the observed sent timestamp and advances the selected-supplier lifecycle without inventing provider identifiers; confirmed not sent returns the message to a retryable failed state.

@@ -14,7 +14,7 @@ from src.core.master_data_repository import MasterDataRepository
 from src.core.mina_job import MinaJobEvent
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.mina_job_service import MinaJobTransitionError, transition_mina_job_stage
-from src.core.operation_start import OperationStartMessage
+from src.core.operation_start import OperationStartMessage, OperationStartSendReconciliationEvidence
 from src.core.operation_start_repository import OperationStartMessageRepository
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.sqlite_repositories import atomic_repository_transaction
@@ -276,6 +276,16 @@ def _dispatch_message(
             "status": "failed", "decision_reason": reason, "attention_reason": reason,
         }))
     delivery = dispatch_outbound_mail(_message_request(message), sender)
+    if delivery.status == "delivery_outcome_unknown":
+        unknown = message.model_copy(update={
+            "status": "delivery_outcome_unknown",
+            "decided_at": now,
+            "decided_by": actor,
+            "decision_reason": delivery.reason,
+            "attention_reason": delivery.reason,
+            "provider_name": delivery.provider_name,
+        })
+        return repository.save(unknown)
     if delivery.status != "sent":
         failed = message.model_copy(update={
             "status": "failed",
@@ -315,6 +325,70 @@ def _dispatch_message(
     return saved
 
 
+def reconcile_operation_start_message_delivery(
+    *,
+    repository: OperationStartMessageRepository,
+    mina_repository: MinaJobRepository,
+    message_id: str,
+    outcome: str,
+    actor: str,
+    observed_sent_at: datetime | None = None,
+    note: str | None = None,
+    reconciled_at: datetime | None = None,
+) -> OperationStartMessage:
+    operator = _actor(actor)
+    current_time = _now(reconciled_at)
+    if outcome not in {"confirmed_sent", "confirmed_not_sent"}:
+        raise ValueError("Operation-start reconciliation outcome is invalid.")
+    if outcome == "confirmed_sent" and observed_sent_at is None:
+        raise ValueError("Confirmed sent reconciliation requires the observed Outlook sent time.")
+    sent_time = _now(observed_sent_at) if observed_sent_at is not None else None
+    normalized_note = note.strip() if note and note.strip() else None
+    with atomic_repository_transaction(repository, mina_repository):
+        message = repository.get(message_id)
+        if message is None:
+            raise OperationStartError(f"Operation-start message not found: {message_id}")
+        if message.status != "delivery_outcome_unknown":
+            raise OperationStartError(
+                "Operation-start reconciliation requires an unknown provider outcome."
+            )
+        evidence = OperationStartSendReconciliationEvidence(
+            outcome=outcome, reconciled_by=operator, reconciled_at=current_time,
+            observed_sent_at=sent_time, note=normalized_note,
+        )
+        if outcome == "confirmed_not_sent":
+            return repository.save(message.model_copy(update={
+                "status": "failed",
+                "decision_reason": "operator_reconciled_not_sent",
+                "attention_reason": normalized_note or "Outlook Sent Items confirmed that the message was not sent.",
+                "send_reconciliation_evidence": [*message.send_reconciliation_evidence, evidence],
+            }))
+        sent = repository.save(message.model_copy(update={
+            "status": "sent",
+            "decision_reason": "operator_reconciled_sent",
+            "attention_reason": None,
+            "sent_at": sent_time,
+            "sent_by": operator,
+            "send_reconciliation_evidence": [*message.send_reconciliation_evidence, evidence],
+        }))
+        event_type = (
+            "selected_supplier_operation_email_sent"
+            if sent.kind == "selected_supplier_confirmation"
+            else "supplier_closure_email_sent"
+        )
+        _append_event(
+            mina_repository, job_id=sent.job_id, event_type=event_type,
+            actor=operator, occurred_at=sent_time, resource_id=sent.message_id,
+            metadata={"supplier_name": sent.supplier_name, "kind": sent.kind, "reconciled": True},
+        )
+        if sent.kind == "selected_supplier_confirmation":
+            _advance_selected_supplier_confirmation(
+                mina_repository=mina_repository, job_id=sent.job_id,
+                actor=operator, occurred_at=sent_time,
+            )
+        return sent
+
+
 def start_operation(
     *, mina_repository: MinaJobRepository,
     quote_case_repository: QuoteCaseRepository,
@@ -326,6 +400,7 @@ def start_operation(
     actor: str,
     closure_reason: str | None = None,
     now: datetime | None = None,
+    allow_automatic_delivery: bool = True,
 ) -> dict[str, Any]:
     current = _now(now)
     operator = _actor(actor)
@@ -427,6 +502,11 @@ def start_operation(
         )
 
     # External delivery is intentionally outside the database transaction.
+    # Shadow runtime may prepare automatic messages but must never dispatch them.
+    if not allow_automatic_delivery:
+        view = build_operation_start_view(message_repository, job_id=job_id)
+        view["warnings"] = [*warnings, "outbound_shadow_mode_delivery_blocked"]
+        return view
     for message in list(message_repository.list_for_job(job_id)):
         if message.outbound_mode != "automatic" or message.status != "approval_required":
             continue
@@ -467,6 +547,10 @@ def decide_operation_start_message(
         raise OperationStartError(
             "Operation-start send is currently reserved; wait for provider outcome before another decision."
         )
+    if message.status == "delivery_outcome_unknown":
+        raise OperationStartError(
+            "Operation-start provider outcome is unknown; reconcile Outlook Sent Items before another decision."
+        )
     if decision == "reject":
         rejection = (reason or "").strip()
         if not rejection:
@@ -505,6 +589,10 @@ def record_operation_start_message_manually_sent(
         return message
     if message.status == "rejected":
         raise OperationStartError("Rejected operation-start message cannot be recorded as sent.")
+    if message.status == "delivery_outcome_unknown":
+        raise OperationStartError(
+            "Operation-start provider outcome is unknown; use send reconciliation instead of manual sent evidence."
+        )
     if (
         message.status == "sending"
         and message.decided_at is not None

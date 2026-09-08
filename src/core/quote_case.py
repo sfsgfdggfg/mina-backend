@@ -41,7 +41,45 @@ class CustomerQuoteAutomatedSentEvidence(BaseModel):
     provider_name: str
     provider_message_id: str
     sent_at: datetime
+    triggered_by: Optional[str] = None
     source: Literal["automated_provider_send"] = "automated_provider_send"
+
+
+class CustomerQuoteSendReconciliationEvidence(BaseModel):
+    case_id: str
+    approval_id: str
+    revision_number: int = Field(ge=0)
+    recipient_email: str
+    attempt_count: int = Field(ge=1)
+    outcome: Literal["confirmed_sent", "confirmed_not_sent"]
+    reconciled_by: str
+    reconciled_at: datetime
+    observed_sent_at: Optional[datetime] = None
+    note: Optional[str] = Field(default=None, max_length=1000)
+    source: Literal["operator_provider_reconciliation"] = "operator_provider_reconciliation"
+
+
+CustomerQuoteAutomatedSendStatus = Literal[
+    "sending",
+    "sent",
+    "failed",
+    "delivery_outcome_unknown",
+]
+
+
+class CustomerQuoteAutomatedSendState(BaseModel):
+    approval_id: str
+    revision_number: int = Field(ge=0)
+    recipient_email: str
+    status: CustomerQuoteAutomatedSendStatus
+    attempt_count: int = Field(default=1, ge=1)
+    reserved_by: str
+    reserved_at: datetime
+    completed_at: Optional[datetime] = None
+    provider_name: Optional[str] = None
+    provider_message_id: Optional[str] = None
+    failure_code: Optional[str] = None
+    source: str = "customer_quote_automated_send_state"
 
 
 class QuoteCase(BaseModel):
@@ -77,6 +115,11 @@ class QuoteCase(BaseModel):
     automated_sent_evidence: list[
         CustomerQuoteAutomatedSentEvidence
     ] = Field(default_factory=list)
+    send_reconciliation_evidence: list[
+        CustomerQuoteSendReconciliationEvidence
+    ] = Field(default_factory=list)
+
+    automated_send_state: Optional[CustomerQuoteAutomatedSendState] = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

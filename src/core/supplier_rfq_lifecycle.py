@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -12,7 +12,9 @@ from src.core.supplier_rfq import (
     SupplierRFQFollowUpDraft,
     SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpManualSentEvidence,
+    SupplierRFQFollowUpSendReconciliationEvidence,
     SupplierRFQManualSentEvidence,
+    SupplierRFQSendReconciliationEvidence,
     SupplierRFQResponse,
 )
 from src.core.supplier_rfq_repository import (
@@ -119,6 +121,7 @@ def validate_supplier_rfq_responses(
         if draft.status not in {
             "sent",
             "awaiting_response",
+            "send_outcome_unknown",
             "clarification_required",
             "responded",
         }:
@@ -252,6 +255,113 @@ def approve_supplier_rfq(
         return approved
 
 
+def reserve_supplier_rfq_send(
+    repository: SupplierRFQRepository,
+    rfq_id: str,
+    *,
+    reserved_by: str,
+    reserved_at: datetime | None = None,
+) -> SupplierRFQDraft:
+    actor = reserved_by.strip()
+    if not actor:
+        raise ValueError("Supplier RFQ send reservation requires an actor.")
+    timestamp = reserved_at or datetime.utcnow()
+    with atomic_repository_transaction(repository):
+        draft = _get_draft(repository, rfq_id)
+        try:
+            require_secondary_dispatch_allowed(repository, draft)
+        except SupplierSecondaryDispatchBlockedError as exc:
+            raise SupplierRFQTransitionError(str(exc)) from exc
+        if draft.status != "approved":
+            raise SupplierRFQTransitionError(
+                f"Cannot reserve Supplier RFQ send from status: {draft.status}"
+            )
+        if not draft.has_recipient:
+            raise SupplierRFQTransitionError(
+                "Cannot reserve Supplier RFQ send without a recipient email."
+            )
+        if repository.list_manual_sent_evidence(rfq_id) or repository.list_automated_sent_evidence(rfq_id):
+            raise SupplierRFQTransitionError("Supplier RFQ already has send evidence.")
+        reserved = SupplierRFQDraft.model_validate({
+            **draft.model_dump(),
+            "status": "sending",
+            "send_attempt_count": draft.send_attempt_count + 1,
+            "send_reserved_at": timestamp,
+            "send_reserved_by": actor,
+            "send_failure_code": None,
+        })
+        repository.save_drafts([reserved])
+        return reserved
+
+
+def fail_supplier_rfq_send(
+    repository: SupplierRFQRepository,
+    rfq_id: str,
+    *,
+    failure_code: str,
+    outcome_unknown: bool,
+) -> SupplierRFQDraft:
+    with atomic_repository_transaction(repository):
+        draft = _get_draft(repository, rfq_id)
+        if draft.status != "sending":
+            raise SupplierRFQTransitionError(
+                f"Cannot complete Supplier RFQ send failure from status: {draft.status}"
+            )
+        updated = SupplierRFQDraft.model_validate({
+            **draft.model_dump(),
+            "status": "send_outcome_unknown" if outcome_unknown else "approved",
+            "send_failure_code": failure_code.strip() or "provider_failure",
+        })
+        repository.save_drafts([updated])
+        return updated
+
+
+def reconcile_supplier_rfq_send(
+    repository: SupplierRFQRepository,
+    rfq_id: str,
+    *,
+    outcome: Literal["confirmed_sent", "confirmed_not_sent"],
+    reconciled_by: str,
+    observed_sent_at: datetime | None = None,
+    note: str | None = None,
+    reconciled_at: datetime | None = None,
+) -> SupplierRFQDraft:
+    actor = reconciled_by.strip()
+    if not actor:
+        raise ValueError("Supplier RFQ send reconciliation requires an operator.")
+    timestamp = reconciled_at or datetime.now(timezone.utc)
+    normalized_note = note.strip() if note and note.strip() else None
+    if outcome == "confirmed_sent" and observed_sent_at is None:
+        raise ValueError("Confirmed sent reconciliation requires the observed Outlook sent time.")
+    if observed_sent_at is not None and observed_sent_at.tzinfo is None:
+        raise ValueError("Observed Outlook sent time must include timezone information.")
+    with atomic_repository_transaction(repository):
+        draft = _get_draft(repository, rfq_id)
+        if draft.status != "send_outcome_unknown":
+            raise SupplierRFQTransitionError(
+                f"Supplier RFQ reconciliation requires unknown send outcome; current status is {draft.status}."
+            )
+        evidence = SupplierRFQSendReconciliationEvidence(
+            rfq_id=draft.rfq_id,
+            recipient_email=draft.recipient_email or "",
+            attempt_count=draft.send_attempt_count,
+            outcome=outcome,
+            reconciled_by=actor,
+            reconciled_at=timestamp,
+            observed_sent_at=observed_sent_at,
+            note=normalized_note,
+        )
+        updated = SupplierRFQDraft.model_validate({
+            **draft.model_dump(),
+            "status": "awaiting_response" if outcome == "confirmed_sent" else "approved",
+            "sent_at": observed_sent_at if outcome == "confirmed_sent" else None,
+            "send_failure_code": None if outcome == "confirmed_sent" else "operator_reconciled_not_sent",
+            "send_reconciliation_evidence": [*draft.send_reconciliation_evidence, evidence],
+        })
+        repository.save_drafts([updated])
+        return updated
+
+
 def send_supplier_rfq(
     repository: SupplierRFQRepository,
     rfq_id: str,
@@ -263,9 +373,9 @@ def send_supplier_rfq(
             require_secondary_dispatch_allowed(repository, draft)
         except SupplierSecondaryDispatchBlockedError as exc:
             raise SupplierRFQTransitionError(str(exc)) from exc
-        if draft.status != "approved":
+        if draft.status not in {"approved", "sending"}:
             raise SupplierRFQTransitionError(
-                f"Cannot send Supplier RFQ from status: {draft.status}"
+                f"Cannot complete Supplier RFQ send from status: {draft.status}"
             )
         if not draft.has_recipient:
             raise SupplierRFQTransitionError(
@@ -284,6 +394,7 @@ def send_supplier_rfq(
                 **draft.model_dump(),
                 "status": "awaiting_response",
                 "sent_at": send_result.sent_at,
+                "send_failure_code": None,
             }
         )
         repository.save_drafts([awaiting])
@@ -384,6 +495,111 @@ def approve_supplier_rfq_follow_up(
         return approved
 
 
+def reserve_supplier_rfq_follow_up_send(
+    repository: SupplierRFQRepository,
+    follow_up_id: str,
+    *,
+    reserved_by: str,
+    reserved_at: datetime | None = None,
+) -> SupplierRFQFollowUpDraft:
+    actor = reserved_by.strip()
+    if not actor:
+        raise ValueError("Supplier RFQ follow-up send reservation requires an actor.")
+    timestamp = reserved_at or datetime.utcnow()
+    with atomic_repository_transaction(repository):
+        current = _get_follow_up(repository, follow_up_id)
+        parent = _get_draft(repository, current.rfq_id)
+        if current.status != "approved":
+            raise SupplierRFQTransitionError(
+                f"Cannot reserve Supplier RFQ follow-up send from status: {current.status}"
+            )
+        if parent.status != "clarification_required":
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ follow-up send requires a clarification-required parent RFQ."
+            )
+        if (repository.list_follow_up_manual_sent_evidence(follow_up_id)
+                or repository.list_follow_up_automated_sent_evidence(follow_up_id)):
+            raise SupplierRFQTransitionError("Supplier RFQ follow-up already has send evidence.")
+        reserved = current.model_copy(update={
+            "status": "sending",
+            "send_attempt_count": current.send_attempt_count + 1,
+            "send_reserved_at": timestamp,
+            "send_reserved_by": actor,
+            "send_failure_code": None,
+        })
+        repository.save_follow_up_drafts([reserved])
+        return reserved
+
+
+def fail_supplier_rfq_follow_up_send(
+    repository: SupplierRFQRepository,
+    follow_up_id: str,
+    *,
+    failure_code: str,
+    outcome_unknown: bool,
+) -> SupplierRFQFollowUpDraft:
+    with atomic_repository_transaction(repository):
+        current = _get_follow_up(repository, follow_up_id)
+        if current.status != "sending":
+            raise SupplierRFQTransitionError(
+                f"Cannot complete Supplier RFQ follow-up send failure from status: {current.status}"
+            )
+        updated = current.model_copy(update={
+            "status": "send_outcome_unknown" if outcome_unknown else "approved",
+            "send_failure_code": failure_code.strip() or "provider_failure",
+        })
+        repository.save_follow_up_drafts([updated])
+        return updated
+
+
+def reconcile_supplier_rfq_follow_up_send(
+    repository: SupplierRFQRepository,
+    follow_up_id: str,
+    *,
+    outcome: Literal["confirmed_sent", "confirmed_not_sent"],
+    reconciled_by: str,
+    observed_sent_at: datetime | None = None,
+    note: str | None = None,
+    reconciled_at: datetime | None = None,
+) -> SupplierRFQFollowUpDraft:
+    actor = reconciled_by.strip()
+    if not actor:
+        raise ValueError("Supplier RFQ follow-up reconciliation requires an operator.")
+    timestamp = reconciled_at or datetime.now(timezone.utc)
+    normalized_note = note.strip() if note and note.strip() else None
+    if outcome == "confirmed_sent" and observed_sent_at is None:
+        raise ValueError("Confirmed sent reconciliation requires the observed Outlook sent time.")
+    if observed_sent_at is not None and observed_sent_at.tzinfo is None:
+        raise ValueError("Observed Outlook sent time must include timezone information.")
+    with atomic_repository_transaction(repository):
+        current = _get_follow_up(repository, follow_up_id)
+        if current.status != "send_outcome_unknown":
+            raise SupplierRFQTransitionError(
+                "Supplier RFQ follow-up reconciliation requires unknown send outcome; "
+                f"current status is {current.status}."
+            )
+        evidence = SupplierRFQFollowUpSendReconciliationEvidence(
+            follow_up_id=current.follow_up_id,
+            rfq_id=current.rfq_id,
+            sequence_number=current.sequence_number,
+            recipient_email=current.recipient_email,
+            attempt_count=current.send_attempt_count,
+            outcome=outcome,
+            reconciled_by=actor,
+            reconciled_at=timestamp,
+            observed_sent_at=observed_sent_at,
+            note=normalized_note,
+        )
+        updated = current.model_copy(update={
+            "status": "awaiting_response" if outcome == "confirmed_sent" else "approved",
+            "sent_at": observed_sent_at if outcome == "confirmed_sent" else None,
+            "send_failure_code": None if outcome == "confirmed_sent" else "operator_reconciled_not_sent",
+            "send_reconciliation_evidence": [*current.send_reconciliation_evidence, evidence],
+        })
+        repository.save_follow_up_drafts([updated])
+        return updated
+
+
 def send_supplier_rfq_follow_up(
     repository: SupplierRFQRepository,
     follow_up_id: str,
@@ -393,9 +609,9 @@ def send_supplier_rfq_follow_up(
     with atomic_repository_transaction(repository):
         current = _get_follow_up(repository, follow_up_id)
         parent = _get_draft(repository, current.rfq_id)
-        if current.status != "approved":
+        if current.status not in {"approved", "sending"}:
             raise SupplierRFQTransitionError(
-                "Supplier RFQ follow-up send requires approved status; "
+                "Supplier RFQ follow-up send completion requires approved or reserved status; "
                 f"current status is {current.status}."
             )
         if parent.status != "clarification_required":
@@ -412,7 +628,7 @@ def send_supplier_rfq_follow_up(
                 "Supplier RFQ follow-up requires confirmed provider send success."
             )
         sent = current.model_copy(
-            update={"status": "awaiting_response", "sent_at": send_result.sent_at}
+            update={"status": "awaiting_response", "sent_at": send_result.sent_at, "send_failure_code": None}
         )
         repository.save_follow_up_drafts([sent])
         return sent
@@ -483,7 +699,7 @@ def _close_supplier_follow_up_for_response(
         (
             item
             for item in repository.list_follow_up_drafts(rfq_id)
-            if item.status in {"draft", "approved", "awaiting_response"}
+            if item.status in {"draft", "approved", "sending", "send_outcome_unknown", "awaiting_response"}
         ),
         key=lambda item: item.sequence_number,
         reverse=True,
