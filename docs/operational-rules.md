@@ -3819,3 +3819,11 @@ Any historical relationship text sent to an AI service must pass through the app
 AI may propose bounded relationship observations only in the allowed behavioral categories. It must not invent identities, legal/compliance facts, financial authority, personal traits or sensitive characteristics. AI-derived relationship observations remain `proposed` until an authenticated operator confirms them.
 
 When a proposed fact differs from an existing confirmed subject/key value, the proposal must explicitly target that confirmed fact for replacement; existing confirmed authority remains active until the replacement is reviewed and confirmed.
+
+## RULE-205 — Relationship AI Must Not Misattribute Agency Behavior or Over-Generalize Sparse History
+
+Only counterparty-authored historical messages may be sent as behavioral evidence to the customer/supplier relationship AI analyzer. Outbound agency mail must not be used to infer that the counterparty shops competitively, creates urgency, prefers a price strategy or exhibits another behavior that actually belongs to the agency.
+
+Each AI observation must declare whether it is limited to the analyzed sample or represents a recurring pattern, plus the number of supporting counterparty-authored messages and threads. Claimed support may not exceed the supplied sample. Sample-only observations receive a bounded confidence ceiling; relationship-pattern claims are not valid as one-off observations. Recurring quote-preference, urgency, timing and relationship-pattern claims require at least five supporting messages across three threads; other categories use category-specific minimum evidence.
+
+When deterministic counterparty response timing exists, AI timing prose must not duplicate it. Generic claims that merely assert an ongoing/strong relationship, trust or reliance are not durable relationship knowledge. AI LearningFact evidence uses the counterparty-authored evidence fingerprint, so changes only to agency-authored wording do not create new counterparty AI facts.
