@@ -4,3 +4,9 @@ __pycache__/
 .venv/
 venv/test-output.txt
 data/pilot/
+data/backups/
+*.sqlite3
+*.sqlite
+*.db
+*-wal
+*-shm

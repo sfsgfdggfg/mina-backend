@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.ai.quote_generator import generate_quote_draft
 from src.ai.supplier_follow_up_generator import build_supplier_follow_up_draft
@@ -119,8 +119,8 @@ def resume_supplier_rfq_workflow(
             "quote_progression_attempt_count": (
                 workflow.quote_progression_attempt_count + 1
             ),
-            "quote_progression_started_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "quote_progression_started_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
         }
     )
     try:
@@ -163,10 +163,10 @@ def resume_supplier_rfq_workflow(
             {
                 **started.model_dump(),
                 "quote_progression_status": "provenance_blocked",
-                "last_provenance_blocked_at": datetime.utcnow(),
+                "last_provenance_blocked_at": datetime.now(timezone.utc),
                 "last_provenance_blocked_result_type": result_type,
                 "rfq_ids": persisted_rfq_ids,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(timezone.utc),
             }
         )
     elif result.get("quote_case") is not None:
@@ -174,9 +174,9 @@ def resume_supplier_rfq_workflow(
             {
                 **started.model_dump(),
                 "quote_progression_status": "completed",
-                "quote_progressed_at": datetime.utcnow(),
+                "quote_progressed_at": datetime.now(timezone.utc),
                 "rfq_ids": persisted_rfq_ids,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(timezone.utc),
             }
         )
     else:
@@ -185,7 +185,7 @@ def resume_supplier_rfq_workflow(
                 **started.model_dump(),
                 "quote_progression_status": "ready",
                 "rfq_ids": persisted_rfq_ids,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(timezone.utc),
             }
         )
     if result.get("quote_case") is not None:

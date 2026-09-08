@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from src.core.quote_approval import QuoteApproval
@@ -50,7 +50,7 @@ def _sync_quote_cases_for_approval(
 
         updates = {
             "quote_approval": approval,
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
         if (
             quote_case.supplier_quote is not None
@@ -96,7 +96,7 @@ def approve_quote(
             update={
                 "approval_status": "approved",
                 "approved_by": normalized_approved_by,
-                "approved_at": approved_at or datetime.utcnow(),
+                "approved_at": approved_at or datetime.now(timezone.utc),
                 "rejection_reason": None,
             }
         )
@@ -143,7 +143,7 @@ def reject_quote(
                 "approved_by": None,
                 "approved_at": None,
                 "rejected_by": normalized_rejected_by,
-                "rejected_at": rejected_at or datetime.utcnow(),
+                "rejected_at": rejected_at or datetime.now(timezone.utc),
                 "rejection_reason": normalized_reason,
                 "invalidated_by": None,
                 "invalidated_at": None,
@@ -191,7 +191,7 @@ def invalidate_quote_approval(
                 "rejected_at": None,
                 "rejection_reason": None,
                 "invalidated_by": normalized_invalidated_by,
-                "invalidated_at": invalidated_at or datetime.utcnow(),
+                "invalidated_at": invalidated_at or datetime.now(timezone.utc),
             }
         )
 

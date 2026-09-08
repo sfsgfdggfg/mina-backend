@@ -248,7 +248,7 @@ def approve_supplier_rfq(
                 **draft.model_dump(),
                 "status": "approved",
                 "approved_by": approver,
-                "approved_at": approved_at or datetime.utcnow(),
+                "approved_at": approved_at or datetime.now(timezone.utc),
             }
         )
         repository.save_drafts([approved])
@@ -265,7 +265,7 @@ def reserve_supplier_rfq_send(
     actor = reserved_by.strip()
     if not actor:
         raise ValueError("Supplier RFQ send reservation requires an actor.")
-    timestamp = reserved_at or datetime.utcnow()
+    timestamp = reserved_at or datetime.now(timezone.utc)
     with atomic_repository_transaction(repository):
         draft = _get_draft(repository, rfq_id)
         try:
@@ -411,7 +411,7 @@ def record_supplier_rfq_manually_sent(
     operator = recorded_by.strip()
     if not operator:
         raise ValueError("Manual RFQ send recorder identity is required.")
-    timestamp = recorded_at or datetime.utcnow()
+    timestamp = recorded_at or datetime.now(timezone.utc)
     evidence = SupplierRFQManualSentEvidence(
         rfq_id=rfq_id,
         recorded_by=operator,
@@ -488,7 +488,7 @@ def approve_supplier_rfq_follow_up(
             update={
                 "status": "approved",
                 "approved_by": actor,
-                "approved_at": approved_at or datetime.utcnow(),
+                "approved_at": approved_at or datetime.now(timezone.utc),
             }
         )
         repository.save_follow_up_drafts([approved])
@@ -505,7 +505,7 @@ def reserve_supplier_rfq_follow_up_send(
     actor = reserved_by.strip()
     if not actor:
         raise ValueError("Supplier RFQ follow-up send reservation requires an actor.")
-    timestamp = reserved_at or datetime.utcnow()
+    timestamp = reserved_at or datetime.now(timezone.utc)
     with atomic_repository_transaction(repository):
         current = _get_follow_up(repository, follow_up_id)
         parent = _get_draft(repository, current.rfq_id)
@@ -648,7 +648,7 @@ def record_supplier_rfq_follow_up_manually_sent(
     actor = recorded_by.strip()
     if not actor:
         raise ValueError("Supplier RFQ follow-up send evidence requires an operator.")
-    timestamp = recorded_at or datetime.utcnow()
+    timestamp = recorded_at or datetime.now(timezone.utc)
     with atomic_repository_transaction(repository):
         current = _get_follow_up(repository, follow_up_id)
         parent = _get_draft(repository, current.rfq_id)

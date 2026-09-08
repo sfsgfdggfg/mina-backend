@@ -12,6 +12,10 @@ from src.core.pilot_access import (
     pilot_mode_enabled,
     validate_pilot_configuration,
 )
+from src.core.pilot_store import (
+    SQLiteStorageSecurityError,
+    validate_pilot_database_configuration,
+)
 from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
 from src.core.web_session import (
     WebSessionConfigurationError,
@@ -113,6 +117,12 @@ def run(environ: Mapping[str, str] | None = None) -> None:
         )
 
     validate_pilot_configuration(env)
+    try:
+        validate_pilot_database_configuration(env)
+    except SQLiteStorageSecurityError as exc:
+        raise PilotAccessConfigurationError(
+            "Controlled pilot database configuration is invalid."
+        ) from exc
     if web_shell_enabled(env):
         try:
             validate_web_session_configuration(env)

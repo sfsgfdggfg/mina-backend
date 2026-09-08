@@ -3866,3 +3866,11 @@ Legacy customer/supplier JSON may remain available for synthetic/development reg
 Every usable supplier price entering a MINA job must retain its source type and source reference through comparison, selection and SupplierQuote creation. RFQ, phone, WhatsApp, portal/API, manual and materialized fixed-rate prices use the same commercial comparison boundary rather than parallel quote engines.
 
 A selected non-email price may create the normal pending customer QuoteCase only after commercial-safety and pricing-policy checks pass. Missing customer/agency pricing authority remains a blocking state; MINAI cannot manufacture a markup to force progression.
+
+## RULE-214 — Pilot Persistence Must Fail Closed at the Storage Boundary
+
+A controlled pilot requires an explicit absolute `MINAI_PILOT_DB_PATH` outside the repository. Missing, relative, or repository-contained pilot database paths must block startup before provider/runtime work begins. Development and synthetic code may use an explicitly supplied temporary database or the legacy repository-owned default only when pilot mode is disabled.
+
+Ordinary retention must continue deleting transient pilot state and audit evidence after the configured window. Durable operational continuity records may be exempt only where later job identity, commercial authority, assignment generation, shift reconciliation, exception history, learning review or operator configuration requires them. Raw historical mail, transient extraction material and unrelated temporary state must not inherit this exemption.
+
+Every new persistent state write must carry the current storage schema version. Pre-version records may be migrated through an explicit compatibility path; an unsupported future schema must fail closed. New operational timestamps must be timezone-aware UTC. Repository backup files and live SQLite artifacts must remain untracked and outside source control.

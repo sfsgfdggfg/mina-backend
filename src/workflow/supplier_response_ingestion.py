@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Any, Optional
@@ -466,7 +466,7 @@ def ingest_supplier_reply(
                     repository=repository,
                     rfq_id=draft.rfq_id,
                     channel="email",
-                    acknowledged_at=reply.received_at or datetime.utcnow(),
+                    acknowledged_at=reply.received_at or datetime.now(timezone.utc),
                 )
                 if message_key:
                     repository.record_ingested_message(
@@ -530,7 +530,7 @@ def ingest_supplier_reply(
             excluded_costs=extraction.excluded_costs,
             notes=extraction.notes,
             source=reply.source,
-            received_at=reply.received_at or datetime.utcnow(),
+            received_at=reply.received_at or datetime.now(timezone.utc),
             is_consolidated_follow_up=bool(inherited_fields),
             inherited_fields=inherited_fields,
             prior_response_received_at=prior_response_received_at,

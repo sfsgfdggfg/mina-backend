@@ -8,13 +8,15 @@ from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
 from threading import local
-from typing import Any
+from typing import Any, Mapping
 from uuid import uuid4
 
 from pydantic import BaseModel
-from src.paths import data_path
+from src.paths import REPO_ROOT, data_path
 
 DEFAULT_PILOT_DB_PATH = data_path("pilot", "minai_pilot.sqlite3")
+STATE_RECORD_SCHEMA_VERSION = 1
+LEGACY_STATE_RECORD_SCHEMA_VERSION = 0
 PERSISTENT_STATE_NAMESPACES = (
     "mina_jobs",
     "mina_job_sequences",
@@ -42,6 +44,14 @@ PERSISTENT_STATE_NAMESPACES = (
     "operation_start_messages",
     "learning_facts",
     "learning_fact_by_entry",
+    "operational_work_assignments",
+    "operational_shift_close_receipts",
+    "operational_shift_open_acceptance_receipts",
+)
+PERSISTENT_EVENT_ENTITY_TYPES = (
+    "operational_work_assignment",
+    "operational_shift_close_receipt",
+    "operational_shift_open_acceptance_receipt",
 )
 
 
@@ -51,6 +61,46 @@ class SQLiteTransactionError(RuntimeError):
 
 class SQLiteStorageSecurityError(RuntimeError):
     pass
+
+
+class SQLiteStateSchemaError(RuntimeError):
+    pass
+
+
+def _env_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def validate_pilot_database_configuration(
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    env = environ if environ is not None else os.environ
+    configured_env_path = (env.get("MINAI_PILOT_DB_PATH") or "").strip()
+    pilot_mode = _env_truthy(env.get("MINAI_PILOT_MODE"))
+    if not pilot_mode:
+        return Path(configured_env_path or DEFAULT_PILOT_DB_PATH)
+    if not configured_env_path:
+        raise SQLiteStorageSecurityError(
+            "MINAI_PILOT_DB_PATH is required in pilot mode."
+        )
+    candidate = Path(configured_env_path)
+    if not candidate.is_absolute():
+        raise SQLiteStorageSecurityError(
+            "MINAI_PILOT_DB_PATH must be absolute in pilot mode."
+        )
+    if _is_within(candidate.resolve(strict=False), REPO_ROOT.resolve()):
+        raise SQLiteStorageSecurityError(
+            "Pilot SQLite database must be stored outside the repository."
+        )
+    return candidate
 
 
 def utc_now_iso() -> str:
@@ -64,9 +114,10 @@ class SQLitePilotStore:
         run_id: str | None = None,
         retention_days: int | None = None,
     ) -> None:
-        configured_path = db_path or os.getenv("MINAI_PILOT_DB_PATH")
-        self.db_path = Path(
-            configured_path or DEFAULT_PILOT_DB_PATH
+        self.db_path = (
+            Path(db_path)
+            if db_path is not None
+            else validate_pilot_database_configuration()
         )
 
         parent_existed = self.db_path.parent.exists()
@@ -238,6 +289,7 @@ class SQLitePilotStore:
                     record_key TEXT NOT NULL,
                     payload_json TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 1,
                     PRIMARY KEY (namespace, record_key)
                 );
 
@@ -256,6 +308,15 @@ class SQLitePilotStore:
                 CREATE INDEX IF NOT EXISTS idx_pilot_events_run
                     ON pilot_events(run_id, event_id);
             """)
+            columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(state_records)").fetchall()
+            }
+            if "schema_version" not in columns:
+                connection.execute(
+                    "ALTER TABLE state_records ADD COLUMN schema_version "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
 
     @staticmethod
     def _encode(payload: Any) -> str:
@@ -285,16 +346,31 @@ class SQLitePilotStore:
     def _decode(payload_json: str) -> Any:
         return json.loads(payload_json)
 
+    @classmethod
+    def _decode_state_payload(cls, payload_json: str, schema_version: int) -> Any:
+        if schema_version not in {
+            LEGACY_STATE_RECORD_SCHEMA_VERSION,
+            STATE_RECORD_SCHEMA_VERSION,
+        }:
+            raise SQLiteStateSchemaError(
+                f"Unsupported pilot state schema version: {schema_version}."
+            )
+        # Legacy v0 rows used the same JSON payload shape but carried no explicit
+        # storage schema marker. Keeping the migration hook here lets later state
+        # versions transform payloads before repositories validate current models.
+        return cls._decode(payload_json)
+
     def upsert(self, *, namespace: str, record_key: str, payload: Any, event_type: str, entity_type: str) -> None:
         payload_json = self._encode(payload)
         timestamp = utc_now_iso()
         with self._connection_scope() as connection:
             connection.execute(
-                """INSERT INTO state_records(namespace, record_key, payload_json, updated_at)
-                VALUES (?, ?, ?, ?)
+                """INSERT INTO state_records(namespace, record_key, payload_json, updated_at, schema_version)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(namespace, record_key)
-                DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at""",
-                (namespace, record_key, payload_json, timestamp),
+                DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at,
+                              schema_version = excluded.schema_version""",
+                (namespace, record_key, payload_json, timestamp, STATE_RECORD_SCHEMA_VERSION),
             )
             connection.execute(
                 """INSERT INTO pilot_events(run_id, event_type, entity_type, entity_id, payload_json, created_at)
@@ -330,9 +406,9 @@ class SQLitePilotStore:
         timestamp = utc_now_iso()
         with self._connection_scope() as connection:
             cursor = connection.execute(
-                """INSERT OR IGNORE INTO state_records(namespace, record_key, payload_json, updated_at)
-                VALUES (?, ?, ?, ?)""",
-                (namespace, record_key, payload_json, timestamp),
+                """INSERT OR IGNORE INTO state_records(namespace, record_key, payload_json, updated_at, schema_version)
+                VALUES (?, ?, ?, ?, ?)""",
+                (namespace, record_key, payload_json, timestamp, STATE_RECORD_SCHEMA_VERSION),
             )
             inserted = cursor.rowcount == 1
             if inserted:
@@ -364,9 +440,13 @@ class SQLitePilotStore:
                 f"AND namespace NOT IN ({placeholders})",
                 (cutoff_iso, *PERSISTENT_STATE_NAMESPACES),
             )
+            event_placeholders = ",".join(
+                "?" for _ in PERSISTENT_EVENT_ENTITY_TYPES
+            )
             event_cursor = connection.execute(
-                "DELETE FROM pilot_events WHERE created_at < ?",
-                (cutoff_iso,),
+                "DELETE FROM pilot_events WHERE created_at < ? "
+                f"AND entity_type NOT IN ({event_placeholders})",
+                (cutoff_iso, *PERSISTENT_EVENT_ENTITY_TYPES),
             )
 
         deleted = {
@@ -389,18 +469,31 @@ class SQLitePilotStore:
     def get(self, *, namespace: str, record_key: str) -> Any | None:
         with self._connection_scope() as connection:
             row = connection.execute(
-                "SELECT payload_json FROM state_records WHERE namespace = ? AND record_key = ?",
+                "SELECT payload_json, schema_version FROM state_records "
+                "WHERE namespace = ? AND record_key = ?",
                 (namespace, record_key),
             ).fetchone()
-        return None if row is None else self._decode(row["payload_json"])
+        return (
+            None
+            if row is None
+            else self._decode_state_payload(
+                row["payload_json"], int(row["schema_version"])
+            )
+        )
 
     def list_all(self, *, namespace: str) -> list[Any]:
         with self._connection_scope() as connection:
             rows = connection.execute(
-                "SELECT payload_json FROM state_records WHERE namespace = ? ORDER BY updated_at ASC, record_key ASC",
+                "SELECT payload_json, schema_version FROM state_records "
+                "WHERE namespace = ? ORDER BY updated_at ASC, record_key ASC",
                 (namespace,),
             ).fetchall()
-        return [self._decode(row["payload_json"]) for row in rows]
+        return [
+            self._decode_state_payload(
+                row["payload_json"], int(row["schema_version"])
+            )
+            for row in rows
+        ]
 
     def exists(self, *, namespace: str, record_key: str) -> bool:
         with self._connection_scope() as connection:

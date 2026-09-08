@@ -1455,3 +1455,13 @@ The job controls mirror P1-75 APIs: job-wide automation disable overrides, suppl
 P1-76 does not approve Streamlit for live pilot use. Do not inject pilot bearer credentials into the Streamlit source or treat the development UI as an authenticated pilot boundary. Live pilot authority remains the authenticated FastAPI/operator-client surface until a browser/session security layer is separately approved.
 
 For development UI validation use `python -m py_compile ui/app.py ui/mina_operations.py` and `python -m src.simulation.mina_operations_ui_regressions`. The controlled pilot launcher remains unchanged and does not start Streamlit.
+
+## P2-16.4 Persistence and Housekeeping Superseding Note
+
+For every real controlled-pilot launch after P2-16.4, earlier examples that place `MINAI_PILOT_DB_PATH` under `data/pilot/` are superseded. Use an approved absolute external path, for example an access-controlled deployment data directory outside the repository. Pilot startup fails closed when the path is missing, relative, or resolves inside the repository.
+
+The repository-owned `data/pilot/minai_pilot.sqlite3` default remains a development/synthetic compatibility path only when pilot mode is disabled. Do not copy a real pilot database or its WAL/SHM files into the repository for backup, debugging, transfer, or evidence review. Use the approved external backup/evidence process instead.
+
+Ordinary transient state and audit evidence retain the configured deletion window (30 days by default). Operational continuity records that must remain linked across longer jobs, assignment generations, shift handoffs, commercial/master authority, exceptions and learning review are excluded from the ordinary purge; this is a technical continuity class, not permission to retain raw mail indefinitely.
+
+State rows created before P2-16.4 remain readable as legacy storage schema v0. New and refreshed rows use schema v1; unknown future versions stop rather than guessing. New quote/RFQ/response workflow timestamps are timezone-aware UTC. Existing legacy naive timestamps are compatibility input only.
