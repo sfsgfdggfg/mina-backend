@@ -3892,3 +3892,11 @@ A real shadow-pilot launch must use one explicit core profile and may not inheri
 The active external pilot data pack must be fully human-verified and fingerprint-current at boot. Structural validity alone is insufficient. A changed dataset invalidates the verified pack until a new reviewed pack version is produced.
 
 Retention must preserve the lifecycle and idempotency state required by any retained MINA job, including extraction/message identity, supplier RFQ state/evidence, quote approval/case state, relevant attachment-review state and automation state. Raw message bodies, attachment content and unrelated transient records do not become durable merely because the linked job is durable.
+
+## RULE-217 — Counterparty Discovery Is Read-Only, Metadata-Only, and Human-Classified
+
+A new agency mailbox may be scanned for counterparty candidates only after explicit operator authorization and only with delegated `Mail.ReadBasic`. The discovery auth profile must be external, may contain only the four Outlook identity/cache keys, and must not inherit or define outbound, OpenAI, pilot database, operator or other application authority.
+
+Discovery requests only message/conversation identity, sender/To/Cc/Bcc recipient addresses, timestamps and draft state. Subject, body, attachments and attachment content are not requested. The discovery result may expose candidate business email addresses/domains and bounded traffic counts plus explicit Inbox/Sent coverage and truncation metadata for human review, but must not persist raw messages, create Master Data, create LearningFacts, call AI, or classify an unmatched address as customer or supplier.
+
+Human review precedes authority. Candidate contacts selected as pilot customers/suppliers must be entered through the normal Master Data/data-pack process and the resulting pack must pass full verification/fingerprint checks before controlled-pilot startup. Relationship-history learning may begin only after deterministic Master Data identities exist.

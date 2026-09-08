@@ -25,6 +25,9 @@ AUTHORITY_BASE = (
 )
 CONSUMERS_TENANT = "consumers"
 
+OUTLOOK_BASIC_READ_SCOPES = (
+    "Mail.ReadBasic",
+)
 OUTLOOK_READ_SCOPES = (
     "Mail.Read",
 )
