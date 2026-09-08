@@ -6614,3 +6614,14 @@ AI relationship observations must describe the customer or supplier from evidenc
 AI observations distinguish `sample_only` descriptions from `recurring_pattern` claims and report supporting message/thread counts. Small samples may support a bounded description of what was observed, but they must not silently become broad statements such as “usually”, “prefers”, “tends”, “ongoing relationship”, trust or reliance. Recurring preference, urgency, timing and relationship-pattern claims require stronger repeated evidence.
 
 Deterministic evidence remains preferred where the system can calculate the fact directly. In particular, supplier response latency is measured from timestamps/thread direction and must not be duplicated as AI prose such as “responds quickly”. AI confidence is capped according to evidence scope/size and human confirmation remains the only runtime-authority boundary.
+
+## DEC-190 — Relationship AI Preserves Two-Way Context and Grades Evidence Instead of Hiding Thin Signals
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+Historical relationship AI receives privacy-transformed two-way conversation context because an agency question, target, correction or instruction can be necessary to interpret a counterparty reply. Every sampled message is explicitly labelled `AGENCY` or `COUNTERPARTY`. Agency-authored messages are context only and cannot be cited as behavioral support for a customer or supplier observation.
+
+Thin evidence is not automatically discarded. AI observations remain proposals and are graded as `sample_only` or `recurring_pattern`; a claimed recurring pattern that lacks the category's supporting message/thread depth is transparently downgraded to `sample_only` and its confidence is capped. Human review remains the promotion boundary. This keeps discovery capacity available for real agency history while making evidence quality visible.
+
+Hard rejection is reserved for structural attribution or authority failures such as citing an AGENCY message as counterparty behavioral support, customer-inapplicable categories, or unsupported internal-state claims such as trust/reliance. Deterministic response-time metrics do not prohibit richer AI timing observations that describe sequence or interaction mechanics beyond raw latency.
