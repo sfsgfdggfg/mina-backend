@@ -38,6 +38,7 @@ from src.simulation.relationship_history_onboarding_regressions import (
 from src.simulation.reporting_read_model_regressions import evaluate_reporting_read_model_regressions
 from src.simulation.reporting_ui_regressions import evaluate_reporting_ui_regressions
 from src.simulation.supplier_price_source_regressions import evaluate_supplier_price_source_regressions
+from src.simulation.runtime_authority_cutover_regressions import evaluate_runtime_authority_cutover_regressions
 from src.simulation.human_operational_flow_regressions import evaluate_human_operational_flow_regressions
 from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
@@ -266,6 +267,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Reporting read models", evaluate_reporting_read_model_regressions),
     Suite("Reporting development UI", evaluate_reporting_ui_regressions),
     Suite("Supplier price sources and fixed rates", evaluate_supplier_price_source_regressions),
+    Suite("Runtime authority cutover and source-neutral quote journey", evaluate_runtime_authority_cutover_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),
     Suite("Pricing policy resolution", evaluate_pricing_policy_regressions),
     Suite(

@@ -59,6 +59,30 @@ def _normalize(value: Optional[str]) -> str:
 SUPPLIER_CAPABILITIES_PATH = data_path("supplier_capabilities.json")
 
 
+def _normalize_supplier_profiles(raw_suppliers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    profiles: List[Dict[str, Any]] = []
+    for raw in raw_suppliers:
+        if not isinstance(raw, dict) or not raw.get("active", True):
+            continue
+        profiles.append({
+            "supplier_name": raw["supplier_name"],
+            "recipient_email": _get_primary_contact_email(raw),
+            "active": raw.get("active", True),
+            "role": raw.get("role", "backup"),
+            "supported_countries": [_normalize(country) for country in raw.get("countries", [])],
+            "supported_equipment": raw.get("equipment_types", []),
+            "supported_service_types": raw.get("service_types", []),
+            "special_capabilities": raw.get("special_capabilities", []),
+            "route_regions": [_normalize(region) for region in raw.get("route_regions", [])],
+            "priority_routes": raw.get("priority_routes", []),
+            "reliability_score": raw.get("reliability_score", 0.70),
+            "price_score": raw.get("price_score", 0.70),
+            "speed_score": raw.get("speed_score", 0.70),
+            "notes": raw.get("notes", ""),
+        })
+    return profiles
+
+
 def _load_supplier_profiles(
     path: Path = SUPPLIER_CAPABILITIES_PATH,
     *,
@@ -82,38 +106,7 @@ def _load_supplier_profiles(
         )
     raw_suppliers = json.loads(content.decode("utf-8"))
 
-    profiles: List[Dict[str, Any]] = []
-
-    for raw in raw_suppliers:
-        if not raw.get("active", True):
-            continue
-
-        profiles.append(
-            {
-                "supplier_name": raw["supplier_name"],
-                "recipient_email": _get_primary_contact_email(raw),
-                "active": raw.get("active", True),
-                "role": raw.get("role", "backup"),
-                "supported_countries": [
-                    _normalize(country)
-                    for country in raw.get("countries", [])
-                ],
-                "supported_equipment": raw.get("equipment_types", []),
-                "supported_service_types": raw.get("service_types", []),
-                "special_capabilities": raw.get("special_capabilities", []),
-                "route_regions": [
-                    _normalize(region)
-                    for region in raw.get("route_regions", [])
-                ],
-                "priority_routes": raw.get("priority_routes", []),
-                "reliability_score": raw.get("reliability_score", 0.70),
-                "price_score": raw.get("price_score", 0.70),
-                "speed_score": raw.get("speed_score", 0.70),
-                "notes": raw.get("notes", ""),
-            }
-        )
-
-    return profiles
+    return _normalize_supplier_profiles(raw_suppliers)
 
 
 def _get_equipment_text(shipment: Any, equipment_decision: Optional[Any]) -> str:
@@ -277,17 +270,21 @@ def select_suppliers_for_shipment(
     risk_assessment: Optional[Dict[str, Any]] = None,
     max_suppliers: int = 3,
     operational_data_sources: OperationalDataSources | None = None,
+    supplier_capabilities: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     require_operational_shipment(shipment)
     sources = resolve_operational_data_sources(operational_data_sources)
-    if operational_data_sources is None:
-        require_pilot_operational_dataset("supplier_capabilities")
-    supplier_profiles = _load_supplier_profiles(
-        sources.supplier_capabilities_path,
-        operational_data_sources=(
-            sources if operational_data_sources is not None else None
-        ),
-    )
+    if supplier_capabilities is not None:
+        supplier_profiles = _normalize_supplier_profiles(supplier_capabilities)
+    else:
+        if operational_data_sources is None:
+            require_pilot_operational_dataset("supplier_capabilities")
+        supplier_profiles = _load_supplier_profiles(
+            sources.supplier_capabilities_path,
+            operational_data_sources=(
+                sources if operational_data_sources is not None else None
+            ),
+        )
     equipment_text = _get_equipment_text(shipment, equipment_decision)
     risk_level = _get_risk_level(risk_assessment)
     service_type = getattr(shipment, "service_type", "FTL") or "FTL"
@@ -298,12 +295,12 @@ def select_suppliers_for_shipment(
     rejected_suppliers = []
 
     for supplier in supplier_profiles:
-        supplier_capabilities = [
+        special_capabilities = [
             _normalize(item)
             for item in supplier.get("special_capabilities", [])
         ]
 
-        if is_adr and ADR_CAPABILITY not in supplier_capabilities:
+        if is_adr and ADR_CAPABILITY not in special_capabilities:
             rejected_suppliers.append(
                 {
                     "supplier_name": supplier["supplier_name"],
@@ -317,7 +314,7 @@ def select_suppliers_for_shipment(
         if (
             is_adr
             and required_class_capability
-            and required_class_capability not in supplier_capabilities
+            and required_class_capability not in special_capabilities
         ):
             rejected_suppliers.append(
                 {
@@ -422,5 +419,9 @@ def select_suppliers_for_shipment(
             "price + speed weighted scoring"
         ),
         "source": "supplier_selection_engine",
-        "data_source": str(sources.supplier_capabilities_path),
+        "data_source": (
+            "supplier_master_projection"
+            if supplier_capabilities is not None
+            else str(sources.supplier_capabilities_path)
+        ),
     }

@@ -25,6 +25,8 @@ from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
 from src.core.mail import InboundMailEnvelope
+from src.core.master_data_repository import MasterDataRepository
+from src.core.master_data_service import customer_to_legacy_memory
 from src.core.operational_data import (
     OperationalDataSources,
 )
@@ -87,16 +89,21 @@ def _customer_matches(
     operational_data_sources: (
         OperationalDataSources | None
     ),
+    master_data_repository: MasterDataRepository | None = None,
 ):
-    if operational_data_sources is None:
-        return None, "pilot_customer_data_unavailable"
-
-    try:
-        profiles = load_customer_memory(
-            operational_data_sources
-        )
-    except DataProvenanceError:
-        return None, "pilot_customer_data_unverified"
+    if master_data_repository is not None:
+        profiles = [
+            customer_to_legacy_memory(item)
+            for item in master_data_repository.list_customers()
+            if item.active
+        ]
+    else:
+        if operational_data_sources is None:
+            return None, "pilot_customer_data_unavailable"
+        try:
+            profiles = load_customer_memory(operational_data_sources)
+        except DataProvenanceError:
+            return None, "pilot_customer_data_unverified"
 
     matches = [
         profile
@@ -130,6 +137,7 @@ def _process_allowlisted_attachment_mail(
     assessment,
     supplier_repository: SupplierRFQRepository,
     operational_data_sources: OperationalDataSources | None,
+    master_data_repository: MasterDataRepository | None,
     attachment_retriever: Callable[[InboundMailEnvelope], Any] | None,
     attachment_interpreter: Callable[..., Any] | None,
     attachment_review_repository,
@@ -139,6 +147,7 @@ def _process_allowlisted_attachment_mail(
     customer_matches, customer_error = _customer_matches(
         mail=mail,
         operational_data_sources=operational_data_sources,
+        master_data_repository=master_data_repository,
     )
     if customer_error is not None:
         return _with_attachment_intake(
@@ -322,6 +331,7 @@ def process_controlled_outlook_inbound_mail(
     operational_data_sources: (
         OperationalDataSources | None
     ),
+    master_data_repository: MasterDataRepository | None = None,
     attachment_retriever: (
         Callable[[InboundMailEnvelope], Any] | None
     ) = None,
@@ -353,6 +363,7 @@ def process_controlled_outlook_inbound_mail(
             assessment=assessment,
             supplier_repository=supplier_repository,
             operational_data_sources=operational_data_sources,
+            master_data_repository=master_data_repository,
             attachment_retriever=attachment_retriever,
             attachment_interpreter=attachment_interpreter,
             attachment_review_repository=attachment_review_repository,
@@ -424,6 +435,7 @@ def process_controlled_outlook_inbound_mail(
             operational_data_sources=(
                 operational_data_sources
             ),
+            master_data_repository=master_data_repository,
         )
     )
 

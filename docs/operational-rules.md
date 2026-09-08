@@ -3854,3 +3854,15 @@ Provider-backed customer quote delivery may use only a linked trusted inbound se
 ## RULE-211 — Operation-Start Unknown Outcomes Cannot Be Overwritten
 
 An operation-start message with `delivery_outcome_unknown` must remain locked until Outlook Sent Items reconciliation. Reject, retry and manual-send evidence paths must not overwrite that uncertainty. `confirmed_sent` requires the observed sent timestamp and advances the normal sent lifecycle; `confirmed_not_sent` records the operator check and reopens the existing controlled retry path.
+
+## RULE-212 — Controlled Pilot Must Not Fall Back From Master Data to Legacy Customer/Supplier JSON
+
+When controlled pilot runtime supplies durable Master Data, customer identity/enrichment and supplier selection/capability checks must use that Master Data projection. A missing, inactive or contactless master subject must remain missing/inactive/contactless; legacy JSON must not silently override the current operator-maintained record.
+
+Legacy customer/supplier JSON may remain available for synthetic/development regressions and explicit bootstrap compatibility. Tests of that compatibility path must select it explicitly and must not be interpreted as pilot runtime authority.
+
+## RULE-213 — Supplier Price Provenance Must Survive Quote Progression
+
+Every usable supplier price entering a MINA job must retain its source type and source reference through comparison, selection and SupplierQuote creation. RFQ, phone, WhatsApp, portal/API, manual and materialized fixed-rate prices use the same commercial comparison boundary rather than parallel quote engines.
+
+A selected non-email price may create the normal pending customer QuoteCase only after commercial-safety and pricing-policy checks pass. Missing customer/agency pricing authority remains a blocking state; MINAI cannot manufacture a markup to force progression.

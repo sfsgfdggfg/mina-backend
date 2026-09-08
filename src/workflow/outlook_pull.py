@@ -180,6 +180,7 @@ def pull_controlled_outlook_inbox(
     operational_data_sources: (
         OperationalDataSources | None
     ),
+    master_data_repository: MasterDataRepository | None = None,
     supplier_parser=None,
     supplier_repository=None,
     attachment_review_repository=None,
@@ -232,6 +233,7 @@ def pull_controlled_outlook_inbox(
                 operational_data_sources=(
                     operational_data_sources
                 ),
+                master_data_repository=master_data_repository,
                 supplier_parser=(
                     supplier_parser
                 ),

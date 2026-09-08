@@ -15,6 +15,7 @@ from src.core.extraction_confirmation_repository import (
 )
 from src.core.mail import InboundMailEnvelope
 from src.core.mina_job_repository import MinaJobRepository
+from src.core.master_data_repository import MasterDataRepository
 from src.core.mina_job_service import (
     create_mina_job_for_confirmed_proposal,
     link_mina_job_workflow,
@@ -238,6 +239,7 @@ def resume_confirmed_extraction(
     mina_job_repository: MinaJobRepository | None = None,
     evidence_recorder: PilotEvidenceRecorder | None = None,
     operational_data_sources: OperationalDataSources | None = None,
+    master_data_repository: MasterDataRepository | None = None,
 ) -> dict:
     proposal = _load_proposal(repository, proposal_id)
     if proposal.extraction_status != "confirmed" or proposal.confirmed_shipment is None:
@@ -274,6 +276,7 @@ def resume_confirmed_extraction(
             approval_repository=approval_repository,
             quote_case_repository=quote_case_repository,
             _persist_rfq_transition=False,
+            master_data_repository=master_data_repository,
         )
     except DataProvenanceError:
         result = build_data_provenance_blocked_result(

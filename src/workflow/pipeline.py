@@ -4,6 +4,8 @@ from src.ai.approval_generator import generate_management_review_draft
 from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
 
 from src.core.customer_memory import enrich_shipment_with_customer_memory
+from src.core.master_data_repository import MasterDataRepository
+from src.core.master_data_service import customer_to_legacy_memory, supplier_to_legacy_capability
 from src.core.equipment import decide_equipment
 from src.core.risk import assess_risk
 from src.core.missing_info import check_missing_information
@@ -131,6 +133,7 @@ def process_shipment(
     _persist_rfq_transition: bool = True,
     operational_data_sources: OperationalDataSources | None = None,
     supplier_dispatch_policy: SupplierDispatchPolicy | None = None,
+    master_data_repository: MasterDataRepository | None = None,
 ):
     if not isinstance(shipment, Shipment) or isinstance(
         shipment,
@@ -142,12 +145,27 @@ def process_shipment(
     if rfq_repository is None:
         rfq_repository = InMemorySupplierRFQRepository()
 
+    customer_profiles = None
+    supplier_capabilities = None
+    if master_data_repository is not None:
+        customer_profiles = [
+            customer_to_legacy_memory(item)
+            for item in master_data_repository.list_customers()
+            if item.active
+        ]
+        supplier_capabilities = [
+            supplier_to_legacy_capability(item)
+            for item in master_data_repository.list_suppliers()
+            if item.active
+        ]
+
     try:
         customer_memory = enrich_shipment_with_customer_memory(
             shipment=shipment,
             email_text=email_text,
             sender_address=sender_address,
             operational_data_sources=operational_data_sources,
+            customer_profiles=customer_profiles,
         )
     except DataProvenanceError:
         return build_data_provenance_blocked_result(shipment)
@@ -211,6 +229,7 @@ def process_shipment(
             equipment_decision=equipment_decision,
             risk_assessment=risk_assessment,
             operational_data_sources=operational_data_sources,
+            supplier_capabilities=supplier_capabilities,
         )
     except DataProvenanceError:
         return build_data_provenance_blocked_result(
@@ -231,6 +250,7 @@ def process_shipment(
         supplier_selection=supplier_selection,
         supplier_quote=None,
         operational_data_sources=operational_data_sources,
+        supplier_capabilities=supplier_capabilities,
     )
 
     quote_readiness = decide_quote_readiness(

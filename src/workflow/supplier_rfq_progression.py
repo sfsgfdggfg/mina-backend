@@ -13,6 +13,8 @@ from src.core.equipment import decide_equipment
 from src.core.missing_info import check_missing_information
 from src.core.mail import OutboundMailRequest
 from src.core.mina_job_repository import MinaJobRepository
+from src.core.master_data_repository import MasterDataRepository
+from src.core.master_data_service import customer_to_legacy_memory, supplier_to_legacy_capability
 from src.core.mina_job_service import link_mina_job_quote_case
 from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.pilot_scope import evaluate_pilot_scope
@@ -30,10 +32,12 @@ from src.core.regulatory_compliance import assess_regulatory_compliance
 from src.core.risk import assess_risk
 from src.core.supplier_quote_comparison import (
     build_supplier_quote_comparisons,
+    build_supplier_price_offer_comparisons,
 )
 from src.core.supplier_quote_selection import (
     build_supplier_quote_selection_decision,
     select_supplier_quote_from_comparisons,
+    select_supplier_quote_from_price_offers,
 )
 from src.core.supplier_rfq_lifecycle import (
     validate_supplier_rfq_responses,
@@ -41,6 +45,7 @@ from src.core.supplier_rfq_lifecycle import (
 from src.core.supplier_dispatch_control import secondary_dispatch_gate
 from src.core.supplier_rfq import SupplierRFQFollowUpDraft
 from src.core.supplier_rfq_repository import SupplierRFQRepository
+from src.core.supplier_price_repository import SupplierPriceRepository
 from src.core.sqlite_repositories import atomic_repository_transaction
 from src.core.supplier_selection import select_suppliers_for_shipment
 from src.workflow.pipeline import build_data_provenance_blocked_result
@@ -94,6 +99,8 @@ def resume_supplier_rfq_workflow(
     mina_job_repository: MinaJobRepository | None = None,
     operational_data_sources: OperationalDataSources | None = None,
     quote_pricing_override: PricingFormula | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    price_repository: SupplierPriceRepository | None = None,
 ) -> dict:
     workflow = rfq_repository.get_workflow(workflow_id)
     if workflow is None:
@@ -122,6 +129,8 @@ def resume_supplier_rfq_workflow(
             rfq_repository=rfq_repository,
             operational_data_sources=operational_data_sources,
             quote_pricing_override=quote_pricing_override,
+            master_data_repository=master_data_repository,
+            price_repository=price_repository,
         )
     except DataProvenanceError:
         drafts = [
@@ -300,14 +309,30 @@ def _progress_supplier_rfq_workflow(
     rfq_repository: SupplierRFQRepository,
     operational_data_sources: OperationalDataSources | None = None,
     quote_pricing_override: PricingFormula | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    price_repository: SupplierPriceRepository | None = None,
 ) -> dict:
 
     shipment = workflow.shipment
+    customer_profiles = None
+    supplier_capabilities = None
+    if master_data_repository is not None:
+        customer_profiles = [
+            customer_to_legacy_memory(item)
+            for item in master_data_repository.list_customers()
+            if item.active
+        ]
+        supplier_capabilities = [
+            supplier_to_legacy_capability(item)
+            for item in master_data_repository.list_suppliers()
+            if item.active
+        ]
     customer_memory = enrich_shipment_with_customer_memory(
         shipment=shipment,
         email_text=workflow.email_text,
         sender_address=workflow.sender_address,
         operational_data_sources=operational_data_sources,
+        customer_profiles=customer_profiles,
     )
     commodity_profile = get_commodity_record(shipment.commodity)
     missing_info = apply_road_rfq_readiness(
@@ -366,6 +391,7 @@ def _progress_supplier_rfq_workflow(
         equipment_decision=equipment_decision,
         risk_assessment=risk_assessment,
         operational_data_sources=operational_data_sources,
+        supplier_capabilities=supplier_capabilities,
     )
     if not supplier_selection.get("selected_suppliers"):
         action_recommendation = generate_action_recommendation(
@@ -460,6 +486,7 @@ def _progress_supplier_rfq_workflow(
             supplier_selection=supplier_selection,
             supplier_quote=None,
             operational_data_sources=operational_data_sources,
+            supplier_capabilities=supplier_capabilities,
         )
         action_recommendation = generate_action_recommendation(
             shipment=shipment,
@@ -495,27 +522,54 @@ def _progress_supplier_rfq_workflow(
             supplier_follow_up_record=active_follow_up_record,
         )
 
-    supplier_quote_comparisons = build_supplier_quote_comparisons(
+    rfq_quote_comparisons = build_supplier_quote_comparisons(
         responses=valid_supplier_rfq_responses,
         supplier_selection=supplier_selection,
         drafts=supplier_rfq_drafts,
         shipment=shipment,
-        expected_equipment=(
-            equipment_decision.selected_equipment
-        ),
-        require_commercial_safety=(
-            shipment.transport_mode == "road"
-        ),
+        expected_equipment=equipment_decision.selected_equipment,
+        require_commercial_safety=(shipment.transport_mode == "road"),
     )
-    supplier_quote = select_supplier_quote_from_comparisons(
+    direct_price_offers = (
+        price_repository.list_offers(job_id=workflow.mina_job_id)
+        if price_repository is not None and workflow.mina_job_id
+        else []
+    )
+    direct_price_comparisons = build_supplier_price_offer_comparisons(
+        direct_price_offers,
+        supplier_selection,
+        shipment=shipment,
+        expected_equipment=equipment_decision.selected_equipment,
+        require_commercial_safety=(shipment.transport_mode == "road"),
+    )
+    supplier_quote_comparisons = [
+        *rfq_quote_comparisons,
+        *direct_price_comparisons,
+    ]
+    supplier_quote_selection_decision = build_supplier_quote_selection_decision(
         comparisons=supplier_quote_comparisons,
-        responses=valid_supplier_rfq_responses,
     )
-    supplier_quote_selection_decision = (
-        build_supplier_quote_selection_decision(
-            comparisons=supplier_quote_comparisons,
-        )
-    )
+    supplier_quote = None
+    if supplier_quote_selection_decision is not None:
+        if supplier_quote_selection_decision.selected_price_offer_id:
+            selected_id = supplier_quote_selection_decision.selected_price_offer_id
+            supplier_quote = select_supplier_quote_from_price_offers(
+                comparisons=[
+                    item for item in supplier_quote_comparisons
+                    if item.price_offer_id == selected_id
+                ],
+                offers=direct_price_offers,
+            )
+        else:
+            selected_rfq_id = supplier_quote_selection_decision.selected_rfq_id
+            supplier_quote = select_supplier_quote_from_comparisons(
+                comparisons=[
+                    item for item in supplier_quote_comparisons
+                    if item.rfq_id == selected_rfq_id
+                    and item.price_offer_id is None
+                ],
+                responses=valid_supplier_rfq_responses,
+            )
     operational_consistency = check_operational_consistency(
         shipment=shipment,
         equipment_decision=equipment_decision,
@@ -523,6 +577,7 @@ def _progress_supplier_rfq_workflow(
         supplier_selection=supplier_selection,
         supplier_quote=supplier_quote,
         operational_data_sources=operational_data_sources,
+        supplier_capabilities=supplier_capabilities,
     )
 
     # Secondary suppliers are not prepared at initial dispatch. They become

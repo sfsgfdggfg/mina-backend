@@ -415,6 +415,11 @@ def _runtime_outbound_delivery_enabled() -> bool:
         return True
     return outbound_runtime_policy.delivery_enabled
 
+def _runtime_master_data_authority():
+    """Real controlled pilot uses durable Master Data; dev/synthetic retains fixtures."""
+    return master_data_repository if pilot_mode_enabled() else None
+
+
 
 def _require_runtime_outbound_delivery() -> None:
     if not _runtime_outbound_delivery_enabled():
@@ -1996,6 +2001,39 @@ def use_mina_job_fixed_rate(
     return offer.model_dump()
 
 
+@app.post("/mina-jobs/{job_id}/supplier-prices/progress")
+def progress_mina_job_supplier_prices(
+    job_id: str, request: ResumeSupplierQuoteRequest | None = None,
+):
+    job = mina_job_repository.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    if not job.supplier_rfq_workflow_id:
+        raise HTTPException(
+            status_code=409,
+            detail="MINA job has no supplier sourcing workflow to progress into a quote.",
+        )
+    try:
+        result = resume_supplier_rfq_workflow(
+            workflow_id=job.supplier_rfq_workflow_id,
+            rfq_repository=supplier_rfq_repository,
+            approval_repository=quote_approval_repository,
+            quote_case_repository=quote_case_repository,
+            mina_job_repository=mina_job_repository,
+            operational_data_sources=operational_data_sources,
+            quote_pricing_override=(
+                request.quote_pricing_override if request is not None else None
+            ),
+            master_data_repository=_runtime_master_data_authority(),
+            price_repository=supplier_price_repository,
+        )
+    except SupplierRFQWorkflowNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SupplierRFQWorkflowProgressionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return serialize_result(result)
+
+
 @app.get("/mina-jobs/{job_id}")
 def get_mina_job(job_id: str):
     try:
@@ -2869,6 +2907,7 @@ def pull_outlook_inbound(
                 operational_data_sources=(
                     operational_data_sources
                 ),
+                master_data_repository=_runtime_master_data_authority(),
                 supplier_parser=(
                     OpenAISupplierResponseParser()
                 ),
@@ -3378,6 +3417,7 @@ def resume_extraction_proposal_endpoint(proposal_id: str):
             mina_job_repository=mina_job_repository,
             evidence_recorder=pilot_store,
             operational_data_sources=operational_data_sources,
+            master_data_repository=_runtime_master_data_authority(),
         )
     except ExtractionProposalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -3788,6 +3828,8 @@ def resume_supplier_rfq_quote(
             quote_pricing_override=(
                 request.quote_pricing_override if request is not None else None
             ),
+            master_data_repository=_runtime_master_data_authority(),
+            price_repository=supplier_price_repository,
         )
     except SupplierRFQWorkflowNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -6660,3 +6660,21 @@ An operator may reconcile an uncertain outcome only after checking Outlook Sent 
 **Date:** 2026-09-08
 
 Operation-start supplier confirmation and quoted-supplier closure messages keep their existing reserve-before-provider concurrency guard. If provider delivery becomes uncertain, the message enters `delivery_outcome_unknown` instead of ordinary failure. It cannot be rejected, retried, or overwritten with manual-send evidence until an authenticated operator reconciles Outlook Sent Items. Confirmed sent reconciliation requires the observed sent timestamp and advances the selected-supplier lifecycle without inventing provider identifiers; confirmed not sent returns the message to a retryable failed state.
+
+## DEC-195 — Controlled Pilot Uses Durable Master Data as the Customer/Supplier Runtime Authority
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+In controlled pilot runtime, durable Customer and Supplier Master Data is the operational authority for customer sender identity, customer defaults/pricing policy, supplier capability/selection, operational consistency, and current supplier contacts. Legacy `customer_memory.json` and `supplier_capabilities.json` remain only as development/synthetic fixtures and controlled bootstrap/compatibility sources.
+
+When Master Data authority is supplied, runtime must not silently consult legacy customer/supplier JSON to fill a missing or conflicting master record. A known inactive supplier, or a known supplier with no active contact, fails closed instead of falling back to an older RFQ recipient. This prevents UI-edited master data and operational decisions from becoming two separate realities.
+
+## DEC-196 — All Supplier Price Sources Enter the Same Quote Selection and Approval Lifecycle
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+RFQ email replies, operator-recorded phone/WhatsApp/manual prices, portal/API prices, and explicitly materialized applicable fixed rates are supplier-price evidence for the same MINA job. They are compared through the existing multi-criteria supplier quote engine; a source-neutral winner becomes the SupplierQuote while preserving its source type and source reference.
+
+A non-email price must not remain a display-only side record. Once selected it enters the normal customer pricing, QuoteCase, human approval and send-safety lifecycle. MINAI must not invent a customer markup when no verified customer/agency pricing policy exists; an operator may provide an explicit job-level pricing override.

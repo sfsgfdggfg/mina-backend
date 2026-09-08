@@ -90,6 +90,15 @@ def evaluate_pilot_web_shell_regressions() -> dict:
         and "/customer-deadline-update/approval" in js_text,
         "browser assets avoid token storage and dynamic HTML while wiring controlled approval APIs",
     )
+    check(
+        "/supplier-prices/manual" in js_text
+        and "/supplier-prices/fixed-rate/" in js_text
+        and "/supplier-prices/progress" in js_text
+        and "Telefon" in js_text
+        and "WhatsApp" in js_text
+        and "Teklifi Hazırla" in js_text,
+        "authoritative browser shell records source-neutral supplier prices and progresses them to quote",
+    )
 
     password = "Pilot-Web-Password-2026!"
     password_hash = hash_password(password, salt=b"pilot-web-salt!!")
