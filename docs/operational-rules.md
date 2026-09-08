@@ -3874,3 +3874,11 @@ A controlled pilot requires an explicit absolute `MINAI_PILOT_DB_PATH` outside t
 Ordinary retention must continue deleting transient pilot state and audit evidence after the configured window. Durable operational continuity records may be exempt only where later job identity, commercial authority, assignment generation, shift reconciliation, exception history, learning review or operator configuration requires them. Raw historical mail, transient extraction material and unrelated temporary state must not inherit this exemption.
 
 Every new persistent state write must carry the current storage schema version. Pre-version records may be migrated through an explicit compatibility path; an unsupported future schema must fail closed. New operational timestamps must be timezone-aware UTC. Repository backup files and live SQLite artifacts must remain untracked and outside source control.
+
+## RULE-215 — Deployment Profiles Must Not Mix Operational Authority
+
+A controlled pilot process must be built from one explicit core env file. DB path, data-pack root, pilot/operator/network authority, outbound mode, pricing/dispatch policy, Outlook provider identity/token paths and OpenAI configuration are core-profile keys and must not be redefined by an overlay. Web/transport overlays may supply non-authoritative presentation and transport settings only.
+
+Primary shadow pilot and smoke/testing profiles must be launched separately. Sourcing a smoke env after a primary pilot env is prohibited because later shell assignment can silently redirect durable state or operational data. Profile validation must happen before Uvicorn startup and must fail closed on protected overlay keys, repository-contained profile files or invalid launcher configuration.
+
+Check-only diagnostics must remain secret-safe. They may identify the selected DB/data paths, source env filenames, web/transport endpoint and outbound mode, but must not expose mailbox tokens, operator bearer tokens, session secrets, passwords, OpenAI keys or other provider credentials.

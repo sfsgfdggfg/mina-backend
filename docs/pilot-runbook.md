@@ -1465,3 +1465,27 @@ The repository-owned `data/pilot/minai_pilot.sqlite3` default remains a developm
 Ordinary transient state and audit evidence retain the configured deletion window (30 days by default). Operational continuity records that must remain linked across longer jobs, assignment generations, shift handoffs, commercial/master authority, exceptions and learning review are excluded from the ordinary purge; this is a technical continuity class, not permission to retain raw mail indefinitely.
 
 State rows created before P2-16.4 remain readable as legacy storage schema v0. New and refreshed rows use schema v1; unknown future versions stop rather than guessing. New quote/RFQ/response workflow timestamps are timezone-aware UTC. Existing legacy naive timestamps are compatibility input only.
+
+## P2-16.5 Deployment Profile Isolation
+
+Do not start the primary web shadow pilot by sourcing both the primary pilot env and a smoke/local pilot env into the same process. The later file can silently replace `MINAI_PILOT_DB_PATH`, `MINAI_PILOT_DATA_DIR`, mailbox identity or other runtime authority.
+
+Validate the primary profile without starting the server:
+
+```bash
+python -m src.pilot_profile_launcher \
+  --core-env ~/.config/minai/pilot.env \
+  --overlay-env ~/.config/minai/web-pilot.env \
+  --check-only
+```
+
+For a separate Outlook smoke profile, use the smoke env as the core profile rather than as an overlay:
+
+```bash
+python -m src.pilot_profile_launcher \
+  --core-env ~/.config/minai/local-pilot.env \
+  --overlay-env ~/.config/minai/web-pilot.env \
+  --check-only
+```
+
+After the check-only result identifies the intended DB path, data-pack root and `outbound_mode=shadow`, remove `--check-only` to launch. The profile env files themselves must be absolute/external at runtime; shell `~` expansion in the command above produces the required absolute path before Python receives it.

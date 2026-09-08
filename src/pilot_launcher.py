@@ -109,7 +109,9 @@ def _load_pilot_tls_configuration(
     )
 
 
-def run(environ: Mapping[str, str] | None = None) -> None:
+def build_uvicorn_options(
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, object]:
     env = environ if environ is not None else os.environ
     if not pilot_mode_enabled(env):
         raise PilotAccessConfigurationError(
@@ -176,7 +178,11 @@ def run(environ: Mapping[str, str] | None = None) -> None:
             }
         )
 
-    uvicorn.run(**uvicorn_options)
+    return uvicorn_options
+
+
+def run(environ: Mapping[str, str] | None = None) -> None:
+    uvicorn.run(**build_uvicorn_options(environ))
 
 
 if __name__ == "__main__":
