@@ -1489,3 +1489,17 @@ python -m src.pilot_profile_launcher \
 ```
 
 After the check-only result identifies the intended DB path, data-pack root and `outbound_mode=shadow`, remove `--check-only` to launch. The profile env files themselves must be absolute/external at runtime; shell `~` expansion in the command above produces the required absolute path before Python receives it.
+
+## P2-16.6 — Pre-Pilot Hardening
+
+Before connecting a real agency mailbox, validate the controlled-pilot profile with `python -m src.pilot_profile_launcher --core-env <pilot.env> --overlay-env <web-pilot.env> --check-only`. Parent-shell `MINAI_*`, Outlook, OpenAI, operator and provider settings are not deployment authority; put every required application setting in the selected core profile.
+
+The preflight now requires a fully verified external pilot data pack. `customer_memory.json` and `supplier_capabilities.json` must satisfy the pilot-pack cardinality/structure rules, carry human-reviewed `pilot_verified` provenance and match their recorded SHA-256 fingerprints. Editing either dataset after verification intentionally makes the pack unstartable; create and review a new pack version instead of weakening the check.
+
+For the first real agency shadow phase keep `MINAI_OUTBOUND_MODE=shadow`. Authenticate Outlook in that profile only after confirming the displayed delegated permission is `Mail.Read`. The CLI reports the actual scopes cached for the selected profile. Do not grant `Mail.Send` for historical analysis or shadow observation. `Mail.Send` is reserved for the later separately approved `controlled_send` phase.
+
+Shadow safety does not depend only on using the launcher. A direct FastAPI pilot startup runs the same controlled-runtime preflight, and default/non-pilot runtime no longer enables outbound delivery implicitly. At the Graph boundary, a read-only Outlook configuration is rejected before token acquisition/provider POST even if a caller reaches the send client unexpectedly. Conversely, selecting `controlled_send` without a valid Outlook sender configuration or usable cached `Mail.Send` authorization blocks pilot startup instead of launching a scheduler with no provider. A malformed `MINAI_PILOT_MODE` also blocks direct ASGI startup. Pilot legacy-bootstrap reads each dataset once, verifies the fingerprint against those exact bytes, and imports those same bytes, so post-startup or concurrent tampering cannot be imported into Master Data.
+
+Ordinary retention may still delete unrelated transient state, but it must not sever a retained MINA job from extraction/message-idempotency evidence, RFQ lifecycle/send evidence, quote approval/case state, relevant attachment review or scheduled automation state. Replaying an old provider message after retention must resolve to its existing durable evidence instead of creating a fresh proposal. This continuity rule does not permit durable raw email-body or attachment-content storage.
+
+Release gate for this milestone: targeted P2-16.6 regressions, source compilation, `git diff --check`, the canonical pilot regression suite, then the exact-head Controlled Pilot Gate. A real mailbox remains blocked until all gates pass and the user separately authorizes the real-agency cutover.

@@ -154,6 +154,7 @@ from src.simulation.manual_rfq_sent_regressions import evaluate_manual_rfq_sent_
 from src.simulation.pilot_access_regressions import evaluate_pilot_access_regressions
 from src.simulation.pilot_launcher_regressions import evaluate_pilot_launcher_regressions
 from src.simulation.pilot_profile_launcher_regressions import evaluate_pilot_profile_launcher_regressions
+from src.simulation.pre_pilot_hardening_regressions import evaluate_pre_pilot_hardening_regressions
 from src.simulation.pilot_rehearsal_regressions import evaluate_pilot_rehearsal_regressions
 from src.simulation.pilot_operator_regressions import evaluate_pilot_operator_regressions
 from src.simulation.pilot_ops_rfq_regressions import evaluate_pilot_ops_rfq_regressions
@@ -219,6 +220,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Pilot access", evaluate_pilot_access_regressions),
     Suite("Pilot launcher", evaluate_pilot_launcher_regressions),
     Suite("Controlled pilot deployment profile isolation", evaluate_pilot_profile_launcher_regressions),
+    Suite("Pre-pilot hardening", evaluate_pre_pilot_hardening_regressions),
     Suite("Synthetic pilot rehearsal", evaluate_pilot_rehearsal_regressions),
     Suite("Sanitized historical replay harness", evaluate_sanitized_replay_regressions),
     Suite("Authorized sanitized historical replay", evaluate_authorized_sanitized_replay_regressions),

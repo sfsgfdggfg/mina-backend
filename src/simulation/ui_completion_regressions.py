@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from src.core.automation_policy_repository import InMemoryAgencyAutomationPolicyRepository
 from src.core.web_session import hash_password
-from src.simulation.pilot_web_shell_regressions import _environment, _hidden_value, _meta_value, _web_env
+from src.simulation.pilot_web_shell_regressions import _controlled_web_environment, _hidden_value, _meta_value, _web_env
 
 
 def evaluate_ui_completion_regressions() -> dict:
@@ -76,7 +76,7 @@ def evaluate_ui_completion_regressions() -> dict:
     test_repository = InMemoryAgencyAutomationPolicyRepository()
     api_module.agency_automation_policy_repository = test_repository
     try:
-        with _environment(_web_env(password_hash)):
+        with _controlled_web_environment(_web_env(password_hash)):
             with TestClient(
                 api_module.app,
                 base_url="https://127.0.0.1",

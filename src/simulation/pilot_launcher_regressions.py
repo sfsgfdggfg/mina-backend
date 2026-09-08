@@ -9,6 +9,7 @@ from unittest.mock import patch
 from src.core.pilot_access import PilotAccessConfigurationError
 from src.core.web_session import hash_password
 from src.pilot_launcher import run
+from src.pilot_data_pack import verify_pack
 
 
 def _valid_env(
@@ -27,56 +28,62 @@ def _valid_env(
     }
 
 
-def _write_pilot_data_pack(root: Path) -> Path:
+def _write_pilot_data_pack(root: Path, *, verify: bool = True) -> Path:
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    customer = [{
-        "customer_name": "Launcher Synthetic Customer",
-        "active": True,
-        "aliases": [],
-        "trusted_sender_addresses": [],
-        "trusted_sender_domains": ["launcher.invalid"],
-        "operational_notes": [],
-    }]
-
-    suppliers = [{
-        "supplier_name": "Launcher Synthetic Supplier",
-        "active": True,
-        "role": "primary",
-        "route_regions": ["international"],
-        "countries": ["Türkiye", "Almanya"],
-        "service_types": ["FTL"],
-        "equipment_types": ["Tenteli"],
-        "special_capabilities": [],
-        "priority_routes": [],
-        "contacts": [{
-            "email": "quotes@launcher.invalid",
+    customers = [
+        {
+            "customer_name": f"Launcher Synthetic Customer {index}",
             "active": True,
-            "is_primary": True,
-        }],
-        "reliability_score": 0.9,
-        "price_score": 0.8,
-        "speed_score": 0.8,
-        "notes": "Synthetic launcher fixture.",
-    }]
+            "aliases": [],
+            "trusted_sender_addresses": [
+                f"ops{index}@launcher.invalid"
+            ],
+            "trusted_sender_domains": [],
+            "operational_notes": [],
+        }
+        for index in (1, 2)
+    ]
+
+    suppliers = [
+        {
+            "supplier_name": f"Launcher Synthetic Supplier {index}",
+            "active": True,
+            "role": "primary",
+            "route_regions": ["international"],
+            "countries": ["Türkiye", "Almanya"],
+            "service_types": ["FTL"],
+            "equipment_types": ["Tenteli"],
+            "special_capabilities": [],
+            "priority_routes": ["Türkiye-Almanya"],
+            "contacts": [{
+                "email": f"quotes{index}@launcher.invalid",
+                "active": True,
+                "is_primary": True,
+            }],
+            "reliability_score": 0.9,
+            "price_score": 0.8,
+            "speed_score": 0.8,
+            "notes": "Synthetic launcher fixture.",
+        }
+        for index in (1, 2, 3)
+    ]
 
     (data_dir / "customer_memory.json").write_text(
-        json.dumps(customer),
+        json.dumps(customers),
         encoding="utf-8",
     )
     (data_dir / "supplier_capabilities.json").write_text(
         json.dumps(suppliers),
         encoding="utf-8",
     )
-
-    # Launcher validates safe pack structure. Semantic provenance
-    # authorization remains a separate operational/readiness boundary.
-    (data_dir / "provenance_registry.json").write_text(
-        "{}",
-        encoding="utf-8",
-    )
-
+    if verify:
+        verify_pack(
+            root,
+            verified_by="Synthetic Launcher Verifier",
+            confirm_final_reviewed=True,
+        )
     return root
 
 
@@ -129,7 +136,7 @@ def evaluate_pilot_launcher_regressions() -> dict:
 
         repo_inside_dir = Path(".pilot-launcher-regression-data")
         try:
-            _write_pilot_data_pack(repo_inside_dir)
+            _write_pilot_data_pack(repo_inside_dir, verify=False)
 
             rejected_configs = (
                 (

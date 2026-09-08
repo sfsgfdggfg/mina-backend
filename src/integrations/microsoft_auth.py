@@ -10,6 +10,7 @@ from uuid import UUID
 import msal
 
 from src.paths import REPO_ROOT
+from src.core.outbound_runtime import resolve_outbound_runtime_policy
 
 
 TENANT_ID_ENV = "MINAI_OUTLOOK_TENANT_ID"
@@ -24,7 +25,10 @@ AUTHORITY_BASE = (
 )
 CONSUMERS_TENANT = "consumers"
 
-OUTLOOK_SCOPES = (
+OUTLOOK_READ_SCOPES = (
+    "Mail.Read",
+)
+OUTLOOK_SEND_SCOPES = (
     "Mail.Read",
     "Mail.Send",
 )
@@ -50,6 +54,7 @@ class MicrosoftAuthConfig:
     client_id: str
     mailbox_id: str
     token_cache_path: Path
+    scopes: tuple[str, ...] = OUTLOOK_READ_SCOPES
 
     @property
     def authority(self) -> str:
@@ -86,11 +91,24 @@ class MicrosoftAuthConfig:
             env.get(TOKEN_CACHE_PATH_ENV)
         )
 
+        try:
+            outbound_policy = resolve_outbound_runtime_policy(env)
+        except ValueError as exc:
+            raise MicrosoftAuthConfigurationError(
+                "Outlook authentication requires a valid outbound runtime mode."
+            ) from exc
+        scopes = (
+            OUTLOOK_SEND_SCOPES
+            if outbound_policy.delivery_enabled
+            else OUTLOOK_READ_SCOPES
+        )
+
         return cls(
             tenant_id=tenant_id,
             client_id=client_id,
             mailbox_id=mailbox_id,
             token_cache_path=cache_path,
+            scopes=scopes,
         )
 
 
@@ -381,7 +399,7 @@ def acquire_silent_access_token(
         )
 
     result = app.acquire_token_silent(
-        list(OUTLOOK_SCOPES),
+        list(config.scopes),
         account=accounts[0],
     )
 
@@ -420,7 +438,7 @@ def interactive_device_login(
     )
 
     flow = app.initiate_device_flow(
-        scopes=list(OUTLOOK_SCOPES)
+        scopes=list(config.scopes)
     )
 
     if (

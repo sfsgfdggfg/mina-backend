@@ -9,6 +9,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from src.simulation.physical_temp import physical_temporary_directory
+from src.simulation.pilot_launcher_regressions import _write_pilot_data_pack
+
 from src.core.web_session import (
     InMemoryLoginThrottle,
     InMemoryWebSessionStore,
@@ -36,6 +39,27 @@ def _environment(values: dict[str, str]):
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+
+
+@contextmanager
+def _controlled_web_environment(values: dict[str, str]):
+    """Supply a complete verified synthetic pilot runtime for TestClient startup."""
+    with physical_temporary_directory() as temporary:
+        root = Path(temporary)
+        pack = _write_pilot_data_pack(root / "pilot-pack")
+        cert = root / "pilot-cert.pem"
+        key = root / "pilot-key.pem"
+        cert.write_text("synthetic-cert", encoding="utf-8")
+        key.write_text("synthetic-key", encoding="utf-8")
+        runtime = {
+            "MINAI_PILOT_DB_PATH": str(root / "pilot.sqlite3"),
+            "MINAI_PILOT_DATA_DIR": str(pack),
+            "MINAI_OUTBOUND_MODE": "shadow",
+            "MINAI_PILOT_TLS_CERTFILE": str(cert),
+            "MINAI_PILOT_TLS_KEYFILE": str(key),
+        }
+        with _environment({**values, **runtime}):
+            yield
 
 
 def _web_env(password_hash: str) -> dict[str, str]:
@@ -154,14 +178,14 @@ def evaluate_pilot_web_shell_regressions() -> dict:
         "MINAI_PILOT_OPERATORS_JSON": json.dumps({"CLI Operator": "c" * 40}),
         "MINAI_WEB_SHELL_ENABLED": "0",
     }
-    with _environment(disabled_env):
+    with _controlled_web_environment(disabled_env):
         with TestClient(
             api_module.app, base_url="https://127.0.0.1", client=("127.0.0.1", 50000),
         ) as client:
             disabled = client.get("/app/login")
     check(disabled.status_code == 404, "pilot web shell is fail-closed unless explicitly enabled")
 
-    with _environment(_web_env(password_hash)):
+    with _controlled_web_environment(_web_env(password_hash)):
         with TestClient(
             api_module.app, base_url="http://127.0.0.1", client=("127.0.0.1", 50000),
         ) as insecure_client:
@@ -172,7 +196,7 @@ def evaluate_pilot_web_shell_regressions() -> dict:
             "pilot web shell requires HTTPS even on loopback",
         )
 
-    with _environment(_web_env(password_hash)):
+    with _controlled_web_environment(_web_env(password_hash)):
         with TestClient(
             api_module.app, base_url="https://127.0.0.1", client=("127.0.0.1", 50000),
         ) as client:

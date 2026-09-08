@@ -337,18 +337,29 @@ def status_pack(pack_dir: Path | str) -> dict[str, Any]:
             require_external=True,
         )
         pilot_env: Mapping[str, str] = {"MINAI_PILOT_MODE": "true"}
-        require_pilot_operational_dataset(
-            "customer_memory",
-            environ=pilot_env,
-            path=sources.provenance_registry_path,
-            dataset_path=sources.customer_memory_path,
+        records = (
+            require_pilot_operational_dataset(
+                "customer_memory",
+                environ=pilot_env,
+                path=sources.provenance_registry_path,
+                dataset_path=sources.customer_memory_path,
+            ),
+            require_pilot_operational_dataset(
+                "supplier_capabilities",
+                environ=pilot_env,
+                path=sources.provenance_registry_path,
+                dataset_path=sources.supplier_capabilities_path,
+            ),
         )
-        require_pilot_operational_dataset(
-            "supplier_capabilities",
-            environ=pilot_env,
-            path=sources.provenance_registry_path,
-            dataset_path=sources.supplier_capabilities_path,
-        )
+        if any(
+            record.get("classification") != "pilot_verified"
+            or record.get("operational") is not True
+            or record.get("pilot_usable") is not True
+            for record in records
+        ):
+            raise DataProvenanceError(
+                "Pilot data pack has not completed human verification."
+            )
     except (
         DataProvenanceError,
         OperationalDataSourceConfigurationError,
