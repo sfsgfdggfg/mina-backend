@@ -6625,3 +6625,13 @@ Historical relationship AI receives privacy-transformed two-way conversation con
 Thin evidence is not automatically discarded. AI observations remain proposals and are graded as `sample_only` or `recurring_pattern`; a claimed recurring pattern that lacks the category's supporting message/thread depth is transparently downgraded to `sample_only` and its confidence is capped. Human review remains the promotion boundary. This keeps discovery capacity available for real agency history while making evidence quality visible.
 
 Hard rejection is reserved for structural attribution or authority failures such as citing an AGENCY message as counterparty behavioral support, customer-inapplicable categories, or unsupported internal-state claims such as trust/reliance. Deterministic response-time metrics do not prohibit richer AI timing observations that describe sequence or interaction mechanics beyond raw latency.
+## DEC-191 — Canonical Pilot Regression Baseline Is Fully Green and Platform-Neutral
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+The canonical controlled-pilot regression gate must distinguish product regressions from test-fixture/platform artifacts. A deterministic canonical suite is not downgraded to an expected failure or skip merely because one development platform exposes a system path through a symlink alias. The preferred outcome is a portable fixture that exercises the same production guard and passes on all supported development/CI platforms.
+
+macOS temporary paths may be presented through aliases such as `/var` → `/private/var`. Production evidence, token-cache and live-smoke destination guards continue to reject symlink-bearing paths. Regression fixtures that need a normal external path must instead present the resolved physical temporary path. No runtime symlink/security validation is weakened to make tests pass.
+
+The target canonical baseline before real-agency shadow pilot work is zero failed deterministic suites. External live credentials, network access and OpenAI keys are not prerequisites for the deterministic canonical gate; those integrations are exercised with controlled offline/fake boundaries while true live evidence remains a separate authorized activity.

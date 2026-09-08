@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
+from src.simulation.physical_temp import physical_temporary_directory
 from src.simulation.outlook_live_smoke_receipt import (
     OutlookLiveSmokeReceiptError,
     build_outlook_live_smoke_receipt,
@@ -198,7 +198,7 @@ def evaluate_outlook_live_smoke_receipt_regressions():
         "receipt omits mailbox PII token and message identifiers",
     )
 
-    with TemporaryDirectory() as temporary:
+    with physical_temporary_directory() as temporary:
         destination = (
             Path(temporary)
             / "outlook-live-smoke-receipt.json"

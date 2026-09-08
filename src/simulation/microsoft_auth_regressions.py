@@ -4,9 +4,9 @@ import io
 import os
 from contextlib import redirect_stdout
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from src.simulation.physical_temp import physical_temporary_directory
 from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
     MicrosoftAuthConfigurationError,
@@ -150,7 +150,7 @@ def evaluate_microsoft_auth_regressions():
         else:
             failures.append(label)
 
-    with TemporaryDirectory() as temp:
+    with physical_temporary_directory() as temp:
         root = Path(temp)
         cache_path = root / "token-cache.json"
 

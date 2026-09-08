@@ -4,9 +4,9 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from src.simulation.physical_temp import physical_temporary_directory
 import src.outlook_live_smoke as smoke_module
 
 from src.outlook_live_smoke import (
@@ -205,7 +205,7 @@ def evaluate_outlook_live_smoke_regressions():
         else:
             failures.append(label)
 
-    with TemporaryDirectory() as temp:
+    with physical_temporary_directory() as temp:
         root = Path(temp)
         manifest_path = (
             root / "manifest.json"
@@ -389,7 +389,7 @@ def evaluate_outlook_live_smoke_regressions():
             "missing human confirmation blocks before live pull",
         )
 
-    with TemporaryDirectory() as temp:
+    with physical_temporary_directory() as temp:
         failure_path = (
             Path(temp)
             / "filesystem-failure.json"
@@ -444,7 +444,7 @@ def evaluate_outlook_live_smoke_regressions():
             "manifest filesystem failures are safely summarized",
         )
 
-    with TemporaryDirectory() as temp:
+    with physical_temporary_directory() as temp:
         root = Path(temp)
 
         manifest_path = (
