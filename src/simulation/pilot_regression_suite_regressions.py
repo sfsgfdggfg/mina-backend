@@ -5,8 +5,10 @@ from __future__ import annotations
 import io
 import os
 import socket
+from pathlib import Path
 from unittest.mock import patch
 
+from src.simulation.physical_temp import physical_temporary_directory
 from src.simulation.pilot_regression_suite import CANONICAL_SUITES, Suite, run_suites
 
 
@@ -96,6 +98,17 @@ def evaluate_pilot_regression_suite_regressions() -> dict:
     stale = sorted(OBSOLETE_EVALUATORS.intersection(callable_names))
     if stale:
         failures.append("obsolete evaluators are canonical: " + ", ".join(stale))
+
+    with physical_temporary_directory() as temporary:
+        physical_path = Path(temporary)
+        if physical_path != physical_path.resolve(strict=True):
+            failures.append("physical temp helper returned an unresolved path")
+        current = physical_path
+        while current != current.parent:
+            if current.is_symlink():
+                failures.append("physical temp helper returned a symlink-bearing path")
+                break
+            current = current.parent
 
     network_attempts: list[object] = []
 

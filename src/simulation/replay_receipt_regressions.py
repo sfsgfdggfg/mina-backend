@@ -6,10 +6,10 @@ import contextlib
 import io
 import json
 import os
-import tempfile
 from collections import Counter
 from pathlib import Path
 
+from src.simulation.physical_temp import physical_temporary_directory
 from src.simulation.pilot_rehearsal import _write_synthetic_sources
 from src.simulation.replay_receipt import (
     CUSTOMER_IDENTITY_MODE,
@@ -62,7 +62,7 @@ def evaluate_replay_receipt_regressions() -> dict:
         if not condition:
             failures.append(name)
 
-    with tempfile.TemporaryDirectory() as temporary:
+    with physical_temporary_directory() as temporary:
         root = Path(temporary)
         sources = _write_synthetic_sources(root)
         replay_input = root / "sanitized-replay.jsonl"

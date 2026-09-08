@@ -5,10 +5,10 @@ from __future__ import annotations
 import io
 import json
 import os
-import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
 
+from src.simulation.physical_temp import physical_temporary_directory
 from src.pilot_ops import (
     PilotOpsError,
     _setup_rfq,
@@ -166,7 +166,7 @@ def _pack(root: Path) -> dict:
 def evaluate_pilot_ops_rfq_regressions() -> dict:
     failures = []
 
-    with tempfile.TemporaryDirectory() as temporary:
+    with physical_temporary_directory() as temporary:
         root = Path(temporary) / "pack"
         root.mkdir()
         status = _pack(root)

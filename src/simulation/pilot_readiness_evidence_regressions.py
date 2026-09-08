@@ -7,12 +7,12 @@ import io
 import json
 import os
 import socket
-import tempfile
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from src.simulation.physical_temp import physical_temporary_directory
 from src.core.data_provenance import calculate_dataset_sha256
 from src.pilot_readiness import load_external_evidence
 from src.pilot_readiness_evidence import (
@@ -112,7 +112,7 @@ def evaluate_pilot_readiness_evidence_regressions() -> dict:
         if not condition:
             failures.append(name)
 
-    with tempfile.TemporaryDirectory() as temporary:
+    with physical_temporary_directory() as temporary:
         root = Path(temporary)
         pack_root = root / "pilot-pack"
         data_dir = pack_root / "data"

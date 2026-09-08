@@ -3833,3 +3833,8 @@ When deterministic counterparty response timing exists, AI timing prose must not
 Privacy-transformed `AGENCY` messages may be included in historical AI context only to interpret what the counterparty is responding to. Every AI observation must cite bounded message indexes and every cited behavioral-support index must resolve to a `COUNTERPARTY` message. If any support index points to an AGENCY-authored message, the observation is rejected before LearningFact creation.
 
 Small samples are evidence-quality signals, not automatic exclusion rules. A thin observation may remain a `sample_only` proposal with capped confidence; an under-supported `recurring_pattern` claim is downgraded rather than silently hidden. UI review must expose the effective evidence scope and support counts. Trust, reliance and similar unobserved internal-state claims remain inadmissible without direct authority.
+## RULE-207 — Regression Fixtures Must Use Physical External Paths Without Weakening Runtime Guards
+
+When a regression exercises create-only evidence, token-cache or smoke-artifact paths that production requires to be outside the repository and free of symlink components, the fixture must supply a resolved physical temporary path. Platform aliases such as macOS `/var` must not cause deterministic canonical failures.
+
+A failing path-security regression must never be fixed by relaxing the production symlink guard, moving evidence into the repository, or classifying a deterministic test as an expected failure. Canonical regressions must remain network-independent and secret-independent unless a suite is explicitly outside the deterministic gate and requires separate live authorization.
