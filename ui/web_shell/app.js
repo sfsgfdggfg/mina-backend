@@ -1402,6 +1402,7 @@ function renderSupplierLearning(container, supplier) {
       const facts=data.facts||[]; if(!facts.length){area.append(emptyState("Henüz öğrenilmiş gözlem yok","Geçmiş RFQ/yanıt kanıtı oluştukça MINAI öneriler üretebilir."));return;}
       const list=node("div","","learning-fact-list"); facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",f.fact_key),node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small"));
+        if(f.source_type==="minai_inference" && (f.evidence||[])[0]?.summary) card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
         if(f.status==="proposed"){const a=node("div","","actions"); a.append(actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"Tedarikçi profili ekranında operatör tarafından doğrulandı."})});await load();}),actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"Tedarikçi profili ekranında operatör tarafından reddedildi."})});await load();}));card.append(a);} list.append(card);}); area.append(list);
     } catch(e){area.replaceChildren(node("div",e.message||String(e),"error"));}
   } load();
@@ -1455,6 +1456,9 @@ async function renderRelationshipFactReview(container, subject) {
         node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),
         node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small")
       );
+      if(f.source_type==="minai_inference" && (f.evidence||[])[0]?.summary){
+        card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
+      }
       if(f.status==="proposed"){
         const actions=node("div","","actions");
         actions.append(
@@ -1477,7 +1481,9 @@ function renderRelationshipOnboardingResult(container, result) {
     summaryItem("Belirsiz eşleşme",result.ambiguous_message_count??0),
     summaryItem("Yeni öneri",result.proposed_fact_count??0),
     summaryItem("AI gözlemi",result.ai_observation_count??0),
-    summaryItem("AI guard eledi",result.ai_observation_skipped_count??0)
+    summaryItem("Sınırlı örnek",result.ai_observation_sample_only_count??0),
+    summaryItem("Tekrarlayan patern",result.ai_observation_recurring_count??0),
+    summaryItem("AI hard guard eledi",result.ai_observation_hard_rejected_count??result.ai_observation_skipped_count??0)
   ); container.append(summary);
   if (result.raw_messages_persisted === false || result.raw_body_persisted === false) {
     container.append(node("div","Ham geçmiş mail gövdeleri onboarding state’inde saklanmadı.","notice"));

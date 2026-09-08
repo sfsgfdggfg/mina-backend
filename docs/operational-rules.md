@@ -3827,3 +3827,9 @@ Only counterparty-authored historical messages may be sent as behavioral evidenc
 Each AI observation must declare whether it is limited to the analyzed sample or represents a recurring pattern, plus the number of supporting counterparty-authored messages and threads. Claimed support may not exceed the supplied sample. Sample-only observations receive a bounded confidence ceiling; relationship-pattern claims are not valid as one-off observations. Recurring quote-preference, urgency, timing and relationship-pattern claims require at least five supporting messages across three threads; other categories use category-specific minimum evidence.
 
 When deterministic counterparty response timing exists, AI timing prose must not duplicate it. Generic claims that merely assert an ongoing/strong relationship, trust or reliance are not durable relationship knowledge. AI LearningFact evidence uses the counterparty-authored evidence fingerprint, so changes only to agency-authored wording do not create new counterparty AI facts.
+
+## RULE-206 — Historical AI Context May Be Two-Way but Behavioral Support Must Be Counterparty-Authored
+
+Privacy-transformed `AGENCY` messages may be included in historical AI context only to interpret what the counterparty is responding to. Every AI observation must cite bounded message indexes and every cited behavioral-support index must resolve to a `COUNTERPARTY` message. If any support index points to an AGENCY-authored message, the observation is rejected before LearningFact creation.
+
+Small samples are evidence-quality signals, not automatic exclusion rules. A thin observation may remain a `sample_only` proposal with capped confidence; an under-supported `recurring_pattern` claim is downgraded rather than silently hidden. UI review must expose the effective evidence scope and support counts. Trust, reliance and similar unobserved internal-state claims remain inadmissible without direct authority.
