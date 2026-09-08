@@ -1503,3 +1503,39 @@ Shadow safety does not depend only on using the launcher. A direct FastAPI pilot
 Ordinary retention may still delete unrelated transient state, but it must not sever a retained MINA job from extraction/message-idempotency evidence, RFQ lifecycle/send evidence, quote approval/case state, relevant attachment review or scheduled automation state. Replaying an old provider message after retention must resolve to its existing durable evidence instead of creating a fresh proposal. This continuity rule does not permit durable raw email-body or attachment-content storage.
 
 Release gate for this milestone: targeted P2-16.6 regressions, source compilation, `git diff --check`, the canonical pilot regression suite, then the exact-head Controlled Pilot Gate. A real mailbox remains blocked until all gates pass and the user separately authorizes the real-agency cutover.
+
+## P2-17 — Read-Only Counterparty Discovery Before Agency Pack Creation
+
+Use this step only for a newly authorized agency mailbox that does not yet have verified Customer/Supplier Master Data. It intentionally runs outside the controlled-pilot app, so an empty agency data pack does not need to be weakened or temporarily replaced with smoke data.
+
+Create a dedicated external auth profile, for example `~/.config/minai/agency-outlook-readonly.env`, containing only `MINAI_OUTLOOK_TENANT_ID`, `MINAI_OUTLOOK_CLIENT_ID`, `MINAI_OUTLOOK_MAILBOX_ID`, and `MINAI_OUTLOOK_TOKEN_CACHE_PATH`. Do not add `MINAI_OUTBOUND_MODE`, OpenAI keys, DB/data-pack settings or operator credentials. Keep the token-cache path external and owner-only.
+
+Validate the profile without authenticating or reading mail:
+
+```bash
+python -m src.outlook_counterparty_discovery check \
+  --auth-env /absolute/path/to/agency-outlook-readonly.env
+```
+
+The check must report `permissions=["Mail.ReadBasic"]` and `outbound_mode=shadow`. Then run the interactive device authorization with the same profile:
+
+```bash
+python -m src.outlook_counterparty_discovery auth \
+  --auth-env /absolute/path/to/agency-outlook-readonly.env
+```
+After the operator confirms that Microsoft is granting `Mail.ReadBasic` access to the intended mailbox, run bounded discovery. Use the actual authorized history window; the hard maximum is 370 days and 10,000 examined messages. Inbox and Sent Items receive separate quotas, newest messages are examined first, and the result reports per-folder examined/accepted counts plus truncation status.
+
+```bash
+python -m src.outlook_counterparty_discovery discover \
+  --auth-env /absolute/path/to/agency-outlook-readonly.env \
+  --start-at 2025-09-08T00:00:00+03:00 \
+  --end-at 2026-09-08T00:00:00+03:00 \
+  --max-messages 10000 \
+  --authorization-confirmed
+```
+
+Add `--agency-alias address@example.com` for each legitimate agency alias that can appear as sender/recipient. Discovery does not request message subjects, bodies or attachments and does not call AI. Output is transient candidate identity/traffic evidence; avoid redirecting it into long-lived files unless an approved onboarding evidence policy explicitly requires that storage.
+
+Review the highest-traffic unmatched addresses/domains with the agency operator. Humanly classify the desired initial scope as 2–3 pilot customers and 3–5 road suppliers, confirm the correct operational email contacts, and then enter them through the normal Master Data/data-pack intake. Only after the resulting agency pack is human-reviewed, fingerprint-current and `verified=true` should the controlled shadow-pilot profile be pointed at it.
+
+Once deterministic customer/supplier identities exist, run the existing historical relationship onboarding to derive proposed timing/communication/behavior facts. Counterparty discovery itself never creates those facts and never treats traffic volume as evidence that an address is a customer or supplier.

@@ -6721,3 +6721,16 @@ Shadow Outlook authorization is genuinely read-only: delegated auth requests `Ma
 A controlled pilot may boot only with the established fully validated data-pack contract: required customer/supplier cardinality, human verification metadata, `pilot_verified` operational provenance and matching SHA-256 fingerprints. A merely structural, internal/demo or post-verification-modified pack fails closed.
 
 Durable MINA lifecycle continuity includes the extraction/idempotency evidence, RFQ drafts/workflows/responses/dispatch/send evidence, quote cases/approvals, attachment-review state and scheduler action state needed to reconstruct a retained job and prevent replay. This retention exception does not authorize persistence of raw email bodies or attachment content; unrelated transient state remains subject to ordinary retention.
+
+## DEC-200 — Real-Agency Onboarding Starts With Read-Only Counterparty Discovery
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+Before a new agency has verified Customer/Supplier Master Data, MINAI must not use relationship onboarding to guess identities from unmatched mail. Initial mailbox onboarding instead uses a separate read-only counterparty-discovery step that can operate with empty Master Data and produces only human-review candidates.
+
+The discovery tool uses a dedicated external Outlook auth profile containing only tenant ID, client ID, mailbox ID and token-cache path. Parent-shell application settings are not authority. The tool forces `shadow`, requires delegated `Mail.ReadBasic` only, rejects broader `Mail.Read` and `Mail.Send`, and requires explicit authorization for the selected historical range.
+
+Discovery is metadata-minimized. Microsoft Graph requests immutable message identity, conversation identity, sender/recipient addresses, timestamps and draft state only; it does not request subject, body, attachments or AI analysis. Raw mailbox messages are transient and are cleared after the run. No Customer/Supplier Master Data, LearningFact, pilot database or operational pack is mutated.
+
+The result ranks external email addresses and domains by bounded inbound/outbound traffic evidence. Inbox and Sent Items receive separate quotas, newest messages are examined first, every examined raw item consumes the hard cap, and any truncation is reported explicitly. The result marks only deterministic matches to existing Master Data. Unmatched addresses remain unclassified candidates; MINAI does not infer customer versus supplier from traffic alone. A human selects and classifies the initial pilot customers/suppliers, then builds and verifies the agency data pack. Existing historical relationship analysis runs only after those identities exist.

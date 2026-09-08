@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import Any, Literal
 from urllib.parse import quote, urlsplit
@@ -40,6 +40,8 @@ GRAPH_PROVIDER_NAME = "microsoft_graph"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 MAX_PULL_MESSAGES = 50
 MAX_HISTORY_MESSAGES = 10_000
+MAX_COUNTERPARTY_DISCOVERY_DAYS = 370
+MIN_COUNTERPARTY_DISCOVERY_MESSAGES = 2
 _HISTORY_PAGE_SIZE = 50
 _ATTACHMENT_SELECT_FIELDS = "name,contentType,size,isInline"
 _ATTACHMENT_RETRIEVAL_SELECT_FIELDS = "id,name,contentType,size,isInline"
@@ -50,6 +52,10 @@ _GRAPH_SELECT_FIELDS = (
 )
 _HISTORY_GRAPH_SELECT_FIELDS = (
     "id,subject,body,from,toRecipients,receivedDateTime,sentDateTime,isDraft"
+)
+_COUNTERPARTY_DISCOVERY_SELECT_FIELDS = (
+    "id,conversationId,from,toRecipients,ccRecipients,bccRecipients,"
+    "receivedDateTime,sentDateTime,isDraft"
 )
 
 _GRAPH_PREFER = (
@@ -381,6 +387,61 @@ def normalize_graph_history_message(
         source_reference=f"microsoft_graph:{normalized_mailbox}:{message_id}",
         sent_at=sent_at, sender_address=sender_address, recipient_addresses=recipients,
         subject=subject, body_text=body_text.strip(), source="authorized_mailbox",
+    )
+
+
+def normalize_graph_counterparty_discovery_message(
+    raw_message: dict[str, Any],
+    *,
+    mailbox_id: str,
+    folder: Literal["inbox", "sentitems"],
+) -> HistoricalMailMessage:
+    if not isinstance(raw_message, dict):
+        raise OutlookGraphMessageError("graph_message_not_object")
+    message_id = _required_text(raw_message.get("id"), code="graph_message_id_missing")
+    is_draft = raw_message.get("isDraft")
+    if not isinstance(is_draft, bool):
+        raise OutlookGraphMessageError("graph_message_draft_state_missing")
+    if is_draft:
+        raise OutlookGraphMessageError("graph_draft_message_rejected")
+    sender_address, _ = _graph_email_address(
+        raw_message.get("from"), code="graph_sender_missing"
+    )
+    recipients: list[str] = []
+    for field_name in ("toRecipients", "ccRecipients", "bccRecipients"):
+        raw_recipients = raw_message.get(field_name)
+        if raw_recipients is None:
+            raw_recipients = []
+        if not isinstance(raw_recipients, list):
+            raise OutlookGraphMessageError("graph_discovery_recipients_invalid")
+        for item in raw_recipients:
+            recipients.append(
+                _graph_email_address(item, code="graph_recipient_invalid")[0]
+            )
+    recipients = list(dict.fromkeys(recipients))
+    if not recipients:
+        raise OutlookGraphMessageError("graph_discovery_recipients_missing")
+    if len(recipients) > 50:
+        raise OutlookGraphMessageError("graph_discovery_recipient_limit_exceeded")
+    timestamp_field = "receivedDateTime" if folder == "inbox" else "sentDateTime"
+    sent_at = _required_text(
+        raw_message.get(timestamp_field), code="graph_history_time_missing"
+    )
+    conversation_id = _optional_text(
+        raw_message.get("conversationId"), code="graph_conversation_id_invalid"
+    )
+    normalized_mailbox = _required_text(
+        mailbox_id, code="graph_mailbox_id_missing"
+    ).lower()
+    return HistoricalMailMessage(
+        source_reference=f"microsoft_graph:{normalized_mailbox}:{message_id}",
+        sent_at=sent_at,
+        sender_address=sender_address,
+        recipient_addresses=recipients,
+        subject="",
+        body_text="",
+        in_reply_to_reference=conversation_id or message_id,
+        source="authorized_mailbox",
     )
 
 
@@ -897,6 +958,110 @@ class OutlookGraphReadClient:
             params = None
 
         return messages
+
+
+    def list_counterparty_discovery_history(
+        self, *, start_at: datetime, end_at: datetime, max_messages: int = 5000,
+    ) -> list[HistoricalMailMessage]:
+        if start_at.tzinfo is None or end_at.tzinfo is None:
+            raise ValueError("Historical Graph range requires timezone-aware timestamps.")
+        start = start_at.astimezone(timezone.utc)
+        end = end_at.astimezone(timezone.utc)
+        if end <= start:
+            raise ValueError("Historical Graph end_at must be after start_at.")
+        if end - start > timedelta(days=MAX_COUNTERPARTY_DISCOVERY_DAYS):
+            raise ValueError(
+                "Counterparty discovery history window cannot exceed "
+                f"{MAX_COUNTERPARTY_DISCOVERY_DAYS} days."
+            )
+        if (
+            isinstance(max_messages, bool)
+            or not isinstance(max_messages, int)
+            or not (MIN_COUNTERPARTY_DISCOVERY_MESSAGES <= max_messages <= MAX_HISTORY_MESSAGES)
+        ):
+            raise ValueError(
+                "Counterparty discovery max_messages must be between "
+                f"{MIN_COUNTERPARTY_DISCOVERY_MESSAGES} and {MAX_HISTORY_MESSAGES}."
+            )
+
+        folder_quotas = {
+            "inbox": (max_messages + 1) // 2,
+            "sentitems": max_messages // 2,
+        }
+        folder_examined = {"inbox": 0, "sentitems": 0}
+        folder_accepted = {"inbox": 0, "sentitems": 0}
+        folder_truncated = {"inbox": False, "sentitems": False}
+        collected: dict[str, HistoricalMailMessage] = {}
+        self.last_message_rejections = []
+
+        for folder, time_field in (("inbox", "receivedDateTime"), ("sentitems", "sentDateTime")):
+            quota = folder_quotas[folder]
+            url = f"{GRAPH_API_BASE_URL}/me/mailFolders/{folder}/messages"
+            params: dict[str, Any] | None = {
+                "$select": _COUNTERPARTY_DISCOVERY_SELECT_FIELDS,
+                "$orderby": f"{time_field} desc",
+                "$filter": (
+                    f"{time_field} ge {start.isoformat().replace('+00:00', 'Z')} and "
+                    f"{time_field} lt {end.isoformat().replace('+00:00', 'Z')}"
+                ),
+                "$top": min(_HISTORY_PAGE_SIZE, quota),
+            }
+            while url and folder_examined[folder] < quota:
+                payload = self._get_json(url, params=params)
+                raw_items = payload.get("value")
+                if not isinstance(raw_items, list):
+                    raise OutlookGraphReadError("microsoft_graph_messages_missing")
+                remaining = quota - folder_examined[folder]
+                page_items = raw_items[:remaining]
+                next_link = _validated_next_link(payload.get("@odata.nextLink"))
+                if len(raw_items) > len(page_items):
+                    folder_truncated[folder] = True
+
+                for raw_item in page_items:
+                    folder_examined[folder] += 1
+                    try:
+                        message = normalize_graph_counterparty_discovery_message(
+                            raw_item, mailbox_id=self.mailbox_id, folder=folder,
+                        )
+                    except (OutlookGraphMessageError, ValidationError) as exc:
+                        raw_id = raw_item.get("id") if isinstance(raw_item, dict) else None
+                        raw_time = raw_item.get(time_field) if isinstance(raw_item, dict) else None
+                        self.last_message_rejections.append(
+                            OutlookGraphMessageRejection(
+                                external_message_id=str(raw_id or "unavailable"),
+                                received_at=str(raw_time or "unavailable"),
+                                reason_code=getattr(
+                                    exc, "code", "graph_discovery_message_contract_invalid"
+                                ),
+                            )
+                        )
+                        continue
+                    if message.source_reference not in collected:
+                        collected[message.source_reference] = message
+                        folder_accepted[folder] += 1
+
+                if folder_examined[folder] >= quota:
+                    if next_link is not None:
+                        folder_truncated[folder] = True
+                    break
+                url = next_link
+                params = None
+
+        self.last_counterparty_discovery_scan = {
+            "requested_max_messages": max_messages,
+            "examined_message_count": sum(folder_examined.values()),
+            "accepted_message_count": len(collected),
+            "rejected_message_count": len(self.last_message_rejections),
+            "folder_examined_counts": dict(folder_examined),
+            "folder_accepted_counts": dict(folder_accepted),
+            "folder_quotas": dict(folder_quotas),
+            "folder_truncated": dict(folder_truncated),
+            "truncated": any(folder_truncated.values()),
+            "newest_first": True,
+        }
+        return sorted(
+            collected.values(), key=lambda item: (item.sent_at, item.source_reference)
+        )
 
 
     def list_relationship_history(
