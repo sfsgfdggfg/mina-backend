@@ -6603,3 +6603,14 @@ Both classes enter the existing LearningFact lifecycle as `proposed` observation
 P2-15 does not introduce a durable historical-mail-body store. Raw message bodies fetched for onboarding are transient processing inputs and are cleared after analysis. Durable LearningFact evidence stores bounded aggregate summaries, source fingerprints/hashes, subject identity and derived values rather than copied historical message text.
 
 AI relationship analysis receives only the approved privacy-transformed source bundle. Historical messages with unknown or conflicting master-data identity may contribute to unmatched/ambiguous coverage reporting but must not become relationship learning for an arbitrarily selected party.
+
+## DEC-189 — AI Relationship Memory Uses Counterparty-Authored, Sample-Bounded Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+AI relationship observations must describe the customer or supplier from evidence authored by that counterparty. Agency-authored outbound message bodies may remain part of deterministic thread/timing calculations but are not behavioral evidence for the counterparty and are excluded from the AI text bundle. AI observation fingerprints are therefore derived from the counterparty-authored sample rather than the full bidirectional thread.
+
+AI observations distinguish `sample_only` descriptions from `recurring_pattern` claims and report supporting message/thread counts. Small samples may support a bounded description of what was observed, but they must not silently become broad statements such as “usually”, “prefers”, “tends”, “ongoing relationship”, trust or reliance. Recurring preference, urgency, timing and relationship-pattern claims require stronger repeated evidence.
+
+Deterministic evidence remains preferred where the system can calculate the fact directly. In particular, supplier response latency is measured from timestamps/thread direction and must not be duplicated as AI prose such as “responds quickly”. AI confidence is capped according to evidence scope/size and human confirmation remains the only runtime-authority boundary.

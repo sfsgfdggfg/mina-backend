@@ -21,6 +21,18 @@ RelationshipSubjectType = Literal["customer", "supplier"]
 RelationshipDirection = Literal["inbound", "outbound"]
 MAX_HISTORY_MESSAGE_BODY_CHARS = 50_000
 MAX_AI_SAMPLE_MESSAGES = 36
+AI_SAMPLE_ONLY_CONFIDENCE_CAP = 0.70
+AI_RECURRING_MIN_EVIDENCE = {
+    "communication_style": (2, 2),
+    "timing_pattern": (5, 3),
+    "negotiation_behavior": (3, 2),
+    "commercial_behavior": (2, 2),
+    "operational_behavior": (2, 2),
+    "relationship_pattern": (5, 3),
+    "vehicle_information_behavior": (2, 2),
+    "urgency_pattern": (5, 3),
+    "quote_preference": (5, 3),
+}
 MAX_RESPONSE_WINDOW = timedelta(days=7)
 _REPLY_PREFIX = re.compile(r"^(?:(?:re|fw|fwd|yanıt|yanit|cevap)\s*:\s*)+", re.I)
 
@@ -83,6 +95,15 @@ class RelationshipAIObservation(BaseModel):
     ]
     observation: str = Field(min_length=1, max_length=700)
     confidence: float = Field(ge=0, le=1)
+    scope: Literal["sample_only", "recurring_pattern"]
+    supporting_message_count: int = Field(ge=1, le=MAX_AI_SAMPLE_MESSAGES)
+    supporting_thread_count: int = Field(ge=1, le=MAX_AI_SAMPLE_MESSAGES)
+
+    @model_validator(mode="after")
+    def validate_support_counts(self):
+        if self.supporting_thread_count > self.supporting_message_count:
+            raise ValueError("AI observation cannot cite more threads than messages.")
+        return self
 
 
 class RelationshipAIObservationSet(BaseModel):
@@ -137,6 +158,7 @@ class RelationshipHistoryAnalysisResult(BaseModel):
     ambiguous_addresses: list[str] = Field(default_factory=list)
     proposed_fact_count: int
     ai_observation_count: int
+    ai_observation_skipped_count: int = 0
     raw_body_persisted: bool = False
     note: str = "Historical observations remain proposed until a human confirms them."
 
@@ -310,7 +332,11 @@ def _propose_fact(
 
 
 def _ai_sample(items: list[_MatchedMessage]) -> list[_MatchedMessage]:
-    ordered = sorted(items, key=lambda item: (item.sent_at, item.source_reference))
+    # Only counterparty-authored mail may be behavioral evidence about that counterparty.
+    ordered = sorted(
+        (item for item in items if item.direction == "inbound"),
+        key=lambda item: (item.sent_at, item.source_reference),
+    )
     if len(ordered) <= MAX_AI_SAMPLE_MESSAGES:
         return ordered
     # Even sampling preserves history span instead of over-weighting only the newest emails.
@@ -320,13 +346,60 @@ def _ai_sample(items: list[_MatchedMessage]) -> list[_MatchedMessage]:
 
 def _ai_bundle(items: list[_MatchedMessage]) -> PrivacySafeText:
     sample = _ai_sample(items)
-    sections = []
+    sections = [(
+        "EVIDENCE_SCOPE",
+        f"COUNTERPARTY_AUTHORED_MESSAGES: {len(sample)}\n"
+        f"COUNTERPARTY_THREADS: {len(set(item.subject_key for item in sample))}\n"
+        "Only counterparty-authored messages are included as behavioral evidence.",
+    )]
     for index, item in enumerate(sample, 1):
         sections.append((
             f"MESSAGE_{index:03d}",
-            f"DIRECTION: {item.direction}\nDATE_UTC: {item.sent_at.isoformat()}\nSUBJECT: {item.subject_text}\nBODY:\n{item.body_text}",
+            f"AUTHOR: COUNTERPARTY\nDATE_UTC: {item.sent_at.isoformat()}\nSUBJECT: {item.subject_text}\nBODY:\n{item.body_text}",
         ))
     return prepare_privacy_safe_source_bundle(sections).safe_text
+
+
+def _ai_observation_confidence_cap(observation: RelationshipAIObservation) -> float:
+    if observation.scope == "sample_only":
+        return AI_SAMPLE_ONLY_CONFIDENCE_CAP
+    if observation.supporting_message_count < 5:
+        return 0.75
+    if observation.supporting_message_count < 8:
+        return 0.85
+    return 0.95
+
+
+def _accept_ai_observation(
+    observation: RelationshipAIObservation, *, subject_type: RelationshipSubjectType,
+    sampled_message_count: int, sampled_thread_count: int,
+    deterministic_counterparty_timing: bool,
+) -> bool:
+    if subject_type == "customer" and observation.category == "vehicle_information_behavior":
+        return False
+    if observation.supporting_message_count > sampled_message_count:
+        return False
+    if observation.supporting_thread_count > sampled_thread_count:
+        return False
+    # Reply latency is already measured from timestamps/thread direction; do not duplicate it with AI prose.
+    if deterministic_counterparty_timing and observation.category == "timing_pattern":
+        return False
+    if observation.scope == "sample_only":
+        # "Relationship pattern" is meaningless as a one-off observation and invites over-generalization.
+        return observation.category != "relationship_pattern"
+    if observation.category == "relationship_pattern":
+        generic_claims = (
+            "ongoing relationship", "business relationship", "strong relationship", "relationship exists",
+            "reliance", "relies on", "trust", "süregelen ilişki", "iş ilişkisi", "güven",
+        )
+        normalized = observation.observation.casefold()
+        if any(claim in normalized for claim in generic_claims):
+            return False
+    min_messages, min_threads = AI_RECURRING_MIN_EVIDENCE[observation.category]
+    return (
+        observation.supporting_message_count >= min_messages
+        and observation.supporting_thread_count >= min_threads
+    )
 
 
 def analyze_relationship_history(
@@ -379,6 +452,7 @@ def analyze_relationship_history(
 
     summaries: list[RelationshipHistorySubjectSummary] = []
     ai_observation_count = 0
+    ai_observation_skipped_count = 0
     proposed_total = 0
     ai_category_map = {
         "communication_style": "relationship.communication_style",
@@ -437,23 +511,38 @@ def analyze_relationship_history(
             if fact is not None:
                 proposed_ids.append(fact.fact_id); proposed_total += 1
 
-        if ai_analyzer is not None and items:
+        ai_sample = _ai_sample(items)
+        if ai_analyzer is not None and ai_sample:
             observations = ai_analyzer.analyze(subject_type=subject_type, history_text=_ai_bundle(items))
+            sampled_thread_count = len(set(item.subject_key for item in ai_sample))
+            ai_digest = _digest(ai_sample)
             for observation in observations.observations:
-                if subject_type == "customer" and observation.category == "vehicle_information_behavior":
+                if not _accept_ai_observation(
+                    observation, subject_type=subject_type,
+                    sampled_message_count=len(ai_sample), sampled_thread_count=sampled_thread_count,
+                    deterministic_counterparty_timing=bool(counterparty_response),
+                ):
+                    ai_observation_skipped_count += 1
                     continue
                 fact_key = ai_category_map[observation.category]
+                confidence = min(observation.confidence, _ai_observation_confidence_cap(observation))
                 fact = _propose_fact(
                     learning_repository=learning_repository, master_repository=master_repository,
                     subject_type=subject_type, subject_id=subject_id, subject_label=label,
-                    fact_key=fact_key, value=observation.observation, confidence=observation.confidence,
+                    fact_key=fact_key, value=observation.observation, confidence=confidence,
                     evidence=LearningEvidence(
-                        source_type="email", source_reference=evidence.source_reference,
+                        source_type="email",
+                        source_reference=f"relationship-history-ai:{subject_type}:{subject_id}:{ai_digest[:24]}",
                         observed_at=timestamp,
-                        summary=f"AI relationship observation from {min(len(items), MAX_AI_SAMPLE_MESSAGES)} privacy-transformed historical emails.",
-                        source_sha256=digest,
+                        summary=(
+                            f"AI relationship observation from {len(ai_sample)} counterparty-authored "
+                            f"privacy-transformed historical emails; scope={observation.scope}; "
+                            f"model_support={observation.supporting_message_count} messages/"
+                            f"{observation.supporting_thread_count} threads."
+                        ),
+                        source_sha256=ai_digest,
                     ),
-                    digest=digest, created_by=created_by, occurred_at=timestamp,
+                    digest=ai_digest, created_by=created_by, occurred_at=timestamp,
                     source_type="minai_inference",
                 )
                 if fact is not None:
@@ -474,4 +563,5 @@ def analyze_relationship_history(
         subjects=summaries, unmatched_addresses=sorted(unmatched_addresses),
         ambiguous_addresses=sorted(ambiguous_addresses), proposed_fact_count=proposed_total,
         ai_observation_count=ai_observation_count,
+        ai_observation_skipped_count=ai_observation_skipped_count,
     )

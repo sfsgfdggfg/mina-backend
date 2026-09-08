@@ -30,14 +30,48 @@ class _AI:
         assert isinstance(history_text, PrivacySafeText)
         assert "contact@customer.invalid" not in str(history_text)
         assert "+90 555 111 2233" not in str(history_text)
-        self.calls.append((subject_type, str(history_text)))
+        text=str(history_text)
+        assert "Please advise." not in text
+        assert "Working on it." not in text
+        assert "Can you quote?" not in text
+        self.calls.append((subject_type, text))
         if subject_type == "supplier":
             return RelationshipAIObservationSet(observations=[RelationshipAIObservation(
-                category="negotiation_behavior", observation="Often responds after a concrete target is supplied.", confidence=.82
+                category="negotiation_behavior",
+                observation="In the analyzed sample, the supplier replied with a commercial offer.",
+                confidence=.82,scope="sample_only",supporting_message_count=1,supporting_thread_count=1,
             )])
         return RelationshipAIObservationSet(observations=[RelationshipAIObservation(
-            category="quote_preference", observation="Usually asks for a concise price-first reply.", confidence=.74
+            category="quote_preference",
+            observation="In the analyzed sample, the customer requested concise pricing information.",
+            confidence=.74,scope="sample_only",supporting_message_count=2,supporting_thread_count=2,
         )])
+
+
+class _GuardAI:
+    def analyze(self, *, subject_type, history_text):
+        if subject_type == "supplier":
+            return RelationshipAIObservationSet(observations=[
+                RelationshipAIObservation(
+                    category="timing_pattern", observation="Replies quickly.", confidence=.99,
+                    scope="sample_only", supporting_message_count=1, supporting_thread_count=1,
+                ),
+                RelationshipAIObservation(
+                    category="operational_behavior",
+                    observation="In the analyzed sample, the supplier stated operational availability.", confidence=.99,
+                    scope="sample_only", supporting_message_count=1, supporting_thread_count=1,
+                ),
+            ])
+        return RelationshipAIObservationSet(observations=[
+            RelationshipAIObservation(
+                category="quote_preference", observation="Usually prefers one quote style.", confidence=.95,
+                scope="recurring_pattern", supporting_message_count=5, supporting_thread_count=3,
+            ),
+            RelationshipAIObservation(
+                category="relationship_pattern", observation="Ongoing relationship.", confidence=.95,
+                scope="sample_only", supporting_message_count=2, supporting_thread_count=2,
+            ),
+        ])
 
 
 def _masters():
@@ -141,10 +175,28 @@ def evaluate_relationship_history_onboarding_regressions():
         and result.raw_body_persisted is False,
         "deterministic mail metrics persist aggregate evidence without raw historical bodies",
     )
+    ai_facts=[x for x in facts if x.source_type=="minai_inference"]
     check(
-        len(ai.calls)==2 and any(x.fact_key=="relationship.negotiation_behavior" and x.source_type=="minai_inference" for x in facts)
-        and any(x.fact_key=="relationship.quote_preference" and x.subject_id==customer.customer_id for x in facts),
-        "AI relationship observations receive privacy-safe history and remain proposed facts",
+        len(ai.calls)==2 and any(x.fact_key=="relationship.negotiation_behavior" for x in ai_facts)
+        and any(x.fact_key=="relationship.quote_preference" and x.subject_id==customer.customer_id for x in ai_facts)
+        and all(x.status=="proposed" and x.confidence==.70 for x in ai_facts),
+        "AI relationship observations use only counterparty-authored privacy-safe history and cap sample-only confidence",
+    )
+
+    guard_learning=InMemoryLearningFactRepository()
+    guarded=analyze_relationship_history(
+        messages=_history(),agency_addresses=[AGENCY],master_repository=masters,
+        learning_repository=guard_learning,created_by="Tester",ai_analyzer=_GuardAI(),
+        occurred_at=NOW+timedelta(hours=9),
+    )
+    guard_ai_facts=[x for x in guard_learning.list_all() if x.source_type=="minai_inference"]
+    check(
+        guarded.ai_observation_count==1 and guarded.ai_observation_skipped_count==3
+        and len(guard_ai_facts)==1
+        and guard_ai_facts[0].subject_id==supplier.supplier_id
+        and guard_ai_facts[0].fact_key=="relationship.operational_behavior"
+        and guard_ai_facts[0].confidence==.70,
+        "AI guard rejects unsupported generalization generic relationship claims and deterministic reply-timing restatements",
     )
 
     # The product deliberately supports a deterministic first pass followed by an AI-on rerun
@@ -182,6 +234,30 @@ def evaluate_relationship_history_onboarding_regressions():
         and third_pass.proposed_fact_count==0
         and len(phased_learning.list_all())==second_count,
         "phased deterministic then AI history reruns are idempotent and add only missing observation categories",
+    )
+
+    direction_learning=InMemoryLearningFactRepository()
+    analyze_relationship_history(
+        messages=_history(),agency_addresses=[AGENCY],master_repository=masters,
+        learning_repository=direction_learning,created_by="Tester",ai_analyzer=_AI(),
+        occurred_at=NOW+timedelta(hours=13),
+    )
+    ai_before=[x for x in direction_learning.list_all() if x.source_type=="minai_inference"]
+    changed_outbound=[
+        item.model_copy(update={"body_text":"Agency changed its own request wording."})
+        if item.sender_address==AGENCY else item
+        for item in _history()
+    ]
+    analyze_relationship_history(
+        messages=changed_outbound,agency_addresses=[AGENCY],master_repository=masters,
+        learning_repository=direction_learning,created_by="Tester",ai_analyzer=_AI(),
+        occurred_at=NOW+timedelta(hours=14),
+    )
+    ai_after=[x for x in direction_learning.list_all() if x.source_type=="minai_inference"]
+    check(
+        len(ai_before)==2 and len(ai_after)==2
+        and {x.entry_id for x in ai_before}=={x.entry_id for x in ai_after},
+        "agency-authored wording changes do not create new counterparty AI relationship evidence",
     )
 
     confirmed=confirm_learning_fact(
@@ -232,6 +308,7 @@ def evaluate_relationship_history_onboarding_regressions():
     root=Path(__file__).resolve().parents[2]
     api=(root/"src/api.py").read_text(encoding="utf-8")
     ui=(root/"ui/web_shell/app.js").read_text(encoding="utf-8")
+    analyzer=(root/"src/ai/relationship_history_analyzer.py").read_text(encoding="utf-8")
     check(
         route_allowed("GET","/relationship-onboarding/status")
         and route_allowed("POST","/relationship-onboarding/outlook/analyze")
@@ -241,8 +318,15 @@ def evaluate_relationship_history_onboarding_regressions():
     check(
         "İlişki Hafızası" in ui and "Bu mailbox geçmişini seçilen tarih aralığında analiz etmeye yetkim var." in ui
         and "/relationship-onboarding/outlook/analyze" in ui and "raw_messages_persisted" in ui
+        and "AI guard eledi" in ui and "ai_observation_skipped_count" in ui
         and "window.prompt" not in ui and "localStorage" not in ui and "sessionStorage" not in ui,
         "browser makes historical mailbox access an explicit operator action and keeps browser state server-authoritative",
+    )
+    check(
+        "Only COUNTERPARTY-authored messages" in analyzer
+        and "Response speed/latency" in analyzer and "measured deterministically" in analyzer
+        and "sample_only" in analyzer and "supporting messages across 3 threads" in analyzer,
+        "AI analyzer prompt encodes counterparty attribution deterministic-timing and sample-size guardrails",
     )
     return {"passed":not failures,"passes":passes,"failures":failures}
 

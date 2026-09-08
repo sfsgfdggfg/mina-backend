@@ -1476,7 +1476,8 @@ function renderRelationshipOnboardingResult(container, result) {
     summaryItem("Eşleşmeyen",result.unmatched_message_count??0),
     summaryItem("Belirsiz eşleşme",result.ambiguous_message_count??0),
     summaryItem("Yeni öneri",result.proposed_fact_count??0),
-    summaryItem("AI gözlemi",result.ai_observation_count??0)
+    summaryItem("AI gözlemi",result.ai_observation_count??0),
+    summaryItem("AI guard eledi",result.ai_observation_skipped_count??0)
   ); container.append(summary);
   if (result.raw_messages_persisted === false || result.raw_body_persisted === false) {
     container.append(node("div","Ham geçmiş mail gövdeleri onboarding state’inde saklanmadı.","notice"));
