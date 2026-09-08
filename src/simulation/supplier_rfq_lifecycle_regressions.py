@@ -4,6 +4,7 @@ from datetime import datetime
 
 from src.core.mail import MailSendResult
 from src.core.models import Package, Shipment
+from src.core.pricing_policy import PricingFormula
 from src.core.quote_approval_repository import (
     InMemoryQuoteApprovalRepository,
 )
@@ -247,6 +248,9 @@ def evaluate_supplier_rfq_lifecycle_regressions() -> dict:
         rfq_repository=rfq_repository,
         approval_repository=approval_repository,
         quote_case_repository=quote_case_repository,
+        quote_pricing_override=PricingFormula(
+            method="cost_markup_percentage", value=15
+        ),
     )
     if resumed.get("customer_quote") is None:
         failures.append("customer pricing did not resume after response")

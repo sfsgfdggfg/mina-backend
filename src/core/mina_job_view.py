@@ -223,6 +223,13 @@ def build_mina_job_detail(
             "allowed_next_stages": allowed_next_stages(job),
             "supplier_reminder_preview_available": not job.is_closed,
             "supplier_price_entry_available": (not job.is_closed and job.stage in PRICE_SOURCING_STAGES),
+            "supplier_price_progress_available": (
+                not job.is_closed
+                and job.stage in PRICE_SOURCING_STAGES
+                and job.quote_case_id is None
+                and bool(job.supplier_rfq_workflow_id)
+                and bool(supplier_prices and supplier_prices.get("price_offers"))
+            ),
             "operation_start_available": (not job.is_closed and job.stage == "accepted"),
         },
     }

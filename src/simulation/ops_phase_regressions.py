@@ -10,7 +10,7 @@ from src.core.automation_policy_service import resolve_effective_automation_poli
 from src.core.learning_fact_repository import InMemoryLearningFactRepository
 from src.core.master_data import SupplierRelationshipSettings
 from src.core.master_data_repository import InMemoryMasterDataRepository
-from src.core.master_data_service import create_supplier_master
+from src.core.master_data_service import create_supplier_master, update_supplier_master
 from src.core.mail import MailSendResult
 from src.core.mina_job_repository import InMemoryMinaJobRepository
 from src.core.mina_job_service import (
@@ -175,6 +175,16 @@ def evaluate_ops_phase_regressions() -> dict:
     )
     jobs.save(job)
 
+    current_supplier = masters.find_supplier_by_name(selected.supplier_name)
+    update_supplier_master(
+        repository=masters, supplier_id=current_supplier.supplier_id, updated_by="Ops One",
+        occurred_at=NOW-timedelta(minutes=1),
+        contacts=[{
+            "contact_name":"Current Ops", "email":"current-primary@example.invalid",
+            "roles":["operations"], "is_primary":True, "active":True,
+        }],
+    )
+
     sender = _Sender()
     view = start_operation(
         mina_repository=jobs, quote_case_repository=cases, supplier_repository=rfqs,
@@ -185,6 +195,7 @@ def evaluate_ops_phase_regressions() -> dict:
     closure_message = next(m for m in messages.list_for_job(job.job_id) if m.kind == "supplier_closure")
     check(
         len(view["messages"]) == 2 and jobs.get(job.job_id).stage == "operation_opened"
+        and selected_message.recipient_email == "current-primary@example.invalid"
         and "teklif kabul edilmiştir" in selected_message.body_text.casefold()
         and "plaka" in selected_message.body_text.casefold()
         and "adana osb 4. cadde no:10" in selected_message.body_text.casefold()

@@ -216,6 +216,7 @@ def check_operational_consistency(
     supplier_selection: Optional[Dict[str, Any]],
     supplier_quote: Any = None,
     operational_data_sources: OperationalDataSources | None = None,
+    supplier_capabilities: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     warnings: List[str] = []
     errors: List[str] = []
@@ -232,13 +233,17 @@ def check_operational_consistency(
     }
     quote_supplier_name = _get_attr(supplier_quote, "supplier_name")
 
-    supplier_capabilities = _load_supplier_capabilities(
-        sources,
-        injected=operational_data_sources is not None,
+    capability_rows = (
+        [item for item in supplier_capabilities if isinstance(item, dict)]
+        if supplier_capabilities is not None
+        else _load_supplier_capabilities(
+            sources,
+            injected=operational_data_sources is not None,
+        )
     )
     selected_supplier_capability = _find_supplier_capability(
         selected_supplier_name,
-        supplier_capabilities,
+        capability_rows,
     )
 
     pickup_country = _normalize(_get_attr(shipment, "pickup_country"))
@@ -378,5 +383,9 @@ def check_operational_consistency(
         "warnings": warnings,
         "errors": errors,
         "source": "operational_consistency_engine",
-        "capability_data_source": str(sources.supplier_capabilities_path),
+        "capability_data_source": (
+            "supplier_master_projection"
+            if supplier_capabilities is not None
+            else str(sources.supplier_capabilities_path)
+        ),
     }

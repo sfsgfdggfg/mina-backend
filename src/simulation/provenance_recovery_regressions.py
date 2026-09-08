@@ -537,10 +537,11 @@ def _api_and_development_behavior(
     api.pilot_store = None
     try:
         with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
-            with _provenance_patches(registry_path):
-                result = api.resume_extraction_proposal_endpoint(
-                    confirmed.proposal_id
-                )
+            with patch.object(api, "_runtime_master_data_authority", return_value=None):
+                with _provenance_patches(registry_path):
+                    result = api.resume_extraction_proposal_endpoint(
+                        confirmed.proposal_id
+                    )
         if result.get("result_type") != "data_provenance_blocked":
             failures.append("API did not serialize the provenance block")
         reason = (result.get("supplier_selection") or {}).get(
@@ -552,10 +553,11 @@ def _api_and_development_behavior(
         api_workflow = SupplierRFQWorkflow(shipment=_shipment())
         api.supplier_rfq_repository.save_workflow(api_workflow)
         with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
-            with _provenance_patches(registry_path):
-                quote_result = api.resume_supplier_rfq_quote(
-                    api_workflow.workflow_id
-                )
+            with patch.object(api, "_runtime_master_data_authority", return_value=None):
+                with _provenance_patches(registry_path):
+                    quote_result = api.resume_supplier_rfq_quote(
+                        api_workflow.workflow_id
+                    )
         if quote_result.get("result_type") != "data_provenance_blocked":
             failures.append("RFQ resume API did not serialize provenance block")
     finally:

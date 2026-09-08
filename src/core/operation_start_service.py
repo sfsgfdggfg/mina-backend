@@ -74,22 +74,31 @@ def _recipient_for_supplier(
     supplier_name: str,
     rfq_id: str | None = None,
 ) -> str | None:
+    if master_repository is not None:
+        profile = master_repository.find_supplier_by_name(supplier_name)
+        if profile is not None:
+            if not profile.active:
+                return None
+            active = [
+                contact for contact in profile.contacts
+                if contact.active and contact.email
+            ]
+            primary = next(
+                (contact for contact in active if contact.is_primary), None
+            )
+            operations = next(
+                (contact for contact in active if "operations" in contact.roles), None
+            )
+            selected = primary or operations or (active[0] if active else None)
+            # A known master supplier with no active contact fails closed. An old
+            # RFQ recipient must not override a newer master-data deactivation.
+            return None if selected is None else selected.email
+
     draft = _draft_for_supplier(
         supplier_repository, workflow_id=workflow_id,
         supplier_name=supplier_name, rfq_id=rfq_id,
     )
-    if draft is not None and draft.recipient_email:
-        return draft.recipient_email
-    if master_repository is None:
-        return None
-    profile = master_repository.find_supplier_by_name(supplier_name)
-    if profile is None:
-        return None
-    active = [contact for contact in profile.contacts if contact.active and contact.email]
-    primary = next((contact for contact in active if contact.is_primary), None)
-    operations = next((contact for contact in active if "operations" in contact.roles), None)
-    selected = primary or operations or (active[0] if active else None)
-    return None if selected is None else selected.email
+    return None if draft is None else draft.recipient_email
 
 
 def _shipment_lines(shipment) -> list[str]:

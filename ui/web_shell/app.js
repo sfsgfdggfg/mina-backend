@@ -846,6 +846,133 @@ function renderJobAutomationSection(container, data, jobId, refresh) {
   container.append(section);
 }
 
+function supplierPriceSourceLabel(value) {
+  return ({
+    rfq_email: "RFQ e-posta", email: "E-posta", phone: "Telefon",
+    whatsapp: "WhatsApp", portal: "Portal", api: "API",
+    manual: "Manuel", fixed_rate: "Sabit fiyat"
+  })[value] || codeLabel(value);
+}
+
+function freshPriceEntryId(prefix) {
+  const id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}:${id}`;
+}
+
+function renderSupplierPricesSection(container, data, jobId, refresh) {
+  const view = data.supplier_prices || {};
+  const offers = view.price_offers || [];
+  const rates = view.applicable_fixed_rates || [];
+  const section = sectionBlock(
+    "Tedarikçi Fiyatları",
+    "RFQ, telefon, WhatsApp ve sabit fiyatlar aynı seçim motorunda karşılaştırılır."
+  );
+
+  if (offers.length) {
+    const list = node("div", "", "supplier-price-list");
+    offers.slice().sort((a,b) => new Date(b.recorded_at || 0) - new Date(a.recorded_at || 0)).forEach(offer => {
+      const card = node("div", "", "supplier-commercial supplier-price-card");
+      card.append(
+        node("strong", `${offer.supplier_name || "Tedarikçi"} · ${moneyLabel(offer.cost, offer.currency)}`),
+        node("span", supplierPriceSourceLabel(offer.source_type), "badge"),
+        node("span", offer.transit_time ? `Transit: ${offer.transit_time}` : "Transit: -", "small")
+      );
+      if (offer.equipment_type) card.append(node("span", `Ekipman: ${offer.equipment_type}`, "small"));
+      list.append(card);
+    });
+    section.append(list);
+  } else {
+    section.append(emptyState("Henüz kullanılabilir tedarikçi fiyatı yok", "RFQ yanıtı bekleyebilir veya telefon/WhatsApp fiyatı kaydedebilirsin."));
+  }
+
+  if (rates.length) {
+    const rateWrap = node("div", "", "fixed-rate-list");
+    rateWrap.append(node("h3", "Bu işe uyan sabit fiyatlar"));
+    rates.forEach(item => {
+      const rate = item.rate || {};
+      const row = node("div", "", "supplier-commercial fixed-rate-row");
+      row.append(
+        node("strong", `${rate.supplier_name || "Tedarikçi"} · ${moneyLabel(rate.cost, rate.currency)}`),
+        node("span", rate.transit_time ? `Transit: ${rate.transit_time}` : "", "small")
+      );
+      if (data.controls?.supplier_price_entry_available) {
+        const use = actionButton("Bu İşte Kullan", "", async () => {
+          use.disabled = true;
+          try {
+            await api(`/mina-jobs/${encodeURIComponent(jobId)}/supplier-prices/fixed-rate/${encodeURIComponent(rate.rate_id)}`, {
+              method: "POST", body: JSON.stringify({ entry_id: freshPriceEntryId("web-fixed-rate") })
+            });
+            await refresh();
+          } catch (error) { showError(error); use.disabled = false; }
+        });
+        row.append(use);
+      }
+      rateWrap.append(row);
+    });
+    section.append(rateWrap);
+  }
+
+  if (data.controls?.supplier_price_entry_available) {
+    const supplierNames = [...new Set([
+      ...(data.suppliers || []).map(item => item.supplier_name),
+      ...offers.map(item => item.supplier_name),
+      ...rates.map(item => item.rate?.supplier_name),
+    ].filter(Boolean))].sort();
+    const form = node("div", "", "approval-focused supplier-price-entry");
+    form.append(node("h3", "Telefon / WhatsApp / Harici Fiyat Kaydet"));
+    if (!supplierNames.length) {
+      form.append(node("div", "Önce bu iş için uygun tedarikçi çalışması oluşmalı.", "notice"));
+    } else {
+      const supplierLabel=node("label","Tedarikçi"); const supplier=document.createElement("select");
+      supplierNames.forEach(name=>{const o=document.createElement("option");o.value=name;o.textContent=name;supplier.append(o);}); supplierLabel.append(supplier);
+      const sourceLabel=node("label","Kaynak"); const source=document.createElement("select");
+      [["phone","Telefon"],["whatsapp","WhatsApp"],["email","E-posta"],["portal","Portal"],["manual","Manuel"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;source.append(o);}); sourceLabel.append(source);
+      const costLabel=node("label","Tedarikçi maliyeti"); const cost=document.createElement("input");cost.type="number";cost.min="0.01";cost.step="0.01";costLabel.append(cost);
+      const currencyLabel=node("label","Para birimi"); const currency=document.createElement("input");currency.value="EUR";currency.maxLength=3;currencyLabel.append(currency);
+      const transitLabel=node("label","Transit süre"); const transit=document.createElement("input");transit.placeholder="örn. 5-7 gün";transit.maxLength=120;transitLabel.append(transit);
+      const equipmentLabel=node("label","Ekipman"); const equipment=document.createElement("input");equipment.value=data.job?.shipment?.equipment_type||"";equipment.maxLength=120;equipmentLabel.append(equipment);
+      const basisLabel=node("label","Fiyat kapsamı"); const basis=document.createElement("select");
+      [["all_in","All-in"],["base_freight_plus_extras","Navlun + ekstralar"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;basis.append(o);});basisLabel.append(basis);
+      const feedback=node("div","","muted settings-feedback");
+      const save=actionButton("Fiyatı Kaydet","primary",async()=>{
+        const amount=Number(cost.value); if(!Number.isFinite(amount)||amount<=0){feedback.textContent="Geçerli tedarikçi maliyeti gerekli.";return;}
+        save.disabled=true; feedback.textContent="Fiyat kaydediliyor…";
+        try {
+          await api(`/mina-jobs/${encodeURIComponent(jobId)}/supplier-prices/manual`,{method:"POST",body:JSON.stringify({
+            entry_id:freshPriceEntryId("web-direct-price"), supplier_name:supplier.value, source_type:source.value,
+            cost:amount, currency:(currency.value||"EUR").trim().toUpperCase(), transit_time:transit.value.trim()||null,
+            equipment_type:equipment.value.trim()||null, pricing_basis:basis.value, included_costs:basis.value==="all_in"?[]:null,
+            excluded_costs:[]
+          })}); await refresh();
+        } catch(error){feedback.textContent=error.message||String(error);save.disabled=false;}
+      });
+      const grid=node("div","","settings-two-col");grid.append(supplierLabel,sourceLabel,costLabel,currencyLabel,transitLabel,equipmentLabel,basisLabel);
+      form.append(grid,save,feedback);
+    }
+    section.append(form);
+  }
+
+  if (data.controls?.supplier_price_progress_available) {
+    const progress = node("div", "", "approval-focused supplier-price-progress");
+    progress.append(node("h3", "Müşteri Teklifini Hazırla"));
+    const marginLabel=node("label","Bu işe özel maliyet üzerine % (opsiyonel)"); const margin=document.createElement("input");
+    margin.type="number";margin.min="0";margin.step="0.1";margin.placeholder="Müşteri/ajans kuralı yoksa gir";marginLabel.append(margin);
+    const feedback=node("div","","muted settings-feedback");
+    const prepare=actionButton("Teklifi Hazırla","approve",async()=>{
+      const raw=margin.value.trim(); const body={};
+      if(raw){const value=Number(raw);if(!Number.isFinite(value)||value<0){feedback.textContent="Geçerli bir yüzde gir.";return;}body.quote_pricing_override={method:"cost_markup_percentage",value};}
+      prepare.disabled=true;feedback.textContent="Tüm fiyat kaynakları karşılaştırılıyor…";
+      try {
+        const result=await api(`/mina-jobs/${encodeURIComponent(jobId)}/supplier-prices/progress`,{method:"POST",body:JSON.stringify(body)});
+        if(result.result_type==="pricing_policy_required") feedback.textContent="Müşteri veya ajans fiyatlama kuralı yok. İşe özel oran girerek tekrar deneyebilirsin.";
+        else await refresh();
+      } catch(error){feedback.textContent=error.message||String(error);} finally{prepare.disabled=false;}
+    });
+    progress.append(marginLabel,prepare,feedback); section.append(progress);
+  }
+  container.append(section);
+}
+
 function quoteStatusLabel(value) {
   return ({ pending: "Onay bekliyor", approved: "Onaylandı", rejected: "Reddedildi", invalidated: "Geçersizleşti" })[value] || codeLabel(value);
 }
@@ -1218,6 +1345,7 @@ async function renderJob(data, jobId) {
   if (!approvals.querySelector(".approval-card")) approvals.append(emptyState("Bekleyen otomasyon onayı yok"));
   root.append(approvals);
 
+  renderSupplierPricesSection(root, data, jobId, async () => loadJob(jobId));
   await renderQuoteSection(root, data, async () => loadJob(jobId));
   const suppliers = sectionBlock("Tedarikçiler", "RFQ durumu, fiyat ve takip aksiyonları.");
   for (const supplier of (data.suppliers || [])) await renderSupplier(

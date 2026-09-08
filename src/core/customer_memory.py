@@ -135,6 +135,7 @@ def normalize_lookup_text(value: Optional[str]) -> Optional[str]:
 def find_customer_profile(
     customer_name: Optional[str],
     operational_data_sources: OperationalDataSources | None = None,
+    customer_profiles: Optional[List[CustomerMemoryProfile]] = None,
 ) -> Optional[CustomerMemoryProfile]:
     normalized_name = normalize_lookup_text(customer_name)
 
@@ -142,9 +143,13 @@ def find_customer_profile(
         return None
 
     customer_memory = (
-        load_customer_memory()
-        if operational_data_sources is None
-        else load_customer_memory(operational_data_sources)
+        customer_profiles
+        if customer_profiles is not None
+        else (
+            load_customer_memory()
+            if operational_data_sources is None
+            else load_customer_memory(operational_data_sources)
+        )
     )
 
     for profile in customer_memory:
@@ -217,6 +222,7 @@ def enrich_shipment_with_customer_memory(
     email_text: Optional[str] = None,
     sender_address: Optional[str] = None,
     operational_data_sources: OperationalDataSources | None = None,
+    customer_profiles: Optional[List[CustomerMemoryProfile]] = None,
 ) -> CustomerMemoryResult:
     """
     Customer Memory identity-safe matching.
@@ -233,16 +239,21 @@ def enrich_shipment_with_customer_memory(
     require_operational_shipment(shipment)
 
     try:
-        if operational_data_sources is None:
+        if customer_profiles is None and operational_data_sources is None:
             require_pilot_operational_dataset("customer_memory")
-        profile = (
-            find_customer_profile(shipment.customer_name)
-            if operational_data_sources is None
-            else find_customer_profile(
+        if customer_profiles is not None:
+            profile = find_customer_profile(
+                shipment.customer_name,
+                operational_data_sources,
+                customer_profiles=customer_profiles,
+            )
+        elif operational_data_sources is None:
+            profile = find_customer_profile(shipment.customer_name)
+        else:
+            profile = find_customer_profile(
                 shipment.customer_name,
                 operational_data_sources,
             )
-        )
     except DataProvenanceBlockedError:
         return CustomerMemoryResult(
             matched=False,
@@ -260,7 +271,7 @@ def enrich_shipment_with_customer_memory(
             profile=None,
             candidate_profile=None,
             notes_applied=[],
-            source="customer_memory",
+            source=("customer_master_projection" if customer_profiles is not None else "customer_memory"),
             matched_by=None,
             identity_status="unmatched",
         )
@@ -271,7 +282,7 @@ def enrich_shipment_with_customer_memory(
             profile=None,
             candidate_profile=profile,
             notes_applied=[],
-            source="customer_memory",
+            source=("customer_master_projection" if customer_profiles is not None else "customer_memory"),
             matched_by=None,
             identity_status="sender_verification_required",
         )
@@ -330,7 +341,7 @@ def enrich_shipment_with_customer_memory(
         profile=profile,
         candidate_profile=profile,
         notes_applied=notes_applied,
-        source="customer_memory",
+        source=("customer_master_projection" if customer_profiles is not None else "customer_memory"),
         matched_by=matched_by,
         identity_status="trusted_sender",
     )

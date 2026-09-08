@@ -19,6 +19,8 @@ from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
 from src.core.mail import InboundMailEnvelope
+from src.core.master_data_repository import MasterDataRepository
+from src.core.master_data_service import customer_to_legacy_memory
 from src.core.operational_data import (
     OperationalDataSources,
 )
@@ -73,6 +75,7 @@ def process_controlled_outlook_customer_mail(
     operational_data_sources: (
         OperationalDataSources | None
     ),
+    master_data_repository: MasterDataRepository | None = None,
 ) -> dict:
     """Gate real Outlook mail before AI extraction."""
 
@@ -102,25 +105,25 @@ def process_controlled_outlook_customer_mail(
         })
         return result
 
-    if operational_data_sources is None:
-        return _blocked_result(
-            result_type="data_provenance_blocked",
-            reason_code=(
-                "pilot_customer_data_unavailable"
-            ),
-        )
-
-    try:
-        profiles = load_customer_memory(
-            operational_data_sources
-        )
-    except DataProvenanceError:
-        return _blocked_result(
-            result_type="data_provenance_blocked",
-            reason_code=(
-                "pilot_customer_data_unverified"
-            ),
-        )
+    if master_data_repository is not None:
+        profiles = [
+            customer_to_legacy_memory(item)
+            for item in master_data_repository.list_customers()
+            if item.active
+        ]
+    else:
+        if operational_data_sources is None:
+            return _blocked_result(
+                result_type="data_provenance_blocked",
+                reason_code="pilot_customer_data_unavailable",
+            )
+        try:
+            profiles = load_customer_memory(operational_data_sources)
+        except DataProvenanceError:
+            return _blocked_result(
+                result_type="data_provenance_blocked",
+                reason_code="pilot_customer_data_unverified",
+            )
 
     matches = [
         profile
