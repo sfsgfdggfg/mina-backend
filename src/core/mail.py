@@ -28,6 +28,7 @@ MailSendStatus = Literal[
     "failed",
     "rejected_before_provider",
     "provider_unavailable",
+    "delivery_outcome_unknown",
 ]
 
 MAX_INBOUND_MAIL_BODY_BYTES = 256 * 1024

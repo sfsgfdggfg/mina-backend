@@ -32,6 +32,10 @@ from src.core.supplier_rfq import (
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQNotFoundError,
     SupplierRFQTransitionError,
+    fail_supplier_rfq_follow_up_send,
+    fail_supplier_rfq_send,
+    reserve_supplier_rfq_follow_up_send,
+    reserve_supplier_rfq_send,
     send_supplier_rfq,
     send_supplier_rfq_follow_up,
 )
@@ -95,8 +99,8 @@ def dispatch_outbound_mail(
     except Exception:
         return _controlled_result(
             operation_id=request.operation_id,
-            status="failed",
-            reason="The outbound mail provider failed safely.",
+            status="delivery_outcome_unknown",
+            reason="The outbound mail provider outcome is unknown; do not retry automatically.",
         )
 
     if result.operation_id != request.operation_id:
@@ -163,49 +167,19 @@ def send_supplier_rfq_via_mail(
     sender: OutboundMailSender | None,
     enforce_business_hours: bool = False,
     now: datetime | None = None,
+    triggered_by: str = "MINAI automation",
 ) -> SupplierRFQMailDeliveryResult:
     draft = repository.get_draft(rfq_id)
     if draft is None:
         raise SupplierRFQNotFoundError(f"Supplier RFQ not found: {rfq_id}")
-
     operation_id = f"supplier-rfq:{rfq_id}"
     if draft.status != "approved":
         return SupplierRFQMailDeliveryResult(
             supplier_rfq=draft,
             delivery=_controlled_result(
-                operation_id=operation_id,
-                status="rejected_before_provider",
-                reason=(
-                    "Supplier RFQ must be approved and unsent before delivery; "
-                    f"current status is {draft.status}."
-                ),
-            ),
-        )
-    if not draft.has_recipient:
-        return SupplierRFQMailDeliveryResult(
-            supplier_rfq=draft,
-            delivery=_controlled_result(
-                operation_id=operation_id,
-                status="rejected_before_provider",
-                reason="Supplier RFQ has no recipient email.",
-            ),
-        )
-    if repository.list_manual_sent_evidence(rfq_id):
-        return SupplierRFQMailDeliveryResult(
-            supplier_rfq=draft,
-            delivery=_controlled_result(
-                operation_id=operation_id,
-                status="rejected_before_provider",
-                reason="Supplier RFQ already has manual send evidence.",
-            ),
-        )
-    if repository.list_automated_sent_evidence(rfq_id):
-        return SupplierRFQMailDeliveryResult(
-            supplier_rfq=draft,
-            delivery=_controlled_result(
-                operation_id=operation_id,
-                status="rejected_before_provider",
-                reason="Supplier RFQ already has automated send evidence.",
+                operation_id=operation_id, status="rejected_before_provider",
+                reason=("Supplier RFQ must be approved and unsent before delivery; "
+                        f"current status is {draft.status}."),
             ),
         )
     if enforce_business_hours:
@@ -217,70 +191,62 @@ def send_supplier_rfq_via_mail(
             return SupplierRFQMailDeliveryResult(
                 supplier_rfq=draft, delivery=business_rejection
             )
-
-    request = build_supplier_rfq_mail_request(draft)
-    delivery = dispatch_outbound_mail(request, sender)
-    if delivery.status != "sent":
-        return SupplierRFQMailDeliveryResult(
-            supplier_rfq=draft,
-            mail_request=request,
-            delivery=delivery,
+    try:
+        reserved = reserve_supplier_rfq_send(
+            repository, rfq_id, reserved_by=triggered_by, reserved_at=now,
         )
-    if (
-        delivery.provider_name is None
-        or delivery.provider_message_id is None
-        or delivery.sent_at is None
-    ):
+    except SupplierRFQTransitionError as exc:
+        current = repository.get_draft(rfq_id) or draft
         return SupplierRFQMailDeliveryResult(
-            supplier_rfq=draft,
-            mail_request=request,
+            supplier_rfq=current,
             delivery=_controlled_result(
-                operation_id=operation_id,
-                status="failed",
-                reason="Sent Supplier RFQ result is missing durable provider metadata.",
+                operation_id=operation_id, status="rejected_before_provider",
+                reason=str(exc),
             ),
         )
-
+    request = build_supplier_rfq_mail_request(reserved)
+    delivery = dispatch_outbound_mail(request, sender)
+    if delivery.status != "sent":
+        updated = fail_supplier_rfq_send(
+            repository, rfq_id, failure_code=delivery.status,
+            outcome_unknown=(delivery.status == "delivery_outcome_unknown"),
+        )
+        return SupplierRFQMailDeliveryResult(
+            supplier_rfq=updated, mail_request=request, delivery=delivery
+        )
+    if delivery.provider_name is None or delivery.provider_message_id is None or delivery.sent_at is None:
+        unknown = _controlled_result(
+            operation_id=operation_id, status="delivery_outcome_unknown",
+            reason="Provider send success lacked durable metadata; automatic retry is blocked.",
+        )
+        updated = fail_supplier_rfq_send(
+            repository, rfq_id, failure_code="missing_provider_metadata", outcome_unknown=True,
+        )
+        return SupplierRFQMailDeliveryResult(
+            supplier_rfq=updated, mail_request=request, delivery=unknown
+        )
     evidence = SupplierRFQAutomatedSentEvidence(
-        rfq_id=rfq_id,
-        recipient_email=draft.recipient_email or "",
-        provider_name=delivery.provider_name,
-        provider_message_id=delivery.provider_message_id,
-        sent_at=delivery.sent_at,
+        rfq_id=rfq_id, recipient_email=reserved.recipient_email or "",
+        provider_name=delivery.provider_name, provider_message_id=delivery.provider_message_id,
+        sent_at=delivery.sent_at, triggered_by=triggered_by,
     )
     with atomic_repository_transaction(repository):
         current = repository.get_draft(rfq_id)
-        if current is None:
-            raise SupplierRFQNotFoundError(f"Supplier RFQ not found: {rfq_id}")
-        if current != draft:
+        if current is None or current.status != "sending" or current.send_attempt_count != reserved.send_attempt_count:
             raise SupplierRFQTransitionError(
-                "Supplier RFQ changed after provider delivery; automated evidence was not attached to stale state."
-            )
-        if repository.list_manual_sent_evidence(rfq_id):
-            raise SupplierRFQTransitionError(
-                "Supplier RFQ received manual send evidence after provider delivery."
-            )
-        if repository.list_automated_sent_evidence(rfq_id):
-            raise SupplierRFQTransitionError(
-                "Supplier RFQ already has automated send evidence."
+                "Supplier RFQ send reservation changed after provider delivery."
             )
         awaiting = send_supplier_rfq(
-            repository=repository,
-            rfq_id=rfq_id,
-            send_result=delivery,
+            repository=repository, rfq_id=rfq_id, send_result=delivery,
         )
         try:
             evidence = repository.save_automated_sent_evidence(evidence)
         except DuplicateSupplierRFQAutomatedSentEvidenceError as exc:
             raise SupplierRFQTransitionError(str(exc)) from exc
-
     return SupplierRFQMailDeliveryResult(
-        supplier_rfq=awaiting,
-        mail_request=request,
-        delivery=delivery,
+        supplier_rfq=awaiting, mail_request=request, delivery=delivery,
         automated_sent_evidence=evidence,
     )
-
 
 def build_supplier_rfq_follow_up_mail_request(
     follow_up: SupplierRFQFollowUpDraft,
@@ -308,6 +274,7 @@ def send_supplier_rfq_follow_up_via_mail(
     sender: OutboundMailSender | None,
     enforce_business_hours: bool = False,
     now: datetime | None = None,
+    triggered_by: str = "MINAI automation",
 ) -> SupplierRFQFollowUpMailDeliveryResult:
     follow_up = repository.get_follow_up_draft(follow_up_id)
     if follow_up is None:
@@ -333,22 +300,6 @@ def send_supplier_rfq_follow_up_via_mail(
                 reason="Supplier RFQ follow-up requires a clarification-required parent RFQ.",
             ),
         )
-    if repository.list_follow_up_manual_sent_evidence(follow_up_id):
-        return SupplierRFQFollowUpMailDeliveryResult(
-            supplier_rfq_follow_up=follow_up,
-            delivery=_controlled_result(
-                operation_id=operation_id, status="rejected_before_provider",
-                reason="Supplier RFQ follow-up already has manual send evidence.",
-            ),
-        )
-    if repository.list_follow_up_automated_sent_evidence(follow_up_id):
-        return SupplierRFQFollowUpMailDeliveryResult(
-            supplier_rfq_follow_up=follow_up,
-            delivery=_controlled_result(
-                operation_id=operation_id, status="rejected_before_provider",
-                reason="Supplier RFQ follow-up already has automated send evidence.",
-            ),
-        )
     if enforce_business_hours:
         business_rejection = _business_hours_rejection(
             repository=repository, workflow_id=follow_up.workflow_id,
@@ -358,43 +309,50 @@ def send_supplier_rfq_follow_up_via_mail(
             return SupplierRFQFollowUpMailDeliveryResult(
                 supplier_rfq_follow_up=follow_up, delivery=business_rejection
             )
-    request = build_supplier_rfq_follow_up_mail_request(follow_up)
-    delivery = dispatch_outbound_mail(request, sender)
-    if delivery.status != "sent":
-        return SupplierRFQFollowUpMailDeliveryResult(
-            supplier_rfq_follow_up=follow_up, mail_request=request, delivery=delivery
+    try:
+        reserved = reserve_supplier_rfq_follow_up_send(
+            repository, follow_up_id, reserved_by=triggered_by, reserved_at=now,
         )
-    if delivery.provider_name is None or delivery.provider_message_id is None or delivery.sent_at is None:
+    except SupplierRFQTransitionError as exc:
+        current = repository.get_follow_up_draft(follow_up_id) or follow_up
         return SupplierRFQFollowUpMailDeliveryResult(
-            supplier_rfq_follow_up=follow_up, mail_request=request,
+            supplier_rfq_follow_up=current,
             delivery=_controlled_result(
-                operation_id=operation_id, status="failed",
-                reason="Sent Supplier RFQ follow-up result is missing durable provider metadata.",
+                operation_id=operation_id, status="rejected_before_provider", reason=str(exc),
             ),
         )
+    request = build_supplier_rfq_follow_up_mail_request(reserved)
+    delivery = dispatch_outbound_mail(request, sender)
+    if delivery.status != "sent":
+        updated = fail_supplier_rfq_follow_up_send(
+            repository, follow_up_id, failure_code=delivery.status,
+            outcome_unknown=(delivery.status == "delivery_outcome_unknown"),
+        )
+        return SupplierRFQFollowUpMailDeliveryResult(
+            supplier_rfq_follow_up=updated, mail_request=request, delivery=delivery
+        )
+    if delivery.provider_name is None or delivery.provider_message_id is None or delivery.sent_at is None:
+        unknown = _controlled_result(
+            operation_id=operation_id, status="delivery_outcome_unknown",
+            reason="Provider send success lacked durable metadata; automatic retry is blocked.",
+        )
+        updated = fail_supplier_rfq_follow_up_send(
+            repository, follow_up_id, failure_code="missing_provider_metadata", outcome_unknown=True,
+        )
+        return SupplierRFQFollowUpMailDeliveryResult(
+            supplier_rfq_follow_up=updated, mail_request=request, delivery=unknown
+        )
     evidence = SupplierRFQFollowUpAutomatedSentEvidence(
-        follow_up_id=follow_up.follow_up_id, rfq_id=follow_up.rfq_id,
-        sequence_number=follow_up.sequence_number, recipient_email=follow_up.recipient_email,
+        follow_up_id=reserved.follow_up_id, rfq_id=reserved.rfq_id,
+        sequence_number=reserved.sequence_number, recipient_email=reserved.recipient_email,
         provider_name=delivery.provider_name, provider_message_id=delivery.provider_message_id,
-        sent_at=delivery.sent_at,
+        sent_at=delivery.sent_at, triggered_by=triggered_by,
     )
     with atomic_repository_transaction(repository):
         current = repository.get_follow_up_draft(follow_up_id)
-        if current is None:
-            raise SupplierRFQNotFoundError(
-                f"Supplier RFQ follow-up not found: {follow_up_id}"
-            )
-        if current != follow_up:
+        if current is None or current.status != "sending" or current.send_attempt_count != reserved.send_attempt_count:
             raise SupplierRFQTransitionError(
-                "Supplier RFQ follow-up changed after provider delivery; automated evidence was not attached to stale state."
-            )
-        if repository.list_follow_up_manual_sent_evidence(follow_up_id):
-            raise SupplierRFQTransitionError(
-                "Supplier RFQ follow-up received manual send evidence after provider delivery."
-            )
-        if repository.list_follow_up_automated_sent_evidence(follow_up_id):
-            raise SupplierRFQTransitionError(
-                "Supplier RFQ follow-up already has automated send evidence."
+                "Supplier RFQ follow-up send reservation changed after provider delivery."
             )
         sent = send_supplier_rfq_follow_up(
             repository=repository, follow_up_id=follow_up_id, send_result=delivery
@@ -407,7 +365,6 @@ def send_supplier_rfq_follow_up_via_mail(
         supplier_rfq_follow_up=sent, mail_request=request, delivery=delivery,
         automated_sent_evidence=evidence,
     )
-
 
 def send_customer_quote_via_mail(
     *,

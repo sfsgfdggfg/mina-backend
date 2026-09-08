@@ -672,6 +672,25 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     card.append(commercial);
   }
 
+  if (supplier.status === "send_outcome_unknown") {
+    card.append(sendOutcomeReconciliationBox({
+      title: "Tedarikçi fiyat talebi gönderimini doğrula",
+      endpoint: `/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/send-reconciliation`,
+      refresh,
+    }));
+  }
+  if (supplier.status === "clarification_required") {
+    try {
+      const rfqDetail = await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}`);
+      const unknownFollowUp = (rfqDetail.follow_ups || []).find(item => item.status === "send_outcome_unknown");
+      if (unknownFollowUp) card.append(sendOutcomeReconciliationBox({
+        title: "Tedarikçi takip maili gönderimini doğrula",
+        endpoint: `/supplier-rfq-follow-ups/${encodeURIComponent(unknownFollowUp.follow_up_id)}/send-reconciliation`,
+        refresh,
+      }));
+    } catch (_) { /* normal supplier rendering remains available */ }
+  }
+
   const reminder = supplier.reminder || {};
   if (reminder.state) {
     const reminderLine = node("div", "", "supplier-reminder-line");
@@ -881,31 +900,96 @@ function renderQuoteApprovalActions(container, quoteCase, approval, refresh) {
   rejectPanel.append(reasonLabel, rejectActions); container.append(rejectPanel, feedback);
 }
 
+function sendOutcomeReconciliationBox({ title, endpoint, refresh, expectedApprovalId = null }) {
+  const box = node("div", "", "approval-focused send-reconciliation-box");
+  box.append(node("h4", title), node("div", "Outlook > Gönderilmiş Öğeler'i kontrol et. MINAI sonucu tahmin etmez.", "notice"));
+  const sentTimeLabel = node("label", "Outlook'ta görünen gönderim zamanı");
+  const sentTime = document.createElement("input"); sentTime.type = "datetime-local"; sentTimeLabel.append(sentTime);
+  const noteLabel = node("label", "Kontrol notu (opsiyonel)");
+  const note = document.createElement("textarea"); note.rows = 2; note.maxLength = 1000; noteLabel.append(note);
+  const feedback = node("div", "", "muted approval-feedback");
+  const actions = node("div", "", "actions");
+  async function reconcile(outcome) {
+    let observedSentAt = null;
+    if (outcome === "confirmed_sent") {
+      if (!sentTime.value) { feedback.textContent = "Outlook'ta görünen gönderim zamanını gir."; return; }
+      const parsed = new Date(sentTime.value);
+      if (Number.isNaN(parsed.getTime())) { feedback.textContent = "Gönderim zamanı geçerli değil."; return; }
+      observedSentAt = parsed.toISOString();
+    }
+    const body = { outcome, observed_sent_at: observedSentAt, note: note.value.trim() || null };
+    if (expectedApprovalId) body.expected_approval_id = expectedApprovalId;
+    try {
+      feedback.textContent = "Kontrol sonucu kaydediliyor…";
+      await api(endpoint, { method: "POST", body: JSON.stringify(body) });
+      await refresh();
+    } catch (error) { feedback.textContent = error.message || String(error); }
+  }
+  actions.append(
+    actionButton("Gönderildiğini Doğrula", "approve", () => reconcile("confirmed_sent")),
+    actionButton("Gönderilmediğini Doğrula", "", () => reconcile("confirmed_not_sent"))
+  );
+  box.append(sentTimeLabel, noteLabel, actions, feedback); return box;
+}
+
+
 async function renderApprovedQuoteSend(container, quoteCase, approval, refresh) {
-  const sent = [...(quoteCase.manual_sent_evidence || []), ...(quoteCase.automated_sent_evidence || [])]
+  const reconciledSent = (quoteCase.send_reconciliation_evidence || [])
+    .filter(item => item.outcome === "confirmed_sent")
+    .map(item => ({ recipient_email: item.recipient_email, sent_at: item.observed_sent_at, reconciled_by: item.reconciled_by }));
+  const sent = [...(quoteCase.manual_sent_evidence || []), ...(quoteCase.automated_sent_evidence || []), ...reconciledSent]
     .sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at));
   if (sent.length) {
     const latest = sent[0];
     container.append(node("div", `Gönderildi · ${latest.recipient_email || "-"} · ${formatDate(latest.sent_at)}`, "notice success-notice"));
     return;
   }
-  let finalOutput;
-  try { finalOutput = await api(`/quote-cases/${encodeURIComponent(quoteCase.case_id)}/final-output`); }
+  const sendState = quoteCase.automated_send_state || null;
+  if (sendState?.status === "sending") {
+    container.append(node("div", "Gönderim provider sonucu bekliyor. Aynı teklif yeniden gönderilemez.", "notice"));
+    return;
+  }
+  if (sendState?.status === "delivery_outcome_unknown") {
+    container.append(node("div", "Gönderim sonucu belirsiz. Tekrar gönderim kilitli; önce Outlook gönderilmiş öğeleriyle kontrol gerekli.", "notice"));
+    container.append(sendOutcomeReconciliationBox({
+      title: "Teklif gönderimini doğrula",
+      endpoint: `/quote-cases/${encodeURIComponent(quoteCase.case_id)}/send-reconciliation`,
+      expectedApprovalId: approval.approval_id,
+      refresh,
+    }));
+    return;
+  }
+  let finalOutput; let authority;
+  try {
+    [finalOutput, authority] = await Promise.all([
+      api(`/quote-cases/${encodeURIComponent(quoteCase.case_id)}/final-output`),
+      api(`/quote-cases/${encodeURIComponent(quoteCase.case_id)}/recipient-authority`),
+    ]);
+  }
   catch (error) { container.append(node("div", `Gönderime hazır değil: ${error.message || error}`, "notice")); return; }
   const sendBox = node("div", "", "quote-send-box approval-focused");
   sendBox.append(node("h3", "Müşteriye Gönder"));
-  const recipientLabel = node("label", "Alıcı e-posta"); const recipient = document.createElement("input"); recipient.type = "email"; recipient.autocomplete = "off"; recipientLabel.append(recipient);
+  authority = authority || {};
+  const allowedRecipients = authority.allowed_recipient_emails || [];
+  if (!allowedRecipients.length) {
+    sendBox.append(node("div", "Doğrulanmış müşteri alıcısı yok. Önce müşteri master/contact veya güvenilir gönderici kaydı tamamlanmalı.", "notice"));
+    container.append(sendBox); return;
+  }
+  const recipientLabel = node("label", "Doğrulanmış alıcı"); const recipient = document.createElement("select");
+  allowedRecipients.forEach(email => { const option = document.createElement("option"); option.value = email; option.textContent = email; recipient.append(option); });
+  if (authority.default_recipient_email) recipient.value = authority.default_recipient_email;
+  recipientLabel.append(recipient);
   sendBox.append(recipientLabel, node("div", finalOutput.subject, "quote-subject"), node("div", finalOutput.body, "preview approval-message-body"));
   const price = node("div", `${moneyLabel(finalOutput.final_price, finalOutput.currency)}`, "quote-final-price"); sendBox.append(price);
   const feedback = node("div", "", "muted approval-feedback"); const actions = node("div", "", "actions");
   const send = actionButton("Gönder", "approve", async () => {
-    const email = recipient.value.trim(); if (!email || !recipient.checkValidity()) { feedback.textContent = "Geçerli alıcı e-posta adresi gerekli."; return; }
+    const email = recipient.value.trim(); if (!email) { feedback.textContent = "Doğrulanmış alıcı gerekli."; return; }
     send.disabled = true; feedback.textContent = "Gönderim öncesi onay ve içerik yeniden doğrulanıyor…";
     try { await api(`/quote-cases/${encodeURIComponent(quoteCase.case_id)}/send`, { method: "POST", body: JSON.stringify({ expected_approval_id: approval.approval_id, recipient_email: email }) }); await refresh(); }
     catch (error) { feedback.textContent = error.message || String(error); send.disabled = false; }
   });
   const manual = actionButton("Harici Gönderildi Olarak Kaydet", "", async () => {
-    const email = recipient.value.trim(); if (!email || !recipient.checkValidity()) { feedback.textContent = "Geçerli alıcı e-posta adresi gerekli."; return; }
+    const email = recipient.value.trim(); if (!email) { feedback.textContent = "Doğrulanmış alıcı gerekli."; return; }
     manual.disabled = true; feedback.textContent = "Harici gönderim kanıtı kaydediliyor…";
     try { await api(`/quote-cases/${encodeURIComponent(quoteCase.case_id)}/record-manually-sent`, { method: "POST", body: JSON.stringify({ expected_approval_id: approval.approval_id, recipient_email: email }) }); await refresh(); }
     catch (error) { feedback.textContent = error.message || String(error); manual.disabled = false; }
@@ -929,7 +1013,7 @@ async function renderQuoteSection(container, data, refresh) {
     summaryItem("Müşteri fiyatı", moneyLabel(q.final_price, q.currency)),
     summaryItem("Onay", approval ? quoteStatusLabel(approval.approval_status) : "Onay kaydı yok"),
     summaryItem("Revizyon", data.quote?.current_revision_number ?? 0),
-    summaryItem("Gönderim", (quoteCase.automated_sent_evidence || []).length + (quoteCase.manual_sent_evidence || []).length)
+    summaryItem("Gönderim", (quoteCase.automated_sent_evidence || []).length + (quoteCase.manual_sent_evidence || []).length + (quoteCase.send_reconciliation_evidence || []).filter(item => item.outcome === "confirmed_sent").length)
   );
   section.append(grid);
   if (!approval) { section.append(node("div", "Teklif onay kaydı henüz oluşmadı.", "notice")); container.append(section); return; }
@@ -952,7 +1036,8 @@ async function renderQuoteSection(container, data, refresh) {
 function operationStartStatusLabel(value) {
   return ({
     approval_required: "Operatör onayı bekliyor", manual_required: "Manuel gönderim bekliyor",
-    sending: "Gönderim sonucu bekleniyor", sent: "Gönderildi", rejected: "Reddedildi", failed: "Gönderim başarısız"
+    sending: "Gönderim sonucu bekleniyor", delivery_outcome_unknown: "Gönderim sonucu belirsiz",
+    sent: "Gönderildi", rejected: "Reddedildi", failed: "Gönderim başarısız"
   })[value] || codeLabel(value);
 }
 
@@ -974,6 +1059,15 @@ function operationStartMessageCard(message, refresh) {
   }
   if (message.status === "sending") {
     card.append(node("div", "Gönderim rezervasyonu var. Provider sonucu kesinleşmeden aynı mesaj tekrar gönderilmez. Uzun süre bu durumda kalırsa gönderilmiş öğeleri kontrol et.", "notice"));
+  }
+  if (message.status === "delivery_outcome_unknown") {
+    card.append(node("div", "Gönderim sonucu belirsiz. Tekrar göndermeden önce Outlook Gönderilmiş Öğeler'i kontrol et.", "notice"));
+    card.append(sendOutcomeReconciliationBox({
+      title: "Operasyon maili gönderimini doğrula",
+      endpoint: `/operation-start-messages/${encodeURIComponent(message.message_id)}/send-reconciliation`,
+      refresh,
+    }));
+    return card;
   }
   const feedback = node("div", "", "muted approval-feedback");
   const actions = node("div", "", "actions");

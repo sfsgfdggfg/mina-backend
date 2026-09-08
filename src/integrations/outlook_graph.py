@@ -995,8 +995,9 @@ class OutlookGraphSendClient:
         except requests.RequestException:
             return MailSendResult(
                 operation_id=request.operation_id,
-                status="failed",
-                reason="Microsoft Graph mail send was unavailable.",
+                status="delivery_outcome_unknown",
+                reason=("Microsoft Graph send outcome is unknown; "
+                        "the message may have been accepted, so automatic retry is blocked."),
                 provider_name=GRAPH_PROVIDER_NAME,
             )
         status_code = int(getattr(response, "status_code", 0))

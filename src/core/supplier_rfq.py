@@ -13,6 +13,8 @@ from src.core.supplier_dispatch_policy import SupplierDispatchPolicy
 SupplierRFQStatus = Literal[
     "draft",
     "approved",
+    "sending",
+    "send_outcome_unknown",
     "sent",
     "awaiting_response",
     "clarification_required",
@@ -29,6 +31,8 @@ QuoteProgressionStatus = Literal[
 SupplierRFQFollowUpStatus = Literal[
     "draft",
     "approved",
+    "sending",
+    "send_outcome_unknown",
     "awaiting_response",
     "responded",
     "cancelled",
@@ -65,6 +69,11 @@ class SupplierRFQDraft(BaseModel):
     approved_at: Optional[datetime] = None
     sent_at: Optional[datetime] = None
     responded_at: Optional[datetime] = None
+    send_attempt_count: int = Field(default=0, ge=0)
+    send_reserved_at: Optional[datetime] = None
+    send_reserved_by: Optional[str] = None
+    send_failure_code: Optional[str] = None
+    send_reconciliation_evidence: list[SupplierRFQSendReconciliationEvidence] = Field(default_factory=list)
     source: str = "supplier_rfq_generator"
 
     @property
@@ -82,6 +91,7 @@ class SupplierRFQAutomatedSentEvidence(BaseModel):
     provider_name: str
     provider_message_id: str
     sent_at: datetime
+    triggered_by: Optional[str] = None
     source: Literal["automated_provider_send"] = "automated_provider_send"
 
 
@@ -90,6 +100,18 @@ class SupplierRFQManualSentEvidence(BaseModel):
     recorded_by: str
     recorded_at: datetime
     source: Literal["manual_external_send"] = "manual_external_send"
+
+
+class SupplierRFQSendReconciliationEvidence(BaseModel):
+    rfq_id: str
+    recipient_email: str
+    attempt_count: int = Field(ge=1)
+    outcome: Literal["confirmed_sent", "confirmed_not_sent"]
+    reconciled_by: str
+    reconciled_at: datetime
+    observed_sent_at: Optional[datetime] = None
+    note: Optional[str] = Field(default=None, max_length=1000)
+    source: Literal["operator_provider_reconciliation"] = "operator_provider_reconciliation"
 
 
 class SupplierRFQAcknowledgementEvidence(BaseModel):
@@ -127,6 +149,11 @@ class SupplierRFQFollowUpDraft(BaseModel):
     approved_at: Optional[datetime] = None
     sent_at: Optional[datetime] = None
     responded_at: Optional[datetime] = None
+    send_attempt_count: int = Field(default=0, ge=0)
+    send_reserved_at: Optional[datetime] = None
+    send_reserved_by: Optional[str] = None
+    send_failure_code: Optional[str] = None
+    send_reconciliation_evidence: list[SupplierRFQFollowUpSendReconciliationEvidence] = Field(default_factory=list)
     source: str = "supplier_follow_up_generator"
 
     @property
@@ -149,6 +176,7 @@ class SupplierRFQFollowUpAutomatedSentEvidence(BaseModel):
     provider_name: str
     provider_message_id: str
     sent_at: datetime
+    triggered_by: Optional[str] = None
     source: Literal["automated_provider_send"] = "automated_provider_send"
 
 
@@ -159,6 +187,20 @@ class SupplierRFQFollowUpManualSentEvidence(BaseModel):
     recorded_by: str
     recorded_at: datetime
     source: Literal["manual_external_send"] = "manual_external_send"
+
+
+class SupplierRFQFollowUpSendReconciliationEvidence(BaseModel):
+    follow_up_id: str
+    rfq_id: str
+    sequence_number: int = Field(ge=1)
+    recipient_email: str
+    attempt_count: int = Field(ge=1)
+    outcome: Literal["confirmed_sent", "confirmed_not_sent"]
+    reconciled_by: str
+    reconciled_at: datetime
+    observed_sent_at: Optional[datetime] = None
+    note: Optional[str] = Field(default=None, max_length=1000)
+    source: Literal["operator_provider_reconciliation"] = "operator_provider_reconciliation"
 
 
 class SupplierRFQWorkflow(BaseModel):

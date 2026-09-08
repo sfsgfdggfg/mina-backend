@@ -11,8 +11,25 @@ from src.core.automation_policy import AutomationMode
 
 OperationStartMessageKind = Literal["selected_supplier_confirmation", "supplier_closure"]
 OperationStartMessageStatus = Literal[
-    "approval_required", "manual_required", "sending", "sent", "rejected", "failed"
+    "approval_required", "manual_required", "sending", "delivery_outcome_unknown",
+    "sent", "rejected", "failed"
 ]
+
+
+class OperationStartSendReconciliationEvidence(BaseModel):
+    outcome: Literal["confirmed_sent", "confirmed_not_sent"]
+    reconciled_by: str = Field(min_length=1, max_length=200)
+    reconciled_at: datetime
+    observed_sent_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=1000)
+    source: Literal["operator_provider_reconciliation"] = "operator_provider_reconciliation"
+
+    @field_validator("reconciled_at", "observed_sent_at")
+    @classmethod
+    def require_aware_reconciliation_time(cls, value):
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Operation-start reconciliation timestamps must be timezone-aware.")
+        return value
 
 
 class OperationStartMessage(BaseModel):
@@ -36,6 +53,7 @@ class OperationStartMessage(BaseModel):
     sent_by: str | None = Field(default=None, max_length=200)
     provider_name: str | None = Field(default=None, max_length=200)
     provider_message_id: str | None = Field(default=None, max_length=500)
+    send_reconciliation_evidence: list[OperationStartSendReconciliationEvidence] = Field(default_factory=list)
     source: str = "operation_start_orchestration"
 
     @field_validator("recipient_email")

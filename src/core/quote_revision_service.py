@@ -255,6 +255,14 @@ def revise_quote_case(
                 f"Quote case not found: {case_id}"
             )
 
+        send_state = quote_case.automated_send_state
+        if send_state is not None and send_state.status in {
+            "sending", "delivery_outcome_unknown"
+        }:
+            raise QuoteRevisionTransitionError(
+                "Customer quote revision is blocked while automated delivery is in flight or awaiting outcome reconciliation."
+            )
+
         if (
             quote_case.supplier_quote is None
             or quote_case.customer_quote is None

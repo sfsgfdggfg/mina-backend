@@ -398,9 +398,9 @@ def evaluate_mail_adapter_regressions() -> dict:
         sender=_RecordingSender(raise_provider_error=True),
     )
     if (
-        exception_result.delivery.status != "failed"
+        exception_result.delivery.status != "delivery_outcome_unknown"
         or "secret" in exception_result.delivery.reason
-        or exception_result.supplier_rfq.status != "approved"
+        or exception_result.supplier_rfq.status != "send_outcome_unknown"
     ):
         failures.append("provider exception was not converted safely")
 

@@ -99,7 +99,17 @@ def create_customer_master(
     if repository.find_customer_by_entry_id(profile.entry_id) is not None:
         saved, _ = repository.create_customer(profile)
         return saved
-    _validate_customer_identity_uniqueness(repository, profile)
+    try:
+        _validate_customer_identity_uniqueness(repository, profile)
+    except MasterDataConflictError:
+        # A concurrent create with the same idempotency entry may have committed
+        # after the first entry lookup but before uniqueness validation. Re-run
+        # through repository idempotency instead of misclassifying it as a
+        # different-customer identity conflict.
+        if repository.find_customer_by_entry_id(profile.entry_id) is not None:
+            saved, _ = repository.create_customer(profile)
+            return saved
+        raise
     saved, _ = repository.create_customer(profile)
     return saved
 
@@ -135,7 +145,13 @@ def create_supplier_master(
     if repository.find_supplier_by_entry_id(profile.entry_id) is not None:
         saved, _ = repository.create_supplier(profile)
         return saved
-    _validate_supplier_contact_uniqueness(repository, profile)
+    try:
+        _validate_supplier_contact_uniqueness(repository, profile)
+    except MasterDataConflictError:
+        if repository.find_supplier_by_entry_id(profile.entry_id) is not None:
+            saved, _ = repository.create_supplier(profile)
+            return saved
+        raise
     saved, _ = repository.create_supplier(profile)
     return saved
 

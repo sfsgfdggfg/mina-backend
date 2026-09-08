@@ -3838,3 +3838,19 @@ Small samples are evidence-quality signals, not automatic exclusion rules. A thi
 When a regression exercises create-only evidence, token-cache or smoke-artifact paths that production requires to be outside the repository and free of symlink components, the fixture must supply a resolved physical temporary path. Platform aliases such as macOS `/var` must not cause deterministic canonical failures.
 
 A failing path-security regression must never be fixed by relaxing the production symlink guard, moving evidence into the repository, or classifying a deterministic test as an expected failure. Canonical regressions must remain network-independent and secret-independent unless a suite is explicitly outside the deterministic gate and requires separate live authorization.
+
+## RULE-208 — Shadow Runtime Must Block Every Provider-Backed Outbound Path
+
+When pilot outbound mode is `shadow`, Outlook sender delivery and the outbound automation scheduler must remain disabled. Approval, automatic policy, or manual send buttons must not bypass the runtime barrier. Drafting, preview, approval and task preparation remain allowed.
+
+## RULE-209 — Ambiguous Provider Outcomes Must Be Reconciled Before Retry
+
+Customer quote, Supplier RFQ and Supplier RFQ follow-up sends must reserve durable state before provider delivery. If provider outcome is unknown, the message must remain non-retryable until an authenticated operator checks Outlook Sent Items and records either `confirmed_sent` with the observed sent timestamp or `confirmed_not_sent`. MINAI must not invent a provider message identifier or assume delivery from an ambiguous network result.
+
+## RULE-210 — Customer Quote Recipient Must Come From Bounded Trusted Evidence
+
+Provider-backed customer quote delivery may use only a linked trusted inbound sender, an active customer-master email contact, or an explicitly trusted sender address. A trusted domain is identity evidence for inbound matching but does not authorize arbitrary outbound addresses. The operator who triggers or reconciles a send must remain durable audit evidence.
+
+## RULE-211 — Operation-Start Unknown Outcomes Cannot Be Overwritten
+
+An operation-start message with `delivery_outcome_unknown` must remain locked until Outlook Sent Items reconciliation. Reject, retry and manual-send evidence paths must not overwrite that uncertainty. `confirmed_sent` requires the observed sent timestamp and advances the normal sent lifecycle; `confirmed_not_sent` records the operator check and reopens the existing controlled retry path.
