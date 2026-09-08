@@ -17,6 +17,8 @@ from src.core.pilot_store import (
     validate_pilot_database_configuration,
 )
 from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
+from src.core.outbound_runtime import resolve_outbound_runtime_policy
+from src.pilot_data_pack import status_pack
 from src.core.web_session import (
     WebSessionConfigurationError,
     validate_web_session_configuration,
@@ -109,13 +111,14 @@ def _load_pilot_tls_configuration(
     )
 
 
-def build_uvicorn_options(
+def validate_controlled_pilot_runtime(
     environ: Mapping[str, str] | None = None,
-) -> dict[str, object]:
+) -> None:
+    """Fail closed unless the effective environment is pilot-safe end to end."""
     env = environ if environ is not None else os.environ
     if not pilot_mode_enabled(env):
         raise PilotAccessConfigurationError(
-            "MINAI_PILOT_MODE must be enabled for the shadow pilot launcher."
+            "MINAI_PILOT_MODE must be enabled for the controlled pilot runtime."
         )
 
     validate_pilot_configuration(env)
@@ -134,19 +137,41 @@ def build_uvicorn_options(
             ) from exc
     try:
         resolve_supplier_dispatch_policy(env)
+        resolve_outbound_runtime_policy(env)
     except ValueError as exc:
         raise PilotAccessConfigurationError(
-            "Controlled pilot supplier dispatch policy is invalid."
+            "Controlled pilot runtime policy configuration is invalid."
         ) from exc
     try:
         operational_data_sources_from_environment(
             env,
             require_external=True,
+            require_verified=True,
         )
-    except OperationalDataSourceConfigurationError as exc:
+        pack_status = status_pack((env.get("MINAI_PILOT_DATA_DIR") or "").strip())
+    except (OperationalDataSourceConfigurationError, OSError, ValueError) as exc:
         raise PilotAccessConfigurationError(
             "Controlled pilot operational data configuration is invalid."
         ) from exc
+    if pack_status.get("valid") is not True or pack_status.get("verified") is not True:
+        raise PilotAccessConfigurationError(
+            "Controlled pilot requires a fully validated, human-verified data pack."
+        )
+
+    host = (env.get("MINAI_PILOT_BIND_HOST") or "").strip()
+    _load_pilot_port(env)
+    _load_pilot_tls_configuration(
+        env,
+        host,
+        require_tls=web_shell_enabled(env),
+    )
+
+
+def build_uvicorn_options(
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, object]:
+    env = environ if environ is not None else os.environ
+    validate_controlled_pilot_runtime(env)
 
     host = (env.get("MINAI_PILOT_BIND_HOST") or "").strip()
     port = _load_pilot_port(env)

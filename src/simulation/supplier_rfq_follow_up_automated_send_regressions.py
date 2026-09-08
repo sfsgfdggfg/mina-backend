@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 import src.api as controlled_api
 from src.core.mail import MailSendResult
+from src.core.outbound_runtime import OutboundRuntimePolicy
 from src.core.pilot_access import route_allowed
 from src.core.pilot_store import SQLitePilotStore
 from src.core.sqlite_repositories import SQLiteSupplierRFQRepository
@@ -203,9 +204,13 @@ def evaluate_supplier_rfq_follow_up_automated_send_regressions() -> dict:
 
         original_repo = controlled_api.supplier_rfq_repository
         original_sender = controlled_api.outbound_mail_sender
+        original_policy = controlled_api.outbound_runtime_policy
         try:
             controlled_api.supplier_rfq_repository = repo
             controlled_api.outbound_mail_sender = _Sender("failed")
+            controlled_api.outbound_runtime_policy = OutboundRuntimePolicy(
+                mode="controlled_send"
+            )
             try:
                 controlled_api.send_supplier_rfq_follow_up_endpoint(follow_up.follow_up_id)
             except HTTPException as exc:
@@ -216,6 +221,7 @@ def evaluate_supplier_rfq_follow_up_automated_send_regressions() -> dict:
         finally:
             controlled_api.supplier_rfq_repository = original_repo
             controlled_api.outbound_mail_sender = original_sender
+            controlled_api.outbound_runtime_policy = original_policy
 
     with TemporaryDirectory(prefix="minai-follow-up-reconcile-not-sent-") as temp_dir:
         repo = _repo(Path(temp_dir), "follow-up-reconcile-not-sent")

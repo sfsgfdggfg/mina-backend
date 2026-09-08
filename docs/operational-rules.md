@@ -3882,3 +3882,13 @@ A controlled pilot process must be built from one explicit core env file. DB pat
 Primary shadow pilot and smoke/testing profiles must be launched separately. Sourcing a smoke env after a primary pilot env is prohibited because later shell assignment can silently redirect durable state or operational data. Profile validation must happen before Uvicorn startup and must fail closed on protected overlay keys, repository-contained profile files or invalid launcher configuration.
 
 Check-only diagnostics must remain secret-safe. They may identify the selected DB/data paths, source env filenames, web/transport endpoint and outbound mode, but must not expose mailbox tokens, operator bearer tokens, session secrets, passwords, OpenAI keys or other provider credentials.
+
+## RULE-216 — Real Shadow Pilot Requires Clean Authority, Read-Only Mailbox Permission, Verified Data and Durable Idempotency
+
+A real shadow-pilot launch must use one explicit core profile and may not inherit application/security authority from the parent shell. Direct ASGI startup with pilot mode enabled must execute the same controlled-pilot preflight as the supported launcher. Missing or invalid DB/data/access/dispatch/web/outbound configuration blocks startup rather than falling back to development behavior.
+
+`shadow` is the outbound default in every runtime. The shadow Outlook authorization may request `Mail.Read` only; it must not request `Mail.Send`. `Mail.Send` requires explicit `controlled_send`, and a read-only Outlook configuration must be rejected before any Graph send request reaches the provider. A `controlled_send` pilot must fail startup when no valid Outlook sender or usable cached `Mail.Send` authorization is available, including when a sender object already exists in process memory. An empty or malformed `MINAI_PILOT_MODE` value must fail closed rather than being treated as non-pilot.
+
+The active external pilot data pack must be fully human-verified and fingerprint-current at boot. Structural validity alone is insufficient. A changed dataset invalidates the verified pack until a new reviewed pack version is produced.
+
+Retention must preserve the lifecycle and idempotency state required by any retained MINA job, including extraction/message identity, supplier RFQ state/evidence, quote approval/case state, relevant attachment-review state and automation state. Raw message bodies, attachment content and unrelated transient records do not become durable merely because the linked job is durable.

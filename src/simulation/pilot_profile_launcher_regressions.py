@@ -66,6 +66,79 @@ def evaluate_pilot_profile_launcher_regressions() -> dict[str, object]:
             "web overlay changes transport without changing core state/data profile",
         )
 
+        hostile_parent = {
+            "PATH": "/host/runtime/bin",
+            "TMPDIR": str(root),
+            "MINAI_PILOT_DB_PATH": str(root / "stale-parent.sqlite3"),
+            "MINAI_PILOT_DATA_DIR": str(root / "stale-parent-pack"),
+            "MINAI_PILOT_OPERATORS_JSON": '{"Stale Operator":"stale"}',
+            "MINAI_PILOT_ALLOWED_NETWORKS": "0.0.0.0/0",
+            "MINAI_OUTBOUND_MODE": "controlled_send",
+            "MINAI_OUTLOOK_MAILBOX_ID": "stale-parent@example.invalid",
+            "MINAI_OUTLOOK_CLIENT_ID": "stale-parent-client",
+            "MINAI_OUTLOOK_TOKEN_CACHE_PATH": str(root / "stale-token"),
+            "DATABASE_URL": "postgresql://stale-parent.invalid/minai",
+            "OPENAI_API_KEY": "stale-parent-provider-secret",
+            "OPENAI_BASE_URL": "https://stale-parent.invalid",
+        }
+        isolated, _ = build_profile_environment(
+            core_env_file=core_path,
+            base_environment=hostile_parent,
+        )
+        check(
+            isolated["PATH"] == hostile_parent["PATH"]
+            and isolated["TMPDIR"] == hostile_parent["TMPDIR"]
+            and isolated["MINAI_PILOT_DB_PATH"] == core_env["MINAI_PILOT_DB_PATH"]
+            and isolated["MINAI_PILOT_DATA_DIR"] == core_env["MINAI_PILOT_DATA_DIR"]
+            and isolated["MINAI_PILOT_OPERATORS_JSON"]
+            == core_env["MINAI_PILOT_OPERATORS_JSON"]
+            and isolated["MINAI_OUTBOUND_MODE"] == "shadow"
+            and isolated["OPENAI_API_KEY"] == "synthetic-api-key-fixture-value",
+            "core profile overrides hostile parent operational authority",
+        )
+        check(
+            all(
+                key not in isolated
+                for key in (
+                    "MINAI_OUTLOOK_MAILBOX_ID",
+                    "MINAI_OUTLOOK_CLIENT_ID",
+                    "MINAI_OUTLOOK_TOKEN_CACHE_PATH",
+                    "DATABASE_URL",
+                    "OPENAI_BASE_URL",
+                )
+            ),
+            "stale parent mailbox database data and provider values are removed",
+        )
+
+        hostile_parent = {
+            "PATH": "/synthetic/safe/path",
+            "MINAI_OUTBOUND_MODE": "controlled_send",
+            "MINAI_PILOT_DB_PATH": str(root / "wrong-parent.sqlite3"),
+            "MINAI_PILOT_DATA_DIR": str(root / "wrong-parent-pack"),
+            "MINAI_PILOT_OPERATORS_JSON": json.dumps({"Wrong": "x" * 40}),
+            "MINAI_OUTLOOK_MAILBOX_ID": "wrong-parent@invalid.example",
+            "MINAI_OUTLOOK_CLIENT_ID": "11111111-1111-1111-1111-111111111111",
+            "MINAI_OUTLOOK_TOKEN_CACHE_PATH": str(root / "wrong-token-cache"),
+            "OPENAI_API_KEY": "wrong-parent-openai-key",
+        }
+        isolated, _ = build_profile_environment(
+            core_env_file=core_path,
+            overlay_env_files=[web_path],
+            base_environment=hostile_parent,
+        )
+        check(
+            isolated.get("PATH") == hostile_parent["PATH"]
+            and isolated["MINAI_OUTBOUND_MODE"] == "shadow"
+            and isolated["MINAI_PILOT_DB_PATH"] == core_env["MINAI_PILOT_DB_PATH"]
+            and isolated["MINAI_PILOT_DATA_DIR"] == core_env["MINAI_PILOT_DATA_DIR"]
+            and isolated["MINAI_PILOT_OPERATORS_JSON"] == core_env["MINAI_PILOT_OPERATORS_JSON"]
+            and isolated["OPENAI_API_KEY"] == "synthetic-api-key-fixture-value"
+            and "MINAI_OUTLOOK_MAILBOX_ID" not in isolated
+            and "MINAI_OUTLOOK_CLIENT_ID" not in isolated
+            and "MINAI_OUTLOOK_TOKEN_CACHE_PATH" not in isolated,
+            "hostile parent application authority cannot leak into the pilot profile",
+        )
+
         legacy_core_path = root / "legacy-shell-pilot.env"
         _write_env(legacy_core_path, core_env)
         escaped_operators = "".join(

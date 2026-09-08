@@ -33,6 +33,17 @@ REQUIRED_CORE_KEYS = (
     "MINAI_PILOT_DB_PATH",
     "MINAI_PILOT_DATA_DIR",
 )
+HOST_ENV_ALLOWLIST = frozenset({
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "PATH",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "TZ",
+})
 
 
 def _allowed_overlay_key(key: str) -> bool:
@@ -91,6 +102,16 @@ def _load_env_file(path: Path) -> dict[str, str]:
         values[str(key)] = normalized
     return values
 
+def _sanitized_base_environment(
+    environ: Mapping[str, str],
+) -> dict[str, str]:
+    return {
+        key: str(value)
+        for key, value in environ.items()
+        if key in HOST_ENV_ALLOWLIST
+    }
+
+
 def build_profile_environment(
     *,
     core_env_file: str | Path,
@@ -105,7 +126,10 @@ def build_profile_environment(
             "Core pilot profile is missing required keys: " + ", ".join(missing)
         )
 
-    effective = dict(base_environment or os.environ)
+    source_environment = (
+        os.environ if base_environment is None else base_environment
+    )
+    effective = _sanitized_base_environment(source_environment)
     effective.update(core)
     source_labels = {key: core_path.name for key in core}
 

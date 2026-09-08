@@ -45,6 +45,8 @@ class _FakeCache:
 class _FakeApplication:
     login_account_available = True
     silent_account_available = True
+    device_scopes: list[list[str]] = []
+    silent_scopes: list[list[str]] = []
 
     def __init__(
         self,
@@ -77,10 +79,7 @@ class _FakeApplication:
         self,
         scopes,
     ):
-        if scopes != ["Mail.Read", "Mail.Send"]:
-            raise AssertionError(
-                "Unexpected delegated scopes."
-            )
+        self.device_scopes.append(list(scopes))
 
         return {
             "user_code": "ABCD-EFGH",
@@ -112,10 +111,7 @@ class _FakeApplication:
         *,
         account,
     ):
-        if scopes != ["Mail.Read", "Mail.Send"]:
-            raise AssertionError(
-                "Unexpected delegated scopes."
-            )
+        self.silent_scopes.append(list(scopes))
 
         return {
             "access_token": (
@@ -153,6 +149,8 @@ def evaluate_microsoft_auth_regressions():
     with physical_temporary_directory() as temp:
         root = Path(temp)
         cache_path = root / "token-cache.json"
+        _FakeApplication.device_scopes.clear()
+        _FakeApplication.silent_scopes.clear()
 
         config = (
             MicrosoftAuthConfig.from_environment(
@@ -163,8 +161,19 @@ def evaluate_microsoft_auth_regressions():
         check(
             config.mailbox_id == MAILBOX
             and config.tenant_id == TENANT
-            and config.client_id == CLIENT,
+            and config.client_id == CLIENT
+            and config.scopes == ("Mail.Read",),
             "Outlook auth configuration normalized",
+        )
+
+        controlled_send_env = _environment(cache_path)
+        controlled_send_env["MINAI_OUTBOUND_MODE"] = "controlled_send"
+        controlled_send_config = MicrosoftAuthConfig.from_environment(
+            controlled_send_env
+        )
+        check(
+            controlled_send_config.scopes == ("Mail.Read", "Mail.Send"),
+            "controlled send explicitly adds Outlook send permission",
         )
 
         consumer_env = _environment(cache_path)
@@ -213,6 +222,10 @@ def evaluate_microsoft_auth_regressions():
         check(
             cache_path.exists(),
             "device login creates external cache",
+        )
+        check(
+            _FakeApplication.device_scopes == [["Mail.Read"]],
+            "shadow device login requests Mail.Read only",
         )
 
         if os.name == "posix":
@@ -267,6 +280,23 @@ def evaluate_microsoft_auth_regressions():
             token
             == "regression-secret-access-token",
             "silent access token acquired",
+        )
+        check(
+            _FakeApplication.silent_scopes[-1] == ["Mail.Read"],
+            "shadow silent token acquisition uses resolved read-only scopes",
+        )
+
+        with patch(
+            "src.integrations.microsoft_auth.msal.SerializableTokenCache",
+            _FakeCache,
+        ), patch(
+            "src.integrations.microsoft_auth.msal.PublicClientApplication",
+            _FakeApplication,
+        ):
+            acquire_silent_access_token(controlled_send_config)
+        check(
+            _FakeApplication.silent_scopes[-1] == ["Mail.Read", "Mail.Send"],
+            "controlled-send token acquisition uses resolved send scopes",
         )
 
         if os.name == "posix":

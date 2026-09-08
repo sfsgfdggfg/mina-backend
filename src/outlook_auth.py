@@ -37,7 +37,7 @@ def main() -> int:
         "Outlook authorization cached securely."
     )
     print(
-        "Permissions cached: Mail.Read and Mail.Send."
+        "Permissions cached: " + ", ".join(config.scopes) + "."
     )
     return 0
 

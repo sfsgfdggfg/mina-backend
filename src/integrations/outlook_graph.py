@@ -964,6 +964,16 @@ class OutlookGraphSendClient:
             pass
 
     def send(self, request: OutboundMailRequest) -> MailSendResult:
+        if "Mail.Send" not in self.config.scopes:
+            return MailSendResult(
+                operation_id=request.operation_id,
+                status="rejected_before_provider",
+                reason=(
+                    "Microsoft Graph send is disabled because the active "
+                    "Outlook authorization is read-only."
+                ),
+                provider_name=GRAPH_PROVIDER_NAME,
+            )
         token = acquire_silent_access_token(self.config)
         client_request_id = str(uuid4())
         payload = {

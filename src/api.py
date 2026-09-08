@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import json
+import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +13,10 @@ from src.core.supplier_capability_validator import validate_supplier_capabilitie
 from src.core.hs_commodity_map_validator import validate_hs_commodity_map_file
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.data_health import build_data_health_summary
+from src.core.data_provenance import (
+    DataProvenanceError,
+    require_pilot_operational_dataset,
+)
 from src.core.customer_memory import (
     CustomerMemoryProfile,
     load_customer_memory,
@@ -65,6 +70,7 @@ from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
     MicrosoftAuthConfigurationError,
     MicrosoftAuthenticationError,
+    acquire_silent_access_token,
 )
 from src.integrations.outlook_graph import (
     MAX_PULL_MESSAGES,
@@ -80,12 +86,14 @@ from src.workflow.extraction_confirmation import (
     resume_confirmed_extraction,
 )
 from src.core.pilot_store import SQLitePilotStore
+from src.pilot_launcher import validate_controlled_pilot_runtime
 from src.core.outbound_runtime import resolve_outbound_runtime_policy
 from src.core.customer_recipient_authority import build_customer_quote_recipient_authority
 from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
 from src.core.business_calendar import supplier_calendar_metadata
 from src.core.runtime_release import runtime_release_payload
 from src.core.pilot_access import (
+    PilotAccessConfigurationError,
     authorize_pilot_request,
     authorize_pilot_transport,
     pilot_mode_enabled,
@@ -96,7 +104,10 @@ from src.core.web_session import (
     validate_web_session_configuration, web_session_store, web_shell_enabled,
 )
 from src.web_shell import router as web_shell_router
-from src.core.operational_data import operational_data_sources_from_environment
+from src.core.operational_data import (
+    OperationalDataSourceConfigurationError,
+    operational_data_sources_from_environment,
+)
 from src.core.sqlite_repositories import (
     SQLiteAttachmentInterpretationReviewRepository,
     SQLiteAutomationActionRepository,
@@ -411,8 +422,6 @@ def _authenticated_operator(
 
 
 def _runtime_outbound_delivery_enabled() -> bool:
-    if not pilot_mode_enabled():
-        return True
     return outbound_runtime_policy.delivery_enabled
 
 def _runtime_master_data_authority():
@@ -427,6 +436,33 @@ def _require_runtime_outbound_delivery() -> None:
             status_code=409,
             detail="outbound_delivery_disabled_by_shadow_mode",
         )
+
+
+def _build_outbound_mail_sender_if_enabled() -> OutboundMailSender | None:
+    if not outbound_runtime_policy.delivery_enabled:
+        return None
+    try:
+        return outlook_graph_sender_from_environment()
+    except MicrosoftAuthConfigurationError:
+        return None
+
+
+def _require_controlled_outbound_mail_sender() -> OutboundMailSender:
+    sender = _build_outbound_mail_sender_if_enabled()
+    if sender is None:
+        raise PilotAccessConfigurationError(
+            "Controlled send requires a valid Outlook sender configuration."
+        )
+    try:
+        acquire_silent_access_token(sender.config)
+    except (
+        MicrosoftAuthConfigurationError,
+        MicrosoftAuthenticationError,
+    ) as exc:
+        raise PilotAccessConfigurationError(
+            "Controlled send requires an authenticated Outlook Mail.Send session."
+        ) from exc
+    return sender
 
 
 outbound_runtime_policy = resolve_outbound_runtime_policy()
@@ -451,13 +487,9 @@ automation_action_repository = SQLiteAutomationActionRepository(pilot_store)
 operational_work_assignment_repository = SQLiteOperationalWorkAssignmentRepository(pilot_store)
 operational_shift_close_receipt_repository = SQLiteOperationalShiftCloseReceiptRepository(pilot_store)
 operational_shift_open_acceptance_repository = SQLiteOperationalShiftOpenAcceptanceReceiptRepository(pilot_store)
-if pilot_mode_enabled() and not outbound_runtime_policy.delivery_enabled:
-    outbound_mail_sender: OutboundMailSender | None = None
-else:
-    try:
-        outbound_mail_sender = outlook_graph_sender_from_environment()
-    except MicrosoftAuthConfigurationError:
-        outbound_mail_sender = None
+outbound_mail_sender: OutboundMailSender | None = None
+if not pilot_mode_enabled():
+    outbound_mail_sender = _build_outbound_mail_sender_if_enabled()
 
 automation_scheduler = AutomationScheduler(
     supplier_repository=supplier_rfq_repository,
@@ -470,8 +502,27 @@ automation_scheduler = AutomationScheduler(
 
 
 @app.on_event("startup")
+def validate_controlled_pilot_startup():
+    raw_pilot_mode = os.environ.get("MINAI_PILOT_MODE")
+    if raw_pilot_mode is not None:
+        normalized_pilot_mode = raw_pilot_mode.strip().lower()
+        if normalized_pilot_mode not in {
+            "0", "1", "false", "true", "no", "yes", "off", "on"
+        }:
+            raise PilotAccessConfigurationError(
+                "MINAI_PILOT_MODE must be an explicit boolean value."
+            )
+    if pilot_mode_enabled():
+        validate_controlled_pilot_runtime()
+
+
+@app.on_event("startup")
 def start_controlled_automation_scheduler():
+    global outbound_mail_sender
+
     if pilot_mode_enabled() and outbound_runtime_policy.delivery_enabled:
+        outbound_mail_sender = _require_controlled_outbound_mail_sender()
+        automation_scheduler.sender = outbound_mail_sender
         automation_scheduler.start()
 
 
@@ -1457,11 +1508,22 @@ def get_supplier_master_geography(supplier_id: str, destination_country: str):
 
 @app.post("/master-data/bootstrap/legacy")
 def bootstrap_master_data_from_legacy(http_request: Request):
+    sources = operational_data_sources
+    if pilot_mode_enabled():
+        try:
+            sources = operational_data_sources_from_environment(
+                require_external=True,
+            )
+        except OperationalDataSourceConfigurationError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="legacy_master_data_provenance_invalid",
+            ) from exc
     customer_validation = validate_customer_memory_file(
-        operational_data_sources.customer_memory_path
+        sources.customer_memory_path
     )
     supplier_validation = validate_supplier_capabilities_file(
-        operational_data_sources.supplier_capabilities_path
+        sources.supplier_capabilities_path
     )
     if not customer_validation.get("valid") or not supplier_validation.get("valid"):
         raise HTTPException(
@@ -1472,12 +1534,36 @@ def bootstrap_master_data_from_legacy(http_request: Request):
                 "supplier_errors": supplier_validation.get("errors") or [],
             },
         )
-    customer_raw = json.loads(
-        operational_data_sources.customer_memory_path.read_text(encoding="utf-8")
-    )
-    supplier_raw = json.loads(
-        operational_data_sources.supplier_capabilities_path.read_text(encoding="utf-8")
-    )
+    try:
+        customer_bytes = sources.customer_memory_path.read_bytes()
+        supplier_bytes = sources.supplier_capabilities_path.read_bytes()
+        if pilot_mode_enabled():
+            require_pilot_operational_dataset(
+                "customer_memory",
+                environ=os.environ,
+                path=sources.provenance_registry_path,
+                dataset_path=sources.customer_memory_path,
+                dataset_bytes=customer_bytes,
+            )
+            require_pilot_operational_dataset(
+                "supplier_capabilities",
+                environ=os.environ,
+                path=sources.provenance_registry_path,
+                dataset_path=sources.supplier_capabilities_path,
+                dataset_bytes=supplier_bytes,
+            )
+        customer_raw = json.loads(customer_bytes.decode("utf-8"))
+        supplier_raw = json.loads(supplier_bytes.decode("utf-8"))
+    except (
+        DataProvenanceError,
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="legacy_master_data_provenance_invalid",
+        ) from exc
     try:
         return bootstrap_legacy_master_data(
             repository=master_data_repository,

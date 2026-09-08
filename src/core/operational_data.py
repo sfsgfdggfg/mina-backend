@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.paths import REPO_ROOT, data_path
+from src.core.data_provenance import (
+    DataProvenanceError,
+    require_pilot_operational_dataset,
+)
 from src.core.customer_memory_validator import validate_customer_memory_file
 from src.core.supplier_capability_validator import (
     validate_supplier_capabilities_file,
@@ -43,6 +47,7 @@ def operational_data_sources_from_environment(
     environ: Mapping[str, str] | None = None,
     *,
     require_external: bool = False,
+    require_verified: bool = False,
 ) -> OperationalDataSources:
     """Resolve one external pilot data pack without exposing remote path choice."""
 
@@ -145,5 +150,38 @@ def operational_data_sources_from_environment(
             "Pilot operational data pack contains structurally invalid "
             "operational datasets."
         )
+
+    if require_verified:
+        verification_env = dict(env)
+        verification_env["MINAI_PILOT_MODE"] = "true"
+        try:
+            records = (
+                require_pilot_operational_dataset(
+                    "customer_memory",
+                    environ=verification_env,
+                    path=sources.provenance_registry_path,
+                    dataset_path=sources.customer_memory_path,
+                ),
+                require_pilot_operational_dataset(
+                    "supplier_capabilities",
+                    environ=verification_env,
+                    path=sources.provenance_registry_path,
+                    dataset_path=sources.supplier_capabilities_path,
+                ),
+            )
+            if any(
+                record.get("classification") != "pilot_verified"
+                or record.get("operational") is not True
+                or record.get("pilot_usable") is not True
+                for record in records
+            ):
+                raise DataProvenanceError(
+                    "Controlled pilot datasets require verified operational provenance."
+                )
+        except DataProvenanceError as exc:
+            raise OperationalDataSourceConfigurationError(
+                "Controlled pilot operational data pack is not verified "
+                "or its verified fingerprint no longer matches."
+            ) from exc
 
     return sources

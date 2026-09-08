@@ -21,7 +21,7 @@ from src.core.pilot_access import route_allowed
 from src.core.pilot_store import SQLitePilotStore
 from src.core.web_session import hash_password
 from src.simulation.pilot_web_shell_regressions import (
-    _environment,
+    _controlled_web_environment,
     _hidden_value,
     _meta_value,
     _web_env,
@@ -127,7 +127,7 @@ def evaluate_branding_settings_regressions() -> dict:
     original_repository = api_module.agency_branding_repository
     api_module.agency_branding_repository = InMemoryAgencyBrandingRepository()
     try:
-        with _environment(_web_env(password_hash)):
+        with _controlled_web_environment(_web_env(password_hash)):
             with TestClient(
                 api_module.app, base_url="https://127.0.0.1", client=("127.0.0.1", 50000),
             ) as client:

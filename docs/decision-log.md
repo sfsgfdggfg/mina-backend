@@ -6706,3 +6706,18 @@ Primary shadow-pilot and Outlook smoke environments are separate core profiles. 
 The profile launcher reads only explicitly named external env files, rejects repository-contained or symlink-traversed profile files, blocks protected keys in overlays and supports a check-only mode that validates the normal pilot-launcher preflight without starting Uvicorn. Its diagnostic summary may expose selected non-secret profile metadata such as DB/data paths, port and outbound mode, but must not print tokens, passwords, operator credentials or provider secrets.
 
 Legacy shell-escaped JSON values used by existing controlled env files remain accepted through a narrow compatibility normalization. This compatibility must not execute env-file shell code or weaken the single-core-profile rule.
+
+## DEC-199 — Pre-Pilot Runtime Boundaries Fail Closed Before Real Mailbox Cutover
+
+**Status:** Accepted
+**Date:** 2026-09-08
+
+A controlled-pilot process must derive application and security authority from its explicit core profile, not from arbitrary parent-shell state. The profile launcher may preserve only a small allowlist of host-process variables such as path, locale, temporary-directory and timezone settings. Stale `MINAI_*`, Outlook, OpenAI, database, operator or provider values from the invoking shell are not inherited unless the core profile explicitly defines them.
+
+Pilot safety is also enforced inside the FastAPI startup boundary. Directly starting `src.api:app` with pilot mode enabled does not bypass database, access, dispatch, outbound-policy, TLS/web or operational-data preflight. Outbound delivery defaults to `shadow` regardless of pilot mode and becomes possible only through explicit `controlled_send` policy. A controlled-send pilot must also resolve a valid Outlook sender and a usable cached `Mail.Send` authorization during startup; missing configuration or reauthentication-required state blocks startup rather than degrading to a provider-unavailable runtime. Explicitly empty or malformed pilot-mode values also fail closed.
+
+Shadow Outlook authorization is genuinely read-only: delegated auth requests `Mail.Read` only. `Mail.Send` is added only for explicit `controlled_send`, and the Graph send client rejects a read-only authorization before token acquisition or provider POST. This least-privilege boundary is separate from, and in addition to, route-level approval/send guards.
+
+A controlled pilot may boot only with the established fully validated data-pack contract: required customer/supplier cardinality, human verification metadata, `pilot_verified` operational provenance and matching SHA-256 fingerprints. A merely structural, internal/demo or post-verification-modified pack fails closed.
+
+Durable MINA lifecycle continuity includes the extraction/idempotency evidence, RFQ drafts/workflows/responses/dispatch/send evidence, quote cases/approvals, attachment-review state and scheduler action state needed to reconstruct a retained job and prevent replay. This retention exception does not authorize persistence of raw email bodies or attachment content; unrelated transient state remains subject to ordinary retention.

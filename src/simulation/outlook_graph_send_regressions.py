@@ -3,7 +3,10 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from src.core.mail import OutboundMailRequest
-from src.integrations.microsoft_auth import MicrosoftAuthConfig
+from src.integrations.microsoft_auth import (
+    MicrosoftAuthConfig,
+    OUTLOOK_SEND_SCOPES,
+)
 from src.integrations.outlook_graph import OutlookGraphSendClient
 
 
@@ -24,12 +27,13 @@ class _Session:
         return self.response
 
 
-def _config() -> MicrosoftAuthConfig:
+def _config(*, send_enabled: bool = True) -> MicrosoftAuthConfig:
     return MicrosoftAuthConfig(
         tenant_id="consumers",
         client_id="11111111-1111-1111-1111-111111111111",
         mailbox_id="sender@example.invalid",
         token_cache_path=__import__("pathlib").Path("/tmp/minai-token-cache-test"),
+        scopes=(OUTLOOK_SEND_SCOPES if send_enabled else ("Mail.Read",)),
     )
 
 
@@ -45,6 +49,23 @@ def _request() -> OutboundMailRequest:
 
 def evaluate_outlook_graph_send_regressions() -> dict:
     failures = []
+
+    read_only_session = _Session(_Response(202))
+    with patch(
+        "src.integrations.outlook_graph.acquire_silent_access_token"
+    ) as token_acquisition:
+        read_only = OutlookGraphSendClient(
+            config=_config(send_enabled=False),
+            session=read_only_session,
+        ).send(_request())
+    if (
+        read_only.status != "rejected_before_provider"
+        or read_only_session.requests
+        or token_acquisition.called
+    ):
+        failures.append(
+            "read-only Outlook authorization reached the Graph send boundary"
+        )
     success_session = _Session(_Response(202, {"request-id": "graph-request-123"}))
     with patch("src.integrations.outlook_graph.acquire_silent_access_token", return_value="secret-token"):
         result = OutlookGraphSendClient(config=_config(), session=success_session).send(_request())
