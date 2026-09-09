@@ -1736,13 +1736,13 @@ function renderRelationshipOnboardingSettings(status = {}) {
   h.append(node("h2","İlişki Hafızası"),node("p","Müşteri ve tedarikçi geçmiş e-postalarından ölçülebilir ilişki davranışları ve doğrulama bekleyen MINAI gözlemleri üretir. Normal günlük inbox pull’undan ayrıdır.","muted"));panel.append(h);
   const health=node("div","","summary-grid relationship-onboarding-health");
   health.append(
-    summaryItem("Outlook",status.outlook_configured?"Hazır":"Yapılandırma eksik"),
+    summaryItem("Outlook",status.synthetic_mailbox?"Demo mailbox":(status.outlook_configured?"Hazır":"Yapılandırma eksik")),
     summaryItem("Müşteri master",status.customer_master_count??0),
     summaryItem("Tedarikçi master",status.supplier_master_count??0),
     summaryItem("Bekleyen müşteri gözlemi",status.proposed_customer_fact_count??0),
     summaryItem("Bekleyen tedarikçi gözlemi",status.proposed_supplier_fact_count??0)
   ); panel.append(health);
-  panel.append(node("div","Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz. Eşleşmeyen taraflar otomatik müşteri/tedarikçi yapılmaz.","notice"));
+  panel.append(node("div",status.synthetic_mailbox?"Demo modunda bu ekran gerçek Outlook yerine sentetik mailbox geçmişini kullanır. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz.":"Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz. Eşleşmeyen taraflar otomatik müşteri/tedarikçi yapılmaz.","notice"));
 
   const form=node("div","","relationship-onboarding-form");
   const now=new Date(); const startDefault=new Date(now.getTime()-180*24*60*60*1000);
@@ -1751,10 +1751,10 @@ function renderRelationshipOnboardingSettings(status = {}) {
   const limit=numberField("Maksimum mesaj",5000,1,status.max_history_messages||10000);
   const aliases=textareaLines("Ajansın ek e-posta adresleri / alias’ları",[],2);
   const authorizedLabel=node("label","","check-label");const authorized=document.createElement("input");authorized.type="checkbox";authorizedLabel.append(authorized,node("span","Bu mailbox geçmişini seçilen tarih aralığında analiz etmeye yetkim var."));
-  const aiLabel=node("label","","check-label");const ai=document.createElement("input");ai.type="checkbox";aiLabel.append(ai,node("span","AI davranış gözlemlerini de üret (privacy transform sonrası OpenAI çağrısı yapılır)."));
+  const aiLabel=node("label","","check-label");const ai=document.createElement("input");ai.type="checkbox";aiLabel.append(ai,node("span",status.synthetic_mailbox?"Sentetik AI davranış gözlemlerini de üret (dış servis çağrısı yapılmaz).":"AI davranış gözlemlerini de üret (privacy transform sonrası OpenAI çağrısı yapılır)."));
   const grid=node("div","","settings-two-col");grid.append(startLabel,endLabel,limit.label,aliases.label);form.append(grid,authorizedLabel,aiLabel);
   const feedback=node("div","","muted settings-feedback");const result=node("div","","relationship-onboarding-result");
-  const run=actionButton("Geçmiş Outlook Analizini Başlat","primary",async()=>{
+  const run=actionButton(status.synthetic_mailbox?"Sentetik Outlook Analizini Başlat":"Geçmiş Outlook Analizini Başlat","primary",async()=>{
     if(!authorized.checked){feedback.textContent="Analiz için yetki onay kutusunu işaretlemelisin.";return;}
     if(!start.value||!end.value){feedback.textContent="Başlangıç ve bitiş tarihi gerekli.";return;}
     run.disabled=true;feedback.textContent="Geçmiş e-postalar okunuyor ve ilişki kanıtı çıkarılıyor…";result.replaceChildren();

@@ -66,6 +66,9 @@ from src.workflow.relationship_onboarding import (
     RelationshipOnboardingAuthorizationError,
     run_outlook_relationship_onboarding,
 )
+from src.workflow.demo_relationship_onboarding import (
+    run_demo_relationship_onboarding,
+)
 from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
     MicrosoftAuthConfigurationError,
@@ -1814,14 +1817,19 @@ def get_reporting_section(
 
 @app.get("/relationship-onboarding/status")
 def get_relationship_onboarding_status():
-    try:
-        MicrosoftAuthConfig.from_environment()
+    synthetic_mailbox = demo_mode_enabled()
+    if synthetic_mailbox:
         outlook_configured = True
-    except MicrosoftAuthConfigurationError:
-        outlook_configured = False
+    else:
+        try:
+            MicrosoftAuthConfig.from_environment()
+            outlook_configured = True
+        except MicrosoftAuthConfigurationError:
+            outlook_configured = False
     facts = learning_fact_repository.list_all()
     return {
         "outlook_configured": outlook_configured,
+        "synthetic_mailbox": synthetic_mailbox,
         "customer_master_count": len(master_data_repository.list_customers()),
         "supplier_master_count": len(master_data_repository.list_suppliers()),
         "proposed_customer_fact_count": sum(item.subject_type == "customer" and item.status == "proposed" for item in facts),
@@ -1842,6 +1850,17 @@ def analyze_outlook_relationship_history(
             detail="historical_mailbox_authorization_required",
         )
     try:
+        if demo_mode_enabled():
+            return run_demo_relationship_onboarding(
+                start_at=request.start_at, end_at=request.end_at,
+                max_messages=request.max_messages,
+                authorization_confirmed=request.authorization_confirmed,
+                master_repository=master_data_repository,
+                learning_repository=learning_fact_repository,
+                created_by=_authenticated_operator(http_request),
+                include_ai_observations=request.include_ai_observations,
+                agency_addresses=request.agency_alias_addresses,
+            )
         config = MicrosoftAuthConfig.from_environment()
         ai_analyzer = (
             OpenAIRelationshipHistoryAnalyzer()

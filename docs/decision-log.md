@@ -6747,3 +6747,16 @@ Demo runtime authority is strictly isolated from controlled pilot authority. `MI
 Provider-backed mail in demo mode is replaced by a deterministic synthetic sender. It may record normal sent evidence and advance the same product lifecycle, but it accepts only reserved `.invalid` recipient addresses and writes an append-only local synthetic outbox instead of contacting Outlook. A non-synthetic recipient fails before provider delivery. This allows RFQ, reminder, customer-quote and operation-message flows to be exercised without risking real external communication.
 
 Demo seed data is idempotent by version and covers multiple lifecycle states rather than only happy-path cards: missing information, active pricing, supplier acknowledgement, no response/reminder due, multi-supplier quote selection, pending/approved customer quote, negotiation, accepted operation start, in-transit execution, exceptions, POD/CMR closeout and completed work. Demo data must remain clearly synthetic and must never be treated as pilot evidence.
+
+## DEC-202 — Demo Relationship Onboarding Uses a Deterministic Synthetic Mailbox
+
+**Status:** Accepted
+**Date:** 2026-09-09
+
+The Demo/Sandbox relationship-memory screen uses the normal historical relationship-analysis and LearningFact pipeline without requiring Microsoft Graph, Outlook credentials or OpenAI. In demo mode only, the `/relationship-onboarding/outlook/analyze` route receives deterministic synthetic historical conversations built from the seeded demo Customer/Supplier Master Data.
+
+Synthetic history preserves the same product constraints as real onboarding: explicit operator authorization is still required; messages are matched only to existing Master Data; raw bodies are transient; deterministic metrics and AI-style observations remain proposed until human confirmation; repeated analysis of the same evidence window is idempotent.
+
+When the demo operator enables AI observations, a deterministic local analyzer stands in for OpenAI. It receives the same privacy-safe two-way context format and must cite only counterparty-authored message indexes. The normal attribution hard guard remains authoritative. No external AI or mailbox provider call occurs in demo mode.
+
+The browser must clearly label this path as `Demo mailbox` / `Sentetik Outlook Analizi` so it cannot be mistaken for evidence retrieved from a real agency mailbox. Normal and controlled-pilot runtimes retain the existing Microsoft Graph + optional OpenAI path unchanged.

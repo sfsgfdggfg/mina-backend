@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.core.demo_runtime import DemoOutboundMailSender, validate_demo_runtime
@@ -10,8 +11,10 @@ from src.core.mail import OutboundMailRequest
 from src.core.pilot_store import SQLitePilotStore
 from src.core.sqlite_repositories import SQLiteMinaJobRepository
 from src.core.master_data_repository import SQLiteMasterDataRepository
+from src.core.learning_fact_repository import SQLiteLearningFactRepository
 from src.demo_launcher import _configure_environment
 from src.demo_seed import seed_demo_database
+from src.workflow.demo_relationship_onboarding import run_demo_relationship_onboarding
 
 
 def evaluate_demo_sandbox_regressions() -> dict:
@@ -36,6 +39,39 @@ def evaluate_demo_sandbox_regressions() -> dict:
         check(seeded.get("job_count") == 11 and len(jobs) == 11, "demo seed creates a populated synthetic MINA workload")
         check(repeated.get("reason") == "already_seeded" and len(jobs) == 11, "demo seed is idempotent without reset")
         check(len(masters.list_customers()) == 12 and len(masters.list_suppliers()) == 6, "demo seed includes synthetic customer and supplier master data")
+
+        learning = SQLiteLearningFactRepository(store)
+        history_end = datetime(2026, 9, 9, 15, 0, tzinfo=timezone.utc)
+        history_start = history_end - timedelta(days=180)
+        first_history = run_demo_relationship_onboarding(
+            start_at=history_start, end_at=history_end, max_messages=5000,
+            authorization_confirmed=True, master_repository=masters,
+            learning_repository=learning, created_by="Demo Operator",
+            include_ai_observations=True,
+        )
+        fact_count_after_first = len(learning.list_all())
+        second_history = run_demo_relationship_onboarding(
+            start_at=history_start, end_at=history_end, max_messages=5000,
+            authorization_confirmed=True, master_repository=masters,
+            learning_repository=learning, created_by="Demo Operator",
+            include_ai_observations=True,
+        )
+        check(
+            first_history["source"] == "synthetic_demo_history"
+            and first_history["synthetic_mailbox"] is True
+            and first_history["unique_message_count"] == 88
+            and first_history["matched_message_count"] == 88
+            and len(first_history["subjects"]) == 11
+            and first_history["proposed_fact_count"] > 0
+            and first_history["ai_observation_count"] == 11
+            and first_history["raw_messages_persisted"] is False,
+            "demo relationship onboarding exercises deterministic mailbox and learning-fact flow",
+        )
+        check(
+            second_history["proposed_fact_count"] == 0
+            and len(learning.list_all()) == fact_count_after_first,
+            "demo relationship history rerun is idempotent for the same evidence window",
+        )
         check(all(
             (contact.email or "").endswith(".invalid")
             for profile in [*masters.list_customers(), *masters.list_suppliers()]
@@ -105,7 +141,12 @@ def evaluate_demo_sandbox_regressions() -> dict:
     root = Path(__file__).resolve().parents[2]
     shell = (root / "src" / "web_shell.py").read_text(encoding="utf-8")
     css = (root / "ui" / "web_shell" / "app.css").read_text(encoding="utf-8")
-    check("DEMO · SENTETİK VERİ" in shell and ".demo-banner" in css, "browser shell visibly labels synthetic demo mode")
+    app_js = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
+    check(
+        "DEMO · SENTETİK VERİ" in shell and ".demo-banner" in css
+        and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js,
+        "browser shell visibly labels synthetic demo mode and synthetic mailbox analysis",
+    )
 
     return {"name": "Synthetic demo sandbox", "passed": not failures, "failures": failures}
 

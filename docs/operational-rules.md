@@ -3910,3 +3910,11 @@ All demo customer and supplier email identities must use reserved `.invalid` dom
 The browser must visibly identify demo mode on every authenticated shell page. Seeded jobs should intentionally cover both permitted and blocked actions so that operational rules are observable; for example, secondary dispatch remains blocked until the primary group is exhausted and approval-required reminders must still pass through their real decision boundary.
 
 Canonical regressions must include demo isolation checks and remain fully green. Date-based retention regressions must pin their fixture timestamps to the fixture clock rather than the wall clock so that safety gates do not become calendar-sensitive.
+
+## RULE-219 — Synthetic Historical Mail Must Preserve Real Onboarding Safety Boundaries
+
+Demo historical relationship analysis may replace the provider source, but it may not bypass the product's evidence rules. Explicit mailbox-analysis authorization remains mandatory. Synthetic messages must use only reserved `.invalid` identities, map through existing demo Master Data, remain transient after analysis, and create only proposed Learning Facts unless a human confirms them through the normal review flow.
+
+A synthetic AI stand-in must use the same privacy-safe history bundle and the same counterparty-attribution guard as the production analyzer. AGENCY-authored context cannot become behavioral support. Demo AI must not call OpenAI or any other external service.
+
+Repeated analysis of the same synthetic date window must not duplicate deterministic metrics or AI observations. The UI must disclose that the mailbox and AI analysis are synthetic while preserving the same review/confirm/reject controls used for real historical onboarding.
