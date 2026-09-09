@@ -23,6 +23,9 @@ from src.core.mina_job_service import create_manual_mina_job
 from src.core.models import CustomerQuote, QuoteDraft, Shipment, SupplierQuote
 from src.core.operation_execution import OperationException, OperationExecutionSnapshot
 from src.core.operation_execution_repository import SQLiteOperationExecutionRepository
+from src.core.operational_work_assignment import OperationalWorkAssignment
+from src.core.operational_work_assignment_service import work_state_fingerprint
+from src.core.operational_work_queue import build_operational_work_queue
 from src.core.performance_settings import PerformanceSettings
 from src.core.performance_settings_repository import SQLitePerformanceSettingsRepository
 from src.core.pilot_store import SQLitePilotStore
@@ -33,6 +36,9 @@ from src.core.sqlite_repositories import (
     SQLiteQuoteApprovalRepository,
     SQLiteQuoteCaseRepository,
     SQLiteSupplierRFQRepository,
+    SQLiteOperationalWorkAssignmentRepository,
+    SQLiteAttachmentInterpretationReviewRepository,
+    SQLiteExtractionProposalRepository,
 )
 from src.core.supplier_price import SupplierPriceOffer, offer_from_rfq_response
 from src.core.supplier_price_repository import SQLiteSupplierPriceRepository
@@ -417,6 +423,92 @@ def _seed_quote(
     return job, case, approval
 
 
+def _seed_operational_assignments(store: SQLitePilotStore, now: datetime) -> int:
+    assignments = SQLiteOperationalWorkAssignmentRepository(store)
+    attachments = SQLiteAttachmentInterpretationReviewRepository(store)
+    proposals = SQLiteExtractionProposalRepository(store)
+    suppliers = SQLiteSupplierRFQRepository(store)
+    approvals = SQLiteQuoteApprovalRepository(store)
+    quotes = SQLiteQuoteCaseRepository(store)
+    queue = build_operational_work_queue(
+        attachment_repository=attachments,
+        proposal_repository=proposals,
+        supplier_repository=suppliers,
+        approval_repository=approvals,
+        quote_case_repository=quotes,
+        now=now,
+    )
+    items = list(queue.get("items", []))
+    if not items:
+        return 0
+
+    def assigned(item, operator: str, *, minutes_ago: int, generation: int = 1,
+                 assigned_by: str = "MINAI Demo Seeder", reassigned_from: str | None = None):
+        at = now - timedelta(minutes=minutes_ago)
+        return OperationalWorkAssignment(
+            work_id=item["work_id"], assigned_to=operator, assigned_by=assigned_by,
+            reassigned_from=reassigned_from, assignment_reason="Sentetik demo iş dağılımı",
+            status="assigned", assigned_at=at, last_renewed_at=at,
+            lease_expires_at=at + timedelta(minutes=30), generation=generation,
+            work_state_sha256=work_state_fingerprint(item),
+        )
+
+    # Active assignment with first-look evidence.
+    first = assigned(items[0], "Demo Operator", minutes_ago=10)
+    assignments.save(first)
+    assignments.save(first.model_copy(update={
+        "status": "acknowledged",
+        "acknowledged_at": now - timedelta(minutes=4),
+        "last_renewed_at": now - timedelta(minutes=4),
+        "lease_expires_at": now + timedelta(minutes=26),
+    }))
+
+    if len(items) > 1:
+        second = assigned(items[1], "Ayşe Demo", minutes_ago=14)
+        assignments.save(second)
+        assignments.save(second.model_copy(update={
+            "status": "acknowledged",
+            "acknowledged_at": now - timedelta(minutes=6),
+            "last_renewed_at": now - timedelta(minutes=6),
+            "lease_expires_at": now + timedelta(minutes=24),
+        }))
+
+    if len(items) > 2:
+        # Preserve one explicit shift handoff and a second assignment generation.
+        third = assigned(items[2], "Mehmet Demo", minutes_ago=25)
+        assignments.save(third)
+        third_ack = third.model_copy(update={
+            "status": "acknowledged",
+            "acknowledged_at": now - timedelta(minutes=20),
+            "last_renewed_at": now - timedelta(minutes=20),
+            "lease_expires_at": now + timedelta(minutes=10),
+        })
+        assignments.save(third_ack)
+        assignments.save(third_ack.model_copy(update={
+            "status": "released",
+            "released_at": now - timedelta(minutes=12),
+            "released_by": "Mehmet Demo",
+            "release_reason": "shift_handoff",
+        }))
+        reassigned = assigned(
+            items[2], "Demo Operator", minutes_ago=8, generation=2,
+            reassigned_from="Mehmet Demo",
+        )
+        assignments.save(reassigned)
+        assignments.save(reassigned.model_copy(update={
+            "status": "acknowledged",
+            "acknowledged_at": now - timedelta(minutes=3),
+            "last_renewed_at": now - timedelta(minutes=3),
+            "lease_expires_at": now + timedelta(minutes=27),
+        }))
+
+    if len(items) > 3:
+        # Intentionally expired assignment keeps takeover/recovery visible in the queue.
+        assignments.save(assigned(items[3], "Ayşe Demo", minutes_ago=45))
+
+    return min(4, len(items))
+
+
 def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
     db_path = Path(db_path).expanduser()
     if reset and db_path.exists():
@@ -697,6 +789,8 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
         updated_at=now - timedelta(hours=6),
     ))
 
+    assignment_count = _seed_operational_assignments(store, now)
+
     store.upsert(
         namespace="demo_seed_metadata",
         record_key="current",
@@ -704,6 +798,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
             "version": DEMO_SEED_VERSION,
             "seeded_at": now.isoformat(),
             "job_count": len(jobs),
+            "assignment_count": assignment_count,
             "synthetic_only": True,
         },
         event_type="demo_database_seeded",
@@ -715,6 +810,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
         "job_count": len(jobs),
         "customer_count": len(customers),
         "supplier_count": len(suppliers),
+        "assignment_count": assignment_count,
     }
 
 

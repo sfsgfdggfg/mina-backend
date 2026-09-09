@@ -3918,3 +3918,9 @@ Demo historical relationship analysis may replace the provider source, but it ma
 A synthetic AI stand-in must use the same privacy-safe history bundle and the same counterparty-attribution guard as the production analyzer. AGENCY-authored context cannot become behavioral support. Demo AI must not call OpenAI or any other external service.
 
 Repeated analysis of the same synthetic date window must not duplicate deterministic metrics or AI observations. The UI must disclose that the mailbox and AI analysis are synthetic while preserving the same review/confirm/reject controls used for real historical onboarding.
+
+## RULE-220 — Demo Operator Metrics Must Come From Real Assignment History
+
+Demo personnel names and performance numbers must not be painted directly into the frontend. First-look coverage, acknowledgement timing, handoff count and reassignment generations must be derived from normal OperationalWorkAssignment repository history and the same reporting read model used by the product.
+
+At least one demo assignment should remain actively acknowledged, one history should contain a shift handoff/reassignment generation, and one current assignment may be deliberately expired so the recovery/takeover control is observable. Synthetic operators may share the local demo password because the environment is loopback-only and non-production, but their identities must remain distinct in the server-side operator directory and audit evidence.

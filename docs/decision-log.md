@@ -6760,3 +6760,14 @@ Synthetic history preserves the same product constraints as real onboarding: exp
 When the demo operator enables AI observations, a deterministic local analyzer stands in for OpenAI. It receives the same privacy-safe two-way context format and must cite only counterparty-authored message indexes. The normal attribution hard guard remains authoritative. No external AI or mailbox provider call occurs in demo mode.
 
 The browser must clearly label this path as `Demo mailbox` / `Sentetik Outlook Analizi` so it cannot be mistaken for evidence retrieved from a real agency mailbox. Normal and controlled-pilot runtimes retain the existing Microsoft Graph + optional OpenAI path unchanged.
+
+## DEC-203 — Demo/Sandbox Includes Multi-Operator Work Assignment Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-09
+
+The functional demo environment includes three synthetic active operators rather than a single login identity: Demo Operator, Ayşe Demo and Mehmet Demo. This keeps the existing multi-operator assignment controls, directed assignment directory and per-operator reporting visible in a realistic small-agency configuration.
+
+The demo seed records real OperationalWorkAssignment state/history against current derived work items. Seeded evidence includes assigned and acknowledged work, an explicit shift handoff, a second assignment generation, and an intentionally expired assignment that can be recovered through the normal takeover flow. These are normal repository records and reporting inputs, not hard-coded UI numbers.
+
+The same server-side assignment lease/fingerprint rules remain authoritative. Demo seeding may pre-populate valid assignment evidence, but subsequent assign/acknowledge/renew/release/takeover actions must continue through the normal product services.

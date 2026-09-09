@@ -10,6 +10,11 @@ from src.demo_seed import seed_demo_database
 
 DEMO_EMAIL = "demo@minai.invalid"
 DEMO_PASSWORD = "minai-demo-2026!"
+DEMO_OPERATORS = {
+    DEMO_EMAIL: "Demo Operator",
+    "ayse@minai.invalid": "Ayşe Demo",
+    "mehmet@minai.invalid": "Mehmet Demo",
+}
 
 
 def _configure_environment(root: Path) -> tuple[Path, Path]:
@@ -20,11 +25,12 @@ def _configure_environment(root: Path) -> tuple[Path, Path]:
 
     password_hash = hash_password(DEMO_PASSWORD, salt=b"minai-demo-seed!")
     users = {
-        DEMO_EMAIL: {
-            "name": "Demo Operator",
+        email: {
+            "name": name,
             "password_hash": password_hash,
             "active": True,
         }
+        for email, name in DEMO_OPERATORS.items()
     }
     os.environ.update({
         "MINAI_DEMO_MODE": "true",

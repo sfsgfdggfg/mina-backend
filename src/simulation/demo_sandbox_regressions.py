@@ -9,10 +9,14 @@ from pathlib import Path
 from src.core.demo_runtime import DemoOutboundMailSender, validate_demo_runtime
 from src.core.mail import OutboundMailRequest
 from src.core.pilot_store import SQLitePilotStore
-from src.core.sqlite_repositories import SQLiteMinaJobRepository
+from src.core.sqlite_repositories import (
+    SQLiteMinaJobRepository,
+    SQLiteOperationalWorkAssignmentRepository,
+)
 from src.core.master_data_repository import SQLiteMasterDataRepository
 from src.core.learning_fact_repository import SQLiteLearningFactRepository
 from src.demo_launcher import _configure_environment
+from src.core.web_session import list_active_web_operators
 from src.demo_seed import seed_demo_database
 from src.workflow.demo_relationship_onboarding import run_demo_relationship_onboarding
 
@@ -36,7 +40,20 @@ def evaluate_demo_sandbox_regressions() -> dict:
         store = SQLitePilotStore(db, run_id="demo-regression", retention_days=365)
         jobs = SQLiteMinaJobRepository(store).list_all()
         masters = SQLiteMasterDataRepository(store)
-        check(seeded.get("job_count") == 11 and len(jobs) == 11, "demo seed creates a populated synthetic MINA workload")
+        check(
+            seeded.get("job_count") == 11 and len(jobs) == 11
+            and seeded.get("assignment_count") == 4,
+            "demo seed creates a populated synthetic MINA workload and work assignments",
+        )
+        assignment_repo = SQLiteOperationalWorkAssignmentRepository(store)
+        assignment_history = assignment_repo.list_history()
+        current_assignments = assignment_repo.list_all()
+        check(
+            len(current_assignments) == 4 and len(assignment_history) == 10
+            and any(item.generation == 2 and item.assigned_to == "Demo Operator" for item in current_assignments)
+            and any(item.status == "released" and item.release_reason == "shift_handoff" for item in assignment_history),
+            "demo seed preserves multi-operator acknowledgement handoff and reassignment evidence",
+        )
         check(repeated.get("reason") == "already_seeded" and len(jobs) == 11, "demo seed is idempotent without reset")
         check(len(masters.list_customers()) == 12 and len(masters.list_suppliers()) == 6, "demo seed includes synthetic customer and supplier master data")
 
@@ -127,13 +144,15 @@ def evaluate_demo_sandbox_regressions() -> dict:
         try:
             os.environ["MINAI_DEMO_STATE_DIR"] = str(root / "launcher-state")
             db_path, outbox_path = _configure_environment(root)
+            operators = list_active_web_operators()
             check(
                 os.environ.get("MINAI_DEMO_MODE") == "true"
                 and os.environ.get("MINAI_PILOT_MODE") == "false"
                 and os.environ.get("MINAI_OUTBOUND_MODE") == "shadow"
                 and Path(db_path).parent == root / "launcher-state"
-                and Path(outbox_path).parent == root / "launcher-state",
-                "demo launcher forces isolated local runtime boundaries",
+                and Path(outbox_path).parent == root / "launcher-state"
+                and {item["operator_name"] for item in operators} == {"Demo Operator", "Ayşe Demo", "Mehmet Demo"},
+                "demo launcher forces isolated local runtime boundaries and multi-operator directory",
             )
         finally:
             os.environ.clear(); os.environ.update(old)
