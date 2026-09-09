@@ -399,3 +399,6 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 @media (max-width: 720px) {
   .relationship-onboarding-form .settings-two-col { grid-template-columns: 1fr; }
 }
+
+.demo-banner { display: inline-flex; align-items: center; justify-content: center; padding: 6px 9px; border-radius: 999px; border: 1px solid #fed7aa; background: #fff7ed; color: #9a3412; font-size: 11px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
+.login-card .demo-banner { margin: 10px auto 14px; width: fit-content; }

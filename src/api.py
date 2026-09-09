@@ -88,6 +88,9 @@ from src.workflow.extraction_confirmation import (
 from src.core.pilot_store import SQLitePilotStore
 from src.pilot_launcher import validate_controlled_pilot_runtime
 from src.core.outbound_runtime import resolve_outbound_runtime_policy
+from src.core.demo_runtime import (
+    DemoOutboundMailSender, demo_mode_enabled, validate_demo_runtime,
+)
 from src.core.customer_recipient_authority import build_customer_quote_recipient_authority
 from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
 from src.core.business_calendar import supplier_calendar_metadata
@@ -422,11 +425,11 @@ def _authenticated_operator(
 
 
 def _runtime_outbound_delivery_enabled() -> bool:
-    return outbound_runtime_policy.delivery_enabled
+    return outbound_runtime_policy.delivery_enabled or demo_mode_enabled()
 
 def _runtime_master_data_authority():
     """Real controlled pilot uses durable Master Data; dev/synthetic retains fixtures."""
-    return master_data_repository if pilot_mode_enabled() else None
+    return master_data_repository if (pilot_mode_enabled() or demo_mode_enabled()) else None
 
 
 
@@ -439,6 +442,11 @@ def _require_runtime_outbound_delivery() -> None:
 
 
 def _build_outbound_mail_sender_if_enabled() -> OutboundMailSender | None:
+    if demo_mode_enabled():
+        outbox = os.environ.get("MINAI_DEMO_OUTBOX_PATH", "").strip()
+        if not outbox:
+            raise RuntimeError("MINAI_DEMO_OUTBOX_PATH is required in demo mode.")
+        return DemoOutboundMailSender(outbox)
     if not outbound_runtime_policy.delivery_enabled:
         return None
     try:
@@ -514,6 +522,8 @@ def validate_controlled_pilot_startup():
             )
     if pilot_mode_enabled():
         validate_controlled_pilot_runtime()
+    if demo_mode_enabled():
+        validate_demo_runtime()
 
 
 @app.on_event("startup")
@@ -522,6 +532,10 @@ def start_controlled_automation_scheduler():
 
     if pilot_mode_enabled() and outbound_runtime_policy.delivery_enabled:
         outbound_mail_sender = _require_controlled_outbound_mail_sender()
+        automation_scheduler.sender = outbound_mail_sender
+        automation_scheduler.start()
+    elif demo_mode_enabled():
+        outbound_mail_sender = _build_outbound_mail_sender_if_enabled()
         automation_scheduler.sender = outbound_mail_sender
         automation_scheduler.start()
 

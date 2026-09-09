@@ -3900,3 +3900,13 @@ A new agency mailbox may be scanned for counterparty candidates only after expli
 Discovery requests only message/conversation identity, sender/To/Cc/Bcc recipient addresses, timestamps and draft state. Subject, body, attachments and attachment content are not requested. The discovery result may expose candidate business email addresses/domains and bounded traffic counts plus explicit Inbox/Sent coverage and truncation metadata for human review, but must not persist raw messages, create Master Data, create LearningFacts, call AI, or classify an unmatched address as customer or supplier.
 
 Human review precedes authority. Candidate contacts selected as pilot customers/suppliers must be entered through the normal Master Data/data-pack process and the resulting pack must pass full verification/fingerprint checks before controlled-pilot startup. Relationship-history learning may begin only after deterministic Master Data identities exist.
+
+## RULE-218 — Demo/Sandbox Must Exercise Real MINAI Behavior Without Reaching Real Counterparties
+
+Demo/Sandbox may use the same backend routes, repositories and lifecycle services as the product, but its state and outbound effects must remain physically separate from controlled pilot state. A demo process requires its own synthetic SQLite database and must not reuse the pilot database, pilot data pack or real provider identity.
+
+All demo customer and supplier email identities must use reserved `.invalid` domains. The demo outbound adapter must reject any recipient outside that reserved namespace before provider delivery and may only append synthetic delivery evidence to the local demo outbox. Demo mode must not authenticate to Outlook or silently fall through to a real sender.
+
+The browser must visibly identify demo mode on every authenticated shell page. Seeded jobs should intentionally cover both permitted and blocked actions so that operational rules are observable; for example, secondary dispatch remains blocked until the primary group is exhausted and approval-required reminders must still pass through their real decision boundary.
+
+Canonical regressions must include demo isolation checks and remain fully green. Date-based retention regressions must pin their fixture timestamps to the fixture clock rather than the wall clock so that safety gates do not become calendar-sensitive.

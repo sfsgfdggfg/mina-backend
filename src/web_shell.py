@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from src.core.pilot_access import pilot_mode_enabled
+from src.core.demo_runtime import demo_mode_enabled
 from src.core.web_session import (
     SESSION_COOKIE_NAME,
     authenticate_web_user,
@@ -49,11 +50,12 @@ def _session_from_request(request: Request):
 
 def _login_html(*, nonce: str, error: str | None = None) -> str:
     message = "" if not error else f'<p class="login-error">{html.escape(error)}</p>'
+    demo = '<p class="demo-banner">DEMO · SENTETİK VERİ</p>' if demo_mode_enabled() else ""
     return f'''<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MINAI Giriş</title><link rel="stylesheet" href="/app/assets/app.css"></head>
 <body class="login-page"><main class="login-card">
-<div class="brand-mark">M</div><h1>MINAI</h1><p class="muted">Freight Operations</p>{message}
+<div class="brand-mark">M</div><h1>MINAI</h1><p class="muted">Freight Operations</p>{demo}{message}
 <form method="post" action="/app/login" autocomplete="on">
 <input type="hidden" name="login_nonce" value="{html.escape(nonce)}">
 <label>E-posta<input type="email" name="email" autocomplete="username" required maxlength="254"></label>
@@ -65,6 +67,7 @@ def _login_html(*, nonce: str, error: str | None = None) -> str:
 def _shell_html(*, page: str, operator_name: str, csrf_token: str, job_id: str = "") -> str:
     operator = html.escape(operator_name)
     safe_job_id = html.escape(job_id)
+    demo = '<span class="demo-banner">DEMO · SENTETİK VERİ</span>' if demo_mode_enabled() else ""
     return f'''<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="csrf-token" content="{html.escape(csrf_token)}"><title>MINAI</title>
@@ -75,7 +78,7 @@ def _shell_html(*, page: str, operator_name: str, csrf_token: str, job_id: str =
 <div class="sidebar-footer"><span>{operator}</span><form method="post" action="/app/logout">
 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}"><button class="link-button" type="submit">Çıkış</button></form></div></aside>
 <main><header><div><p class="eyebrow">Operasyon Merkezi</p><h1 id="page-title">MINAI</h1></div>
-<div id="status-pill" class="status-pill">Bağlanıyor…</div></header><section id="app-content" class="content-card"></section></main>
+{demo}<div id="status-pill" class="status-pill">Bağlanıyor…</div></header><section id="app-content" class="content-card"></section></main>
 </div><script src="/app/assets/app.js" defer></script></body></html>'''
 
 

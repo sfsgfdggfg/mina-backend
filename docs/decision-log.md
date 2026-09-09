@@ -6734,3 +6734,16 @@ The discovery tool uses a dedicated external Outlook auth profile containing onl
 Discovery is metadata-minimized. Microsoft Graph requests immutable message identity, conversation identity, sender/recipient addresses, timestamps and draft state only; it does not request subject, body, attachments or AI analysis. Raw mailbox messages are transient and are cleared after the run. No Customer/Supplier Master Data, LearningFact, pilot database or operational pack is mutated.
 
 The result ranks external email addresses and domains by bounded inbound/outbound traffic evidence. Inbox and Sent Items receive separate quotas, newest messages are examined first, every examined raw item consumes the hard cap, and any truncation is reported explicitly. The result marks only deterministic matches to existing Master Data. Unmatched addresses remain unclassified candidates; MINAI does not infer customer versus supplier from traffic alone. A human selects and classifies the initial pilot customers/suppliers, then builds and verifies the agency data pack. Existing historical relationship analysis runs only after those identities exist.
+
+## DEC-201 — MINAI Demo/Sandbox Uses Real Product Code With Isolated Synthetic Authority
+
+**Status:** Accepted
+**Date:** 2026-09-09
+
+MINAI Demo/Sandbox is not a separate mock frontend. It uses the normal FastAPI/browser-shell code paths, repositories, state machines, approvals, reminders, operation execution, reporting, Master Data, Learning Facts, automation policies and branding against a dedicated synthetic SQLite database.
+
+Demo runtime authority is strictly isolated from controlled pilot authority. `MINAI_DEMO_MODE=1` requires pilot mode disabled, a dedicated database path outside the repository, shadow outbound policy, local loopback binding and an explicit demo outbox path. The demo launcher seeds only synthetic customers, suppliers and jobs and visibly labels the browser shell as `DEMO · SENTETİK VERİ`.
+
+Provider-backed mail in demo mode is replaced by a deterministic synthetic sender. It may record normal sent evidence and advance the same product lifecycle, but it accepts only reserved `.invalid` recipient addresses and writes an append-only local synthetic outbox instead of contacting Outlook. A non-synthetic recipient fails before provider delivery. This allows RFQ, reminder, customer-quote and operation-message flows to be exercised without risking real external communication.
+
+Demo seed data is idempotent by version and covers multiple lifecycle states rather than only happy-path cards: missing information, active pricing, supplier acknowledgement, no response/reminder due, multi-supplier quote selection, pending/approved customer quote, negotiation, accepted operation start, in-transit execution, exceptions, POD/CMR closeout and completed work. Demo data must remain clearly synthetic and must never be treated as pilot evidence.

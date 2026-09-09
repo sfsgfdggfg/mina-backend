@@ -30,6 +30,7 @@ from src.simulation.automation_policy_hierarchy_regressions import evaluate_auto
 from src.simulation.approval_required_execution_regressions import evaluate_approval_required_execution_regressions
 from src.simulation.pilot_web_shell_regressions import evaluate_pilot_web_shell_regressions
 from src.simulation.operations_dashboard_regressions import evaluate_operations_dashboard_regressions
+from src.simulation.demo_sandbox_regressions import evaluate_demo_sandbox_regressions
 from src.simulation.operation_execution_exception_regressions import evaluate_operation_execution_exception_regressions
 from src.simulation.learning_fact_provenance_regressions import evaluate_learning_fact_provenance_regressions
 from src.simulation.relationship_history_onboarding_regressions import (
@@ -270,6 +271,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Approval-required outbound execution", evaluate_approval_required_execution_regressions),
     Suite("Pilot-approved web operator shell", evaluate_pilot_web_shell_regressions),
     Suite("Operations home dashboard and calendar", evaluate_operations_dashboard_regressions),
+    Suite("Synthetic demo sandbox", evaluate_demo_sandbox_regressions),
     Suite("Operation execution and exception layer", evaluate_operation_execution_exception_regressions),
     Suite("Learning fact and provenance authority", evaluate_learning_fact_provenance_regressions),
     Suite("Historical relationship onboarding", evaluate_relationship_history_onboarding_regressions),
