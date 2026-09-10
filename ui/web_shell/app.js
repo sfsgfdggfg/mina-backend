@@ -2,6 +2,7 @@ const content = document.getElementById("app-content");
 const title = document.getElementById("page-title");
 const statusPill = document.getElementById("status-pill");
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
+const demoMode = Boolean(document.querySelector(".demo-banner"));
 
 function node(tag, text = "", className = "") {
   const el = document.createElement(tag);
@@ -886,6 +887,17 @@ function reminderPreviewCard(preview, sendPath, onDone) {
   card.append(feedback); return card;
 }
 
+async function simulateDemoSupplierResponse(rfqId, scenario, feedback, refresh) {
+  feedback.textContent = "Sentetik tedarikçi yanıtı işleniyor…";
+  try {
+    const result = await api(`/demo/supplier-rfqs/${encodeURIComponent(rfqId)}/simulate-response`, {
+      method: "POST", body: JSON.stringify({ scenario })
+    });
+    feedback.textContent = `Yanıt sonucu: ${codeLabel(result.status)}${result.reason ? ` · ${result.reason}` : ""}`;
+    await refresh();
+  } catch (error) { feedback.textContent = error.message || String(error); setStatus("Hata", false); }
+}
+
 async function renderSupplier(container, jobId, supplier, refresh, effectivePolicy = null) {
   const card = node("div", "", "supplier-card");
   const head = node("div", "", "supplier-card-head");
@@ -908,6 +920,20 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
       node("span", `Yanıt: ${codeLabel(response.status)}`, "small")
     );
     card.append(commercial);
+  }
+
+  if (demoMode && supplier.status === "awaiting_response" && !supplier.commercial_response) {
+    const demoBox = node("div", "", "demo-supplier-response-box");
+    demoBox.append(node("strong", "Demo tedarikçi yanıtı"), node("div", "Gerçek inbound correlation ve response lifecycle çalışır.", "small muted"));
+    const demoActions = node("div", "", "actions demo-supplier-response-actions");
+    const demoFeedback = node("div", "", "muted settings-feedback");
+    if (!supplier.latest_acknowledgement_at) demoActions.append(actionButton("Çalışıyoruz", "", () => simulateDemoSupplierResponse(supplier.rfq_id, "acknowledged", demoFeedback, refresh)));
+    demoActions.append(
+      actionButton("Tam fiyat ver", "approve", () => simulateDemoSupplierResponse(supplier.rfq_id, "quoted", demoFeedback, refresh)),
+      actionButton("Araç yok", "reject", () => simulateDemoSupplierResponse(supplier.rfq_id, "no_capacity", demoFeedback, refresh)),
+      actionButton("Açıklama iste", "", () => simulateDemoSupplierResponse(supplier.rfq_id, "needs_clarification", demoFeedback, refresh))
+    );
+    demoBox.append(demoActions, demoFeedback); card.append(demoBox);
   }
 
   if (supplier.status === "send_outcome_unknown") {

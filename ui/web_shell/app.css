@@ -432,3 +432,8 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .attachment-field-row input, .attachment-field-row select, .attachment-field-row textarea { width: 100%; }
 .attachment-attention { color: #b45309; font-weight: 700; }
 @media (max-width: 760px) { .attachment-field-grid { grid-template-columns: 1fr; } }
+
+/* Synthetic supplier response controls */
+.demo-supplier-response-box { margin-top: 12px; padding: 11px; border: 1px dashed #cbd5e1; border-radius: 11px; background: #f8fafc; }
+.demo-supplier-response-actions { margin-top: 9px; flex-wrap: wrap; }
+.demo-supplier-response-box .settings-feedback { margin-top: 8px; }

@@ -6795,3 +6795,14 @@ The functional demo seeds pending attachment-interpretation reviews for both cus
 The browser `Gelen Talepler` workspace exposes these reviews through the normal field-level preview/apply/reject services. Operator edits must be validated by the existing preview-token contract before apply. Applying a customer review creates a normal ExtractionProposal; applying a supplier review attaches a normal SupplierRFQResponse to the frozen RFQ snapshot.
 
 Synthetic attachment examples must preserve uncertainty and safety attention instead of pretending perfect extraction. Demo seed therefore includes an unknown high-value flag on the customer candidate and an uncertain transit-time field on the supplier candidate. Normal and controlled-pilot attachment retrieval, verification and interpretation paths are unchanged.
+
+## DEC-206 — Demo/Sandbox Can Simulate Supplier Email Responses Through Real Ingestion
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The functional demo exposes synthetic supplier response controls only for RFQs that are still awaiting a commercial response. The controls model acknowledgement, complete quote, no-capacity, and clarification-request scenarios.
+
+The browser does not mutate RFQ state directly. A demo-only server endpoint constructs a synthetic `.invalid` supplier email using the existing RFQ identity/reference and passes it through the normal `ingest_supplier_reply` correlation and validation service. Production and controlled-pilot runtimes fail closed on this endpoint.
+
+Acknowledgement must keep the RFQ open for a commercial response. Quote/no-capacity/clarification scenarios must remain subject to the same duplicate, sender, RFQ-state, and commercial validation rules as provider-ingested mail.

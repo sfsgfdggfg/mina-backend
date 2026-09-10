@@ -3940,3 +3940,11 @@ Synthetic attachment content may pre-populate a candidate, but it never becomes 
 Customer attachment apply may create only an ExtractionProposal, which still requires the ordinary extraction-confirmation boundary before a MINA job is created. Supplier attachment apply may affect only the RFQ whose frozen snapshot and sender identity still match the review evidence.
 
 Unknown safety values and parser-marked uncertain commercial fields must remain visible in the demo review UI. The demo must contain at least one customer attachment and one supplier attachment example, and regression coverage must prove their mutations flow through normal repositories rather than frontend-only state.
+
+## RULE-223 — Demo Supplier Reply Simulation Must Use Inbound Correlation
+
+Synthetic supplier reply buttons may exist only in demo mode and only while the target RFQ is awaiting response. The server must derive the synthetic sender and explicit RFQ reference from the durable RFQ record; the browser must not invent supplier identity authority.
+
+A simulated acknowledgement must pass through the normal acknowledgement detector and must not create a commercial response. Simulated quote, no-capacity, and clarification outcomes must pass through `ingest_supplier_reply` and normal RFQ lifecycle validation.
+
+The demo-only response endpoint must fail closed outside Demo/Sandbox. Regression coverage must prove acknowledgement, quote, and no-capacity behavior through repository evidence rather than frontend-only state.

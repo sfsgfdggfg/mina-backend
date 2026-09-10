@@ -13,6 +13,7 @@ from src.core.attachment_interpretation_review_service import (
 )
 from src.core.mail import OutboundMailRequest
 from src.core.pilot_store import SQLitePilotStore
+from src.core.pilot_access import route_allowed
 from src.core.sqlite_repositories import (
     SQLiteAttachmentInterpretationReviewRepository,
     SQLiteExtractionProposalRepository,
@@ -32,6 +33,7 @@ from src.workflow.demo_relationship_onboarding import run_demo_relationship_onbo
 from src.workflow.demo_inbound import parse_demo_customer_email
 from src.workflow.extraction_confirmation import confirm_extraction_proposal
 from src.workflow.mail_ingestion import process_customer_inquiry_mail
+from src.workflow.supplier_response_ingestion import ingest_supplier_reply
 
 
 def evaluate_demo_sandbox_regressions() -> dict:
@@ -123,6 +125,46 @@ def evaluate_demo_sandbox_regressions() -> dict:
             and supplier_responses[0].source_attachment_review_id == supplier_review.review_id
             and supplier_responses[0].cost == 2470.0 and supplier_responses[0].currency == "EUR",
             "demo attachment review applies customer extraction and supplier quote through real review services",
+        )
+
+        reply_candidates = [
+            item for item in supplier_repo.list_drafts()
+            if item.status == "awaiting_response"
+            and not supplier_repo.list_responses(item.rfq_id)
+            and not supplier_repo.list_acknowledgements(item.rfq_id)
+        ]
+        ack_target, no_capacity_target = reply_candidates[:2]
+        ack_result = ingest_supplier_reply(
+            reply=InboundMailEnvelope(
+                external_message_id="demo-regression-ack", sender_address=ack_target.recipient_email,
+                subject=f"Re: {ack_target.subject}", body_text="Talebinizi aldık, çalışıyoruz.",
+                explicit_rfq_reference=ack_target.rfq_id, source="email",
+            ), repository=supplier_repo,
+        )
+        responses_after_ack = supplier_repo.list_responses(ack_target.rfq_id)
+        quote_result = ingest_supplier_reply(
+            reply=InboundMailEnvelope(
+                external_message_id="demo-regression-quote", sender_address=ack_target.recipient_email,
+                subject=f"Re: {ack_target.subject}", body_text="2440 EUR",
+                explicit_rfq_reference=ack_target.rfq_id, source="email",
+            ), repository=supplier_repo,
+            extracted_response={"status":"quoted","cost":2440.0,"currency":"EUR","transit_time":"5 gün","pricing_basis":"all_in"},
+        )
+        no_capacity_result = ingest_supplier_reply(
+            reply=InboundMailEnvelope(
+                external_message_id="demo-regression-no-capacity", sender_address=no_capacity_target.recipient_email,
+                subject=f"Re: {no_capacity_target.subject}", body_text="Maalesef araç veremiyoruz.",
+                explicit_rfq_reference=no_capacity_target.rfq_id, source="email",
+            ), repository=supplier_repo, extracted_response={"status":"no_capacity"},
+        )
+        check(
+            ack_result.status == "acknowledgement_recorded" and not responses_after_ack
+            and len(supplier_repo.list_acknowledgements(ack_target.rfq_id)) == 1
+            and quote_result.status == "response_attached"
+            and supplier_repo.list_responses(ack_target.rfq_id)[0].cost == 2440.0
+            and no_capacity_result.status == "response_attached"
+            and supplier_repo.list_responses(no_capacity_target.rfq_id)[0].status == "no_capacity",
+            "demo supplier reply scenarios use real correlation acknowledgement and commercial-response ingestion",
         )
 
         learning = SQLiteLearningFactRepository(store)
@@ -227,6 +269,7 @@ def evaluate_demo_sandbox_regressions() -> dict:
 
     root = Path(__file__).resolve().parents[2]
     shell = (root / "src" / "web_shell.py").read_text(encoding="utf-8")
+    api_text = (root / "src" / "api.py").read_text(encoding="utf-8")
     css = (root / "ui" / "web_shell" / "app.css").read_text(encoding="utf-8")
     app_js = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
     check(
@@ -234,6 +277,9 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "Gelen Talepler" in shell and "DEMO_INBOUND_TEMPLATES" in app_js
         and "Doğrula ve MINA işi oluştur" in app_js and "Ek İnceleme" in app_js
         and "İncelemeyi uygula" in app_js and "preview_token" in app_js
+        and "Demo tedarikçi yanıtı" in app_js
+        and "demo_supplier_response_unavailable" in api_text
+        and route_allowed("POST", "/demo/supplier-rfqs/demo-rfq/simulate-response")
         and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js,
         "browser shell exposes synthetic inbound and relationship workflows without hiding demo mode",
     )

@@ -906,6 +906,12 @@ class SupplierRFQAcknowledgementRequest(BaseModel):
     channel: Literal["phone", "whatsapp", "manual"]
 
 
+class DemoSupplierResponseRequest(BaseModel):
+    scenario: Literal[
+        "acknowledged", "quoted", "no_capacity", "needs_clarification"
+    ]
+
+
 class SupplierRFQResponseRequest(BaseModel):
     supplier_name: str
     rfq_priority: int
@@ -3972,6 +3978,51 @@ def ingest_supplier_response(request: SupplierReplyIngestionRequest):
         extracted_response=request.extracted_response,
         repository=supplier_rfq_repository,
     ).model_dump()
+
+
+@app.post("/demo/supplier-rfqs/{rfq_id}/simulate-response")
+def simulate_demo_supplier_response(rfq_id: str, request: DemoSupplierResponseRequest):
+    if not demo_mode_enabled():
+        raise HTTPException(status_code=404, detail="demo_supplier_response_unavailable")
+    draft = supplier_rfq_repository.get_draft(rfq_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail=f"Supplier RFQ not found: {rfq_id}")
+    if not draft.recipient_email:
+        raise HTTPException(status_code=409, detail="demo_supplier_recipient_missing")
+
+    now = datetime.now(timezone.utc)
+    cost = 2300.0 + (draft.priority * 70.0)
+    bodies = {
+        "acknowledged": "Talebinizi aldık, çalışıyoruz.",
+        "quoted": f"Teklifimiz {cost:.0f} EUR all-in, transit 5 gün.",
+        "no_capacity": "Maalesef bu yük için araç veremiyoruz.",
+        "needs_clarification": "Yükleme posta kodunu teyit eder misiniz?",
+    }
+    extracted = None
+    if request.scenario == "quoted":
+        extracted = {
+            "status": "quoted", "cost": cost, "currency": "EUR",
+            "transit_time": "5 gün", "equipment_type": "Tenteli",
+            "pricing_basis": "all_in",
+        }
+    elif request.scenario == "no_capacity":
+        extracted = {"status": "no_capacity", "notes": bodies[request.scenario]}
+    elif request.scenario == "needs_clarification":
+        extracted = {"status": "needs_clarification", "notes": bodies[request.scenario]}
+
+    reply = InboundMailEnvelope(
+        external_message_id=f"demo-supplier-reply-{rfq_id}-{int(now.timestamp() * 1_000_000)}",
+        provider_name="synthetic_demo_mailbox", mailbox_id="demo",
+        sender_address=draft.recipient_email, sender_name=draft.supplier_name,
+        recipient_addresses=["ops@minai.invalid"], subject=f"Re: {draft.subject}",
+        body_text=bodies[request.scenario], received_at=now,
+        explicit_rfq_reference=rfq_id, source="email",
+    )
+    return ingest_supplier_reply(
+        reply=reply, extracted_response=extracted, repository=supplier_rfq_repository
+    ).model_dump()
+
+
 
 @app.post("/customer-memory/import/validate")
 def validate_customer_memory_import(
