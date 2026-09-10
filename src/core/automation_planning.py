@@ -8,6 +8,8 @@ from src.core.mina_job_repository import MinaJobRepository
 from src.core.automation_policy_service import find_supplier_policy_profile, resolve_effective_automation_policy
 from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
 from src.core.master_data_repository import MasterDataRepository
+from src.core.learning_fact_repository import LearningFactRepository
+from src.core.supplier_intelligence_policy import resolve_supplier_operational_learning_policy
 from src.core.business_calendar import (
     SupplierHolidayCalendarCoverageError,
     add_supplier_business_minutes,
@@ -51,6 +53,7 @@ def supplier_reminder_plan(
     mina_job_repository: MinaJobRepository | None = None,
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
+    learning_fact_repository: LearningFactRepository | None = None,
 ) -> dict[str, Any]:
     workflow = supplier_repository.get_workflow(draft.workflow_id)
     if workflow is None or workflow.automation_timing_version < 1:
@@ -73,15 +76,31 @@ def supplier_reminder_plan(
 
     supplier_profile = find_supplier_policy_profile(master_data_repository, draft.supplier_name)
     relationship = None if supplier_profile is None else supplier_profile.relationship
+    learning_policy = resolve_supplier_operational_learning_policy(
+        supplier_name=draft.supplier_name,
+        master_data_repository=master_data_repository,
+        learning_repository=learning_fact_repository,
+        base_first_reminder_minutes=workflow.dispatch_policy.no_response_reminder_minutes,
+        base_acknowledged_wait_minutes=workflow.dispatch_policy.acknowledged_grace_minutes,
+        as_of=now,
+    )
     first_reminder_minutes = (
-        relationship.first_reminder_minutes
-        if relationship is not None and relationship.first_reminder_minutes is not None
-        else workflow.dispatch_policy.no_response_reminder_minutes
+        learning_policy.effective_first_reminder_minutes
+        if learning_policy is not None
+        else (
+            relationship.first_reminder_minutes
+            if relationship is not None and relationship.first_reminder_minutes is not None
+            else workflow.dispatch_policy.no_response_reminder_minutes
+        )
     )
     acknowledged_wait_minutes = (
-        relationship.acknowledged_wait_minutes
-        if relationship is not None and relationship.acknowledged_wait_minutes is not None
-        else workflow.dispatch_policy.acknowledged_grace_minutes
+        learning_policy.effective_acknowledged_wait_minutes
+        if learning_policy is not None
+        else (
+            relationship.acknowledged_wait_minutes
+            if relationship is not None and relationship.acknowledged_wait_minutes is not None
+            else workflow.dispatch_policy.acknowledged_grace_minutes
+        )
     )
 
     acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
@@ -104,6 +123,23 @@ def supplier_reminder_plan(
     current = aware_utc(now)
     preferred_channels = ["email", "phone", "whatsapp"] if relationship is None else relationship.preferred_contact_channels
     max_email_reminders = None if relationship is None else relationship.max_email_reminders
+    supplier_relationship_view = {
+        "supplier_id": None if supplier_profile is None else supplier_profile.supplier_id,
+        "first_reminder_minutes": first_reminder_minutes,
+        "acknowledged_wait_minutes": acknowledged_wait_minutes,
+        "max_email_reminders": max_email_reminders,
+        "current_flow_effective_email_reminder_limit": (
+            None if max_email_reminders is None else min(max_email_reminders, 1)
+        ),
+        "automatic_contact_blocked": False if relationship is None else relationship.automatic_contact_blocked,
+        "phone_escalation_after_minutes": None if relationship is None else relationship.phone_escalation_after_minutes,
+        "whatsapp_escalation_after_minutes": None if relationship is None else relationship.whatsapp_escalation_after_minutes,
+        "management_escalation_allowed": None if relationship is None else relationship.management_escalation_allowed,
+        "preferred_contact_channels": preferred_channels,
+        "first_reminder_source": None if learning_policy is None else learning_policy.first_reminder_source,
+        "acknowledged_wait_source": None if learning_policy is None else learning_policy.acknowledged_wait_source,
+        "learning_policy": None if learning_policy is None else learning_policy.model_dump(mode="json"),
+    }
 
     if action is not None:
         if action.status == "sent":
@@ -188,6 +224,7 @@ def supplier_reminder_plan(
             "action_type": action_type,
             "action_key": action_key,
             "due_at": due_at,
+            "supplier_relationship": supplier_relationship_view,
         }
     if max_email_reminders == 0 or "email" not in preferred_channels:
         return {
@@ -241,20 +278,7 @@ def supplier_reminder_plan(
         "action_key": action_key,
         "due_at": due_at,
         "automation_policy": policy.model_dump(),
-        "supplier_relationship": {
-            "supplier_id": None if supplier_profile is None else supplier_profile.supplier_id,
-            "first_reminder_minutes": first_reminder_minutes,
-            "acknowledged_wait_minutes": acknowledged_wait_minutes,
-            "max_email_reminders": max_email_reminders,
-            "current_flow_effective_email_reminder_limit": (
-                None if max_email_reminders is None else min(max_email_reminders, 1)
-            ),
-            "automatic_contact_blocked": False if relationship is None else relationship.automatic_contact_blocked,
-            "phone_escalation_after_minutes": None if relationship is None else relationship.phone_escalation_after_minutes,
-            "whatsapp_escalation_after_minutes": None if relationship is None else relationship.whatsapp_escalation_after_minutes,
-            "management_escalation_allowed": None if relationship is None else relationship.management_escalation_allowed,
-            "preferred_contact_channels": ["email", "phone", "whatsapp"] if relationship is None else relationship.preferred_contact_channels,
-        },
+        "supplier_relationship": supplier_relationship_view,
     }
 
 

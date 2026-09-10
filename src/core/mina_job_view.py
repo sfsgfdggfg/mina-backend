@@ -88,6 +88,7 @@ def build_mina_job_detail(
                 mina_job_repository=repository,
                 master_data_repository=master_data_repository,
                 agency_policy_repository=agency_policy_repository,
+                learning_fact_repository=learning_fact_repository,
             )
             latest_response = max(responses, key=lambda item: item.received_at) if responses else None
             latest_ack = max(acknowledgements, key=lambda item: item.acknowledged_at) if acknowledgements else None
@@ -106,9 +107,12 @@ def build_mina_job_detail(
                     "transit_time": latest_response.transit_time,
                 },
                 "reminder": {
-                    key: plan.get(key)
-                    for key in ("state", "action_type", "due_at", "resume_at", "reason")
-                    if plan.get(key) is not None
+                    **{
+                        key: plan.get(key)
+                        for key in ("state", "action_type", "due_at", "resume_at", "reason")
+                        if plan.get(key) is not None
+                    },
+                    "supplier_relationship": plan.get("supplier_relationship"),
                 },
             })
     customer_plan: dict[str, Any] | None = None

@@ -4031,3 +4031,11 @@ A demo reset may mutate only paths beneath the configured `MINAI_DEMO_STATE_DIR`
 Reset requires an authenticated browser session, CSRF validation and the explicit `RESET_DEMO` confirmation token. The endpoint is demo-only and must fail closed outside `MINAI_DEMO_MODE`; it must not be added to the controlled-pilot route allowlist.
 
 Path validation happens before any mutation. Symlinks, path escapes or mismatched configured paths abort the reset. A successful reset reseeds the normal deterministic demo baseline while preserving the active browser session.
+
+## RULE-236 — Learned Supplier Behaviour Must Stay Explainable, Conservative, and Subordinate to Manual Rules
+
+A supplier-learning fact may alter supplier ranking or reminder timing only when it is `confirmed`, structured, unit-valid, recent enough and above the policy confidence threshold. Proposed, rejected, superseded, stale, future-dated or free-text behavioral observations must not change runtime behavior.
+
+Learning must never make supplier contact earlier than the explicit/default operational rule. It may only extend waiting windows within the accepted caps. Supplier-specific manual timing always wins over learned timing.
+
+Learning must never promote a secondary supplier into the primary group, bypass capability/safety eligibility, release secondary suppliers, infer availability, alter phone/WhatsApp/management escalation, or create an outbound commercial target. Any applied learning effect must remain visible in backend read models with its source and bounded policy output.

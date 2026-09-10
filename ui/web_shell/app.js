@@ -1448,6 +1448,15 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     if (reminder.resume_at) reminderLine.append(node("span", ` · devam ${formatDate(reminder.resume_at)}`, "small"));
     if (reminder.escalation_due_at) reminderLine.append(node("span", ` · temas ${formatDate(reminder.escalation_due_at)}`, "small"));
     if ((reminder.preferred_contact_channels || []).length) reminderLine.append(node("span", ` · kanal: ${reminder.preferred_contact_channels.join(" / ")}`, "small"));
+    const timing = reminder.supplier_relationship || {};
+    const timingSourceLabel = source => source === "confirmed_learning" ? "Doğrulanmış öğrenme" : source === "supplier_master" ? "Tedarikçi ayarı" : "Genel kural";
+    if (reminder.action_type === "supplier_acknowledged_reminder" && timing.acknowledged_wait_minutes) {
+      reminderLine.append(node("span", ` · bekleme ${timing.acknowledged_wait_minutes} dk (${timingSourceLabel(timing.acknowledged_wait_source)})`, "small"));
+    } else if (timing.first_reminder_minutes) {
+      reminderLine.append(node("span", ` · ilk reminder ${timing.first_reminder_minutes} dk (${timingSourceLabel(timing.first_reminder_source)})`, "small"));
+    }
+    const negotiationAdvisory = timing.learning_policy?.negotiation_advisory_percent;
+    if (negotiationAdvisory != null) reminderLine.append(node("span", ` · pazarlık geçmişi ≈ %${negotiationAdvisory} (tavsiye)`, "small"));
     card.append(reminderLine);
   }
 
@@ -2401,9 +2410,18 @@ function renderSupplierLearning(container, supplier) {
   const area=node("div","","supplier-learning"); container.append(area);
   async function load(){
     area.replaceChildren(node("div","Öğrenilen tedarikçi davranışları yükleniyor…","muted"));
-    try { const data=await api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/learning-facts`); area.replaceChildren();
-      const head=node("div","","settings-subheading"); head.append(node("h3","MINAI Geçmiş Gözlemleri"),node("p","Geçmiş mail/operasyon kanıtından türetilen gözlemler öneridir; operatör doğrulamadan kalıcı kural olmaz.","muted"));
+    try { const [data, policy]=await Promise.all([
+        api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/learning-facts`),
+        api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/operational-policy`)
+      ]); area.replaceChildren();
+      const head=node("div","","settings-subheading"); head.append(node("h3","MINAI Geçmiş Gözlemleri"),node("p","Geçmiş mail/operasyon kanıtından türetilen gözlemler öneridir; yalnız operatörün doğruladığı ve policy eşiğini geçen yapılandırılmış metrikler operasyonu etkiler.","muted"));
       const derive=actionButton("Geçmişten Gözlem Üret","",async()=>{derive.disabled=true;try{await api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/derive-learning`,{method:"POST"});await load();}catch(e){area.append(node("div",e.message||String(e),"error"));}finally{derive.disabled=false;}}); head.append(derive); area.append(head);
+      const policyCard=node("div","","learning-fact-card");
+      const sourceText=v=>v==="confirmed_learning"?"Doğrulanmış öğrenme":v==="supplier_master"?"Tedarikçi ayarı":"Genel kural";
+      policyCard.append(node("strong","Aktif operasyon etkisi"), node("div",`Sıralama etkisi: ${(Number(policy.ranking_adjustment||0)*100).toFixed(1)} puan · İlk reminder: ${policy.effective_first_reminder_minutes} dk (${sourceText(policy.first_reminder_source)}) · ‘Çalışıyoruz’ sonrası: ${policy.effective_acknowledged_wait_minutes} dk (${sourceText(policy.acknowledged_wait_source)})`,"small"));
+      if(policy.negotiation_advisory_percent!=null) policyCard.append(node("div",`Geçmiş pazarlık indirimi ≈ %${policy.negotiation_advisory_percent}; yalnız tavsiye, otomatik hedef fiyat değildir.`,"muted small"));
+      if(!(policy.evaluations||[]).some(x=>x.effect&&x.effect!=="none")) policyCard.append(node("div","Şu anda runtime davranışını değiştiren doğrulanmış öğrenme yok.","muted small"));
+      area.append(policyCard);
       const facts=data.facts||[]; if(!facts.length){area.append(emptyState("Henüz öğrenilmiş gözlem yok","Geçmiş RFQ/yanıt kanıtı oluştukça MINAI öneriler üretebilir."));return;}
       const list=node("div","","learning-fact-list"); facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",f.fact_key),node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small"));

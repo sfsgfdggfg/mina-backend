@@ -67,7 +67,7 @@ from src.core.supplier_rfq import (
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
 DEMO_OPERATOR = "Demo Operator"
-DEMO_SEED_VERSION = 4
+DEMO_SEED_VERSION = 5
 
 
 
@@ -892,7 +892,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
         subject_type="supplier",
         subject_id=rhein.supplier_id,
         subject_label=rhein.supplier_name,
-        fact_key="response.usable_quote_median_minutes",
+        fact_key="response.median_minutes",
         value=24,
         value_unit="minutes",
         confidence=0.91,

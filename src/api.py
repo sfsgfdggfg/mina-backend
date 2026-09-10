@@ -259,6 +259,7 @@ from src.core.learning_fact_service import (
     reject_learning_fact,
 )
 from src.core.supplier_learning_service import derive_supplier_history_learning
+from src.core.supplier_intelligence_policy import build_supplier_operational_learning_policy
 from src.core.reporting_read_model import (
     REPORTING_SECTIONS,
     build_reporting_read_model,
@@ -512,6 +513,7 @@ automation_scheduler = AutomationScheduler(
     mina_job_repository=mina_job_repository,
     master_data_repository=master_data_repository,
     agency_policy_repository=agency_automation_policy_repository,
+    learning_fact_repository=learning_fact_repository,
 )
 
 
@@ -2009,6 +2011,20 @@ def get_supplier_learning_facts(supplier_id: str):
     )
 
 
+@app.get("/master-data/suppliers/{supplier_id}/operational-policy")
+def get_supplier_operational_learning_policy(supplier_id: str):
+    supplier = master_data_repository.get_supplier(supplier_id)
+    if supplier is None:
+        raise HTTPException(status_code=404, detail=f"Supplier master not found: {supplier_id}")
+    dispatch = resolve_supplier_dispatch_policy()
+    return build_supplier_operational_learning_policy(
+        supplier=supplier, learning_repository=learning_fact_repository,
+        base_first_reminder_minutes=dispatch.no_response_reminder_minutes,
+        base_acknowledged_wait_minutes=dispatch.acknowledged_grace_minutes,
+        as_of=datetime.now(timezone.utc),
+    ).model_dump(mode="json")
+
+
 @app.get("/mina-jobs/{job_id}/learning-facts")
 def get_mina_job_learning_facts(job_id: str):
     if mina_job_repository.get(job_id) is None:
@@ -2474,6 +2490,8 @@ def preview_mina_job_supplier_reminder(job_id: str, rfq_id: str):
             action_repository=automation_action_repository,
             mina_code=job.mina_code,
             rfq_id=rfq_id,
+            master_data_repository=_runtime_master_data_authority(),
+            learning_fact_repository=learning_fact_repository,
         )
     except MinaJobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -2519,6 +2537,7 @@ def send_mina_job_supplier_reminder_now(
             actor=_authenticated_operator(http_request),
             master_data_repository=master_data_repository,
             agency_policy_repository=agency_automation_policy_repository,
+            learning_fact_repository=learning_fact_repository,
         )
     except MinaJobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
