@@ -53,7 +53,20 @@ def evaluate_operator_work_queue_web_regressions() -> dict:
     )
 
     check(
-        '.work-list' in css and '.work-card.critical' in css and '.work-first-look' in css,
+        'Detay / Recovery' in work_block
+        and '/operational-work-items/${encodeURIComponent(item.work_id)}' in work_block
+        and 'Neden bekliyor?' in work_block
+        and 'Bloklayan durumlar' in work_block
+        and 'Güvenli devam yolu' in work_block
+        and 'Bu panel salt-okunurdur' in work_block
+        and 'operator_commands' in work_block
+        and 'blocking_reasons' in work_block,
+        "work queue exposes read-only blocker diagnostics and guarded recovery guidance",
+    )
+
+    check(
+        '.work-list' in css and '.work-card.critical' in css and '.work-first-look' in css
+        and '.work-detail-panel' in css and '.work-detail-checks' in css,
         "operator work queue has responsive visual hierarchy for priority assignment and timing evidence",
     )
 

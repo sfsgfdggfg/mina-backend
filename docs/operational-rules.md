@@ -4010,3 +4010,9 @@ Such acknowledgement starts the configured acknowledgement grace period but neve
 The browser may expose commercial secondary release only after all primary suppliers have terminal outcomes and at least one primary quote exists, with the dispatch policy allowing commercial fallback. An unresolved or merely silent primary must keep the action unavailable.
 
 Commercial release records operator evidence only and must never include or transmit customer target price. Once released, secondary RFQ preparation, approval and sending remain subject to the normal progression, lifecycle, recipient and business-hours controls.
+
+## RULE-233 — Work Recovery Guidance Must Not Become Frontend Authority
+
+Work-item blocker codes, state checks and recovery modes shown in the browser must come from the current backend detail projection. The UI may translate those codes into operator-friendly text but may not change their meaning or hide a blocker.
+
+Operator-command entries are guidance to existing guarded actions, not executable frontend instructions. The browser must not execute returned argv strings or introduce a generic “repair” operation that bypasses the normal attachment, extraction, supplier, quote or assignment lifecycle.

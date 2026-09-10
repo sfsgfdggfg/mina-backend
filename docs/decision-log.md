@@ -6897,3 +6897,12 @@ Supplier dispatch status may expose neutral browser capabilities such as whether
 When every primary supplier has reached a terminal result and at least one primary quote exists, the browser may offer an explicit action to record that primary price negotiation is exhausted and open the secondary supplier group, if the current dispatch policy permits that commercial fallback.
 
 The action writes only the existing durable secondary-dispatch authorization evidence. It must not disclose the customer's target price, treat silence as unavailability, or bypass unresolved primary suppliers. After authorization, normal supplier-price progression may prepare the secondary RFQ draft; approval and send still use the ordinary Supplier RFQ lifecycle.
+
+## DEC-216 — Work Queue Exposes Read-Only Diagnostic and Recovery Detail
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+Each browser work-queue card may open the existing operational work-item detail projection. The panel shows why the item is waiting, blocking reasons, current state checks, assignment status, recovery mode and the purposes of existing guarded operator commands.
+
+The detail panel is diagnostic only. It must not execute CLI argv, fabricate workflow state, auto-repair stale resources or turn informational `next_action` text into authority. Existing workflow, approval, RFQ, attachment and assignment services remain the only mutation boundaries.

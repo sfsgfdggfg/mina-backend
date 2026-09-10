@@ -368,6 +368,135 @@ function workAssignmentSummary(item, isMine) {
   return `${owner}${remaining}`;
 }
 
+function workReasonLabel(code) {
+  return ({
+    baseline_not_apply_ready: "Ek incelemesi uygulanmaya henüz hazır değil.",
+    supplier_rfq_missing: "Bağlı tedarikçi RFQ kaydı bulunamıyor.",
+    supplier_rfq_snapshot_stale: "RFQ durumu iş kuyruğu kaydından sonra değişmiş.",
+    supplier_rfq_no_longer_review_applicable: "RFQ artık bu inceleme aksiyonuna uygun değil.",
+    supplier_follow_up_parent_rfq_missing: "Tedarikçi takip kaydının ana RFQ'su bulunamıyor.",
+    supplier_follow_up_parent_state_stale: "Ana RFQ takip kaydıyla uyumlu durumda değil.",
+    supplier_follow_up_send_evidence_state_conflict: "Takip gönderim kanıtı ile kayıt durumu çelişiyor.",
+    multiple_active_supplier_follow_ups: "Aynı RFQ için birden fazla aktif takip kaydı var.",
+    supplier_automation_delivery_requires_review: "Tedarikçi otomasyon gönderimi insan incelemesi gerektiriyor.",
+    supplier_recipient_missing_for_automation: "Tedarikçi gönderimi için alıcı adresi eksik.",
+    customer_status_update_delivery_requires_review: "Müşteri durum güncellemesi gönderimi incelenmeli.",
+    customer_recipient_missing_for_deadline_update: "Müşteri deadline güncellemesi için alıcı eksik.",
+    clarification_required_without_active_follow_up: "RFQ açıklama bekliyor ancak aktif takip taslağı yok.",
+    quote_approval_case_missing: "Teklif onayının bağlı teklif vakası bulunamıyor.",
+    quote_approval_multiple_cases: "Teklif onayı birden fazla vakaya bağlanmış.",
+    quote_approval_case_state_stale: "Teklif vakası ile onay durumu eşleşmiyor.",
+    quote_sent_while_approval_pending: "Onay bekleyen teklif için gönderim kanıtı var.",
+    customer_safety_fields_unknown: "Müşteri talebinde güvenlik alanları belirsiz.",
+  })[code] || codeLabel(code);
+}
+
+function recoveryModeLabel(value) {
+  return ({
+    inspect_state: "Durumu incele; otomatik düzeltme yok",
+    inspect_then_preview: "Kaydı incele, sonra güvenli önizleme üret",
+    human_confirmation_required: "Operatör doğrulaması gerekli",
+    controlled_follow_up_action: "Mevcut kontrollü tedarikçi takip aksiyonu kullanılabilir",
+    controlled_workflow_resume: "Mevcut workflow yeniden değerlendirme akışı kullanılabilir",
+    human_supplier_contact: "Telefon / WhatsApp ile insan teması gerekli",
+    human_customer_contact: "Müşteriyle manuel temas gerekli",
+    human_decision_required: "Operatör ticari kararı gerekli",
+  })[value] || codeLabel(value);
+}
+
+function recoveryPurposeLabel(value) {
+  return ({
+    inspect_review: "Ek inceleme kaydını aç",
+    preview_without_corrections: "Düzeltmesiz güvenli önizleme üret",
+    inspect_proposal: "Extraction önerisini incele",
+    confirm_after_review: "İnceleme sonrası extraction'ı doğrula",
+    inspect_follow_up: "Tedarikçi takip kaydını incele",
+    approve_follow_up: "Tedarikçi takip taslağını onayla",
+    send_follow_up: "Onaylı takip mesajını gönder",
+    inspect_rfq: "Tedarikçi RFQ durumunu incele",
+    regenerate_controlled_follow_up_if_still_required: "Gerekliyse kontrollü takip taslağını yeniden üret",
+    inspect_supplier_rfq: "Tedarikçi RFQ kaydını incele",
+    record_phone_confirmation_after_contact: "Telefon teması sonrası teyidi kaydet",
+    inspect_approval: "Teklif onay kaydını incele",
+    approve_after_review: "İnceleme sonrası teklifi onayla",
+    reject_after_review: "İnceleme sonrası teklifi gerekçeyle reddet",
+  })[value] || codeLabel(value);
+}
+
+function stateCheckLabel(key) {
+  return ({
+    resource_present: "Kaynak mevcut", review_status: "İnceleme durumu", extraction_status: "Extraction durumu",
+    resume_status: "Devam durumu", unknown_field_count: "Belirsiz alan", unknown_safety_field_count: "Belirsiz güvenlik alanı",
+    unknown_fields: "Belirsiz alanlar", unknown_safety_fields: "Belirsiz güvenlik alanları", follow_up_status: "Takip durumu",
+    parent_rfq_present: "Ana RFQ mevcut", parent_rfq_status: "Ana RFQ durumu", active_sibling_count: "Aktif kardeş takip",
+    send_evidence_present: "Gönderim kanıtı", clarification_reason_code_count: "Açıklama gerekçesi", rfq_status: "RFQ durumu",
+    workflow_present: "Workflow mevcut", active_follow_up_count: "Aktif takip", recipient_configured: "Alıcı tanımlı",
+    customer_recipient_configured: "Müşteri alıcısı tanımlı", explicit_quote_deadline_present: "Açık teklif deadline'ı",
+    approval_status: "Onay durumu", linked_case_count: "Bağlı teklif vakası", case_state_synced: "Vaka/onay uyumlu",
+    prior_send_evidence_present: "Önceki gönderim kanıtı",
+  })[key] || codeLabel(key);
+}
+
+function stateCheckValue(value) {
+  if (value === true) return "Evet";
+  if (value === false) return "Hayır";
+  if (Array.isArray(value)) return value.length ? value.map(codeLabel).join(", ") : "Yok";
+  if (value == null || value === "") return "-";
+  return codeLabel(value);
+}
+
+async function toggleWorkDetail(item, card) {
+  let panel = card.querySelector(".work-detail-panel");
+  if (panel) { panel.remove(); return; }
+  panel = node("div", "", "work-detail-panel");
+  panel.append(node("div", "Detay yükleniyor…", "small muted"));
+  card.append(panel);
+  try {
+    const detail = await api(`/operational-work-items/${encodeURIComponent(item.work_id)}`);
+    panel.replaceChildren();
+    const diagnostics = detail.diagnostics || {};
+    const assignment = detail.assignment || {};
+    const head = node("div", "", "work-detail-head");
+    head.append(node("strong", "Detay / Recovery"), node("span", recoveryModeLabel(diagnostics.recovery_mode), "badge"));
+    panel.append(head);
+
+    const reasons = detail.why_waiting || [];
+    if (reasons.length) {
+      const block = node("div", "", "work-detail-block"); block.append(node("strong", "Neden bekliyor?"));
+      const list = node("ul", "", "work-detail-list"); reasons.forEach(code => list.append(node("li", workReasonLabel(code))));
+      block.append(list); panel.append(block);
+    }
+    const blockers = detail.blocking_reasons || [];
+    if (blockers.length) {
+      const block = node("div", "", "work-detail-block blocker"); block.append(node("strong", "Bloklayan durumlar"));
+      const list = node("ul", "", "work-detail-list"); blockers.forEach(code => list.append(node("li", workReasonLabel(code))));
+      block.append(list); panel.append(block);
+    }
+
+    const checks = diagnostics.state_checks || {};
+    if (Object.keys(checks).length) {
+      const grid = node("div", "", "work-detail-checks");
+      Object.entries(checks).forEach(([key, value]) => grid.append(summaryItem(stateCheckLabel(key), stateCheckValue(value))));
+      panel.append(grid);
+    }
+
+    const commands = detail.operator_commands || [];
+    const recovery = node("div", "", "work-detail-block"); recovery.append(node("strong", "Güvenli devam yolu"));
+    if (commands.length) {
+      const list = node("ol", "", "work-detail-list");
+      commands.forEach(command => {
+        const li = node("li", recoveryPurposeLabel(command.purpose));
+        if ((command.requires || []).length) li.append(node("span", ` · gerekli bilgi: ${command.requires.map(codeLabel).join(", ")}`, "small muted"));
+        list.append(li);
+      }); recovery.append(list);
+    } else recovery.append(node("div", "Bu kayıtta otomatik recovery komutu yok; mevcut operasyon ekranından inceleme gerekiyor.", "small muted"));
+    panel.append(recovery);
+    panel.append(node("div", `Atama durumu: ${codeLabel(assignment.assignment_status || "unassigned")} · Bu panel salt-okunurdur; mevcut workflow guard'ları yetkilidir.`, "small work-detail-authority"));
+  } catch (error) {
+    panel.replaceChildren(node("div", error.message || String(error), "error"));
+  }
+}
+
 function workCard(item, myIds, refresh, operators = []) {
   const isMine = myIds.has(item.work_id);
   const card = node("article", "", `work-card ${item.priority_band || "normal"}`);
@@ -440,6 +569,7 @@ function workCard(item, myIds, refresh, operators = []) {
     });
     assignWrap.append(select, assign); card.append(assignWrap);
   }
+  actions.append(actionButton("Detay / Recovery", "", () => toggleWorkDetail(item, card)));
   if (actions.childElementCount) card.append(actions);
   return card;
 }
