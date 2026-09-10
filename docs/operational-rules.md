@@ -3948,3 +3948,11 @@ Synthetic supplier reply buttons may exist only in demo mode and only while the 
 A simulated acknowledgement must pass through the normal acknowledgement detector and must not create a commercial response. Simulated quote, no-capacity, and clarification outcomes must pass through `ingest_supplier_reply` and normal RFQ lifecycle validation.
 
 The demo-only response endpoint must fail closed outside Demo/Sandbox. Regression coverage must prove acknowledgement, quote, and no-capacity behavior through repository evidence rather than frontend-only state.
+
+## RULE-224 — Manual Intake Must Preserve Human Source Authority
+
+Phone, WhatsApp, portal, face-to-face and other manually entered requests may create a MINA job without email extraction because the operator is the explicit source of the shipment fields.
+
+The browser must submit manual intake through the normal job-creation service. It may not generate its own MINA code, skip repository idempotency, or silently reinterpret an email as manual intake.
+
+Manual-intake jobs remain subject to the same downstream quote-readiness, supplier-selection, approval, pricing and operation rules as jobs originating from confirmed email extraction.

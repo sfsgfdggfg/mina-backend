@@ -718,6 +718,33 @@ function renderInbox(proposals = [], attachmentReviews = []) {
   });
   composer.append(submit, composeFeedback); root.append(composer);
 
+  const manual = node("section", "", "section manual-intake-section");
+  manual.append(node("h2", "Telefon / WhatsApp / Portal talebi"), node("div", "Operatör tarafından doğrudan girilen talepler extraction beklemeden MINA işi olur.", "small muted"));
+  const channelLabel=node("label","Kanal"); const channel=document.createElement("select");
+  [["whatsapp","WhatsApp"],["phone","Telefon"],["portal","Portal"],["face_to_face","Yüz yüze"],["other","Diğer"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;channel.append(o);}); channelLabel.append(channel);
+  const kindLabel=node("label","İş türü"); const kind=document.createElement("select");
+  [["price_request","Fiyat talebi"],["approved_job","Onaylı iş"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;kind.append(o);}); kindLabel.append(kind);
+  const customer=inboxField("Müşteri"); const pickupCountry=inboxField("Yükleme ülkesi"); const pickupCity=inboxField("Yükleme şehri");
+  const deliveryCountry=inboxField("Teslim ülkesi"); const deliveryCity=inboxField("Teslim şehri"); const deliveryPostcode=inboxField("Teslim posta kodu");
+  const commodity=inboxField("Ürün"); const weight=inboxField("Yaklaşık brüt kg","number"); const equipment=inboxField("Ekipman"); const ready=inboxField("Yük hazır tarihi","date");
+  customer.input.value="Eksen Ambalaj"; pickupCountry.input.value="Türkiye"; pickupCity.input.value="Gaziantep"; deliveryCountry.input.value="Germany"; deliveryCity.input.value="Köln"; deliveryPostcode.input.value="50667"; commodity.input.value="Ambalaj"; weight.input.value="16000"; equipment.input.value="Tenteli";
+  const manualGrid=node("div","","settings-two-col"); manualGrid.append(channelLabel,kindLabel,customer.label,pickupCountry.label,pickupCity.label,deliveryCountry.label,deliveryCity.label,deliveryPostcode.label,commodity.label,weight.label,equipment.label,ready.label);
+  const manualFeedback=node("div","","muted settings-feedback");
+  const createManual=actionButton("Manuel MINA işi oluştur","primary",async()=>{
+    const amount=weight.input.value.trim()?Number(weight.input.value):null;
+    if(!customer.input.value.trim()||!pickupCity.input.value.trim()||!deliveryCity.input.value.trim()){manualFeedback.textContent="Müşteri, yükleme ve teslim şehri gerekli.";return;}
+    if(amount!==null&&(!Number.isFinite(amount)||amount<=0)){manualFeedback.textContent="Ağırlık pozitif sayı olmalı.";return;}
+    createManual.disabled=true; manualFeedback.textContent="MINA işi oluşturuluyor…";
+    try{
+      const job=await api("/mina-jobs/manual",{method:"POST",body:JSON.stringify({
+        manual_intake_id:`web-manual-${Date.now()}-${Math.random().toString(16).slice(2)}`, intake_channel:channel.value, job_kind:kind.value,
+        shipment:{customer_name:customer.input.value.trim(),pickup_country:pickupCountry.input.value.trim()||null,pickup_city:pickupCity.input.value.trim()||null,delivery_country:deliveryCountry.input.value.trim()||null,delivery_city:deliveryCity.input.value.trim()||null,delivery_postcode:deliveryPostcode.input.value.trim()||null,commodity:commodity.input.value.trim()||null,gross_weight_kg:amount,weight_is_approximate:true,service_type:"FTL",quote_mode:"firm",transport_mode:"road",equipment_type:equipment.input.value.trim()||null,cargo_ready_date:ready.input.value||null,packages:[]}
+      })});
+      manualFeedback.textContent=`${job.mina_code} oluşturuldu.`; window.location.assign(`/app/jobs/${encodeURIComponent(job.job_id)}`);
+    }catch(e){manualFeedback.textContent=e.message||String(e);setStatus("Hata",false);createManual.disabled=false;}
+  });
+  manual.append(manualGrid,createManual,manualFeedback); root.append(manual);
+
   const attachments = node("section", "", "section attachment-review-section");
   const pendingAttachments = attachmentReviews.filter(item => item.status === "pending").length;
   attachments.append(node("h2", `Ek İnceleme · ${attachmentReviews.length}`), node("div", `${pendingAttachments} ek operatör incelemesi bekliyor.`, "small muted"));

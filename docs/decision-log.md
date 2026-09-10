@@ -6806,3 +6806,14 @@ The functional demo exposes synthetic supplier response controls only for RFQs t
 The browser does not mutate RFQ state directly. A demo-only server endpoint constructs a synthetic `.invalid` supplier email using the existing RFQ identity/reference and passes it through the normal `ingest_supplier_reply` correlation and validation service. Production and controlled-pilot runtimes fail closed on this endpoint.
 
 Acknowledgement must keep the RFQ open for a commercial response. Quote/no-capacity/clarification scenarios must remain subject to the same duplicate, sender, RFQ-state, and commercial validation rules as provider-ingested mail.
+
+## DEC-207 — Browser Demo Supports Manual Non-Email Intake Through Normal MINA Job Creation
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The Demo/Sandbox `Gelen Talepler` workbench includes a separate manual-intake form for phone, WhatsApp, portal, face-to-face and other operator-entered requests. These requests do not pass through email extraction because the shipment values are entered directly by the operator.
+
+The browser must call the existing `/mina-jobs/manual` endpoint and `create_manual_mina_job` service. Job codes, lifecycle state, audit events and idempotency remain repository-authoritative; the UI must not fabricate a MINA code or directly mutate job state.
+
+Manual intake and email extraction remain visibly distinct paths. The manual form may provide convenient demo defaults, but the created job is a normal MINA job and must use the same downstream job-detail, pricing, supplier and operation services as every other case.

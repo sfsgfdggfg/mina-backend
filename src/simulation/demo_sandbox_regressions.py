@@ -278,6 +278,8 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "Doğrula ve MINA işi oluştur" in app_js and "Ek İnceleme" in app_js
         and "İncelemeyi uygula" in app_js and "preview_token" in app_js
         and "Demo tedarikçi yanıtı" in app_js
+        and "Manuel MINA işi oluştur" in app_js and "/mina-jobs/manual" in app_js
+        and route_allowed("POST", "/mina-jobs/manual")
         and "demo_supplier_response_unavailable" in api_text
         and route_allowed("POST", "/demo/supplier-rfqs/demo-rfq/simulate-response")
         and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js,
