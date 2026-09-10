@@ -3984,3 +3984,9 @@ Legacy customer-memory reads/writes in Demo mode must resolve to a demo-specific
 Controlled-pilot browser allowlisting must not be expanded for legacy Customer Memory mutations merely to support the Sandbox. Demo UI may call those existing APIs only because Demo runs outside pilot mode with authenticated local browser sessions and CSRF protection.
 
 Import apply and backup restore remain backend-authoritative. The browser may require dry-run before apply, but it may not suppress alias/name conflicts, fabricate a successful restore, or treat imported memory as stronger evidence than the existing customer identity rules allow.
+
+## RULE-229 — Browser Master Data Must Preserve Repository Identity Authority
+
+Customer and supplier creation/update from the browser must use the existing master-data API/service boundary. The browser must never construct durable customer_id/supplier_id values or treat display labels as identity authority.
+
+Supplier country capabilities must be submitted as explicit geography records and remain subject to normalized-country and strength validation. Customer trusted sender addresses/domains remain identity evidence only; adding aliases or defaults must not weaken the sender-trust boundary.

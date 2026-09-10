@@ -6857,3 +6857,12 @@ The functional Sandbox may expose the legacy Customer Memory profile, import/exp
 Demo runtime resolves customer-memory storage and backups beneath its isolated state directory. Profile creation, update, active-status changes, import dry-run/apply and restore must never write the repository-owned production/customer-memory file.
 
 The demo seeds synthetic customer-memory profiles using reserved `.invalid` identities. Import apply remains preview-oriented: the browser requires a successful dry-run before allowing apply, while the existing backend creates the durable backup and remains authoritative for conflict validation.
+
+## DEC-212 — Browser Settings Exposes Durable Customer and Supplier Master Data
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The browser Settings workspace includes a `Master Veri` panel backed by the existing durable customer/supplier master-data services. Operators may create and update customer identity/trusted-sender/default-operation/pricing fields and supplier identity/contact/geography/service/equipment/capability/priority-route fields.
+
+This panel does not replace the separate supplier relationship settings or customer automation exception views. Master-data writes continue to use repository conflict detection, normalized geography and authenticated operator evidence; the browser may not fabricate master IDs or bypass durable service validation.

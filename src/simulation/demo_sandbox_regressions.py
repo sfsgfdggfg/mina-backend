@@ -372,6 +372,8 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "demo_supplier_response_unavailable" in api_text
         and route_allowed("POST", "/demo/supplier-rfqs/demo-rfq/simulate-response")
         and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js
+        and "Master Veri" in app_js and "Müşteri Oluştur" in app_js and "Tedarikçi Oluştur" in app_js
+        and route_allowed("POST", "/master-data/customers") and route_allowed("POST", "/master-data/suppliers")
         and "Müşteri Hafızası · Demo" in app_js and "/customer-memory/import/dry-run" in app_js
         and not route_allowed("POST", "/customer-memory") and not route_allowed("PUT", "/customer-memory"),
         "browser shell exposes synthetic inbound and relationship workflows without hiding demo mode",
