@@ -1049,6 +1049,7 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     if (!supplier.latest_acknowledgement_at) demoActions.append(actionButton("Çalışıyoruz", "", () => simulateDemoSupplierResponse(supplier.rfq_id, "acknowledged", demoFeedback, refresh)));
     demoActions.append(
       actionButton("Tam fiyat ver", "approve", () => simulateDemoSupplierResponse(supplier.rfq_id, "quoted", demoFeedback, refresh)),
+      actionButton("Eksik fiyat ver", "", () => simulateDemoSupplierResponse(supplier.rfq_id, "incomplete_quote", demoFeedback, refresh)),
       actionButton("Araç yok", "reject", () => simulateDemoSupplierResponse(supplier.rfq_id, "no_capacity", demoFeedback, refresh)),
       actionButton("Açıklama iste", "", () => simulateDemoSupplierResponse(supplier.rfq_id, "needs_clarification", demoFeedback, refresh))
     );
@@ -1063,15 +1064,84 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     }));
   }
   if (supplier.status === "clarification_required") {
+    const followBox = node("div", "", "supplier-follow-up-box");
+    followBox.append(node("strong", "Tedarikçi açıklama takibi"));
+    const followFeedback = node("div", "", "muted settings-feedback");
     try {
       const rfqDetail = await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}`);
-      const unknownFollowUp = (rfqDetail.follow_ups || []).find(item => item.status === "send_outcome_unknown");
-      if (unknownFollowUp) card.append(sendOutcomeReconciliationBox({
-        title: "Tedarikçi takip maili gönderimini doğrula",
-        endpoint: `/supplier-rfq-follow-ups/${encodeURIComponent(unknownFollowUp.follow_up_id)}/send-reconciliation`,
-        refresh,
-      }));
-    } catch (_) { /* normal supplier rendering remains available */ }
+      const followUps = (rfqDetail.follow_ups || []).slice().sort((a,b)=>(b.sequence_number||0)-(a.sequence_number||0));
+      const activeFollowUp = followUps.find(item => !["responded","cancelled"].includes(item.status));
+      if (!activeFollowUp) {
+        const priorQuoted = (rfqDetail.responses || []).some(item => item.status === "quoted");
+        if (priorQuoted) {
+          followBox.append(
+            node("div", "Eksik ticari alan için henüz takip taslağı oluşmadı.", "small muted"),
+            actionButton("Takip taslağını oluştur", "", async () => {
+              followFeedback.textContent = "Eksik ticari alan yeniden değerlendiriliyor…";
+              try {
+                await api(`/mina-jobs/${encodeURIComponent(jobId)}/supplier-prices/progress`, { method: "POST", body: "{}" });
+                await refresh();
+              } catch (error) { followFeedback.textContent = error.message || String(error); }
+            })
+          );
+        } else {
+          followBox.append(node("div", "Tedarikçi yeni operasyon/müşteri bilgisi istiyor. Bu soru otomatik ticari follow-up generator kapsamına girmiyor; operatör incelemesi gerekiyor.", "notice small"));
+        }
+      } else {
+        const meta = node("div", "", "supplier-follow-up-meta");
+        meta.append(
+          node("span", `Takip #${activeFollowUp.sequence_number || 1}`, "badge"),
+          node("span", codeLabel(activeFollowUp.status), "badge"),
+          node("span", activeFollowUp.recipient_email || "-", "small muted")
+        );
+        followBox.append(meta, node("div", activeFollowUp.subject || "-", "quote-subject"), node("pre", activeFollowUp.body || "", "message-preview"));
+        if ((activeFollowUp.rejection_reasons || []).length) {
+          followBox.append(node("div", `Gerekçe: ${activeFollowUp.rejection_reasons.map(codeLabel).join(" · ")}`, "small notice"));
+        }
+        const followActions = node("div", "", "actions supplier-follow-up-actions");
+        if (activeFollowUp.status === "draft") {
+          followActions.append(actionButton("Takibi Onayla", "approve", async () => {
+            followFeedback.textContent = "Takip onaylanıyor…";
+            try {
+              await api(`/supplier-rfq-follow-ups/${encodeURIComponent(activeFollowUp.follow_up_id)}/approve`, { method: "POST", body: "{}" });
+              await refresh();
+            } catch (error) { followFeedback.textContent = error.message || String(error); }
+          }));
+        } else if (activeFollowUp.status === "approved") {
+          followActions.append(
+            actionButton("Takibi Gönder", "approve", async () => {
+              followFeedback.textContent = "Takip gönderiliyor…";
+              try {
+                await api(`/supplier-rfq-follow-ups/${encodeURIComponent(activeFollowUp.follow_up_id)}/send`, { method: "POST" });
+                await refresh();
+              } catch (error) { followFeedback.textContent = error.message || String(error); }
+            }),
+            actionButton("Harici Gönderildi Olarak Kaydet", "", async () => {
+              followFeedback.textContent = "Harici gönderim kanıtı kaydediliyor…";
+              try {
+                await api(`/supplier-rfq-follow-ups/${encodeURIComponent(activeFollowUp.follow_up_id)}/record-manually-sent`, { method: "POST", body: "{}" });
+                await refresh();
+              } catch (error) { followFeedback.textContent = error.message || String(error); }
+            })
+          );
+        } else if (activeFollowUp.status === "send_outcome_unknown") {
+          followBox.append(sendOutcomeReconciliationBox({
+            title: "Tedarikçi takip maili gönderimini doğrula",
+            endpoint: `/supplier-rfq-follow-ups/${encodeURIComponent(activeFollowUp.follow_up_id)}/send-reconciliation`,
+            refresh,
+          }));
+        } else if (activeFollowUp.status === "awaiting_response" && demoMode) {
+          followActions.append(actionButton("Demo: Fiyatla Yanıtla", "approve", () => simulateDemoSupplierResponse(supplier.rfq_id, "quoted", followFeedback, refresh)));
+        }
+        if (followActions.childElementCount) followBox.append(followActions);
+      }
+      if (followUps.some(item => item.status === "responded")) {
+        followBox.append(node("div", "Takip yanıtı alındı; tedarikçi fiyatları bölümünden teklif akışını ilerletebilirsin.", "small muted"));
+      }
+    } catch (error) {
+      followFeedback.textContent = error.message || String(error);
+    }
+    followBox.append(followFeedback); card.append(followBox);
   }
 
   const reminder = supplier.reminder || {};

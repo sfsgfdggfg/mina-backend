@@ -6866,3 +6866,14 @@ The demo seeds synthetic customer-memory profiles using reserved `.invalid` iden
 The browser Settings workspace includes a `Master Veri` panel backed by the existing durable customer/supplier master-data services. Operators may create and update customer identity/trusted-sender/default-operation/pricing fields and supplier identity/contact/geography/service/equipment/capability/priority-route fields.
 
 This panel does not replace the separate supplier relationship settings or customer automation exception views. Master-data writes continue to use repository conflict detection, normalized geography and authenticated operator evidence; the browser may not fabricate master IDs or bypass durable service validation.
+
+## DEC-213 — Browser Exposes Supplier Clarification Follow-Up Lifecycle
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+When a supplier RFQ contains an incomplete commercial quote that the existing progression engine can clarify on the same RFQ, the browser must expose the persisted SupplierRFQFollowUpDraft instead of leaving the clarification lifecycle CLI-only.
+
+The job detail may create the follow-up only by re-running the normal supplier-price progression, then uses the existing approve, provider-send, manual-sent and send-reconciliation endpoints. In Demo mode, a synthetic incomplete-quote scenario is available so the full follow-up path can be exercised without a real supplier.
+
+A supplier asking for new operational/customer information is not the same as an incomplete commercial quote. The browser must not pretend the commercial follow-up generator can answer such a question; it remains an operator-review condition until an authoritative answer path exists.

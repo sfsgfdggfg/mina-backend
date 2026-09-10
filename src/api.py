@@ -908,7 +908,7 @@ class SupplierRFQAcknowledgementRequest(BaseModel):
 
 class DemoSupplierResponseRequest(BaseModel):
     scenario: Literal[
-        "acknowledged", "quoted", "no_capacity", "needs_clarification"
+        "acknowledged", "quoted", "incomplete_quote", "no_capacity", "needs_clarification"
     ]
 
 
@@ -3995,6 +3995,7 @@ def simulate_demo_supplier_response(rfq_id: str, request: DemoSupplierResponseRe
     bodies = {
         "acknowledged": "Talebinizi aldık, çalışıyoruz.",
         "quoted": f"Teklifimiz {cost:.0f} EUR all-in, transit 5 gün.",
+        "incomplete_quote": f"Teklifimiz {cost:.0f} EUR all-in. Transit bilgisini ayrıca teyit edeceğiz.",
         "no_capacity": "Maalesef bu yük için araç veremiyoruz.",
         "needs_clarification": "Yükleme posta kodunu teyit eder misiniz?",
     }
@@ -4004,6 +4005,11 @@ def simulate_demo_supplier_response(rfq_id: str, request: DemoSupplierResponseRe
             "status": "quoted", "cost": cost, "currency": "EUR",
             "transit_time": "5 gün", "equipment_type": "Tenteli",
             "pricing_basis": "all_in",
+        }
+    elif request.scenario == "incomplete_quote":
+        extracted = {
+            "status": "quoted", "cost": cost, "currency": "EUR",
+            "equipment_type": "Tenteli", "pricing_basis": "all_in",
         }
     elif request.scenario == "no_capacity":
         extracted = {"status": "no_capacity", "notes": bodies[request.scenario]}

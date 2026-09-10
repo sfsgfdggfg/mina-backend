@@ -5,6 +5,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from src.core.demo_runtime import DemoOutboundMailSender, validate_demo_runtime
 from src.core.attachment_interpretation_review_service import (
@@ -28,6 +29,14 @@ from src.core.sqlite_repositories import (
 from src.core.master_data_repository import SQLiteMasterDataRepository
 from src.core.supplier_price_repository import SQLiteSupplierPriceRepository
 from src.core.mail import InboundMailEnvelope
+from src.core.models import EquipmentDecision, Package, Shipment
+from src.core.supplier_rfq import SupplierRFQResponse, SupplierRFQWorkflow
+from src.core.supplier_rfq_lifecycle import approve_supplier_rfq_follow_up, attach_supplier_rfq_response
+from src.core.supplier_rfq_repository import InMemorySupplierRFQRepository
+from src.core.supplier_selection import select_suppliers_for_shipment
+from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
+from src.core.quote_approval_repository import InMemoryQuoteApprovalRepository
+from src.core.quote_case_repository import InMemoryQuoteCaseRepository
 from src.core.missing_info import check_missing_information
 from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.learning_fact_repository import SQLiteLearningFactRepository
@@ -44,6 +53,31 @@ from src.workflow.demo_inbound import parse_demo_customer_email
 from src.workflow.extraction_confirmation import confirm_extraction_proposal
 from src.workflow.mail_ingestion import process_customer_inquiry_mail
 from src.workflow.supplier_response_ingestion import ingest_supplier_reply
+from src.workflow.supplier_rfq_progression import resume_supplier_rfq_workflow
+from src.workflow.mail_delivery import send_supplier_rfq_follow_up_via_mail
+
+
+def _isolated_follow_up_fixture():
+    shipment = Shipment(
+        customer_name="Demo Follow-up Customer", pickup_country="Türkiye", pickup_city="Adana",
+        delivery_country="Almanya", delivery_city="Hamburg", delivery_postcode="20095",
+        commodity="Tekstil", gross_weight_kg=20000, transport_mode="road", service_type="FTL",
+        equipment_type="Tenteli / Curtainsider", cargo_ready_date="2026-09-10",
+        is_adr=False, is_temperature_controlled=False, is_high_value=False,
+        packages=[Package(package_type="pallet", quantity=20, length_cm=120, width_cm=80, height_cm=150)],
+    )
+    equipment = EquipmentDecision(selected_equipment="Tenteli / Curtainsider", reason="Demo regression", confidence=1.0)
+    selection = select_suppliers_for_shipment(shipment=shipment, equipment_decision=equipment)
+    first = selection["selected_suppliers"][0]
+    workflow = SupplierRFQWorkflow(shipment=shipment)
+    draft = generate_supplier_rfq_drafts(
+        workflow_id=workflow.workflow_id, shipment=shipment, equipment_decision=equipment,
+        supplier_selection={**selection, "selected_suppliers": [first]},
+    )[0].model_copy(update={"status":"awaiting_response", "sent_at":datetime(2026,9,10,8,0,0)})
+    repository = InMemorySupplierRFQRepository()
+    repository.save_drafts([draft])
+    repository.save_workflow(workflow.model_copy(update={"rfq_ids":[draft.rfq_id]}))
+    return repository, workflow, draft
 
 
 def evaluate_demo_sandbox_regressions() -> dict:
@@ -203,6 +237,49 @@ def evaluate_demo_sandbox_regressions() -> dict:
             "demo supplier reply scenarios use real correlation acknowledgement and commercial-response ingestion",
         )
 
+        follow_repo, follow_workflow, follow_draft = _isolated_follow_up_fixture()
+        attach_supplier_rfq_response(follow_repo, SupplierRFQResponse(
+            rfq_id=follow_draft.rfq_id, supplier_name=follow_draft.supplier_name,
+            rfq_priority=follow_draft.priority, status="quoted", cost=2450.0, currency="EUR",
+            equipment_type="Tenteli / Curtainsider", pricing_basis="all_in", source="manual",
+            received_at=datetime(2026, 9, 10, 9, 0, 0),
+        ))
+        with patch.dict(os.environ, {"MINAI_PILOT_MODE":"0"}, clear=False):
+            follow_result = resume_supplier_rfq_workflow(
+                workflow_id=follow_workflow.workflow_id, rfq_repository=follow_repo,
+                approval_repository=InMemoryQuoteApprovalRepository(), quote_case_repository=InMemoryQuoteCaseRepository(),
+            )
+        follow_record = follow_result.get("supplier_follow_up_record")
+        follow_sent = None; follow_reply = None; follow_closed = None
+        if follow_record is not None:
+            approved = approve_supplier_rfq_follow_up(follow_repo, follow_record.follow_up_id, approved_by="Demo Operator")
+            with patch.dict(os.environ, {"MINAI_DEMO_MODE":"true", "MINAI_OUTBOUND_MODE":"shadow"}, clear=False):
+                follow_sent = send_supplier_rfq_follow_up_via_mail(
+                    repository=follow_repo, follow_up_id=approved.follow_up_id,
+                    sender=DemoOutboundMailSender(root / "follow_up_outbox.jsonl"), enforce_business_hours=False, triggered_by="Demo Operator",
+                )
+            sent_record = follow_repo.get_follow_up_draft(approved.follow_up_id)
+            follow_reply = ingest_supplier_reply(
+                reply=InboundMailEnvelope(
+                    external_message_id="demo-follow-up-transit", sender_address=follow_draft.recipient_email,
+                    subject=f"Re: [{follow_draft.reference_token}] Demo RFQ", body_text="4 gün",
+                    explicit_rfq_reference=follow_draft.rfq_id, source="email",
+                    received_at=(sent_record.sent_at + timedelta(seconds=2)),
+                ), repository=follow_repo,
+            )
+            follow_closed = follow_repo.get_follow_up_draft(approved.follow_up_id)
+        check(
+            follow_result.get("result_type") == "supplier_response_required"
+            and follow_record is not None and follow_record.status == "draft"
+            and "supplier_transit_missing_or_unparseable" in follow_record.rejection_reasons
+            and follow_sent is not None and follow_sent.delivery.status == "sent"
+            and follow_reply is not None and follow_reply.status == "response_attached"
+            and follow_reply.response is not None and follow_reply.response.cost == 2450.0
+            and follow_reply.response.transit_time == "4 gün" and follow_reply.response.is_consolidated_follow_up
+            and follow_closed is not None and follow_closed.status == "responded",
+            "demo supplier clarification follow-up preserves approval send and consolidated response lifecycle",
+        )
+
         learning = SQLiteLearningFactRepository(store)
         history_end = datetime(2026, 9, 9, 15, 0, tzinfo=timezone.utc)
         history_start = history_end - timedelta(days=180)
@@ -355,7 +432,10 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "Gelen Talepler" in shell and "DEMO_INBOUND_TEMPLATES" in app_js
         and "Doğrula ve MINA işi oluştur" in app_js and "Ek İnceleme" in app_js
         and "İncelemeyi uygula" in app_js and "preview_token" in app_js
-        and "Demo tedarikçi yanıtı" in app_js
+        and "Demo tedarikçi yanıtı" in app_js and "Eksik fiyat ver" in app_js
+        and "Tedarikçi açıklama takibi" in app_js
+        and "/supplier-rfq-follow-ups/${encodeURIComponent(activeFollowUp.follow_up_id)}/approve" in app_js
+        and "/supplier-rfq-follow-ups/${encodeURIComponent(activeFollowUp.follow_up_id)}/send" in app_js
         and "Manuel MINA işi oluştur" in app_js and "/mina-jobs/manual" in app_js
         and "Sabit Fiyatlar" in app_js and "/supplier-fixed-rates" in app_js
         and "Sistem Sağlığı" in app_js and "/data-health/summary" in app_js
