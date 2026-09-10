@@ -3956,3 +3956,11 @@ Phone, WhatsApp, portal, face-to-face and other manually entered requests may cr
 The browser must submit manual intake through the normal job-creation service. It may not generate its own MINA code, skip repository idempotency, or silently reinterpret an email as manual intake.
 
 Manual-intake jobs remain subject to the same downstream quote-readiness, supplier-selection, approval, pricing and operation rules as jobs originating from confirmed email extraction.
+
+## RULE-225 — Shift Evidence Must Never Substitute for Current Queue Reconciliation
+
+A prior shift-close or shift-open receipt is audit evidence only. The browser must always use a fresh server-side close-readiness or open-reconciliation projection before enabling the corresponding attestation action.
+
+Handoff releases assignment coordination only; it does not resolve or complete the operational work. A handed-off item remains incomplete until it is no longer active or a successor claims/reconciles it according to the normal work-assignment rules.
+
+Synthetic historical continuity evidence may populate the demo ledger, but stale evidence, operational changes since close, incomplete handoffs or critical uncovered work must continue to block current shift acceptance when the backend says review is required.

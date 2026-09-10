@@ -19,6 +19,10 @@ from src.core.sqlite_repositories import (
     SQLiteExtractionProposalRepository,
     SQLiteMinaJobRepository,
     SQLiteOperationalWorkAssignmentRepository,
+    SQLiteOperationalShiftCloseReceiptRepository,
+    SQLiteOperationalShiftOpenAcceptanceReceiptRepository,
+    SQLiteQuoteApprovalRepository,
+    SQLiteQuoteCaseRepository,
     SQLiteSupplierRFQRepository,
 )
 from src.core.master_data_repository import SQLiteMasterDataRepository
@@ -26,6 +30,8 @@ from src.core.mail import InboundMailEnvelope
 from src.core.missing_info import check_missing_information
 from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.learning_fact_repository import SQLiteLearningFactRepository
+from src.core.operational_shift_continuity_ledger import build_operational_shift_continuity_ledger
+from src.core.operational_shift_open_reconciliation import build_operational_shift_open_reconciliation
 from src.demo_launcher import _configure_environment
 from src.core.web_session import list_active_web_operators
 from src.demo_seed import seed_demo_database
@@ -72,6 +78,30 @@ def evaluate_demo_sandbox_regressions() -> dict:
         )
         check(repeated.get("reason") == "already_seeded" and len(jobs) == 11, "demo seed is idempotent without reset")
         check(len(masters.list_customers()) == 12 and len(masters.list_suppliers()) == 6, "demo seed includes synthetic customer and supplier master data")
+
+        shift_closes = SQLiteOperationalShiftCloseReceiptRepository(store)
+        shift_opens = SQLiteOperationalShiftOpenAcceptanceReceiptRepository(store)
+        shift_approvals = SQLiteQuoteApprovalRepository(store)
+        shift_cases = SQLiteQuoteCaseRepository(store)
+        shift_args = dict(
+            assignment_repository=assignment_repo, attachment_repository=SQLiteAttachmentInterpretationReviewRepository(store),
+            proposal_repository=SQLiteExtractionProposalRepository(store), supplier_repository=SQLiteSupplierRFQRepository(store),
+            approval_repository=shift_approvals, quote_case_repository=shift_cases,
+        )
+        shift_ledger = build_operational_shift_continuity_ledger(
+            receipt_repository=shift_closes, acceptance_repository=shift_opens, **shift_args
+        )
+        shift_opening = build_operational_shift_open_reconciliation(
+            operator_name="Demo Operator", receipt_repository=shift_closes, **shift_args
+        )
+        check(
+            seeded.get("shift_continuity_evidence_count") == 2
+            and shift_ledger["counts"]["listed_complete_cycle_count"] == 1
+            and shift_ledger["items"][0]["completion_status"] == "complete"
+            and shift_opening["prior_shift_close"]["status"] == "available"
+            and shift_opening["reconciliation_status"] == "review_required",
+            "demo seed includes historical close-open continuity evidence without authorizing the current shift",
+        )
 
         proposals = SQLiteExtractionProposalRepository(store)
         inbound_results = {}
@@ -280,6 +310,14 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "Demo tedarikçi yanıtı" in app_js
         and "Manuel MINA işi oluştur" in app_js and "/mina-jobs/manual" in app_js
         and route_allowed("POST", "/mina-jobs/manual")
+        and "Vardiya Sürekliliği" in app_js and "Vardiyaya Devret" in app_js
+        and "/operational-work-shift-close-readiness" in app_js
+        and "/operational-work-shift-open-reconciliation" in app_js
+        and "/operational-work-shift-continuity" in app_js
+        and route_allowed("GET", "/operational-work-shift-summary")
+        and route_allowed("POST", "/operational-work-shift-open-accept")
+        and route_allowed("POST", "/operational-work-shift-close-attest")
+        and route_allowed("POST", "/operational-work-items/demo-work/handoff")
         and "demo_supplier_response_unavailable" in api_text
         and route_allowed("POST", "/demo/supplier-rfqs/demo-rfq/simulate-response")
         and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js,

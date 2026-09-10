@@ -437,3 +437,17 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .demo-supplier-response-box { margin-top: 12px; padding: 11px; border: 1px dashed #cbd5e1; border-radius: 11px; background: #f8fafc; }
 .demo-supplier-response-actions { margin-top: 9px; flex-wrap: wrap; }
 .demo-supplier-response-box .settings-feedback { margin-top: 8px; }
+
+/* Shift continuity workspace */
+.shift-continuity-section { margin: 0; }
+.shift-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.shift-heading-copy { min-width: 0; }
+.shift-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 12px 0; }
+.shift-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.shift-status-card { border: 1px solid #e2e7ef; border-radius: 14px; padding: 14px; display: grid; gap: 10px; background: #fff; }
+.shift-status-card > strong { font-size: 14px; }
+.shift-attention-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: grid; gap: 4px; }
+.shift-handoff-list { margin-top: 14px; }
+.shift-history-row { padding: 7px 0; border-bottom: 1px solid #edf1f5; }
+.shift-audit-line { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e7ef; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+@media (max-width: 760px) { .shift-metrics { grid-template-columns: 1fr 1fr; } .shift-status-grid { grid-template-columns: 1fr; } }

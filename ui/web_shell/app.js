@@ -412,6 +412,10 @@ function workCard(item, myIds, refresh, operators = []) {
   }
   if (isMine && ["assigned", "acknowledged"].includes(item.assignment_status)) {
     actions.append(actionButton(
+      "Vardiyaya Devret", "",
+      () => mutateOperationalWork(item, "handoff", refresh, "Bu işi vardiya devrine bırakmak istiyor musun? İş tamamlanmaz; yeni operatörün devralması gerekir.")
+    ));
+    actions.append(actionButton(
       "Bırak", "",
       () => mutateOperationalWork(item, "release", refresh, "Bu işi sahipsiz bırakmak istiyor musun? Bu işlem işi tamamlandı olarak işaretlemez.")
     ));
@@ -440,7 +444,93 @@ function workCard(item, myIds, refresh, operators = []) {
   return card;
 }
 
-function renderOperationalWork(queue, mine, operatorsPayload = {}) {
+function shiftAttentionText(code) {
+  return ({
+    active_assignments_remaining: "Üzerindeki aktif işler devredilmeli veya bırakılmalı.",
+    expired_assignments_recovered: "Süresi dolmuş atamalar kurtarılmalı.",
+    critical_unassigned_work_requires_coverage: "Kritik sahipsiz işler bir operatör tarafından üstlenilmeli.",
+    recent_handoffs_incomplete: "Vardiya devrine bırakılan işler yeni sahibi tarafından alınmalı.",
+    no_prior_shift_close_receipt: "Önce geçerli bir vardiya kapanış kaydı gerekli.",
+    change_tracking_unavailable: "Önceki kapanıştan sonraki değişiklik takibi kullanılamıyor.",
+    critical_uncovered_work_requires_coverage: "Kritik kapsamasız işler çözülmeden vardiya açılışı kabul edilemez.",
+    prior_shift_close_receipt_stale: "Önceki vardiya kapanış kaydı mevcut duruma göre eskimiş.",
+    operational_changes_since_close: "Önceki kapanıştan sonra operasyonel değişiklikler var; mevcut kuyruk yeniden uzlaştırılmalı.",
+    incomplete_handoffs_require_reconciliation: "Tamamlanmamış vardiya devirleri yeni operatör tarafından uzlaştırılmalı.",
+  })[code] || codeLabel(code);
+}
+
+function renderShiftContinuityPanel(payload, refresh) {
+  const summary = payload.summary || {};
+  const close = payload.close || {};
+  const open = payload.open || {};
+  const ledger = payload.ledger || {};
+  const receipts = payload.receipts?.items || [];
+  const acceptances = payload.acceptances?.items || [];
+  const section = node("section", "", "section shift-continuity-section");
+  const head = node("div", "", "section-heading shift-heading");
+  head.append(node("div", "", "shift-heading-copy"));
+  head.firstChild.append(node("h2", "Vardiya Sürekliliği"), node("p", "Devir, açılış ve kapanış kanıtları iş kuyruğunun gerçek durumundan hesaplanır.", "muted"));
+  const closeBadge = close.ready_to_close ? "Kapanış hazır" : "Kapanış bloklu";
+  head.append(node("span", closeBadge, `badge ${close.ready_to_close ? "open" : "warning-badge"}`));
+  section.append(head);
+
+  const overview = summary.overview || {};
+  const metrics = node("div", "", "grid shift-metrics");
+  metrics.append(
+    metric("Bendeki aktif", overview.my_active_count ?? 0),
+    metric("Yakında süresi dolan", overview.my_expiring_soon_count ?? 0),
+    metric("Kritik sahipsiz", close.critical_unassigned?.count ?? 0),
+    metric("Eksik devir", close.incomplete_handoffs?.count ?? 0)
+  );
+  section.append(metrics);
+
+  const statuses = node("div", "", "shift-status-grid");
+  const openCard = node("div", "", "shift-status-card");
+  openCard.append(node("strong", "Vardiya açılışı"), node("span", codeLabel(open.reconciliation_status || "-"), "badge"));
+  openCard.append(node("div", `Bekleyen iş: ${open.current_overview?.pending_count ?? 0} · Kritik kapsamasız: ${open.current_overview?.critical_uncovered_count ?? 0}`, "small muted"));
+  const openCodes = open.attention_codes || [];
+  if (openCodes.length) {
+    const list=node("ul","","shift-attention-list"); openCodes.forEach(code=>list.append(node("li",shiftAttentionText(code)))); openCard.append(list);
+  }
+  if (open.reconciliation_status === "clear" && open.review_required === false && open.prior_shift_close?.status === "available") {
+    openCard.append(actionButton("Vardiya açılışını kabul et", "approve", async()=>{
+      try { await api("/operational-work-shift-open-accept",{method:"POST"}); await refresh(); }
+      catch(error){showError(error);}
+    }));
+  }
+  if (acceptances.length) openCard.append(node("div", `Son açılış kabulü: ${formatDate(acceptances[0].accepted_at)} · ${codeLabel(acceptances[0].current_status)}`, "small muted"));
+
+  const closeCard = node("div", "", "shift-status-card");
+  closeCard.append(node("strong", "Vardiya kapanışı"), node("span", close.ready_to_close ? "Hazır" : "Bloklu", `badge ${close.ready_to_close ? "open" : "warning-badge"}`));
+  closeCard.append(node("div", `Blocker: ${close.blocker_count ?? 0} · Aktif atama: ${close.active_work?.count ?? 0}`, "small muted"));
+  const closeCodes = close.blocker_codes || [];
+  if (closeCodes.length) {
+    const list=node("ul","","shift-attention-list"); closeCodes.forEach(code=>list.append(node("li",shiftAttentionText(code)))); closeCard.append(list);
+  }
+  if (close.ready_to_close) {
+    closeCard.append(actionButton("Vardiya kapanışını onayla", "approve", async()=>{
+      try { await api("/operational-work-shift-close-attest",{method:"POST"}); await refresh(); }
+      catch(error){showError(error);}
+    }));
+  }
+  if (receipts.length) closeCard.append(node("div", `Son kapanış: ${formatDate(receipts[0].attested_at)} · ${codeLabel(receipts[0].current_status)}`, "small muted"));
+  statuses.append(openCard, closeCard); section.append(statuses);
+
+  const handoffs = summary.recent_handoffs?.items || [];
+  if (handoffs.length) {
+    const wrap=node("div","","shift-handoff-list"); wrap.append(node("h3","Son vardiya devirleri"));
+    handoffs.slice(0,5).forEach(item=>wrap.append(node("div",`${workTypeLabel(item)} · ${codeLabel(item.current_disposition)} · ${formatDate(item.released_at)}`,"small shift-history-row")));
+    section.append(wrap);
+  }
+  const ledgerItems = ledger.items || [];
+  const audit = node("div", "", "shift-audit-line");
+  audit.append(node("strong", "Süreklilik defteri"), node("span", `${ledger.counts?.listed_cycle_count ?? ledgerItems.length} çevrim · ${codeLabel(ledger.ledger_status || "-")}`, "small"));
+  if ((ledger.audit_attention_codes || []).length) audit.append(node("span", (ledger.audit_attention_codes || []).map(shiftAttentionText).join(" · "), "small muted"));
+  section.append(audit);
+  return section;
+}
+
+function renderOperationalWork(queue, mine, operatorsPayload = {}, shiftPayload = {}) {
   title.textContent = "İş Kuyruğu";
   const root = node("div", "", "work-page");
   const items = queue.items || [];
@@ -459,6 +549,7 @@ function renderOperationalWork(queue, mine, operatorsPayload = {}) {
     metric("Sahipsiz kritik", unassignedCriticalCount)
   );
   root.append(metrics);
+  root.append(renderShiftContinuityPanel(shiftPayload, () => loadOperationalWork(operationalWorkView)));
 
   root.append(node(
     "div",
@@ -477,7 +568,7 @@ function renderOperationalWork(queue, mine, operatorsPayload = {}) {
     const count = items.filter(predicate).length;
     tabs.append(actionButton(`${label} · ${count}`, key === operationalWorkView ? "active" : "", () => {
       operationalWorkView = key;
-      renderOperationalWork(queue, mine, operatorsPayload);
+      renderOperationalWork(queue, mine, operatorsPayload, shiftPayload);
     }));
   }
   root.append(tabs);
@@ -494,12 +585,13 @@ function renderOperationalWork(queue, mine, operatorsPayload = {}) {
 
 async function loadOperationalWork(view = operationalWorkView) {
   operationalWorkView = view;
-  const [queue, mine, operatorsPayload] = await Promise.all([
-    api("/operational-work-queue"),
-    api("/operational-work-my"),
-    api("/operators"),
+  const [queue, mine, operatorsPayload, summary, close, open, ledger, receipts, acceptances] = await Promise.all([
+    api("/operational-work-queue"), api("/operational-work-my"), api("/operators"),
+    api("/operational-work-shift-summary"), api("/operational-work-shift-close-readiness"),
+    api("/operational-work-shift-open-reconciliation"), api("/operational-work-shift-continuity"),
+    api("/operational-work-shift-close-receipts"), api("/operational-work-shift-open-acceptances"),
   ]);
-  renderOperationalWork(queue, mine, operatorsPayload);
+  renderOperationalWork(queue, mine, operatorsPayload, {summary, close, open, ledger, receipts, acceptances});
   setStatus("Güncel");
 }
 

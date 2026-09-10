@@ -6817,3 +6817,14 @@ The Demo/Sandbox `Gelen Talepler` workbench includes a separate manual-intake fo
 The browser must call the existing `/mina-jobs/manual` endpoint and `create_manual_mina_job` service. Job codes, lifecycle state, audit events and idempotency remain repository-authoritative; the UI must not fabricate a MINA code or directly mutate job state.
 
 Manual intake and email extraction remain visibly distinct paths. The manual form may provide convenient demo defaults, but the created job is a normal MINA job and must use the same downstream job-detail, pricing, supplier and operation services as every other case.
+
+## DEC-208 — Browser Work Queue Exposes Shift Continuity Without Creating New Authority
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The browser `İş Kuyruğu` includes a shift-continuity workspace backed by the existing shift summary, close readiness, open reconciliation, close/open evidence and continuity-ledger services. The browser may render readiness and offer an action only when the corresponding backend projection says the action is currently allowed.
+
+Work assignment remains coordination-only. An operator may hand an active assignment to the next shift through the existing `/handoff` transition; this does not complete the underlying work item. Shift close/open receipts remain audit evidence and do not authorize operational workflow actions.
+
+The demo seed includes one historical synthetic close→open evidence cycle so the continuity ledger is visible immediately. Historical receipts must remain stale/audit-only when current operational state differs; they must never make the current shift appear reconciled or authorized.

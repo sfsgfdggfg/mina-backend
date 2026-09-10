@@ -29,6 +29,8 @@ from src.core.mail import InboundAttachmentMetadata, InboundMailEnvelope
 from src.core.supplier_response_ingestion import SupplierResponseExtraction
 from src.core.operation_execution import OperationException, OperationExecutionSnapshot
 from src.core.operation_execution_repository import SQLiteOperationExecutionRepository
+from src.core.operational_shift_close_receipt import OperationalShiftCloseReceipt
+from src.core.operational_shift_open_acceptance_receipt import OperationalShiftOpenAcceptanceReceipt
 from src.core.operational_work_assignment import OperationalWorkAssignment
 from src.core.operational_work_assignment_service import work_state_fingerprint
 from src.core.operational_work_queue import build_operational_work_queue
@@ -45,6 +47,8 @@ from src.core.sqlite_repositories import (
     SQLiteOperationalWorkAssignmentRepository,
     SQLiteAttachmentInterpretationReviewRepository,
     SQLiteExtractionProposalRepository,
+    SQLiteOperationalShiftCloseReceiptRepository,
+    SQLiteOperationalShiftOpenAcceptanceReceiptRepository,
 )
 from src.core.supplier_price import SupplierPriceOffer, offer_from_rfq_response
 from src.core.supplier_price_repository import SQLiteSupplierPriceRepository
@@ -62,7 +66,7 @@ from src.core.supplier_rfq import (
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
 DEMO_OPERATOR = "Demo Operator"
-DEMO_SEED_VERSION = 2
+DEMO_SEED_VERSION = 3
 
 
 def _utc_now() -> datetime:
@@ -497,6 +501,31 @@ def _seed_attachment_reviews(store: SQLitePilotStore, now: datetime) -> int:
     return len(reviews.list_all())
 
 
+def _seed_shift_continuity(store: SQLitePilotStore, now: datetime) -> int:
+    closes = SQLiteOperationalShiftCloseReceiptRepository(store)
+    opens = SQLiteOperationalShiftOpenAcceptanceReceiptRepository(store)
+    close_id = "shift-close-" + hashlib.sha256(b"demo-historical-close").hexdigest()[:32]
+    open_id = "shift-open-" + hashlib.sha256(b"demo-historical-open").hexdigest()[:32]
+    close_at = now - timedelta(hours=18)
+    open_at = now - timedelta(hours=4)
+    closes.save_if_absent(OperationalShiftCloseReceipt(
+        receipt_id=close_id, attested_by="Ayşe Demo", attested_at=close_at,
+        readiness_generated_at=close_at - timedelta(minutes=2), pending_work_count=5,
+        critical_pending_count=1, active_assignment_count=0, expired_assignment_count=0,
+        incomplete_handoff_count=0, critical_uncovered_count=0,
+        close_state_sha256=hashlib.sha256(b"demo-historical-close-state").hexdigest(),
+        state_event_id=0,
+    ))
+    opens.save_if_absent(OperationalShiftOpenAcceptanceReceipt(
+        receipt_id=open_id, accepted_by="Mehmet Demo", accepted_at=open_at,
+        reconciliation_generated_at=open_at - timedelta(minutes=1), source_close_receipt_id=close_id,
+        pending_work_count=6, critical_pending_count=1, incomplete_handoff_count=0,
+        critical_uncovered_count=0,
+        acceptance_state_sha256=hashlib.sha256(b"demo-historical-open-state").hexdigest(),
+    ))
+    return len(closes.list_all()) + len(opens.list_all())
+
+
 def _seed_operational_assignments(store: SQLitePilotStore, now: datetime) -> int:
     assignments = SQLiteOperationalWorkAssignmentRepository(store)
     attachments = SQLiteAttachmentInterpretationReviewRepository(store)
@@ -865,6 +894,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
 
     attachment_review_count = _seed_attachment_reviews(store, now)
     assignment_count = _seed_operational_assignments(store, now)
+    shift_continuity_evidence_count = _seed_shift_continuity(store, now)
 
     store.upsert(
         namespace="demo_seed_metadata",
@@ -875,6 +905,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
             "job_count": len(jobs),
             "assignment_count": assignment_count,
             "attachment_review_count": attachment_review_count,
+            "shift_continuity_evidence_count": shift_continuity_evidence_count,
             "synthetic_only": True,
         },
         event_type="demo_database_seeded",
@@ -888,6 +919,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
         "supplier_count": len(suppliers),
         "assignment_count": assignment_count,
         "attachment_review_count": attachment_review_count,
+        "shift_continuity_evidence_count": shift_continuity_evidence_count,
     }
 
 
