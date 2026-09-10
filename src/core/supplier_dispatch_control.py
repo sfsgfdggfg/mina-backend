@@ -13,6 +13,7 @@ from src.core.business_calendar import (
 
 from src.core.supplier_rfq import (
     SupplierRFQAcknowledgementEvidence,
+    SupplierContactAttemptEvidence,
     SupplierRFQDraft,
     SupplierSecondaryDispatchAuthorization,
 )
@@ -26,6 +27,10 @@ class SupplierAcknowledgementError(ValueError):
 
 
 class SupplierSecondaryDispatchBlockedError(ValueError):
+    pass
+
+
+class SupplierContactAttemptError(ValueError):
     pass
 
 
@@ -193,6 +198,47 @@ def record_supplier_acknowledgement(
         "channel": stored.channel,
         "effect": "supplier_seen_confirmed_non_commercial",
         "commercial_response_recorded": False,
+    }
+
+
+def record_supplier_contact_attempt(
+    *, repository: SupplierRFQRepository, rfq_id: str, channel: str, outcome: str,
+    recorded_by: str, attempted_at: datetime | None = None, note: str | None = None,
+) -> dict[str, Any]:
+    normalized_channel = channel.strip().lower()
+    normalized_outcome = outcome.strip().lower()
+    actor = recorded_by.strip()
+    if normalized_channel not in {"phone", "whatsapp"}:
+        raise SupplierContactAttemptError("Supplier contact attempt supports only phone or WhatsApp.")
+    if normalized_outcome not in {"acknowledged_working", "no_response", "unreachable"}:
+        raise SupplierContactAttemptError("Unsupported supplier contact attempt outcome.")
+    if not actor:
+        raise SupplierContactAttemptError("Authenticated operator is required for supplier contact evidence.")
+    timestamp = attempted_at or datetime.now(timezone.utc)
+    attempt = SupplierContactAttemptEvidence(
+        rfq_id=rfq_id, attempted_at=timestamp, channel=normalized_channel,
+        outcome=normalized_outcome, recorded_by=actor, note=None if note is None else note.strip() or None,
+    )
+    acknowledgement = None
+    with atomic_repository_transaction(repository):
+        draft = repository.get_draft(rfq_id)
+        if draft is None:
+            raise SupplierContactAttemptError("Supplier RFQ not found.")
+        if draft.status != "awaiting_response":
+            raise SupplierContactAttemptError("Supplier contact attempt requires an RFQ awaiting response.")
+        if repository.list_responses(rfq_id):
+            raise SupplierContactAttemptError("Supplier contact attempt cannot replace a commercial response.")
+        stored = repository.save_contact_attempt(attempt)
+        if normalized_outcome == "acknowledged_working":
+            acknowledgement = repository.save_acknowledgement(SupplierRFQAcknowledgementEvidence(
+                rfq_id=rfq_id, acknowledged_at=timestamp, channel=normalized_channel, recorded_by=actor,
+            ))
+    return {
+        "contact_attempt": stored.model_dump(),
+        "acknowledgement": None if acknowledgement is None else acknowledgement.model_dump(),
+        "commercial_response_recorded": False,
+        "capacity_failure_recorded": False,
+        "secondary_release_recorded": False,
     }
 
 

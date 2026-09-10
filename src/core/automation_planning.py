@@ -76,12 +76,18 @@ def supplier_reminder_plan(
 
     supplier_profile = find_supplier_policy_profile(master_data_repository, draft.supplier_name)
     relationship = None if supplier_profile is None else supplier_profile.relationship
+    acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
+    latest_acknowledgement = (
+        max(acknowledgements, key=lambda item: aware_utc(item.acknowledged_at))
+        if acknowledgements else None
+    )
     learning_policy = resolve_supplier_operational_learning_policy(
         supplier_name=draft.supplier_name,
         master_data_repository=master_data_repository,
         learning_repository=learning_fact_repository,
         base_first_reminder_minutes=workflow.dispatch_policy.no_response_reminder_minutes,
         base_acknowledged_wait_minutes=workflow.dispatch_policy.acknowledged_grace_minutes,
+        acknowledgement_channel=(None if latest_acknowledgement is None else latest_acknowledgement.channel),
         as_of=now,
     )
     first_reminder_minutes = (
@@ -103,10 +109,9 @@ def supplier_reminder_plan(
         )
     )
 
-    acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
     try:
         if acknowledgements:
-            anchor = max(aware_utc(item.acknowledged_at) for item in acknowledgements)
+            anchor = aware_utc(latest_acknowledgement.acknowledged_at)
             action_type = "supplier_acknowledged_reminder"
             due_at = add_supplier_business_minutes(anchor, acknowledged_wait_minutes)
         else:
@@ -139,6 +144,9 @@ def supplier_reminder_plan(
         "first_reminder_source": None if learning_policy is None else learning_policy.first_reminder_source,
         "acknowledged_wait_source": None if learning_policy is None else learning_policy.acknowledged_wait_source,
         "learning_policy": None if learning_policy is None else learning_policy.model_dump(mode="json"),
+        "preferred_contact_channel_advisory": (
+            None if learning_policy is None else learning_policy.preferred_contact_channel_advisory
+        ),
     }
 
     if action is not None:

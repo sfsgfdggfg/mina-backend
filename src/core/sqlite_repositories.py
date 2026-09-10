@@ -23,6 +23,7 @@ from src.core.quote_case import QuoteCase
 from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
     SupplierRFQAcknowledgementEvidence,
+    SupplierContactAttemptEvidence,
     SupplierRFQDraft,
     SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpDraft,
@@ -492,6 +493,7 @@ class SQLiteSupplierRFQRepository:
     WORKFLOW_NAMESPACE = "supplier_rfq_workflows"
     RESPONSE_NAMESPACE = "supplier_rfq_responses"
     ACKNOWLEDGEMENT_NAMESPACE = "supplier_rfq_acknowledgements"
+    CONTACT_ATTEMPT_NAMESPACE = "supplier_contact_attempts"
     SECONDARY_DISPATCH_AUTH_NAMESPACE = "supplier_secondary_dispatch_authorizations"
     INGESTED_MESSAGE_NAMESPACE = "supplier_ingested_messages"
     def __init__(self, store: SQLitePilotStore) -> None:
@@ -714,6 +716,27 @@ class SQLiteSupplierRFQRepository:
         items = [
             _model_from_payload(SupplierRFQAcknowledgementEvidence, payload)
             for payload in self.store.list_all(namespace=self.ACKNOWLEDGEMENT_NAMESPACE)
+        ]
+        return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
+
+    def save_contact_attempt(
+        self, evidence: SupplierContactAttemptEvidence
+    ) -> SupplierContactAttemptEvidence:
+        payload = _model_payload(evidence)
+        self.store.insert_once(
+            namespace=self.CONTACT_ATTEMPT_NAMESPACE, record_key=evidence.attempt_id,
+            payload=payload, event_type="supplier_contact_attempt_recorded",
+            entity_type="supplier_contact_attempt",
+        )
+        stored = self.store.get(namespace=self.CONTACT_ATTEMPT_NAMESPACE, record_key=evidence.attempt_id)
+        return _model_from_payload(SupplierContactAttemptEvidence, stored)
+
+    def list_contact_attempts(
+        self, rfq_id: str | None = None
+    ) -> list[SupplierContactAttemptEvidence]:
+        items = [
+            _model_from_payload(SupplierContactAttemptEvidence, payload)
+            for payload in self.store.list_all(namespace=self.CONTACT_ATTEMPT_NAMESPACE)
         ]
         return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
 

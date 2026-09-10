@@ -40,26 +40,53 @@ def derive_supplier_history_learning(
     drafts = [d for d in supplier_repository.list_drafts() if d.supplier_name == supplier.supplier_name]
     response_minutes: list[float] = []
     ack_to_quote_minutes: list[float] = []
+    contact_attempt_counts = {"phone": 0, "whatsapp": 0}
+    contact_ack_counts = {"phone": 0, "whatsapp": 0}
+    contact_ack_to_quote_minutes: dict[str, list[float]] = {"phone": [], "whatsapp": []}
     quoted_count = 0
     responded_count = 0
     evidence_ids: list[str] = []
+    observed_times: list[datetime] = []
     for draft in drafts:
+        if draft.sent_at is not None:
+            observed_times.append(_aware(draft.sent_at))
+        attempts = supplier_repository.list_contact_attempts(draft.rfq_id)
+        for attempt in attempts:
+            observed_times.append(_aware(attempt.attempted_at))
+            contact_attempt_counts[attempt.channel] += 1
+            if attempt.outcome == "acknowledged_working":
+                contact_ack_counts[attempt.channel] += 1
         responses = supplier_repository.list_responses(draft.rfq_id)
         if not responses:
             continue
         latest = max(responses, key=lambda item: _aware(item.received_at))
+        observed_times.extend(_aware(item.received_at) for item in responses)
         responded_count += 1
-        quoted_count += int(latest.status == "quoted" and latest.is_price_usable)
+        is_usable_quote = latest.status == "quoted" and latest.is_price_usable
+        quoted_count += int(is_usable_quote)
         evidence_ids.append(draft.rfq_id)
         elapsed = _minutes(draft.sent_at, latest.received_at)
         if elapsed is not None:
             response_minutes.append(elapsed)
         acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
+        observed_times.extend(_aware(item.acknowledged_at) for item in acknowledgements)
         if acknowledgements:
             latest_ack = max(acknowledgements, key=lambda item: _aware(item.acknowledged_at))
             elapsed_ack = _minutes(latest_ack.acknowledged_at, latest.received_at)
             if elapsed_ack is not None:
                 ack_to_quote_minutes.append(elapsed_ack)
+        if is_usable_quote:
+            for channel in ("phone", "whatsapp"):
+                successful = [
+                    item for item in attempts
+                    if item.channel == channel and item.outcome == "acknowledged_working"
+                    and _aware(item.attempted_at) <= _aware(latest.received_at)
+                ]
+                if successful:
+                    latest_success = max(successful, key=lambda item: _aware(item.attempted_at))
+                    elapsed_channel = _minutes(latest_success.attempted_at, latest.received_at)
+                    if elapsed_channel is not None:
+                        contact_ack_to_quote_minutes[channel].append(elapsed_channel)
 
     fingerprint_source = {
         "supplier_id": supplier.supplier_id,
@@ -68,6 +95,9 @@ def derive_supplier_history_learning(
         "ack_to_quote_minutes": ack_to_quote_minutes,
         "quoted_count": quoted_count,
         "responded_count": responded_count,
+        "contact_attempt_counts": contact_attempt_counts,
+        "contact_ack_counts": contact_ack_counts,
+        "contact_ack_to_quote_minutes": contact_ack_to_quote_minutes,
     }
     digest = hashlib.sha256(
         json.dumps(fingerprint_source, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -75,10 +105,12 @@ def derive_supplier_history_learning(
     evidence = LearningEvidence(
         source_type="operation_history",
         source_reference=f"supplier-rfq-history:{supplier.supplier_id}:{digest}",
-        observed_at=timestamp,
+        observed_at=max(observed_times) if observed_times else timestamp,
         summary=(
             f"Derived from {len(drafts)} RFQ records, {responded_count} supplier responses "
-            f"and {quoted_count} usable quotes for {supplier.supplier_name}."
+            f"and {quoted_count} usable quotes for {supplier.supplier_name}; "
+            f"contact attempts: phone={contact_attempt_counts['phone']}, "
+            f"whatsapp={contact_attempt_counts['whatsapp']}."
         ),
     )
 
@@ -99,6 +131,21 @@ def derive_supplier_history_learning(
             "commercial.usable_quote_rate_percent", round(100 * quoted_count / responded_count, 2), "percent",
             min(0.90, 0.50 + 0.05 * responded_count),
         ))
+    for channel in ("phone", "whatsapp"):
+        attempts = contact_attempt_counts[channel]
+        if attempts:
+            metrics.append((
+                f"contact.{channel}.ack_rate_percent",
+                round(100 * contact_ack_counts[channel] / attempts, 2), "percent",
+                min(0.90, 0.50 + 0.05 * attempts),
+            ))
+        channel_timings = contact_ack_to_quote_minutes[channel]
+        if channel_timings:
+            metrics.append((
+                f"contact.{channel}.after_ack_quote_median_minutes",
+                round(float(median(channel_timings)), 2), "minutes",
+                min(0.95, 0.55 + 0.05 * len(channel_timings)),
+            ))
 
     for fact_key, value, unit, confidence in metrics:
         fact = create_learning_fact(

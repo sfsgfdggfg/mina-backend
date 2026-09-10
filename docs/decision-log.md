@@ -6943,3 +6943,16 @@ The first runtime effects are deliberately bounded. Confirmed response-time and 
 Learned timing may make supplier follow-up more patient but never more aggressive than the generic rule: the first no-response reminder cannot be moved earlier than its dispatch default and may be extended only up to 60 minutes; the acknowledged-wait window cannot be shortened and may be extended only up to 180 minutes. Explicit supplier-master timing overrides both learned values.
 
 Confirmed negotiation-reduction history is advisory only. It may be surfaced to the operator as historical negotiation evidence, but it does not authorize a customer target, supplier target, automatic counter-offer or outbound commercial message. Phone, WhatsApp and management escalation remain governed by explicit supplier settings until structured channel-success evidence and a separate policy are accepted.
+
+## DEC-220 — Supplier Relationship Intelligence Requires Explicit Contact-Attempt Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+MINAI may learn phone and WhatsApp relationship patterns only from durable contact-attempt evidence. A contact attempt records the RFQ, channel, outcome, operator and observed time. The bounded v2 outcomes are `acknowledged_working`, `no_response` and `unreachable`; none is a commercial supplier response.
+
+`acknowledged_working` also records the existing non-commercial acknowledgement evidence so the established supplier grace timer remains the single timing authority. `no_response` and `unreachable` never count as capacity failure, never release secondary suppliers and never infer that a supplier cannot perform the shipment.
+
+Historical derivation may propose channel acknowledgement-rate and channel-specific acknowledgement-to-usable-quote timing facts. These remain proposed until human confirmation. Evidence recency is anchored to the latest underlying RFQ/response/contact observation rather than the date MINAI reruns the analysis, so old history cannot be made artificially fresh by re-derivation.
+
+Confirmed channel history may only provide an operator-facing preferred-channel advisory and, when the current acknowledgement came through that channel, extend the acknowledged waiting window within the existing 180-minute cap. It cannot shorten waiting, remove manually preferred channels, initiate a call/WhatsApp message, change explicit escalation delays or create commercial/secondary-dispatch authority.

@@ -517,12 +517,14 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "/supplier-rfq-follow-ups/${encodeURIComponent(activeFollowUp.follow_up_id)}/approve" in app_js
         and "/supplier-rfq-follow-ups/${encodeURIComponent(activeFollowUp.follow_up_id)}/send" in app_js
         and "RFQ'yu Onayla" in app_js and "RFQ'yu Gönder" in app_js
-        and "Telefon teyidi kaydet" in app_js and "WhatsApp teyidi kaydet" in app_js
+        and "Telefon / WhatsApp temas sonucu" in app_js and "Telefon · Ulaşılamadı" in app_js
+        and "/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/contact-attempts" in app_js
         and "Pahalı primary fiyatları sonrası secondary grubu aç" in app_js
         and route_allowed("POST", "/supplier-rfqs/demo-rfq/approve")
         and route_allowed("POST", "/supplier-rfqs/demo-rfq/send")
         and route_allowed("POST", "/supplier-rfqs/demo-rfq/record-manually-sent")
         and route_allowed("POST", "/supplier-rfqs/demo-rfq/acknowledge-seen")
+        and route_allowed("POST", "/supplier-rfqs/demo-rfq/contact-attempts")
         and route_allowed("GET", "/supplier-rfq-workflows/demo-workflow/dispatch-status")
         and route_allowed("POST", "/supplier-rfq-workflows/demo-workflow/authorize-secondary-after-negotiation")
         and "primary_price_negotiation_exhausted" not in app_js

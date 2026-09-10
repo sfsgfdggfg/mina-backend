@@ -1307,23 +1307,33 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
   }
   if (lifecycleActions.childElementCount) card.append(lifecycleActions, lifecycleFeedback);
 
-  if (supplier.status === "awaiting_response" && !supplier.commercial_response && !supplier.latest_acknowledgement_at) {
+  if (supplier.status === "awaiting_response" && !supplier.commercial_response) {
     const ackBox = node("div", "", "supplier-acknowledgement-box");
-    ackBox.append(node("strong", "Manuel tedarikçi teyidi"), node("div", "Telefon veya WhatsApp üzerinden yalnız ‘aldık / çalışıyoruz’ teyidi aldıysan kaydet. Bu fiyat veya kapasite cevabı sayılmaz.", "small muted"));
+    ackBox.append(node("strong", "Telefon / WhatsApp temas sonucu"), node("div", "Temas sonucunu kanıt olarak kaydet. ‘Çalışıyoruz’ teyidi reminder grace başlatır; cevap yok veya ulaşılamadı kapasite başarısızlığı sayılmaz ve secondary grubu açmaz.", "small muted"));
     const ackFeedback = node("div", "", "muted settings-feedback");
     const ackActions = node("div", "", "actions supplier-acknowledgement-actions");
-    const recordAck = async channel => {
-      ackFeedback.textContent = `${channel === "phone" ? "Telefon" : "WhatsApp"} teyidi kaydediliyor…`;
+    const recordAttempt = async (channel, outcome) => {
+      const channelText = channel === "phone" ? "Telefon" : "WhatsApp";
+      ackFeedback.textContent = `${channelText} temas sonucu kaydediliyor…`;
       try {
-        await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/acknowledge-seen`, { method: "POST", body: JSON.stringify({ channel }) });
+        await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/contact-attempts`, { method: "POST", body: JSON.stringify({ channel, outcome }) });
         await refresh();
       } catch (error) { ackFeedback.textContent = error.message || String(error); }
     };
     ackActions.append(
-      actionButton("Telefon teyidi kaydet", "", () => recordAck("phone")),
-      actionButton("WhatsApp teyidi kaydet", "", () => recordAck("whatsapp"))
+      actionButton("Telefon · Çalışıyoruz", "", () => recordAttempt("phone", "acknowledged_working")),
+      actionButton("Telefon · Cevap yok", "", () => recordAttempt("phone", "no_response")),
+      actionButton("Telefon · Ulaşılamadı", "", () => recordAttempt("phone", "unreachable")),
+      actionButton("WhatsApp · Çalışıyoruz", "", () => recordAttempt("whatsapp", "acknowledged_working")),
+      actionButton("WhatsApp · Cevap yok", "", () => recordAttempt("whatsapp", "no_response")),
+      actionButton("WhatsApp · Ulaşılamadı", "", () => recordAttempt("whatsapp", "unreachable"))
     );
-    ackBox.append(ackActions, ackFeedback); card.append(ackBox);
+    ackBox.append(ackActions);
+    const attemptLabel = outcome => ({ acknowledged_working: "çalışıyoruz teyidi", no_response: "cevap yok", unreachable: "ulaşılamadı" }[outcome] || codeLabel(outcome));
+    if ((supplier.contact_attempts || []).length) {
+      ackBox.append(node("div", `Son temaslar: ${supplier.contact_attempts.map(item => `${item.channel === "phone" ? "Telefon" : "WhatsApp"} · ${attemptLabel(item.outcome)} · ${formatDate(item.attempted_at)}`).join(" | ")}`, "small muted"));
+    }
+    ackBox.append(ackFeedback); card.append(ackBox);
   }
 
   if (supplier.commercial_response) {
@@ -1457,6 +1467,8 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     }
     const negotiationAdvisory = timing.learning_policy?.negotiation_advisory_percent;
     if (negotiationAdvisory != null) reminderLine.append(node("span", ` · pazarlık geçmişi ≈ %${negotiationAdvisory} (tavsiye)`, "small"));
+    const learnedChannel = reminder.supplier_relationship?.preferred_contact_channel_advisory;
+    if (learnedChannel) reminderLine.append(node("span", ` · öğrenme kanal tavsiyesi: ${learnedChannel === "phone" ? "Telefon" : "WhatsApp"}`, "small"));
     card.append(reminderLine);
   }
 
@@ -2420,6 +2432,7 @@ function renderSupplierLearning(container, supplier) {
       const sourceText=v=>v==="confirmed_learning"?"Doğrulanmış öğrenme":v==="supplier_master"?"Tedarikçi ayarı":"Genel kural";
       policyCard.append(node("strong","Aktif operasyon etkisi"), node("div",`Sıralama etkisi: ${(Number(policy.ranking_adjustment||0)*100).toFixed(1)} puan · İlk reminder: ${policy.effective_first_reminder_minutes} dk (${sourceText(policy.first_reminder_source)}) · ‘Çalışıyoruz’ sonrası: ${policy.effective_acknowledged_wait_minutes} dk (${sourceText(policy.acknowledged_wait_source)})`,"small"));
       if(policy.negotiation_advisory_percent!=null) policyCard.append(node("div",`Geçmiş pazarlık indirimi ≈ %${policy.negotiation_advisory_percent}; yalnız tavsiye, otomatik hedef fiyat değildir.`,"muted small"));
+      if(policy.preferred_contact_channel_advisory) policyCard.append(node("div",`Temas kanalı tavsiyesi: ${policy.preferred_contact_channel_advisory==="phone"?"Telefon":"WhatsApp"}; yalnız operatör tavsiyesi, otomatik temas yetkisi değildir.`,"muted small"));
       if(!(policy.evaluations||[]).some(x=>x.effect&&x.effect!=="none")) policyCard.append(node("div","Şu anda runtime davranışını değiştiren doğrulanmış öğrenme yok.","muted small"));
       area.append(policyCard);
       const facts=data.facts||[]; if(!facts.length){area.append(emptyState("Henüz öğrenilmiş gözlem yok","Geçmiş RFQ/yanıt kanıtı oluştukça MINAI öneriler üretebilir."));return;}
