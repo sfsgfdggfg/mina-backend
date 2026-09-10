@@ -230,6 +230,7 @@ def process_shipment(
             risk_assessment=risk_assessment,
             operational_data_sources=operational_data_sources,
             supplier_capabilities=supplier_capabilities,
+            master_data_repository=master_data_repository,
         )
     except DataProvenanceError:
         return build_data_provenance_blocked_result(

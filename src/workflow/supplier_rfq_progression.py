@@ -392,6 +392,7 @@ def _progress_supplier_rfq_workflow(
         risk_assessment=risk_assessment,
         operational_data_sources=operational_data_sources,
         supplier_capabilities=supplier_capabilities,
+        master_data_repository=master_data_repository,
     )
     if not supplier_selection.get("selected_suppliers"):
         action_recommendation = generate_action_recommendation(

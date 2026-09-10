@@ -6928,3 +6928,18 @@ The Sandbox exposes a demo-only reset/reseed control that restores the synthetic
 A reset request requires an authenticated browser session, normal CSRF validation, and an explicit `RESET_DEMO` confirmation token. It restores the demo SQLite seed, synthetic Customer Memory, demo outbox, Customer Memory backups, and synthetic Outlook replay-target state while preserving the user's current browser session.
 
 All mutable reset targets must resolve beneath the configured `MINAI_DEMO_STATE_DIR`, outside the repository. Paths or symlinks that escape that directory are rejected before any mutation begins.
+
+## DEC-219 — Confirmed Supplier Learning May Affect Operations Only Through a Bounded Policy Overlay
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+Supplier Intelligence may now turn reviewed supplier-history facts into limited runtime behavior, but it does not mutate Supplier Master Data and does not create a second supplier authority. Manual supplier settings remain more specific authority than learned timing.
+
+Only human-confirmed, structured supplier metrics with valid units, sufficient effective confidence and current-enough evidence may affect the v1 operational overlay. Proposed facts and free-text relationship observations remain non-authoritative regardless of model confidence.
+
+The first runtime effects are deliberately bounded. Confirmed response-time and usable-quote metrics may adjust ranking only within the existing eligible dispatch tier; they cannot change route, service, equipment, ADR eligibility, supplier role or primary/secondary gates. The total ranking adjustment is capped at ±0.06.
+
+Learned timing may make supplier follow-up more patient but never more aggressive than the generic rule: the first no-response reminder cannot be moved earlier than its dispatch default and may be extended only up to 60 minutes; the acknowledged-wait window cannot be shortened and may be extended only up to 180 minutes. Explicit supplier-master timing overrides both learned values.
+
+Confirmed negotiation-reduction history is advisory only. It may be surfaced to the operator as historical negotiation evidence, but it does not authorize a customer target, supplier target, automatic counter-offer or outbound commercial message. Phone, WhatsApp and management escalation remain governed by explicit supplier settings until structured channel-success evidence and a separate policy are accepted.

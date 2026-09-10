@@ -8,6 +8,8 @@ from src.core.automation_action_repository import AutomationActionRepository
 from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
 from src.core.automation_policy_service import resolve_effective_automation_policy
 from src.core.master_data_repository import MasterDataRepository
+from src.core.learning_fact_repository import LearningFactRepository
+from src.core.supplier_intelligence_policy import resolve_supplier_operational_learning_policy
 from src.core.automation_planning import (
     aware_utc,
     latest_supplier_response_status,
@@ -61,6 +63,9 @@ def _load_job_draft_workflow(
 def _current_reminder_context(
     *, supplier_repository: SupplierRFQRepository,
     draft: SupplierRFQDraft, workflow,
+    master_data_repository: MasterDataRepository | None = None,
+    learning_fact_repository: LearningFactRepository | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     if draft.status != "awaiting_response" or draft.sent_at is None:
         raise MinaJobActionError("Supplier RFQ is not awaiting a response.")
@@ -68,23 +73,39 @@ def _current_reminder_context(
         raise MinaJobActionError("Supplier RFQ has no recipient email.")
     if latest_supplier_response_status(supplier_repository, draft.rfq_id) is not None:
         raise MinaJobActionError("Supplier already has a commercial response.")
+    learning_policy = resolve_supplier_operational_learning_policy(
+        supplier_name=draft.supplier_name,
+        master_data_repository=master_data_repository,
+        learning_repository=learning_fact_repository,
+        base_first_reminder_minutes=workflow.dispatch_policy.no_response_reminder_minutes,
+        base_acknowledged_wait_minutes=workflow.dispatch_policy.acknowledged_grace_minutes,
+        as_of=now,
+    )
+    first_minutes = (
+        workflow.dispatch_policy.no_response_reminder_minutes
+        if learning_policy is None
+        else learning_policy.effective_first_reminder_minutes
+    )
+    acknowledged_minutes = (
+        workflow.dispatch_policy.acknowledged_grace_minutes
+        if learning_policy is None
+        else learning_policy.effective_acknowledged_wait_minutes
+    )
     acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
     if acknowledgements:
         anchor = max(aware_utc(item.acknowledged_at) for item in acknowledgements)
         action_type = "supplier_acknowledged_reminder"
-        due_at = add_supplier_business_minutes(
-            anchor, workflow.dispatch_policy.acknowledged_grace_minutes
-        )
+        due_at = add_supplier_business_minutes(anchor, acknowledged_minutes)
     else:
         action_type = "supplier_no_response_reminder"
-        due_at = add_supplier_business_minutes(
-            aware_utc(draft.sent_at),
-            workflow.dispatch_policy.no_response_reminder_minutes,
-        )
+        due_at = add_supplier_business_minutes(aware_utc(draft.sent_at), first_minutes)
     return {
         "action_type": action_type,
         "action_key": supplier_action_key(draft.rfq_id, action_type),
         "due_at": due_at,
+        "supplier_learning_policy": (
+            None if learning_policy is None else learning_policy.model_dump(mode="json")
+        ),
     }
 
 
@@ -93,6 +114,8 @@ def preview_supplier_reminder_now(
     supplier_repository: SupplierRFQRepository,
     action_repository: AutomationActionRepository,
     mina_code: str, rfq_id: str, now: datetime | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    learning_fact_repository: LearningFactRepository | None = None,
 ) -> dict[str, Any]:
     current = _now(now)
     job, draft, workflow = _load_job_draft_workflow(
@@ -103,7 +126,9 @@ def preview_supplier_reminder_now(
     )
     try:
         context = _current_reminder_context(
-            supplier_repository=supplier_repository, draft=draft, workflow=workflow
+            supplier_repository=supplier_repository, draft=draft, workflow=workflow,
+            master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository, now=current,
         )
         business_open = is_supplier_business_time(current)
         resume_at = None if business_open else next_supplier_business_open(current)
@@ -156,6 +181,7 @@ def send_supplier_reminder_now(
     mina_code: str, rfq_id: str, actor: str,
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
+    learning_fact_repository: LearningFactRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = _now(now)
@@ -189,7 +215,9 @@ def send_supplier_reminder_now(
                 f"hours; next opening is {resume_at.isoformat()}."
             )
         context = _current_reminder_context(
-            supplier_repository=supplier_repository, draft=draft, workflow=workflow
+            supplier_repository=supplier_repository, draft=draft, workflow=workflow,
+            master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository, now=current,
         )
     except SupplierHolidayCalendarCoverageError as exc:
         raise MinaJobActionError(str(exc)) from exc
@@ -224,6 +252,9 @@ def send_supplier_reminder_now(
             supplier_repository=supplier_repository,
             draft=current_draft,
             workflow=current_workflow,
+            master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository,
+            now=current,
         )
         current_policy = resolve_effective_automation_policy(
             action="supplier_reminder",

@@ -11,6 +11,9 @@ from src.core.supplier_capability_registry import (
 )
 from src.paths import data_path
 from src.core.extraction_confirmation import require_operational_shipment
+from src.core.learning_fact_repository import LearningFactRepository
+from src.core.master_data_repository import MasterDataRepository
+from src.core.supplier_intelligence_policy import resolve_supplier_operational_learning_policy
 from src.core.data_provenance import (
     DataProvenanceError,
     require_pilot_operational_dataset,
@@ -271,6 +274,9 @@ def select_suppliers_for_shipment(
     max_suppliers: int = 3,
     operational_data_sources: OperationalDataSources | None = None,
     supplier_capabilities: Optional[List[Dict[str, Any]]] = None,
+    master_data_repository: MasterDataRepository | None = None,
+    learning_fact_repository: LearningFactRepository | None = None,
+    policy_as_of=None,
 ) -> Dict[str, Any]:
     require_operational_shipment(shipment)
     sources = resolve_operational_data_sources(operational_data_sources)
@@ -365,13 +371,23 @@ def select_suppliers_for_shipment(
             )
             continue
 
-        total_score = (
+        base_score = (
             route_score * 0.35
             + equipment_score * 0.25
             + risk_score * 0.25
             + supplier["price_score"] * 0.10
             + supplier["speed_score"] * 0.05
         )
+        learning_policy = resolve_supplier_operational_learning_policy(
+            supplier_name=supplier["supplier_name"],
+            master_data_repository=master_data_repository,
+            learning_repository=learning_fact_repository,
+            base_first_reminder_minutes=30,
+            base_acknowledged_wait_minutes=120,
+            as_of=policy_as_of,
+        )
+        learning_adjustment = 0.0 if learning_policy is None else learning_policy.ranking_adjustment
+        total_score = max(0.0, min(1.0, base_score + learning_adjustment))
 
         scored_suppliers.append(
             {
@@ -388,6 +404,12 @@ def select_suppliers_for_shipment(
                 "risk_score": round(risk_score, 3),
                 "price_score": supplier["price_score"],
                 "speed_score": supplier["speed_score"],
+                "base_total_score": round(base_score, 3),
+                "learning_adjustment": round(learning_adjustment, 4),
+                "learning_policy": (
+                    None if learning_policy is None
+                    else learning_policy.model_dump(mode="json")
+                ),
                 "reason": _build_reason(
                     supplier=supplier,
                     route_score=route_score,
@@ -416,7 +438,7 @@ def select_suppliers_for_shipment(
         "rejected_suppliers": rejected_suppliers,
         "selection_strategy": (
             "strict route + service + equipment eligibility, then risk + "
-            "price + speed weighted scoring"
+            "price + speed weighted scoring + bounded confirmed-learning overlay"
         ),
         "source": "supplier_selection_engine",
         "data_source": (
