@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Any, List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
@@ -71,6 +71,7 @@ from src.workflow.demo_relationship_onboarding import (
 )
 from src.workflow.demo_inbound import parse_demo_customer_email
 from src.workflow.demo_outlook_pull import run_demo_outlook_pull
+from src.workflow.demo_reset import DemoResetUnavailableError, reset_demo_sandbox
 from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
     MicrosoftAuthConfigurationError,
@@ -579,6 +580,11 @@ class ProcessEmailRequest(BaseModel):
     def validate_email_text(cls, value: str) -> str:
         return validate_inbound_mail_body(value)
 
+
+
+class DemoResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    confirmation: Literal["RESET_DEMO"]
 
 
 class OutlookPullRequest(BaseModel):
@@ -3010,6 +3016,18 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
         ) from exc
 
     return result.model_dump()
+
+
+@app.post("/demo/reset")
+def reset_demo_endpoint(request: DemoResetRequest, http_request: Request):
+    if not demo_mode_enabled():
+        raise HTTPException(status_code=404, detail="demo_reset_unavailable")
+    if not getattr(http_request.state, "pilot_operator", None):
+        raise HTTPException(status_code=401, detail="demo_web_session_required")
+    try:
+        return reset_demo_sandbox()
+    except DemoResetUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/inbound/outlook/pull")

@@ -4024,3 +4024,10 @@ Demo Outlook pull may replace provider/token/parser dependencies only. Customer-
 The synthetic inbox must reuse stable external message IDs across repeated pulls. A repeated customer mail may return the existing extraction proposal and a repeated supplier reply must not create a second commercial response.
 
 When durable master data is the runtime customer identity authority, that same repository must be passed through the customer ingestion gate. The router must not validate against master data and then revalidate against an unrelated legacy customer file.
+## RULE-235 — Demo Reset Must Stay Inside the Synthetic State Boundary
+
+A demo reset may mutate only paths beneath the configured `MINAI_DEMO_STATE_DIR`: the synthetic SQLite database, synthetic outbox, demo Customer Memory file and backups, and synthetic Outlook replay-target state. Repository files, controlled-pilot state and paths outside the demo state directory are never reset targets.
+
+Reset requires an authenticated browser session, CSRF validation and the explicit `RESET_DEMO` confirmation token. The endpoint is demo-only and must fail closed outside `MINAI_DEMO_MODE`; it must not be added to the controlled-pilot route allowlist.
+
+Path validation happens before any mutation. Symlinks, path escapes or mismatched configured paths abort the reset. A successful reset reseeds the normal deterministic demo baseline while preserving the active browser session.

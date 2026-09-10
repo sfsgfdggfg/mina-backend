@@ -6917,3 +6917,14 @@ The Sandbox may expose a synthetic Outlook inbox, but it must run through the ex
 The demo mailbox includes a verified customer request, a correlated supplier reply and an unverified sender requiring manual review. Repeated pulls must present the same synthetic message identities so existing inbound replay/idempotency rules, rather than demo-specific shortcuts, determine duplicate behavior.
 
 Customer master-data authority selected by the Outlook router must be propagated into controlled customer ingestion. The downstream customer gate must not silently fall back to a different legacy customer source after the sender was already resolved against durable master data.
+
+## DEC-218 — Demo Reset Is Isolated, Explicit, and Session-Bound
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The Sandbox exposes a demo-only reset/reseed control that restores the synthetic MINAI baseline without touching pilot or repository-owned operational data. Reset is available only while `MINAI_DEMO_MODE` is active and must remain disabled from the controlled-pilot route allowlist.
+
+A reset request requires an authenticated browser session, normal CSRF validation, and an explicit `RESET_DEMO` confirmation token. It restores the demo SQLite seed, synthetic Customer Memory, demo outbox, Customer Memory backups, and synthetic Outlook replay-target state while preserving the user's current browser session.
+
+All mutable reset targets must resolve beneath the configured `MINAI_DEMO_STATE_DIR`, outside the repository. Paths or symlinks that escape that directory are rejected before any mutation begins.

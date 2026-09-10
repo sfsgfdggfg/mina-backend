@@ -36,6 +36,7 @@ def _configure_environment(root: Path) -> tuple[Path, Path]:
     }
     os.environ.update({
         "MINAI_DEMO_MODE": "true",
+        "MINAI_DEMO_STATE_DIR": str(state_dir.resolve()),
         "MINAI_PILOT_MODE": "false",
         "MINAI_OUTBOUND_MODE": "shadow",
         "MINAI_WEB_SHELL_ENABLED": "true",

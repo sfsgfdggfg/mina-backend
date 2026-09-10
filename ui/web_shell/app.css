@@ -499,3 +499,10 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .outlook-pull-results { display: grid; gap: 8px; margin-top: 12px; }
 .outlook-pull-result-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfe; }
 @media (max-width: 760px) { .outlook-pull-result-row { align-items: flex-start; flex-direction: column; } }
+
+/* Demo sandbox reset */
+.demo-reset-panel { display: grid; gap: 14px; }
+.demo-reset-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.demo-reset-scope .summary-item { display: grid; gap: 4px; }
+.demo-reset-panel .reject { justify-self: start; }
+@media (max-width: 760px) { .demo-reset-scope { grid-template-columns: 1fr; } }

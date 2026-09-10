@@ -2661,11 +2661,34 @@ function renderCustomerMemorySettings(bundle = {}) {
   transfer.append(backupList);panel.append(transfer);return panel;
 }
 
+function renderDemoSandboxSettings() {
+  const panel=node("div","","settings-panel demo-reset-panel");
+  panel.append(node("h2","Demo Sandbox"));
+  panel.append(node("div","Bu alan yalnız sentetik demo ortamını sıfırlar. Gerçek/pilot verisine erişmez.","notice"));
+  const scope=node("div","","demo-reset-scope");
+  [
+    ["MINA işleri","11 işlik başlangıç senaryosu yeniden oluşturulur"],
+    ["Sentetik outbox","Demo gönderim kayıtları temizlenir"],
+    ["Müşteri Hafızası","4 sentetik profil başlangıç durumuna döner"],
+    ["Outlook replay state","Sentetik gelen kutusu yeniden ilk pull davranışına döner"],
+  ].forEach(([label,detail])=>{const row=node("div","","summary-item");row.append(node("strong",label),node("span",detail,"small muted"));scope.append(row);});
+  panel.append(scope);
+  const feedback=node("div","","muted settings-feedback");
+  const reset=actionButton("Demo'yu Sıfırla ve Yeniden Doldur","reject",async()=>{
+    if(!window.confirm("Sentetik demo içindeki tüm denemeleri silip başlangıç verisini yeniden oluşturmak istiyor musun?"))return;
+    reset.disabled=true;feedback.textContent="Demo başlangıç durumuna döndürülüyor…";
+    try{const result=await api("/demo/reset",{method:"POST",body:JSON.stringify({confirmation:"RESET_DEMO"})});feedback.textContent=`Tamamlandı · ${result.job_count||0} iş · ${result.customer_count||0} müşteri · ${result.supplier_count||0} tedarikçi`;setTimeout(()=>window.location.assign("/app/dashboard"),350);}
+    catch(e){feedback.textContent=e.message||String(e);setStatus("Hata",false);reset.disabled=false;}
+  });
+  panel.append(node("div","Bu işlem geri alınamaz; yalnız sentetik sandbox verisi için tasarlanmıştır.","small muted"),reset,feedback);
+  return panel;
+}
+
 let settingsSelectedTab="automation";
 function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}, fixedRates = {}, systemHealth = {}, customerMemoryBundle = null) {
   setPageContext("Ayarlar", "Sistem Ayarları"); const page=node("div","","settings-page");const tabs=node("div","","settings-tabs");const body=node("div","","settings-tab-body");
-  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),master:()=>renderMasterDataSettings(customersPayload,suppliersPayload),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding),health:()=>renderSystemHealthSettings(systemHealth),memory:()=>renderCustomerMemorySettings(customerMemoryBundle||{})};
-  function draw(){tabs.replaceChildren();const defs=[["automation","Otomasyon"],["master","Master Veri"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"],["health","Sistem Sağlığı"]];if(customerMemoryBundle)defs.splice(4,0,["memory","Müşteri Hafızası"]);defs.forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));if(!panels[settingsSelectedTab])settingsSelectedTab="automation";body.replaceChildren(panels[settingsSelectedTab]());}
+  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),master:()=>renderMasterDataSettings(customersPayload,suppliersPayload),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding),health:()=>renderSystemHealthSettings(systemHealth),memory:()=>renderCustomerMemorySettings(customerMemoryBundle||{}),demo:()=>renderDemoSandboxSettings()};
+  function draw(){tabs.replaceChildren();const defs=[["automation","Otomasyon"],["master","Master Veri"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"],["health","Sistem Sağlığı"]];if(customerMemoryBundle)defs.splice(4,0,["memory","Müşteri Hafızası"]);if(demoMode)defs.push(["demo","Demo"]);defs.forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));if(!panels[settingsSelectedTab])settingsSelectedTab="automation";body.replaceChildren(panels[settingsSelectedTab]());}
   page.append(tabs,body);content.replaceChildren(page);draw();
 }
 

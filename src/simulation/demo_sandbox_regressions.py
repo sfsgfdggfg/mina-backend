@@ -50,6 +50,7 @@ from src.core.web_session import list_active_web_operators
 from src.demo_seed import seed_demo_customer_memory, seed_demo_database
 from src.workflow.demo_relationship_onboarding import run_demo_relationship_onboarding
 from src.workflow.demo_inbound import parse_demo_customer_email
+from src.workflow.demo_reset import DemoResetUnavailableError, reset_demo_sandbox
 from src.workflow.demo_outlook_pull import run_demo_outlook_pull
 from src.workflow.extraction_confirmation import confirm_extraction_proposal
 from src.workflow.mail_ingestion import process_customer_inquiry_mail
@@ -458,6 +459,49 @@ def evaluate_demo_sandbox_regressions() -> dict:
             if old_backup_dir is None: os.environ.pop("MINAI_CUSTOMER_MEMORY_BACKUP_DIR", None)
             else: os.environ["MINAI_CUSTOMER_MEMORY_BACKUP_DIR"] = old_backup_dir
 
+    with tempfile.TemporaryDirectory(prefix="minai-demo-reset-") as reset_dir:
+        reset_root = Path(reset_dir)
+        state = reset_root / "state"
+        state.mkdir()
+        db = state / "minai_demo.sqlite3"
+        outbox = state / "demo_outbox.jsonl"
+        memory = state / "customer_memory.json"
+        backups = state / "customer_memory_backups"
+        target = state / "demo_outlook_supplier_target.txt"
+        reset_env = {
+            "MINAI_DEMO_MODE":"true", "MINAI_DEMO_STATE_DIR":str(state),
+            "MINAI_PILOT_MODE":"false", "MINAI_OUTBOUND_MODE":"shadow", "MINAI_WEB_SHELL_ENABLED":"true",
+            "MINAI_PILOT_DB_PATH":str(db), "MINAI_DEMO_OUTBOX_PATH":str(outbox),
+            "MINAI_CUSTOMER_MEMORY_PATH":str(memory), "MINAI_CUSTOMER_MEMORY_BACKUP_DIR":str(backups),
+        }
+        with patch.dict(os.environ, reset_env, clear=False):
+            seed_demo_database(db, reset=True); seed_demo_customer_memory(memory, reset=True)
+            probe_store = SQLitePilotStore(db, run_id="demo-reset-probe", retention_days=365)
+            jobs_before_reset = SQLiteMinaJobRepository(probe_store)
+            probe_store.upsert(namespace="demo_reset_probe", record_key="dirty", payload={"dirty":True}, event_type="demo_reset_probe_written", entity_type="demo_reset_probe")
+            outbox.write_text("synthetic dirty outbox\n", encoding="utf-8")
+            target.write_text("dirty-rfq", encoding="utf-8")
+            memory.write_text("[]", encoding="utf-8")
+            backups.mkdir(exist_ok=True); (backups / "dirty.json").write_text("{}", encoding="utf-8")
+            reset_result = reset_demo_sandbox()
+            reset_profiles = json.loads(memory.read_text(encoding="utf-8"))
+            check(
+                reset_result.get("reset_status") == "complete" and reset_result.get("job_count") == 11
+                and len(jobs_before_reset.list_all()) == 11 and probe_store.get(namespace="demo_reset_probe", record_key="dirty") is None
+                and len(reset_profiles) == 4 and not outbox.exists() and not target.exists()
+                and backups.exists() and not any(backups.iterdir()),
+                "demo reset restores isolated baseline and existing repositories reconnect to reseeded state",
+            )
+            outside = reset_root / "outside-memory.json"; outside.write_text("do-not-touch", encoding="utf-8")
+            os.environ["MINAI_CUSTOMER_MEMORY_PATH"] = str(outside)
+            try:
+                reset_demo_sandbox()
+            except DemoResetUnavailableError:
+                reset_blocked = outside.read_text(encoding="utf-8") == "do-not-touch"
+            else:
+                reset_blocked = False
+            check(reset_blocked, "demo reset rejects state paths outside the isolated demo directory before mutation")
+
     root = Path(__file__).resolve().parents[2]
     shell = (root / "src" / "web_shell.py").read_text(encoding="utf-8")
     api_text = (root / "src" / "api.py").read_text(encoding="utf-8")
@@ -501,6 +545,9 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "Sentetik Outlook Gelen Kutusu" in app_js and "/inbound/outlook/pull" in app_js
         and "Ham mail gövdesi bu özet yüzeyine taşınmaz" in app_js
         and "run_demo_outlook_pull" in api_text
+        and "Demo'yu Sıfırla ve Yeniden Doldur" in app_js and '/demo/reset' in app_js
+        and 'confirmation:"RESET_DEMO"' in app_js and 'reset_demo_sandbox' in api_text
+        and 'demo_web_session_required' in api_text and not route_allowed("POST", "/demo/reset")
         and "Master Veri" in app_js and "Müşteri Oluştur" in app_js and "Tedarikçi Oluştur" in app_js
         and route_allowed("POST", "/master-data/customers") and route_allowed("POST", "/master-data/suppliers")
         and "Müşteri Hafızası · Demo" in app_js and "/customer-memory/import/dry-run" in app_js
