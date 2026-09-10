@@ -69,6 +69,7 @@ from src.workflow.relationship_onboarding import (
 from src.workflow.demo_relationship_onboarding import (
     run_demo_relationship_onboarding,
 )
+from src.workflow.demo_inbound import parse_demo_customer_email
 from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
     MicrosoftAuthConfigurationError,
@@ -3468,7 +3469,7 @@ def process_email(request: ProcessEmailRequest):
                 ),
                 source="manual",
             ),
-            shipment_parser=parse_email_with_ai,
+            shipment_parser=(parse_demo_customer_email if demo_mode_enabled() else parse_email_with_ai),
             proposal_repository=(
                 extraction_proposal_repository
             ),
@@ -3485,6 +3486,13 @@ def process_email(request: ProcessEmailRequest):
         ) from exc
 
     return serialize_result(result)
+
+
+@app.get("/extraction-proposals")
+def list_extraction_proposals():
+    proposals = extraction_proposal_repository.list_all()
+    proposals.sort(key=lambda item: item.created_at, reverse=True)
+    return {"proposals": [item.model_dump() for item in proposals]}
 
 
 @app.get("/extraction-proposals/{proposal_id}")

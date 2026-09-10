@@ -402,3 +402,22 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 
 .demo-banner { display: inline-flex; align-items: center; justify-content: center; padding: 6px 9px; border-radius: 999px; border: 1px solid #fed7aa; background: #fff7ed; color: #9a3412; font-size: 11px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
 .login-card .demo-banner { margin: 10px auto 14px; width: fit-content; }
+
+/* Demo inbound request workbench */
+.inbox-page { display: grid; gap: 16px; }
+.inbox-composer, .inbox-queue { margin: 0; }
+.inbox-template-actions { margin: 10px 0 14px; flex-wrap: wrap; }
+.inbox-field { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+.inbox-field input, .inbox-field textarea { color: var(--ink); }
+.inbox-body-field { margin-top: 12px; }
+.inbox-proposal-list { display: grid; gap: 12px; margin-top: 12px; }
+.inbox-proposal-card { border: 1px solid #e2e7ef; border-radius: 14px; padding: 15px; background: #fff; }
+.inbox-proposal-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.inbox-shipment-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.inbox-unknown { margin-top: 12px; }
+.inbox-mina-code { margin-top: 12px; font-weight: 700; color: var(--accent); }
+.inbox-actions { margin-top: 12px; }
+@media (max-width: 760px) {
+  .inbox-shipment-summary { grid-template-columns: 1fr 1fr; }
+  .inbox-proposal-head { flex-direction: column; }
+}

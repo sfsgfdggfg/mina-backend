@@ -6771,3 +6771,16 @@ The functional demo environment includes three synthetic active operators rather
 The demo seed records real OperationalWorkAssignment state/history against current derived work items. Seeded evidence includes assigned and acknowledged work, an explicit shift handoff, a second assignment generation, and an intentionally expired assignment that can be recovered through the normal takeover flow. These are normal repository records and reporting inputs, not hard-coded UI numbers.
 
 The same server-side assignment lease/fingerprint rules remain authoritative. Demo seeding may pre-populate valid assignment evidence, but subsequent assign/acknowledge/renew/release/takeover actions must continue through the normal product services.
+
+## DEC-204 — Demo/Sandbox Exposes the Real Inbound Extraction Boundary
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+Demo/Sandbox includes a `Gelen Talepler` workbench that exercises the normal customer-mail ingestion, extraction proposal, human confirmation, MINA job creation and downstream resume services. The demo page is not allowed to create a Job directly from parsed text.
+
+In demo mode only, a deterministic local inbound parser replaces the external AI parser so the workflow remains reproducible and usable without OpenAI credentials. The parser produces only `ShipmentProposalSnapshot` data; the normal extraction-confirmation boundary remains authoritative.
+
+The demo ships with three synthetic scenarios: a quote-ready standard FTL textile load, a machine shipment that must stop for missing dimensions, and a quote-ready temperature-controlled reefer load. These scenarios are intended to make both successful progression and clarification blocking observable through the same real workflow services.
+
+Normal and controlled-pilot runtime continue to use the configured production email parser. Demo inbound messages must use synthetic `.invalid` identities and must never be confused with real mailbox evidence.

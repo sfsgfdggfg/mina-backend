@@ -10,15 +10,22 @@ from src.core.demo_runtime import DemoOutboundMailSender, validate_demo_runtime
 from src.core.mail import OutboundMailRequest
 from src.core.pilot_store import SQLitePilotStore
 from src.core.sqlite_repositories import (
+    SQLiteExtractionProposalRepository,
     SQLiteMinaJobRepository,
     SQLiteOperationalWorkAssignmentRepository,
 )
 from src.core.master_data_repository import SQLiteMasterDataRepository
+from src.core.mail import InboundMailEnvelope
+from src.core.missing_info import check_missing_information
+from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.learning_fact_repository import SQLiteLearningFactRepository
 from src.demo_launcher import _configure_environment
 from src.core.web_session import list_active_web_operators
 from src.demo_seed import seed_demo_database
 from src.workflow.demo_relationship_onboarding import run_demo_relationship_onboarding
+from src.workflow.demo_inbound import parse_demo_customer_email
+from src.workflow.extraction_confirmation import confirm_extraction_proposal
+from src.workflow.mail_ingestion import process_customer_inquiry_mail
 
 
 def evaluate_demo_sandbox_regressions() -> dict:
@@ -56,6 +63,31 @@ def evaluate_demo_sandbox_regressions() -> dict:
         )
         check(repeated.get("reason") == "already_seeded" and len(jobs) == 11, "demo seed is idempotent without reset")
         check(len(masters.list_customers()) == 12 and len(masters.list_suppliers()) == 6, "demo seed includes synthetic customer and supplier master data")
+
+        proposals = SQLiteExtractionProposalRepository(store)
+        inbound_results = {}
+        for marker in ("DEMO:FTL", "DEMO:MACHINE", "DEMO:REEFER"):
+            result = process_customer_inquiry_mail(
+                mail=InboundMailEnvelope(
+                    body_text=marker, sender_address="demo@synthetic.customer.invalid",
+                    external_message_id=f"demo-regression-{marker.casefold()}", source="manual",
+                ),
+                shipment_parser=parse_demo_customer_email, proposal_repository=proposals,
+            )
+            proposal = result["extraction_proposal"]
+            confirmed = confirm_extraction_proposal(
+                repository=proposals, proposal_id=proposal.proposal_id,
+                operator_identity="Demo Operator", mina_job_repository=SQLiteMinaJobRepository(store),
+            )
+            base = check_missing_information(confirmed.confirmed_shipment)
+            inbound_results[marker] = apply_road_rfq_readiness(confirmed.confirmed_shipment, base)
+        check(
+            inbound_results["DEMO:FTL"].can_continue_to_quote
+            and not inbound_results["DEMO:REEFER"].missing_fields
+            and not inbound_results["DEMO:MACHINE"].can_continue_to_quote
+            and "package count and dimensions" in inbound_results["DEMO:MACHINE"].missing_fields,
+            "demo inbound scenarios preserve extraction confirmation and road quote-readiness boundaries",
+        )
 
         learning = SQLiteLearningFactRepository(store)
         history_end = datetime(2026, 9, 9, 15, 0, tzinfo=timezone.utc)
@@ -163,8 +195,10 @@ def evaluate_demo_sandbox_regressions() -> dict:
     app_js = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
     check(
         "DEMO · SENTETİK VERİ" in shell and ".demo-banner" in css
+        and "Gelen Talepler" in shell and "DEMO_INBOUND_TEMPLATES" in app_js
+        and "Doğrula ve MINA işi oluştur" in app_js
         and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js,
-        "browser shell visibly labels synthetic demo mode and synthetic mailbox analysis",
+        "browser shell exposes synthetic inbound and relationship workflows without hiding demo mode",
     )
 
     return {"name": "Synthetic demo sandbox", "passed": not failures, "failures": failures}

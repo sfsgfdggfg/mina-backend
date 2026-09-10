@@ -502,6 +502,147 @@ async function loadOperationalWork(view = operationalWorkView) {
   setStatus("Güncel");
 }
 
+
+function inboxField(labelText, type = "text") {
+  const label = node("label", labelText, "inbox-field");
+  const input = document.createElement("input");
+  input.type = type;
+  label.append(input);
+  return { label, input };
+}
+
+const DEMO_INBOUND_TEMPLATES = [
+  {
+    key: "ftl", label: "Tam FTL talebi", sender: "atlas@atlas-tekstil.customer.invalid",
+    name: "Atlas Tekstil", subject: "Adana Hamburg komple araç fiyat talebi",
+    body: "DEMO:FTL\nMerhaba, 11 Eylül yüklemeli Adana-Hamburg 20 ton tekstil için tenteli komple araç fiyatı rica ederiz. Teslim 16 Eylül. Fiyatı bugün içinde bekliyoruz."
+  },
+  {
+    key: "machine", label: "Eksik bilgili makina", sender: "lojistik@mavi-makina.customer.invalid",
+    name: "Mavi Makina", subject: "Bursa Stuttgart makina taşıması",
+    body: "DEMO:MACHINE\nMerhaba, Bursa'dan Stuttgart'a yaklaşık 3 ton makina taşıması için fiyat rica ederiz. Makina ölçülerini henüz paylaşamıyoruz."
+  },
+  {
+    key: "reefer", label: "Acil reefer", sender: "export@nova-gida.customer.invalid",
+    name: "Nova Gıda", subject: "Mersin Münih +4 derece acil fiyat",
+    body: "DEMO:REEFER\nMerhaba, Mersin-Münih 18 ton gıda, +4°C reefer. 11 Eylül yükleme, 15 Eylül teslim. İki saat içinde fiyat rica ederiz."
+  },
+];
+
+function shipmentSummary(shipment = {}) {
+  const wrap = node("div", "", "inbox-shipment-summary");
+  const route = `${shipment.pickup_city || shipment.pickup_country || "?"} → ${shipment.delivery_city || shipment.delivery_country || "?"}`;
+  wrap.append(
+    summaryItem("Müşteri", shipment.customer_name || "-"),
+    summaryItem("Rota", route),
+    summaryItem("Yük", shipment.commodity || "-"),
+    summaryItem("Ağırlık", shipment.gross_weight_kg == null ? "-" : `${shipment.gross_weight_kg} kg`),
+    summaryItem("Taşıma", transportLabel(shipment.transport_mode)),
+    summaryItem("Ekipman", shipment.equipment_type || "-")
+  );
+  return wrap;
+}
+
+function inboxProposalCard(proposal, refresh) {
+  const card = node("article", "", "inbox-proposal-card");
+  const mail = proposal.inbound_mail || {};
+  const shipment = proposal.confirmed_shipment || proposal.proposed_shipment || {};
+  const head = node("div", "", "inbox-proposal-head");
+  const htext = node("div");
+  htext.append(node("strong", mail.subject || "Konusuz talep"), node("div", `${mail.sender_name || shipment.customer_name || "-"} · ${mail.sender_address || "-"}`, "small muted"));
+  const status = proposal.extraction_status === "confirmed" ? (proposal.resume_status === "completed" ? "Akış başladı" : "Doğrulandı") : "Doğrulama bekliyor";
+  head.append(htext, node("span", status, `badge ${proposal.extraction_status === "confirmed" ? "open" : ""}`));
+  card.append(head, shipmentSummary(shipment));
+
+  const unknown = proposal.unknown_fields || [];
+  if (unknown.length) card.append(node("div", `Eksik/Belirsiz alanlar: ${unknown.join(", ")}`, "notice inbox-unknown"));
+  if (proposal.changed_fields?.length) card.append(node("div", `Operatör düzeltmeleri: ${proposal.changed_fields.join(", ")}`, "small muted"));
+  if (proposal.mina_code) card.append(node("div", `MINA işi: ${proposal.mina_code}`, "inbox-mina-code"));
+
+  const feedback = node("div", "", "muted settings-feedback");
+  const actions = node("div", "", "actions inbox-actions");
+  if (proposal.extraction_status === "proposed") {
+    actions.append(actionButton("Doğrula ve MINA işi oluştur", "primary", async () => {
+      actions.querySelectorAll("button").forEach(btn => btn.disabled = true);
+      feedback.textContent = "Doğrulanıyor…";
+      try {
+        const confirmed = await api(`/extraction-proposals/${encodeURIComponent(proposal.proposal_id)}/confirm`, {method:"POST", body:JSON.stringify({corrections:{}})});
+        feedback.textContent = `${confirmed.mina_code || "MINA işi"} oluşturuldu.`;
+        await refresh();
+      } catch (e) { feedback.textContent = e.message || String(e); setStatus("Hata", false); }
+    }));
+  } else if (proposal.resume_status !== "completed") {
+    actions.append(actionButton("Operasyon akışını devam ettir", "primary", async () => {
+      actions.querySelectorAll("button").forEach(btn => btn.disabled = true);
+      feedback.textContent = "MINAI pipeline çalışıyor…";
+      try {
+        const result = await api(`/extraction-proposals/${encodeURIComponent(proposal.proposal_id)}/resume`, {method:"POST"});
+        const type = result.result_type || result.downstream_result_type || "işlendi";
+        feedback.textContent = `Pipeline sonucu: ${codeLabel(type)}`;
+        await refresh();
+      } catch (e) { feedback.textContent = e.message || String(e); setStatus("Hata", false); }
+    }));
+  } else if (proposal.mina_job_id) {
+    actions.append(actionButton("MINA işini aç", "", () => window.location.assign(`/app/jobs/${encodeURIComponent(proposal.mina_job_id)}`)));
+  }
+  card.append(actions, feedback);
+  return card;
+}
+
+function renderInbox(proposals = []) {
+  setPageContext("Gelen Talepler", "Müşteri Talep Girişi");
+  const root = node("div", "", "inbox-page");
+  const intro = node("div", "", "notice");
+  intro.textContent = "Demo ortamında aşağıdaki sentetik müşteri mailleri gerçek extraction → operatör doğrulaması → MINA işi → operasyon pipeline zincirini çalıştırır. Extraction tek başına operasyonel gerçek sayılmaz.";
+  root.append(intro);
+
+  const composer = node("section", "", "section inbox-composer");
+  composer.append(node("h2", "Yeni müşteri talebi simüle et"));
+  const templateBar = node("div", "", "actions inbox-template-actions");
+  const senderName = inboxField("Gönderen adı");
+  const senderEmail = inboxField("Gönderen e-posta", "email");
+  const subject = inboxField("Konu");
+  const bodyLabel = node("label", "E-posta içeriği", "inbox-field inbox-body-field");
+  const body = document.createElement("textarea"); body.rows = 7; bodyLabel.append(body);
+  function loadTemplate(template) {
+    senderName.input.value = template.name; senderEmail.input.value = template.sender;
+    subject.input.value = template.subject; body.value = template.body;
+  }
+  DEMO_INBOUND_TEMPLATES.forEach(template => templateBar.append(actionButton(template.label, "", () => loadTemplate(template))));
+  loadTemplate(DEMO_INBOUND_TEMPLATES[0]);
+  const fields = node("div", "", "settings-two-col");
+  fields.append(senderName.label, senderEmail.label, subject.label); composer.append(templateBar, fields, bodyLabel);
+  const composeFeedback = node("div", "", "muted settings-feedback");
+  const submit = actionButton("Talebi MINAI'ye al", "primary", async () => {
+    if (!body.value.trim() || !senderEmail.input.value.trim()) { composeFeedback.textContent = "Gönderen e-posta ve mail içeriği gerekli."; return; }
+    submit.disabled = true; composeFeedback.textContent = "Talep işleniyor…";
+    try {
+      const externalId = `demo-inbound-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const result = await api("/process-email", {method:"POST", body:JSON.stringify({
+        email_text:body.value, sender_address:senderEmail.input.value.trim(), sender_name:senderName.input.value.trim() || null,
+        subject:subject.input.value.trim() || null, external_message_id:externalId
+      })});
+      composeFeedback.textContent = result.ingestion_status === "created" ? "Extraction önerisi oluşturuldu; aşağıdan doğrulayabilirsin." : `Talep durumu: ${codeLabel(result.ingestion_status)}`;
+      await loadInbox();
+    } catch (e) { composeFeedback.textContent = e.message || String(e); setStatus("Hata", false); }
+    finally { submit.disabled = false; }
+  });
+  composer.append(submit, composeFeedback); root.append(composer);
+
+  const queue = node("section", "", "section inbox-queue");
+  const proposedCount = proposals.filter(item => item.extraction_status === "proposed").length;
+  queue.append(node("h2", `Extraction Kuyruğu · ${proposals.length}`), node("div", `${proposedCount} talep operatör doğrulaması bekliyor.`, "small muted"));
+  const list = node("div", "", "inbox-proposal-list");
+  proposals.forEach(item => list.append(inboxProposalCard(item, loadInbox)));
+  if (!proposals.length) list.append(emptyState("Henüz gelen talep yok", "Yukarıdaki sentetik senaryolardan biriyle başlayabilirsin."));
+  queue.append(list); root.append(queue); content.replaceChildren(root); setStatus("Güncel");
+}
+
+async function loadInbox() {
+  const payload = await api("/extraction-proposals");
+  renderInbox(payload.proposals || []);
+}
+
 function renderJobs(data) {
   setPageContext("MINA İşleri");
   const jobs = data.jobs || [];
@@ -1794,6 +1935,8 @@ async function boot() {
     applyBranding(branding);
     if (page === "dashboard") {
       await loadDashboard(5); return;
+    } else if (page === "inbox") {
+      await loadInbox(); return;
     } else if (page === "work") {
       await loadOperationalWork(); return;
     } else if (page === "jobs") {

@@ -3924,3 +3924,11 @@ Repeated analysis of the same synthetic date window must not duplicate determini
 Demo personnel names and performance numbers must not be painted directly into the frontend. First-look coverage, acknowledgement timing, handoff count and reassignment generations must be derived from normal OperationalWorkAssignment repository history and the same reporting read model used by the product.
 
 At least one demo assignment should remain actively acknowledged, one history should contain a shift handoff/reassignment generation, and one current assignment may be deliberately expired so the recovery/takeover control is observable. Synthetic operators may share the local demo password because the environment is loopback-only and non-production, but their identities must remain distinct in the server-side operator directory and audit evidence.
+
+## RULE-221 — Demo Inbound Parsing Must Not Bypass Human Extraction Confirmation
+
+Synthetic inbound mail may use a deterministic local parser, but parser output remains non-authoritative. A demo customer request must first create an ExtractionProposal and may receive a MINA job code only after explicit operator confirmation through the normal confirmation service.
+
+Demo scenarios must preserve real blocking logic. A complete standard road request may proceed to supplier-RFQ preparation, while a machine request without dimensions must remain in clarification. Temperature-controlled loads must carry explicit temperature-control evidence and equipment data before they may proceed.
+
+The `Gelen Talepler` UI must call the same `/process-email`, extraction-confirmation and resume boundaries used by the application. It may provide synthetic templates for convenience, but it must not paint successful outcomes directly into the frontend or skip server-side state transitions.
