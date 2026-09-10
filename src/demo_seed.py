@@ -50,7 +50,7 @@ from src.core.sqlite_repositories import (
     SQLiteOperationalShiftCloseReceiptRepository,
     SQLiteOperationalShiftOpenAcceptanceReceiptRepository,
 )
-from src.core.supplier_price import SupplierPriceOffer, offer_from_rfq_response
+from src.core.supplier_price import SupplierFixedRate, SupplierPriceOffer, offer_from_rfq_response
 from src.core.supplier_price_repository import SQLiteSupplierPriceRepository
 from src.core.supplier_quote_selection import (
     RejectedSupplierQuoteAlternative,
@@ -66,7 +66,7 @@ from src.core.supplier_rfq import (
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
 DEMO_OPERATOR = "Demo Operator"
-DEMO_SEED_VERSION = 3
+DEMO_SEED_VERSION = 4
 
 
 def _utc_now() -> datetime:
@@ -612,6 +612,18 @@ def _seed_operational_assignments(store: SQLitePilotStore, now: datetime) -> int
     return min(4, len(items))
 
 
+def _seed_fixed_rates(price_repo: SQLiteSupplierPriceRepository, now: datetime) -> int:
+    today = now.astimezone(ISTANBUL).date()
+    rates = [
+        SupplierFixedRate(entry_id="demo-fixed-de-ftl", supplier_name="Rhein Cargo", origin_country="Türkiye", destination_country="Germany", transport_mode="road", service_type="FTL", equipment_type="Tenteli", cost=2380, currency="EUR", transit_time="5-6 gün", pricing_basis="all_in", included_costs=[], excluded_costs=[], valid_from=today-timedelta(days=15), valid_to=today+timedelta(days=45), evidence_source="agreement", evidence_reference="DEMO-CONTRACT-DE-2026", recorded_by=DEMO_OPERATOR, notes="Sentetik Almanya FTL anlaşma fiyatı."),
+        SupplierFixedRate(entry_id="demo-fixed-nl-ftl", supplier_name="NordLine Logistics", origin_country="Türkiye", destination_country="Netherlands", transport_mode="road", service_type="FTL", equipment_type="Tenteli", cost=2650, currency="EUR", transit_time="6-7 gün", pricing_basis="all_in", included_costs=[], excluded_costs=[], valid_from=today-timedelta(days=10), valid_to=today+timedelta(days=30), evidence_source="email", evidence_reference="DEMO-RATE-NL-0901", recorded_by=DEMO_OPERATOR, notes="Sentetik Hollanda FTL fiyatı."),
+        SupplierFixedRate(entry_id="demo-fixed-de-reefer", supplier_name="FrigoTrans", origin_country="Türkiye", destination_country="Germany", transport_mode="road", service_type="FTL", equipment_type="Reefer", cost=3120, currency="EUR", transit_time="5-6 gün", pricing_basis="all_in", included_costs=[], excluded_costs=[], valid_from=today-timedelta(days=5), valid_to=today+timedelta(days=20), evidence_source="agreement", evidence_reference="DEMO-REEFER-DE-2026", recorded_by=DEMO_OPERATOR, notes="Sentetik +4/-18 reefer anlaşma fiyatı."),
+    ]
+    for rate in rates:
+        price_repo.create_fixed_rate(rate)
+    return len(price_repo.list_fixed_rates())
+
+
 def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
     db_path = Path(db_path).expanduser()
     if reset and db_path.exists():
@@ -632,6 +644,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
     learning_repo = SQLiteLearningFactRepository(store)
 
     customers, suppliers = _seed_master_data(store, now)
+    fixed_rate_count = _seed_fixed_rates(price_repo, now)
     SQLiteAgencyBrandingRepository(store).save(AgencyBrandingSettings(
         company_name="MINAI Demo Agency",
         logo_data_uri=None,
@@ -906,6 +919,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
             "assignment_count": assignment_count,
             "attachment_review_count": attachment_review_count,
             "shift_continuity_evidence_count": shift_continuity_evidence_count,
+            "fixed_rate_count": fixed_rate_count,
             "synthetic_only": True,
         },
         event_type="demo_database_seeded",
@@ -919,6 +933,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
         "supplier_count": len(suppliers),
         "assignment_count": assignment_count,
         "attachment_review_count": attachment_review_count,
+        "fixed_rate_count": fixed_rate_count,
         "shift_continuity_evidence_count": shift_continuity_evidence_count,
     }
 

@@ -3964,3 +3964,9 @@ A prior shift-close or shift-open receipt is audit evidence only. The browser mu
 Handoff releases assignment coordination only; it does not resolve or complete the operational work. A handed-off item remains incomplete until it is no longer active or a successor claims/reconciles it according to the normal work-assignment rules.
 
 Synthetic historical continuity evidence may populate the demo ledger, but stale evidence, operational changes since close, incomplete handoffs or critical uncovered work must continue to block current shift acceptance when the backend says review is required.
+
+## RULE-226 — Fixed Rates Remain Commercial Evidence, Not Frontend State
+
+Supplier fixed rates must be durable commercial records with supplier, lane, equipment/service scope, validity period, price, currency and evidence source. Activating or deactivating a rate must use the normal repository/service boundary.
+
+A fixed rate may enter job pricing only when the existing applicability engine says it matches the shipment. Demo seed rates are synthetic examples only and must never be exported or interpreted as real supplier commercial commitments.

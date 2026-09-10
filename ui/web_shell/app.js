@@ -2151,6 +2151,22 @@ function renderRelationshipOnboardingSettings(status = {}) {
   form.append(run,feedback,result);panel.append(form);return panel;
 }
 
+
+function renderFixedRateSettings(payload = {}, suppliersPayload = {}) {
+  const panel=node("section","","settings-panel");
+  const heading=node("div","","settings-heading"); heading.append(node("h2","Sabit Fiyatlar"),node("p","Hat/ekipman bazlı anlaşma ve sabit fiyatlar. Uygun işlerde aynı fiyat seçim motoruna girer.","muted")); panel.append(heading);
+  const rates=(payload.fixed_rates||[]).slice().sort((a,b)=>String(b.valid_to||"").localeCompare(String(a.valid_to||"")));
+  const list=node("div","","supplier-price-list");
+  rates.forEach(rate=>{const card=node("div","","supplier-commercial supplier-price-card");card.append(node("strong",`${rate.supplier_name} · ${moneyLabel(rate.cost,rate.currency)}`),node("span",rate.active?"Aktif":"Pasif",`badge ${rate.active?"open":""}`),node("span",`${rate.origin_city||rate.origin_country} → ${rate.destination_city||rate.destination_country}`,"small"),node("span",`${rate.equipment_type||"Tüm ekipman"} · ${rate.transit_time||"Transit -"}`,"small"),node("span",`${rate.valid_from} → ${rate.valid_to}`,"small"));const toggle=actionButton(rate.active?"Pasife Al":"Aktifleştir","",async()=>{toggle.disabled=true;try{await api(`/supplier-fixed-rates/${encodeURIComponent(rate.rate_id)}/status`,{method:"POST",body:JSON.stringify({active:!rate.active})});await loadSettings();}catch(e){showError(e);toggle.disabled=false;}});card.append(toggle);list.append(card);});
+  if(!rates.length) list.append(emptyState("Sabit fiyat kaydı yok")); panel.append(list);
+  const form=node("div","","approval-focused supplier-price-entry"); form.append(node("h3","Yeni sabit fiyat ekle"));
+  const names=(suppliersPayload.suppliers||[]).map(x=>x.supplier_name).filter(Boolean); const supplierLabel=node("label","Tedarikçi"); const supplier=document.createElement("select"); names.forEach(name=>{const o=document.createElement("option");o.value=name;o.textContent=name;supplier.append(o)}); supplierLabel.append(supplier);
+  const origin=inboxField("Çıkış ülkesi"); origin.input.value="Türkiye"; const destination=inboxField("Varış ülkesi"); destination.input.value="Germany"; const equipment=inboxField("Ekipman"); equipment.input.value="Tenteli"; const cost=inboxField("Maliyet","number"); const currency=inboxField("Para birimi"); currency.input.value="EUR"; const transit=inboxField("Transit süre");
+  const validFrom=inboxField("Geçerli başlangıç","date"); const validTo=inboxField("Geçerli bitiş","date"); const today=new Date(); validFrom.input.value=today.toISOString().slice(0,10); validTo.input.value=new Date(today.getTime()+30*86400000).toISOString().slice(0,10);
+  const fb=node("div","","muted settings-feedback"); const save=actionButton("Sabit Fiyatı Kaydet","primary",async()=>{const amount=Number(cost.input.value);if(!supplier.value||!origin.input.value.trim()||!destination.input.value.trim()||!Number.isFinite(amount)||amount<=0){fb.textContent="Tedarikçi, çıkış/varış ve geçerli maliyet gerekli.";return;}save.disabled=true;try{await api("/supplier-fixed-rates",{method:"POST",body:JSON.stringify({entry_id:freshPriceEntryId("web-fixed-rate-master"),supplier_name:supplier.value,origin_country:origin.input.value.trim(),destination_country:destination.input.value.trim(),transport_mode:"road",service_type:"FTL",equipment_type:equipment.input.value.trim()||null,cost:amount,currency:(currency.input.value||"EUR").trim().toUpperCase(),transit_time:transit.input.value.trim()||null,pricing_basis:"all_in",included_costs:[],excluded_costs:[],valid_from:validFrom.input.value,valid_to:validTo.input.value,evidence_source:"manual",evidence_reference:"Browser sabit fiyat kaydı",notes:"MINAI Ayarlar ekranından girildi.",active:true})});await loadSettings();}catch(e){fb.textContent=e.message||String(e);save.disabled=false;}});
+  const grid=node("div","","settings-two-col");grid.append(supplierLabel,origin.label,destination.label,equipment.label,cost.label,currency.label,transit.label,validFrom.label,validTo.label);form.append(grid,save,fb);panel.append(form);return panel;
+}
+
 function renderPerformanceSettings(settings = {}) {
   const panel=node("section","","settings-panel");const h=node("div","","settings-heading");h.append(node("h2","Performans"),node("p","Tek personel puanı yok. MINAI gerçek süreleri ölçer; hedefler yalnız süreç darboğazını görmek içindir.","muted"));panel.append(h);
   const firstEnabled=document.createElement("input");firstEnabled.type="checkbox";firstEnabled.checked=settings.first_look_target_minutes!=null;const first=numberField("İlk bakış hedefi (dk)",settings.first_look_target_minutes??15,1,240);const firstRow=node("div","","performance-setting-row");const firstToggle=node("label","","check-label");firstToggle.append(firstEnabled,node("span","İlk bakış hedefini kullan"));firstRow.append(firstToggle,first.label);
@@ -2161,11 +2177,18 @@ function renderPerformanceSettings(settings = {}) {
 }
 
 let settingsSelectedTab="automation";
-function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}) {
+function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}, fixedRates = {}) {
   setPageContext("Ayarlar", "Sistem Ayarları"); const page=node("div","","settings-page");const tabs=node("div","","settings-tabs");const body=node("div","","settings-tab-body");
-  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding)};
-  function draw(){tabs.replaceChildren();[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"]].forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));body.replaceChildren(panels[settingsSelectedTab]());}
+  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding)};
+  function draw(){tabs.replaceChildren();[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"]].forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));body.replaceChildren(panels[settingsSelectedTab]());}
   page.append(tabs,body);content.replaceChildren(page);draw();
+}
+
+async function loadSettings() {
+  const [branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates] = await Promise.all([
+    api("/settings/branding"), api("/automation-policy/agency"), api("/master-data/customers"), api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status"), api("/supplier-fixed-rates")
+  ]);
+  applyBranding(branding); renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates);
 }
 
 async function boot() {
@@ -2188,11 +2211,11 @@ async function boot() {
     } else if (page === "reports") {
       renderReports(await api("/reports"));
     } else if (page === "settings") {
-      const [automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus] = await Promise.all([
+      const [automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates] = await Promise.all([
         api("/automation-policy/agency"), api("/master-data/customers"),
-        api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status")
+        api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status"), api("/supplier-fixed-rates")
       ]);
-      renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus);
+      renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates);
     }
     setStatus("Güncel");
   } catch (error) { showError(error); }

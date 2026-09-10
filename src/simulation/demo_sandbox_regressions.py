@@ -26,6 +26,7 @@ from src.core.sqlite_repositories import (
     SQLiteSupplierRFQRepository,
 )
 from src.core.master_data_repository import SQLiteMasterDataRepository
+from src.core.supplier_price_repository import SQLiteSupplierPriceRepository
 from src.core.mail import InboundMailEnvelope
 from src.core.missing_info import check_missing_information
 from src.core.road_rfq_readiness import apply_road_rfq_readiness
@@ -78,6 +79,8 @@ def evaluate_demo_sandbox_regressions() -> dict:
         )
         check(repeated.get("reason") == "already_seeded" and len(jobs) == 11, "demo seed is idempotent without reset")
         check(len(masters.list_customers()) == 12 and len(masters.list_suppliers()) == 6, "demo seed includes synthetic customer and supplier master data")
+        fixed_rates = SQLiteSupplierPriceRepository(store).list_fixed_rates()
+        check(seeded.get("fixed_rate_count") == 3 and len(fixed_rates) == 3 and all(rate.active for rate in fixed_rates), "demo seed exposes active synthetic supplier fixed rates")
 
         shift_closes = SQLiteOperationalShiftCloseReceiptRepository(store)
         shift_opens = SQLiteOperationalShiftOpenAcceptanceReceiptRepository(store)
@@ -309,6 +312,7 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "İncelemeyi uygula" in app_js and "preview_token" in app_js
         and "Demo tedarikçi yanıtı" in app_js
         and "Manuel MINA işi oluştur" in app_js and "/mina-jobs/manual" in app_js
+        and "Sabit Fiyatlar" in app_js and "/supplier-fixed-rates" in app_js
         and route_allowed("POST", "/mina-jobs/manual")
         and "Vardiya Sürekliliği" in app_js and "Vardiyaya Devret" in app_js
         and "/operational-work-shift-close-readiness" in app_js

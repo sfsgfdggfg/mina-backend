@@ -6828,3 +6828,12 @@ The browser `İş Kuyruğu` includes a shift-continuity workspace backed by the 
 Work assignment remains coordination-only. An operator may hand an active assignment to the next shift through the existing `/handoff` transition; this does not complete the underlying work item. Shift close/open receipts remain audit evidence and do not authorize operational workflow actions.
 
 The demo seed includes one historical synthetic close→open evidence cycle so the continuity ledger is visible immediately. Historical receipts must remain stale/audit-only when current operational state differs; they must never make the current shift appear reconciled or authorized.
+
+## DEC-209 — Browser Settings Manages Supplier Fixed Rates Through Existing Pricing Authority
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The browser Settings workspace includes a `Sabit Fiyatlar` panel backed by the existing SupplierFixedRate repository and API. Operators may list, create, activate and deactivate lane/equipment fixed rates; the browser must not maintain a separate price table or bypass repository idempotency.
+
+The demo seed includes synthetic Germany FTL, Netherlands FTL and Germany Reefer fixed rates so applicability can be observed immediately in normal MINA job pricing. These rates remain synthetic and use the same applicability/selection engine as operator-entered or imported production rates.
