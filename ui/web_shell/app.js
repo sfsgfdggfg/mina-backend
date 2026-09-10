@@ -900,12 +900,63 @@ function attachmentReviewCard(review, refresh) {
   card.append(actions,feedback); return card;
 }
 
+let lastOutlookPullResult = null;
+
+function outlookPullResultLabel(item = {}) {
+  const route = ({ customer: "Müşteri", supplier: "Tedarikçi", manual_review: "Manuel inceleme" })[item.inbound_route] || codeLabel(item.inbound_route);
+  const status = codeLabel(item.ingestion_status || item.result_type);
+  return `${route} · ${status}`;
+}
+
+function renderDemoOutlookPullPanel() {
+  const section = node("section", "", "section demo-outlook-pull-section");
+  section.append(
+    node("h2", "Sentetik Outlook Gelen Kutusu"),
+    node("div", "Aynı production Outlook pull + deterministic inbound router çalışır; Microsoft Graph ve OpenAI çağrısı yapılmaz.", "small muted")
+  );
+  const actions = node("div", "", "actions");
+  const feedback = node("div", "", "muted settings-feedback");
+  const pull = actionButton("Yeni mailleri çek ve route et", "primary", async () => {
+    pull.disabled = true; feedback.textContent = "Sentetik Outlook gelen kutusu işleniyor…";
+    try {
+      lastOutlookPullResult = await api("/inbound/outlook/pull", {
+        method: "POST", body: JSON.stringify({ limit: 10, interpret_attachments: false })
+      });
+      feedback.textContent = `${lastOutlookPullResult.handled_message_count || 0} mesaj işlendi.`;
+      await loadInbox();
+    } catch (error) { feedback.textContent = error.message || String(error); setStatus("Hata", false); }
+    finally { pull.disabled = false; }
+  });
+  actions.append(pull); section.append(actions, feedback);
+  if (lastOutlookPullResult) {
+    const summary = node("div", "", "summary-grid outlook-pull-metrics");
+    summary.append(
+      summaryItem("Çekilen", lastOutlookPullResult.fetched_message_count ?? 0),
+      summaryItem("Müşteri proposal", lastOutlookPullResult.proposal_count ?? 0),
+      summaryItem("Tedarikçi yanıtı", lastOutlookPullResult.supplier_response_count ?? 0),
+      summaryItem("Manuel inceleme", lastOutlookPullResult.manual_review_count ?? 0)
+    );
+    section.append(summary);
+    const results = node("div", "", "outlook-pull-results");
+    (lastOutlookPullResult.results || []).forEach(item => {
+      const row = node("div", "", "outlook-pull-result-row");
+      const copy = node("div");
+      copy.append(node("strong", outlookPullResultLabel(item)), node("div", item.external_message_id || "-", "small muted"));
+      row.append(copy, node("span", item.reason_code ? codeLabel(item.reason_code) : "İşlendi", "badge"));
+      results.append(row);
+    });
+    section.append(results, node("div", "Ham mail gövdesi bu özet yüzeyine taşınmaz. Aynı mesajlar tekrar çekilirse mevcut idempotency kuralları duplicate olarak işler.", "small muted"));
+  }
+  return section;
+}
+
 function renderInbox(proposals = [], attachmentReviews = []) {
   setPageContext("Gelen Talepler", "Müşteri Talep Girişi");
   const root = node("div", "", "inbox-page");
   const intro = node("div", "", "notice");
   intro.textContent = "Demo ortamında aşağıdaki sentetik müşteri mailleri gerçek extraction → operatör doğrulaması → MINA işi → operasyon pipeline zincirini çalıştırır. Extraction tek başına operasyonel gerçek sayılmaz.";
   root.append(intro);
+  if (demoMode) root.append(renderDemoOutlookPullPanel());
 
   const composer = node("section", "", "section inbox-composer");
   composer.append(node("h2", "Yeni müşteri talebi simüle et"));

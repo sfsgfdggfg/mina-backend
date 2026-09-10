@@ -50,6 +50,7 @@ from src.core.web_session import list_active_web_operators
 from src.demo_seed import seed_demo_customer_memory, seed_demo_database
 from src.workflow.demo_relationship_onboarding import run_demo_relationship_onboarding
 from src.workflow.demo_inbound import parse_demo_customer_email
+from src.workflow.demo_outlook_pull import run_demo_outlook_pull
 from src.workflow.extraction_confirmation import confirm_extraction_proposal
 from src.workflow.mail_ingestion import process_customer_inquiry_mail
 from src.workflow.supplier_response_ingestion import ingest_supplier_reply
@@ -166,6 +167,41 @@ def evaluate_demo_sandbox_regressions() -> dict:
             and not inbound_results["DEMO:MACHINE"].can_continue_to_quote
             and "package count and dimensions" in inbound_results["DEMO:MACHINE"].missing_fields,
             "demo inbound scenarios preserve extraction confirmation and road quote-readiness boundaries",
+        )
+
+        pull_db = root / "demo-outlook.sqlite3"
+        seed_demo_database(pull_db, reset=True)
+        pull_store = SQLitePilotStore(pull_db, run_id="demo-outlook-regression", retention_days=365)
+        pull_proposals = SQLiteExtractionProposalRepository(pull_store)
+        pull_suppliers = SQLiteSupplierRFQRepository(pull_store)
+        pull_reviews = SQLiteAttachmentInterpretationReviewRepository(pull_store)
+        pull_masters = SQLiteMasterDataRepository(pull_store)
+        with patch.dict(os.environ, {"MINAI_DEMO_STATE_DIR": str(root / "outlook-state")}, clear=False):
+            first_pull = run_demo_outlook_pull(
+                limit=10, proposal_repository=pull_proposals, operational_data_sources=None,
+                master_data_repository=pull_masters, supplier_repository=pull_suppliers,
+                attachment_review_repository=pull_reviews, interpret_attachments=False,
+            )
+            response_count_after_first = sum(
+                len(pull_suppliers.list_responses(item.rfq_id)) for item in pull_suppliers.list_drafts()
+            )
+            second_pull = run_demo_outlook_pull(
+                limit=10, proposal_repository=pull_proposals, operational_data_sources=None,
+                master_data_repository=pull_masters, supplier_repository=pull_suppliers,
+                attachment_review_repository=pull_reviews, interpret_attachments=False,
+            )
+            response_count_after_second = sum(
+                len(pull_suppliers.list_responses(item.rfq_id)) for item in pull_suppliers.list_drafts()
+            )
+        check(
+            first_pull["synthetic_mailbox"] is True
+            and first_pull["proposal_count"] == 1
+            and first_pull["supplier_response_count"] == 1
+            and first_pull["manual_review_count"] == 1
+            and second_pull["supplier_response_count"] == 0
+            and response_count_after_first == response_count_after_second
+            and any(item.get("ingestion_status") == "duplicate_response" for item in second_pull["results"]),
+            "demo Outlook pull uses production routing while preserving sender authority and replay idempotency",
         )
 
         review_repo = SQLiteAttachmentInterpretationReviewRepository(store)
@@ -462,6 +498,9 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "demo_supplier_response_unavailable" in api_text
         and route_allowed("POST", "/demo/supplier-rfqs/demo-rfq/simulate-response")
         and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js
+        and "Sentetik Outlook Gelen Kutusu" in app_js and "/inbound/outlook/pull" in app_js
+        and "Ham mail gövdesi bu özet yüzeyine taşınmaz" in app_js
+        and "run_demo_outlook_pull" in api_text
         and "Master Veri" in app_js and "Müşteri Oluştur" in app_js and "Tedarikçi Oluştur" in app_js
         and route_allowed("POST", "/master-data/customers") and route_allowed("POST", "/master-data/suppliers")
         and "Müşteri Hafızası · Demo" in app_js and "/customer-memory/import/dry-run" in app_js

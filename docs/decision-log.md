@@ -6906,3 +6906,14 @@ The action writes only the existing durable secondary-dispatch authorization evi
 Each browser work-queue card may open the existing operational work-item detail projection. The panel shows why the item is waiting, blocking reasons, current state checks, assignment status, recovery mode and the purposes of existing guarded operator commands.
 
 The detail panel is diagnostic only. It must not execute CLI argv, fabricate workflow state, auto-repair stale resources or turn informational `next_action` text into authority. Existing workflow, approval, RFQ, attachment and assignment services remain the only mutation boundaries.
+
+## DEC-217 — Demo Outlook Pull Reuses Production Inbound Routing
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The Sandbox may expose a synthetic Outlook inbox, but it must run through the existing `pull_controlled_outlook_inbox` and deterministic inbound router rather than a UI-only mock. Microsoft authentication, Microsoft Graph and OpenAI are replaced only by deterministic demo adapters.
+
+The demo mailbox includes a verified customer request, a correlated supplier reply and an unverified sender requiring manual review. Repeated pulls must present the same synthetic message identities so existing inbound replay/idempotency rules, rather than demo-specific shortcuts, determine duplicate behavior.
+
+Customer master-data authority selected by the Outlook router must be propagated into controlled customer ingestion. The downstream customer gate must not silently fall back to a different legacy customer source after the sender was already resolved against durable master data.

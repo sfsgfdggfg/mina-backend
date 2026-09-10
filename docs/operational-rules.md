@@ -4016,3 +4016,11 @@ Commercial release records operator evidence only and must never include or tran
 Work-item blocker codes, state checks and recovery modes shown in the browser must come from the current backend detail projection. The UI may translate those codes into operator-friendly text but may not change their meaning or hide a blocker.
 
 Operator-command entries are guidance to existing guarded actions, not executable frontend instructions. The browser must not execute returned argv strings or introduce a generic “repair” operation that bypasses the normal attachment, extraction, supplier, quote or assignment lifecycle.
+
+## RULE-234 — Synthetic Outlook Pull Must Preserve Real Routing and Replay Guards
+
+Demo Outlook pull may replace provider/token/parser dependencies only. Customer-vs-supplier routing, sender verification, RFQ correlation, proposal creation, supplier response ingestion and replay detection must remain the production code path.
+
+The synthetic inbox must reuse stable external message IDs across repeated pulls. A repeated customer mail may return the existing extraction proposal and a repeated supplier reply must not create a second commercial response.
+
+When durable master data is the runtime customer identity authority, that same repository must be passed through the customer ingestion gate. The router must not validate against master data and then revalidate against an unrelated legacy customer file.

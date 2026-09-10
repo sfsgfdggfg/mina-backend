@@ -70,6 +70,7 @@ from src.workflow.demo_relationship_onboarding import (
     run_demo_relationship_onboarding,
 )
 from src.workflow.demo_inbound import parse_demo_customer_email
+from src.workflow.demo_outlook_pull import run_demo_outlook_pull
 from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
     MicrosoftAuthConfigurationError,
@@ -3015,6 +3016,17 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
 def pull_outlook_inbound(
     request: OutlookPullRequest,
 ):
+    if demo_mode_enabled():
+        return run_demo_outlook_pull(
+            limit=request.limit,
+            proposal_repository=extraction_proposal_repository,
+            operational_data_sources=operational_data_sources,
+            master_data_repository=_runtime_master_data_authority(),
+            supplier_repository=supplier_rfq_repository,
+            attachment_review_repository=attachment_review_repository,
+            interpret_attachments=request.interpret_attachments,
+        )
+
     try:
         config = (
             MicrosoftAuthConfig.from_environment()
