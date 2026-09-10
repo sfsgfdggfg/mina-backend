@@ -523,6 +523,7 @@ def process_controlled_outlook_inbound_mail(
                 operational_data_sources=(
                     operational_data_sources
                 ),
+                master_data_repository=master_data_repository,
             )
         )
 

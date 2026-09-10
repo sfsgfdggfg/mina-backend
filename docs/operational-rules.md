@@ -3900,3 +3900,134 @@ A new agency mailbox may be scanned for counterparty candidates only after expli
 Discovery requests only message/conversation identity, sender/To/Cc/Bcc recipient addresses, timestamps and draft state. Subject, body, attachments and attachment content are not requested. The discovery result may expose candidate business email addresses/domains and bounded traffic counts plus explicit Inbox/Sent coverage and truncation metadata for human review, but must not persist raw messages, create Master Data, create LearningFacts, call AI, or classify an unmatched address as customer or supplier.
 
 Human review precedes authority. Candidate contacts selected as pilot customers/suppliers must be entered through the normal Master Data/data-pack process and the resulting pack must pass full verification/fingerprint checks before controlled-pilot startup. Relationship-history learning may begin only after deterministic Master Data identities exist.
+
+## RULE-218 — Demo/Sandbox Must Exercise Real MINAI Behavior Without Reaching Real Counterparties
+
+Demo/Sandbox may use the same backend routes, repositories and lifecycle services as the product, but its state and outbound effects must remain physically separate from controlled pilot state. A demo process requires its own synthetic SQLite database and must not reuse the pilot database, pilot data pack or real provider identity.
+
+All demo customer and supplier email identities must use reserved `.invalid` domains. The demo outbound adapter must reject any recipient outside that reserved namespace before provider delivery and may only append synthetic delivery evidence to the local demo outbox. Demo mode must not authenticate to Outlook or silently fall through to a real sender.
+
+The browser must visibly identify demo mode on every authenticated shell page. Seeded jobs should intentionally cover both permitted and blocked actions so that operational rules are observable; for example, secondary dispatch remains blocked until the primary group is exhausted and approval-required reminders must still pass through their real decision boundary.
+
+Canonical regressions must include demo isolation checks and remain fully green. Date-based retention regressions must pin their fixture timestamps to the fixture clock rather than the wall clock so that safety gates do not become calendar-sensitive.
+
+## RULE-219 — Synthetic Historical Mail Must Preserve Real Onboarding Safety Boundaries
+
+Demo historical relationship analysis may replace the provider source, but it may not bypass the product's evidence rules. Explicit mailbox-analysis authorization remains mandatory. Synthetic messages must use only reserved `.invalid` identities, map through existing demo Master Data, remain transient after analysis, and create only proposed Learning Facts unless a human confirms them through the normal review flow.
+
+A synthetic AI stand-in must use the same privacy-safe history bundle and the same counterparty-attribution guard as the production analyzer. AGENCY-authored context cannot become behavioral support. Demo AI must not call OpenAI or any other external service.
+
+Repeated analysis of the same synthetic date window must not duplicate deterministic metrics or AI observations. The UI must disclose that the mailbox and AI analysis are synthetic while preserving the same review/confirm/reject controls used for real historical onboarding.
+
+## RULE-220 — Demo Operator Metrics Must Come From Real Assignment History
+
+Demo personnel names and performance numbers must not be painted directly into the frontend. First-look coverage, acknowledgement timing, handoff count and reassignment generations must be derived from normal OperationalWorkAssignment repository history and the same reporting read model used by the product.
+
+At least one demo assignment should remain actively acknowledged, one history should contain a shift handoff/reassignment generation, and one current assignment may be deliberately expired so the recovery/takeover control is observable. Synthetic operators may share the local demo password because the environment is loopback-only and non-production, but their identities must remain distinct in the server-side operator directory and audit evidence.
+
+## RULE-221 — Demo Inbound Parsing Must Not Bypass Human Extraction Confirmation
+
+Synthetic inbound mail may use a deterministic local parser, but parser output remains non-authoritative. A demo customer request must first create an ExtractionProposal and may receive a MINA job code only after explicit operator confirmation through the normal confirmation service.
+
+Demo scenarios must preserve real blocking logic. A complete standard road request may proceed to supplier-RFQ preparation, while a machine request without dimensions must remain in clarification. Temperature-controlled loads must carry explicit temperature-control evidence and equipment data before they may proceed.
+
+The `Gelen Talepler` UI must call the same `/process-email`, extraction-confirmation and resume boundaries used by the application. It may provide synthetic templates for convenience, but it must not paint successful outcomes directly into the frontend or skip server-side state transitions.
+
+## RULE-222 — Demo Attachment Interpretation Must Preserve Human Review Authority
+
+Synthetic attachment content may pre-populate a candidate, but it never becomes shipment or supplier-response authority automatically. The operator must preview the current corrections and apply with the matching preview token through the normal attachment-review service.
+
+Customer attachment apply may create only an ExtractionProposal, which still requires the ordinary extraction-confirmation boundary before a MINA job is created. Supplier attachment apply may affect only the RFQ whose frozen snapshot and sender identity still match the review evidence.
+
+Unknown safety values and parser-marked uncertain commercial fields must remain visible in the demo review UI. The demo must contain at least one customer attachment and one supplier attachment example, and regression coverage must prove their mutations flow through normal repositories rather than frontend-only state.
+
+## RULE-223 — Demo Supplier Reply Simulation Must Use Inbound Correlation
+
+Synthetic supplier reply buttons may exist only in demo mode and only while the target RFQ is awaiting response. The server must derive the synthetic sender and explicit RFQ reference from the durable RFQ record; the browser must not invent supplier identity authority.
+
+A simulated acknowledgement must pass through the normal acknowledgement detector and must not create a commercial response. Simulated quote, no-capacity, and clarification outcomes must pass through `ingest_supplier_reply` and normal RFQ lifecycle validation.
+
+The demo-only response endpoint must fail closed outside Demo/Sandbox. Regression coverage must prove acknowledgement, quote, and no-capacity behavior through repository evidence rather than frontend-only state.
+
+## RULE-224 — Manual Intake Must Preserve Human Source Authority
+
+Phone, WhatsApp, portal, face-to-face and other manually entered requests may create a MINA job without email extraction because the operator is the explicit source of the shipment fields.
+
+The browser must submit manual intake through the normal job-creation service. It may not generate its own MINA code, skip repository idempotency, or silently reinterpret an email as manual intake.
+
+Manual-intake jobs remain subject to the same downstream quote-readiness, supplier-selection, approval, pricing and operation rules as jobs originating from confirmed email extraction.
+
+## RULE-225 — Shift Evidence Must Never Substitute for Current Queue Reconciliation
+
+A prior shift-close or shift-open receipt is audit evidence only. The browser must always use a fresh server-side close-readiness or open-reconciliation projection before enabling the corresponding attestation action.
+
+Handoff releases assignment coordination only; it does not resolve or complete the operational work. A handed-off item remains incomplete until it is no longer active or a successor claims/reconciles it according to the normal work-assignment rules.
+
+Synthetic historical continuity evidence may populate the demo ledger, but stale evidence, operational changes since close, incomplete handoffs or critical uncovered work must continue to block current shift acceptance when the backend says review is required.
+
+## RULE-226 — Fixed Rates Remain Commercial Evidence, Not Frontend State
+
+Supplier fixed rates must be durable commercial records with supplier, lane, equipment/service scope, validity period, price, currency and evidence source. Activating or deactivating a rate must use the normal repository/service boundary.
+
+A fixed rate may enter job pricing only when the existing applicability engine says it matches the shipment. Demo seed rates are synthetic examples only and must never be exported or interpreted as real supplier commercial commitments.
+
+## RULE-227 — Browser Health Views Are Diagnostic Only
+
+Runtime and data validation status shown in the browser must come from current backend validators and release/automation projections. The UI may summarize or label their returned state but may not persist a replacement status, suppress a failing validation, or create operational authority from a health card.
+
+Validation endpoints exposed to the browser are read-only GET surfaces.
+
+## RULE-228 — Demo Customer Memory Must Never Share Production File State
+
+Legacy customer-memory reads/writes in Demo mode must resolve to a demo-specific file and backup directory outside repository operational data. The default production path remains unchanged when no demo override is configured.
+
+Controlled-pilot browser allowlisting must not be expanded for legacy Customer Memory mutations merely to support the Sandbox. Demo UI may call those existing APIs only because Demo runs outside pilot mode with authenticated local browser sessions and CSRF protection.
+
+Import apply and backup restore remain backend-authoritative. The browser may require dry-run before apply, but it may not suppress alias/name conflicts, fabricate a successful restore, or treat imported memory as stronger evidence than the existing customer identity rules allow.
+
+## RULE-229 — Browser Master Data Must Preserve Repository Identity Authority
+
+Customer and supplier creation/update from the browser must use the existing master-data API/service boundary. The browser must never construct durable customer_id/supplier_id values or treat display labels as identity authority.
+
+Supplier country capabilities must be submitted as explicit geography records and remain subject to normalized-country and strength validation. Customer trusted sender addresses/domains remain identity evidence only; adding aliases or defaults must not weaken the sender-trust boundary.
+
+## RULE-230 — Supplier Commercial Follow-Up Must Stay on the Original RFQ
+
+An incomplete quoted response that can be clarified must reopen the same RFQ and use the persisted follow-up draft generated by supplier quote progression. Approval, send, reconciliation and final supplier reply must remain attached to that RFQ and follow-up sequence.
+
+A follow-up reply may inherit previously confirmed commercial fields only through the existing consolidation rules. The browser must never merge price/transit/equipment fields itself.
+
+Supplier questions that request new shipment/customer information are a separate operational clarification class. They must not be auto-answered merely because a commercial follow-up generator exists.
+
+## RULE-231 — Manual Supplier Acknowledgement Is Non-Commercial Evidence
+
+Phone or WhatsApp confirmation that a supplier has received the request or is working on it may be recorded only while that RFQ is awaiting response and has no commercial response. The authenticated operator and channel must be preserved as evidence.
+
+Such acknowledgement starts the configured acknowledgement grace period but never counts as a quote, no-capacity result, decline or secondary-release condition.
+
+## RULE-232 — Browser Secondary Release Must Preserve the Primary Gate
+
+The browser may expose commercial secondary release only after all primary suppliers have terminal outcomes and at least one primary quote exists, with the dispatch policy allowing commercial fallback. An unresolved or merely silent primary must keep the action unavailable.
+
+Commercial release records operator evidence only and must never include or transmit customer target price. Once released, secondary RFQ preparation, approval and sending remain subject to the normal progression, lifecycle, recipient and business-hours controls.
+
+## RULE-233 — Work Recovery Guidance Must Not Become Frontend Authority
+
+Work-item blocker codes, state checks and recovery modes shown in the browser must come from the current backend detail projection. The UI may translate those codes into operator-friendly text but may not change their meaning or hide a blocker.
+
+Operator-command entries are guidance to existing guarded actions, not executable frontend instructions. The browser must not execute returned argv strings or introduce a generic “repair” operation that bypasses the normal attachment, extraction, supplier, quote or assignment lifecycle.
+
+## RULE-234 — Synthetic Outlook Pull Must Preserve Real Routing and Replay Guards
+
+Demo Outlook pull may replace provider/token/parser dependencies only. Customer-vs-supplier routing, sender verification, RFQ correlation, proposal creation, supplier response ingestion and replay detection must remain the production code path.
+
+The synthetic inbox must reuse stable external message IDs across repeated pulls. A repeated customer mail may return the existing extraction proposal and a repeated supplier reply must not create a second commercial response.
+
+When durable master data is the runtime customer identity authority, that same repository must be passed through the customer ingestion gate. The router must not validate against master data and then revalidate against an unrelated legacy customer file.
+## RULE-235 — Demo Reset Must Stay Inside the Synthetic State Boundary
+
+A demo reset may mutate only paths beneath the configured `MINAI_DEMO_STATE_DIR`: the synthetic SQLite database, synthetic outbox, demo Customer Memory file and backups, and synthetic Outlook replay-target state. Repository files, controlled-pilot state and paths outside the demo state directory are never reset targets.
+
+Reset requires an authenticated browser session, CSRF validation and the explicit `RESET_DEMO` confirmation token. The endpoint is demo-only and must fail closed outside `MINAI_DEMO_MODE`; it must not be added to the controlled-pilot route allowlist.
+
+Path validation happens before any mutation. Symlinks, path escapes or mismatched configured paths abort the reset. A successful reset reseeds the normal deterministic demo baseline while preserving the active browser session.

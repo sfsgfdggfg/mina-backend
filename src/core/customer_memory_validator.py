@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List
@@ -9,6 +10,11 @@ from src.paths import data_path
 from src.core.pricing_policy import PricingFormula
 
 CUSTOMER_MEMORY_PATH = data_path("customer_memory.json")
+
+
+def customer_memory_validation_path() -> Path:
+    override = os.environ.get("MINAI_CUSTOMER_MEMORY_PATH", "").strip()
+    return Path(override).expanduser().resolve() if override else CUSTOMER_MEMORY_PATH
 
 ALLOWED_SENSITIVITY_VALUES = {"low", "medium", "high"}
 ALLOWED_EQUIPMENT_TYPES = {
@@ -90,8 +96,9 @@ def _validate_string_list(
 
 
 def validate_customer_memory_file(
-    path: Path = CUSTOMER_MEMORY_PATH,
+    path: Path | None = None,
 ) -> Dict[str, Any]:
+    path = path or customer_memory_validation_path()
     errors: List[str] = []
     warnings: List[str] = []
 
@@ -421,9 +428,9 @@ def validate_customer_memory_file(
 
 
 def assert_customer_memory_valid(
-    path: Path = CUSTOMER_MEMORY_PATH,
+    path: Path | None = None,
 ) -> Dict[str, Any]:
-    result = validate_customer_memory_file(path)
+    result = validate_customer_memory_file(path or customer_memory_validation_path())
 
     if not result.get("valid"):
         error_text = "\n".join(result.get("errors", []))

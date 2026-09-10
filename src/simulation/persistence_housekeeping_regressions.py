@@ -167,6 +167,18 @@ def _check_retention_classes(failures: list[str]) -> None:
             payload={"temporary": True}, event_type="temporary_saved",
             entity_type="temporary_housekeeping",
         )
+        # Retention is evaluated against the fixture clock, so pin the transient
+        # evidence to that same clock instead of the wall clock running the test.
+        # Otherwise this regression becomes date-sensitive once real time passes NOW.
+        with sqlite3.connect(store.db_path) as connection:
+            connection.execute(
+                "UPDATE state_records SET updated_at=? WHERE namespace=? AND record_key=?",
+                (NOW.isoformat(), "temporary_housekeeping_state", "old"),
+            )
+            connection.execute(
+                "UPDATE pilot_events SET created_at=? WHERE entity_type=?",
+                (NOW.isoformat(), "temporary_housekeeping"),
+            )
         result = store.purge_expired(now=NOW + timedelta(days=2))
         if assignments.get(assignment.work_id) is None or not assignments.list_history():
             failures.append("work assignment state/history did not survive ordinary retention")

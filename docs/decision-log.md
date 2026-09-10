@@ -6734,3 +6734,197 @@ The discovery tool uses a dedicated external Outlook auth profile containing onl
 Discovery is metadata-minimized. Microsoft Graph requests immutable message identity, conversation identity, sender/recipient addresses, timestamps and draft state only; it does not request subject, body, attachments or AI analysis. Raw mailbox messages are transient and are cleared after the run. No Customer/Supplier Master Data, LearningFact, pilot database or operational pack is mutated.
 
 The result ranks external email addresses and domains by bounded inbound/outbound traffic evidence. Inbox and Sent Items receive separate quotas, newest messages are examined first, every examined raw item consumes the hard cap, and any truncation is reported explicitly. The result marks only deterministic matches to existing Master Data. Unmatched addresses remain unclassified candidates; MINAI does not infer customer versus supplier from traffic alone. A human selects and classifies the initial pilot customers/suppliers, then builds and verifies the agency data pack. Existing historical relationship analysis runs only after those identities exist.
+
+## DEC-201 — MINAI Demo/Sandbox Uses Real Product Code With Isolated Synthetic Authority
+
+**Status:** Accepted
+**Date:** 2026-09-09
+
+MINAI Demo/Sandbox is not a separate mock frontend. It uses the normal FastAPI/browser-shell code paths, repositories, state machines, approvals, reminders, operation execution, reporting, Master Data, Learning Facts, automation policies and branding against a dedicated synthetic SQLite database.
+
+Demo runtime authority is strictly isolated from controlled pilot authority. `MINAI_DEMO_MODE=1` requires pilot mode disabled, a dedicated database path outside the repository, shadow outbound policy, local loopback binding and an explicit demo outbox path. The demo launcher seeds only synthetic customers, suppliers and jobs and visibly labels the browser shell as `DEMO · SENTETİK VERİ`.
+
+Provider-backed mail in demo mode is replaced by a deterministic synthetic sender. It may record normal sent evidence and advance the same product lifecycle, but it accepts only reserved `.invalid` recipient addresses and writes an append-only local synthetic outbox instead of contacting Outlook. A non-synthetic recipient fails before provider delivery. This allows RFQ, reminder, customer-quote and operation-message flows to be exercised without risking real external communication.
+
+Demo seed data is idempotent by version and covers multiple lifecycle states rather than only happy-path cards: missing information, active pricing, supplier acknowledgement, no response/reminder due, multi-supplier quote selection, pending/approved customer quote, negotiation, accepted operation start, in-transit execution, exceptions, POD/CMR closeout and completed work. Demo data must remain clearly synthetic and must never be treated as pilot evidence.
+
+## DEC-202 — Demo Relationship Onboarding Uses a Deterministic Synthetic Mailbox
+
+**Status:** Accepted
+**Date:** 2026-09-09
+
+The Demo/Sandbox relationship-memory screen uses the normal historical relationship-analysis and LearningFact pipeline without requiring Microsoft Graph, Outlook credentials or OpenAI. In demo mode only, the `/relationship-onboarding/outlook/analyze` route receives deterministic synthetic historical conversations built from the seeded demo Customer/Supplier Master Data.
+
+Synthetic history preserves the same product constraints as real onboarding: explicit operator authorization is still required; messages are matched only to existing Master Data; raw bodies are transient; deterministic metrics and AI-style observations remain proposed until human confirmation; repeated analysis of the same evidence window is idempotent.
+
+When the demo operator enables AI observations, a deterministic local analyzer stands in for OpenAI. It receives the same privacy-safe two-way context format and must cite only counterparty-authored message indexes. The normal attribution hard guard remains authoritative. No external AI or mailbox provider call occurs in demo mode.
+
+The browser must clearly label this path as `Demo mailbox` / `Sentetik Outlook Analizi` so it cannot be mistaken for evidence retrieved from a real agency mailbox. Normal and controlled-pilot runtimes retain the existing Microsoft Graph + optional OpenAI path unchanged.
+
+## DEC-203 — Demo/Sandbox Includes Multi-Operator Work Assignment Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-09
+
+The functional demo environment includes three synthetic active operators rather than a single login identity: Demo Operator, Ayşe Demo and Mehmet Demo. This keeps the existing multi-operator assignment controls, directed assignment directory and per-operator reporting visible in a realistic small-agency configuration.
+
+The demo seed records real OperationalWorkAssignment state/history against current derived work items. Seeded evidence includes assigned and acknowledged work, an explicit shift handoff, a second assignment generation, and an intentionally expired assignment that can be recovered through the normal takeover flow. These are normal repository records and reporting inputs, not hard-coded UI numbers.
+
+The same server-side assignment lease/fingerprint rules remain authoritative. Demo seeding may pre-populate valid assignment evidence, but subsequent assign/acknowledge/renew/release/takeover actions must continue through the normal product services.
+
+## DEC-204 — Demo/Sandbox Exposes the Real Inbound Extraction Boundary
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+Demo/Sandbox includes a `Gelen Talepler` workbench that exercises the normal customer-mail ingestion, extraction proposal, human confirmation, MINA job creation and downstream resume services. The demo page is not allowed to create a Job directly from parsed text.
+
+In demo mode only, a deterministic local inbound parser replaces the external AI parser so the workflow remains reproducible and usable without OpenAI credentials. The parser produces only `ShipmentProposalSnapshot` data; the normal extraction-confirmation boundary remains authoritative.
+
+The demo ships with three synthetic scenarios: a quote-ready standard FTL textile load, a machine shipment that must stop for missing dimensions, and a quote-ready temperature-controlled reefer load. These scenarios are intended to make both successful progression and clarification blocking observable through the same real workflow services.
+
+Normal and controlled-pilot runtime continue to use the configured production email parser. Demo inbound messages must use synthetic `.invalid` identities and must never be confused with real mailbox evidence.
+
+## DEC-205 — Demo/Sandbox Includes Real Attachment Interpretation Review
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The functional demo seeds pending attachment-interpretation reviews for both customer and supplier routes. A synthetic customer XLSX produces a non-authoritative shipment candidate; a synthetic supplier PDF produces a commercial quote candidate linked to a real awaiting-response RFQ.
+
+The browser `Gelen Talepler` workspace exposes these reviews through the normal field-level preview/apply/reject services. Operator edits must be validated by the existing preview-token contract before apply. Applying a customer review creates a normal ExtractionProposal; applying a supplier review attaches a normal SupplierRFQResponse to the frozen RFQ snapshot.
+
+Synthetic attachment examples must preserve uncertainty and safety attention instead of pretending perfect extraction. Demo seed therefore includes an unknown high-value flag on the customer candidate and an uncertain transit-time field on the supplier candidate. Normal and controlled-pilot attachment retrieval, verification and interpretation paths are unchanged.
+
+## DEC-206 — Demo/Sandbox Can Simulate Supplier Email Responses Through Real Ingestion
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The functional demo exposes synthetic supplier response controls only for RFQs that are still awaiting a commercial response. The controls model acknowledgement, complete quote, no-capacity, and clarification-request scenarios.
+
+The browser does not mutate RFQ state directly. A demo-only server endpoint constructs a synthetic `.invalid` supplier email using the existing RFQ identity/reference and passes it through the normal `ingest_supplier_reply` correlation and validation service. Production and controlled-pilot runtimes fail closed on this endpoint.
+
+Acknowledgement must keep the RFQ open for a commercial response. Quote/no-capacity/clarification scenarios must remain subject to the same duplicate, sender, RFQ-state, and commercial validation rules as provider-ingested mail.
+
+## DEC-207 — Browser Demo Supports Manual Non-Email Intake Through Normal MINA Job Creation
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The Demo/Sandbox `Gelen Talepler` workbench includes a separate manual-intake form for phone, WhatsApp, portal, face-to-face and other operator-entered requests. These requests do not pass through email extraction because the shipment values are entered directly by the operator.
+
+The browser must call the existing `/mina-jobs/manual` endpoint and `create_manual_mina_job` service. Job codes, lifecycle state, audit events and idempotency remain repository-authoritative; the UI must not fabricate a MINA code or directly mutate job state.
+
+Manual intake and email extraction remain visibly distinct paths. The manual form may provide convenient demo defaults, but the created job is a normal MINA job and must use the same downstream job-detail, pricing, supplier and operation services as every other case.
+
+## DEC-208 — Browser Work Queue Exposes Shift Continuity Without Creating New Authority
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The browser `İş Kuyruğu` includes a shift-continuity workspace backed by the existing shift summary, close readiness, open reconciliation, close/open evidence and continuity-ledger services. The browser may render readiness and offer an action only when the corresponding backend projection says the action is currently allowed.
+
+Work assignment remains coordination-only. An operator may hand an active assignment to the next shift through the existing `/handoff` transition; this does not complete the underlying work item. Shift close/open receipts remain audit evidence and do not authorize operational workflow actions.
+
+The demo seed includes one historical synthetic close→open evidence cycle so the continuity ledger is visible immediately. Historical receipts must remain stale/audit-only when current operational state differs; they must never make the current shift appear reconciled or authorized.
+
+## DEC-209 — Browser Settings Manages Supplier Fixed Rates Through Existing Pricing Authority
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The browser Settings workspace includes a `Sabit Fiyatlar` panel backed by the existing SupplierFixedRate repository and API. Operators may list, create, activate and deactivate lane/equipment fixed rates; the browser must not maintain a separate price table or bypass repository idempotency.
+
+The demo seed includes synthetic Germany FTL, Netherlands FTL and Germany Reefer fixed rates so applicability can be observed immediately in normal MINA job pricing. These rates remain synthetic and use the same applicability/selection engine as operator-entered or imported production rates.
+
+## DEC-210 — Browser Settings Exposes Read-Only Runtime and Data Health
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The Settings workspace includes a `Sistem Sağlığı` panel that reads runtime release, automation status, aggregate data-health, commodity dictionary, supplier capability, customer-memory and HS-map validation results. These are read-only operational diagnostics; the browser cannot mutate validation truth or mark an unhealthy dataset healthy.
+
+The controlled browser allowlist permits only GET access to these validation surfaces. Existing backend validators remain authoritative and normal/demo/pilot behavior is unchanged.
+
+## DEC-211 — Legacy Customer Memory Is Demo-Only and File-Isolated
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The functional Sandbox may expose the legacy Customer Memory profile, import/export and backup/restore APIs only when the browser is running in Demo mode. Controlled-pilot navigation must not load or receive mutation authority for these legacy file-backed endpoints.
+
+Demo runtime resolves customer-memory storage and backups beneath its isolated state directory. Profile creation, update, active-status changes, import dry-run/apply and restore must never write the repository-owned production/customer-memory file.
+
+The demo seeds synthetic customer-memory profiles using reserved `.invalid` identities. Import apply remains preview-oriented: the browser requires a successful dry-run before allowing apply, while the existing backend creates the durable backup and remains authoritative for conflict validation.
+
+## DEC-212 — Browser Settings Exposes Durable Customer and Supplier Master Data
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The browser Settings workspace includes a `Master Veri` panel backed by the existing durable customer/supplier master-data services. Operators may create and update customer identity/trusted-sender/default-operation/pricing fields and supplier identity/contact/geography/service/equipment/capability/priority-route fields.
+
+This panel does not replace the separate supplier relationship settings or customer automation exception views. Master-data writes continue to use repository conflict detection, normalized geography and authenticated operator evidence; the browser may not fabricate master IDs or bypass durable service validation.
+
+## DEC-213 — Browser Exposes Supplier Clarification Follow-Up Lifecycle
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+When a supplier RFQ contains an incomplete commercial quote that the existing progression engine can clarify on the same RFQ, the browser must expose the persisted SupplierRFQFollowUpDraft instead of leaving the clarification lifecycle CLI-only.
+
+The job detail may create the follow-up only by re-running the normal supplier-price progression, then uses the existing approve, provider-send, manual-sent and send-reconciliation endpoints. In Demo mode, a synthetic incomplete-quote scenario is available so the full follow-up path can be exercised without a real supplier.
+
+A supplier asking for new operational/customer information is not the same as an incomplete commercial quote. The browser must not pretend the commercial follow-up generator can answer such a question; it remains an operator-review condition until an authoritative answer path exists.
+
+## DEC-214 — Browser Exposes Supplier RFQ Lifecycle and Manual Acknowledgement Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The MINA job detail must expose the existing Supplier RFQ draft approval, controlled provider send, manual-sent evidence and send-reconciliation lifecycle. Secondary drafts remain visibly held while the server-side primary-group gate is closed; the browser does not infer permission to approve or send them.
+
+Operators may record a supplier's non-commercial “received / working” acknowledgement when it was obtained by phone or WhatsApp. This action uses the existing acknowledgement endpoint and authenticated operator evidence, extends the acknowledgement grace logic, and must never create a quote or capacity response.
+
+Supplier dispatch status may expose neutral browser capabilities such as whether commercial or capacity secondary release is enabled. Internal protected commercial evidence labels and customer target-price data must not be embedded in browser source.
+
+## DEC-215 — Commercial Secondary Release Is an Explicit Operator Action
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+When every primary supplier has reached a terminal result and at least one primary quote exists, the browser may offer an explicit action to record that primary price negotiation is exhausted and open the secondary supplier group, if the current dispatch policy permits that commercial fallback.
+
+The action writes only the existing durable secondary-dispatch authorization evidence. It must not disclose the customer's target price, treat silence as unavailability, or bypass unresolved primary suppliers. After authorization, normal supplier-price progression may prepare the secondary RFQ draft; approval and send still use the ordinary Supplier RFQ lifecycle.
+
+## DEC-216 — Work Queue Exposes Read-Only Diagnostic and Recovery Detail
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+Each browser work-queue card may open the existing operational work-item detail projection. The panel shows why the item is waiting, blocking reasons, current state checks, assignment status, recovery mode and the purposes of existing guarded operator commands.
+
+The detail panel is diagnostic only. It must not execute CLI argv, fabricate workflow state, auto-repair stale resources or turn informational `next_action` text into authority. Existing workflow, approval, RFQ, attachment and assignment services remain the only mutation boundaries.
+
+## DEC-217 — Demo Outlook Pull Reuses Production Inbound Routing
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The Sandbox may expose a synthetic Outlook inbox, but it must run through the existing `pull_controlled_outlook_inbox` and deterministic inbound router rather than a UI-only mock. Microsoft authentication, Microsoft Graph and OpenAI are replaced only by deterministic demo adapters.
+
+The demo mailbox includes a verified customer request, a correlated supplier reply and an unverified sender requiring manual review. Repeated pulls must present the same synthetic message identities so existing inbound replay/idempotency rules, rather than demo-specific shortcuts, determine duplicate behavior.
+
+Customer master-data authority selected by the Outlook router must be propagated into controlled customer ingestion. The downstream customer gate must not silently fall back to a different legacy customer source after the sender was already resolved against durable master data.
+
+## DEC-218 — Demo Reset Is Isolated, Explicit, and Session-Bound
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The Sandbox exposes a demo-only reset/reseed control that restores the synthetic MINAI baseline without touching pilot or repository-owned operational data. Reset is available only while `MINAI_DEMO_MODE` is active and must remain disabled from the controlled-pilot route allowlist.
+
+A reset request requires an authenticated browser session, normal CSRF validation, and an explicit `RESET_DEMO` confirmation token. It restores the demo SQLite seed, synthetic Customer Memory, demo outbox, Customer Memory backups, and synthetic Outlook replay-target state while preserving the user's current browser session.
+
+All mutable reset targets must resolve beneath the configured `MINAI_DEMO_STATE_DIR`, outside the repository. Paths or symlinks that escape that directory are rejected before any mutation begins.

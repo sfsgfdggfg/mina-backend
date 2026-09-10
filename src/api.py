@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Any, List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
@@ -66,6 +66,12 @@ from src.workflow.relationship_onboarding import (
     RelationshipOnboardingAuthorizationError,
     run_outlook_relationship_onboarding,
 )
+from src.workflow.demo_relationship_onboarding import (
+    run_demo_relationship_onboarding,
+)
+from src.workflow.demo_inbound import parse_demo_customer_email
+from src.workflow.demo_outlook_pull import run_demo_outlook_pull
+from src.workflow.demo_reset import DemoResetUnavailableError, reset_demo_sandbox
 from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
     MicrosoftAuthConfigurationError,
@@ -88,6 +94,9 @@ from src.workflow.extraction_confirmation import (
 from src.core.pilot_store import SQLitePilotStore
 from src.pilot_launcher import validate_controlled_pilot_runtime
 from src.core.outbound_runtime import resolve_outbound_runtime_policy
+from src.core.demo_runtime import (
+    DemoOutboundMailSender, demo_mode_enabled, validate_demo_runtime,
+)
 from src.core.customer_recipient_authority import build_customer_quote_recipient_authority
 from src.core.supplier_dispatch_policy import resolve_supplier_dispatch_policy
 from src.core.business_calendar import supplier_calendar_metadata
@@ -422,11 +431,11 @@ def _authenticated_operator(
 
 
 def _runtime_outbound_delivery_enabled() -> bool:
-    return outbound_runtime_policy.delivery_enabled
+    return outbound_runtime_policy.delivery_enabled or demo_mode_enabled()
 
 def _runtime_master_data_authority():
     """Real controlled pilot uses durable Master Data; dev/synthetic retains fixtures."""
-    return master_data_repository if pilot_mode_enabled() else None
+    return master_data_repository if (pilot_mode_enabled() or demo_mode_enabled()) else None
 
 
 
@@ -439,6 +448,11 @@ def _require_runtime_outbound_delivery() -> None:
 
 
 def _build_outbound_mail_sender_if_enabled() -> OutboundMailSender | None:
+    if demo_mode_enabled():
+        outbox = os.environ.get("MINAI_DEMO_OUTBOX_PATH", "").strip()
+        if not outbox:
+            raise RuntimeError("MINAI_DEMO_OUTBOX_PATH is required in demo mode.")
+        return DemoOutboundMailSender(outbox)
     if not outbound_runtime_policy.delivery_enabled:
         return None
     try:
@@ -514,6 +528,8 @@ def validate_controlled_pilot_startup():
             )
     if pilot_mode_enabled():
         validate_controlled_pilot_runtime()
+    if demo_mode_enabled():
+        validate_demo_runtime()
 
 
 @app.on_event("startup")
@@ -522,6 +538,10 @@ def start_controlled_automation_scheduler():
 
     if pilot_mode_enabled() and outbound_runtime_policy.delivery_enabled:
         outbound_mail_sender = _require_controlled_outbound_mail_sender()
+        automation_scheduler.sender = outbound_mail_sender
+        automation_scheduler.start()
+    elif demo_mode_enabled():
+        outbound_mail_sender = _build_outbound_mail_sender_if_enabled()
         automation_scheduler.sender = outbound_mail_sender
         automation_scheduler.start()
 
@@ -560,6 +580,11 @@ class ProcessEmailRequest(BaseModel):
     def validate_email_text(cls, value: str) -> str:
         return validate_inbound_mail_body(value)
 
+
+
+class DemoResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    confirmation: Literal["RESET_DEMO"]
 
 
 class OutlookPullRequest(BaseModel):
@@ -886,6 +911,12 @@ class SupplierRFQManualSentRequest(BaseModel):
 
 class SupplierRFQAcknowledgementRequest(BaseModel):
     channel: Literal["phone", "whatsapp", "manual"]
+
+
+class DemoSupplierResponseRequest(BaseModel):
+    scenario: Literal[
+        "acknowledged", "quoted", "incomplete_quote", "no_capacity", "needs_clarification"
+    ]
 
 
 class SupplierRFQResponseRequest(BaseModel):
@@ -1800,14 +1831,19 @@ def get_reporting_section(
 
 @app.get("/relationship-onboarding/status")
 def get_relationship_onboarding_status():
-    try:
-        MicrosoftAuthConfig.from_environment()
+    synthetic_mailbox = demo_mode_enabled()
+    if synthetic_mailbox:
         outlook_configured = True
-    except MicrosoftAuthConfigurationError:
-        outlook_configured = False
+    else:
+        try:
+            MicrosoftAuthConfig.from_environment()
+            outlook_configured = True
+        except MicrosoftAuthConfigurationError:
+            outlook_configured = False
     facts = learning_fact_repository.list_all()
     return {
         "outlook_configured": outlook_configured,
+        "synthetic_mailbox": synthetic_mailbox,
         "customer_master_count": len(master_data_repository.list_customers()),
         "supplier_master_count": len(master_data_repository.list_suppliers()),
         "proposed_customer_fact_count": sum(item.subject_type == "customer" and item.status == "proposed" for item in facts),
@@ -1828,6 +1864,17 @@ def analyze_outlook_relationship_history(
             detail="historical_mailbox_authorization_required",
         )
     try:
+        if demo_mode_enabled():
+            return run_demo_relationship_onboarding(
+                start_at=request.start_at, end_at=request.end_at,
+                max_messages=request.max_messages,
+                authorization_confirmed=request.authorization_confirmed,
+                master_repository=master_data_repository,
+                learning_repository=learning_fact_repository,
+                created_by=_authenticated_operator(http_request),
+                include_ai_observations=request.include_ai_observations,
+                agency_addresses=request.agency_alias_addresses,
+            )
         config = MicrosoftAuthConfig.from_environment()
         ai_analyzer = (
             OpenAIRelationshipHistoryAnalyzer()
@@ -2971,10 +3018,33 @@ def prepare_quote_send(request: PrepareQuoteSendRequest):
     return result.model_dump()
 
 
+@app.post("/demo/reset")
+def reset_demo_endpoint(request: DemoResetRequest, http_request: Request):
+    if not demo_mode_enabled():
+        raise HTTPException(status_code=404, detail="demo_reset_unavailable")
+    if not getattr(http_request.state, "pilot_operator", None):
+        raise HTTPException(status_code=401, detail="demo_web_session_required")
+    try:
+        return reset_demo_sandbox()
+    except DemoResetUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @app.post("/inbound/outlook/pull")
 def pull_outlook_inbound(
     request: OutlookPullRequest,
 ):
+    if demo_mode_enabled():
+        return run_demo_outlook_pull(
+            limit=request.limit,
+            proposal_repository=extraction_proposal_repository,
+            operational_data_sources=operational_data_sources,
+            master_data_repository=_runtime_master_data_authority(),
+            supplier_repository=supplier_rfq_repository,
+            attachment_review_repository=attachment_review_repository,
+            interpret_attachments=request.interpret_attachments,
+        )
+
     try:
         config = (
             MicrosoftAuthConfig.from_environment()
@@ -3435,7 +3505,7 @@ def process_email(request: ProcessEmailRequest):
                 ),
                 source="manual",
             ),
-            shipment_parser=parse_email_with_ai,
+            shipment_parser=(parse_demo_customer_email if demo_mode_enabled() else parse_email_with_ai),
             proposal_repository=(
                 extraction_proposal_repository
             ),
@@ -3452,6 +3522,13 @@ def process_email(request: ProcessEmailRequest):
         ) from exc
 
     return serialize_result(result)
+
+
+@app.get("/extraction-proposals")
+def list_extraction_proposals():
+    proposals = extraction_proposal_repository.list_all()
+    proposals.sort(key=lambda item: item.created_at, reverse=True)
+    return {"proposals": [item.model_dump() for item in proposals]}
 
 
 @app.get("/extraction-proposals/{proposal_id}")
@@ -3931,6 +4008,57 @@ def ingest_supplier_response(request: SupplierReplyIngestionRequest):
         extracted_response=request.extracted_response,
         repository=supplier_rfq_repository,
     ).model_dump()
+
+
+@app.post("/demo/supplier-rfqs/{rfq_id}/simulate-response")
+def simulate_demo_supplier_response(rfq_id: str, request: DemoSupplierResponseRequest):
+    if not demo_mode_enabled():
+        raise HTTPException(status_code=404, detail="demo_supplier_response_unavailable")
+    draft = supplier_rfq_repository.get_draft(rfq_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail=f"Supplier RFQ not found: {rfq_id}")
+    if not draft.recipient_email:
+        raise HTTPException(status_code=409, detail="demo_supplier_recipient_missing")
+
+    now = datetime.now(timezone.utc)
+    cost = 2300.0 + (draft.priority * 70.0)
+    bodies = {
+        "acknowledged": "Talebinizi aldık, çalışıyoruz.",
+        "quoted": f"Teklifimiz {cost:.0f} EUR all-in, transit 5 gün.",
+        "incomplete_quote": f"Teklifimiz {cost:.0f} EUR all-in. Transit bilgisini ayrıca teyit edeceğiz.",
+        "no_capacity": "Maalesef bu yük için araç veremiyoruz.",
+        "needs_clarification": "Yükleme posta kodunu teyit eder misiniz?",
+    }
+    extracted = None
+    if request.scenario == "quoted":
+        extracted = {
+            "status": "quoted", "cost": cost, "currency": "EUR",
+            "transit_time": "5 gün", "equipment_type": "Tenteli",
+            "pricing_basis": "all_in",
+        }
+    elif request.scenario == "incomplete_quote":
+        extracted = {
+            "status": "quoted", "cost": cost, "currency": "EUR",
+            "equipment_type": "Tenteli", "pricing_basis": "all_in",
+        }
+    elif request.scenario == "no_capacity":
+        extracted = {"status": "no_capacity", "notes": bodies[request.scenario]}
+    elif request.scenario == "needs_clarification":
+        extracted = {"status": "needs_clarification", "notes": bodies[request.scenario]}
+
+    reply = InboundMailEnvelope(
+        external_message_id=f"demo-supplier-reply-{rfq_id}-{int(now.timestamp() * 1_000_000)}",
+        provider_name="synthetic_demo_mailbox", mailbox_id="demo",
+        sender_address=draft.recipient_email, sender_name=draft.supplier_name,
+        recipient_addresses=["ops@minai.invalid"], subject=f"Re: {draft.subject}",
+        body_text=bodies[request.scenario], received_at=now,
+        explicit_rfq_reference=rfq_id, source="email",
+    )
+    return ingest_supplier_reply(
+        reply=reply, extracted_response=extracted, repository=supplier_rfq_repository
+    ).model_dump()
+
+
 
 @app.post("/customer-memory/import/validate")
 def validate_customer_memory_import(
