@@ -7,12 +7,18 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.core.demo_runtime import DemoOutboundMailSender, validate_demo_runtime
+from src.core.attachment_interpretation_review_service import (
+    apply_attachment_interpretation_review,
+    build_attachment_review_preview,
+)
 from src.core.mail import OutboundMailRequest
 from src.core.pilot_store import SQLitePilotStore
 from src.core.sqlite_repositories import (
+    SQLiteAttachmentInterpretationReviewRepository,
     SQLiteExtractionProposalRepository,
     SQLiteMinaJobRepository,
     SQLiteOperationalWorkAssignmentRepository,
+    SQLiteSupplierRFQRepository,
 )
 from src.core.master_data_repository import SQLiteMasterDataRepository
 from src.core.mail import InboundMailEnvelope
@@ -49,7 +55,8 @@ def evaluate_demo_sandbox_regressions() -> dict:
         masters = SQLiteMasterDataRepository(store)
         check(
             seeded.get("job_count") == 11 and len(jobs) == 11
-            and seeded.get("assignment_count") == 4,
+            and seeded.get("assignment_count") == 4
+            and seeded.get("attachment_review_count") == 2,
             "demo seed creates a populated synthetic MINA workload and work assignments",
         )
         assignment_repo = SQLiteOperationalWorkAssignmentRepository(store)
@@ -87,6 +94,35 @@ def evaluate_demo_sandbox_regressions() -> dict:
             and not inbound_results["DEMO:MACHINE"].can_continue_to_quote
             and "package count and dimensions" in inbound_results["DEMO:MACHINE"].missing_fields,
             "demo inbound scenarios preserve extraction confirmation and road quote-readiness boundaries",
+        )
+
+        review_repo = SQLiteAttachmentInterpretationReviewRepository(store)
+        supplier_repo = SQLiteSupplierRFQRepository(store)
+        customer_review = review_repo.get("demo-attachment-review-customer")
+        supplier_review = review_repo.get("demo-attachment-review-supplier")
+        customer_preview = build_attachment_review_preview(customer_review, {})
+        supplier_preview = build_attachment_review_preview(supplier_review, {})
+        applied_customer = apply_attachment_interpretation_review(
+            repository=review_repo, review_id=customer_review.review_id,
+            operator_identity="Demo Operator", corrections={}, proposal_repository=proposals,
+            supplier_repository=supplier_repo,
+        )
+        customer_proposal = proposals.get(applied_customer.applied_proposal_id)
+        responses_before = len(supplier_repo.list_responses(supplier_review.rfq_id))
+        applied_supplier = apply_attachment_interpretation_review(
+            repository=review_repo, review_id=supplier_review.review_id,
+            operator_identity="Demo Operator", corrections={}, proposal_repository=proposals,
+            supplier_repository=supplier_repo,
+        )
+        supplier_responses = supplier_repo.list_responses(applied_supplier.applied_rfq_id)
+        check(
+            customer_preview["apply_ready"] and "safety_value_unknown:is_high_value" in customer_preview["warnings"]
+            and customer_proposal.source_attachment_review_id == customer_review.review_id
+            and supplier_preview["apply_ready"] and "parser_marked_uncertain:transit_time" in supplier_preview["warnings"]
+            and responses_before == 0 and len(supplier_responses) == 1
+            and supplier_responses[0].source_attachment_review_id == supplier_review.review_id
+            and supplier_responses[0].cost == 2470.0 and supplier_responses[0].currency == "EUR",
+            "demo attachment review applies customer extraction and supplier quote through real review services",
         )
 
         learning = SQLiteLearningFactRepository(store)
@@ -196,7 +232,8 @@ def evaluate_demo_sandbox_regressions() -> dict:
     check(
         "DEMO · SENTETİK VERİ" in shell and ".demo-banner" in css
         and "Gelen Talepler" in shell and "DEMO_INBOUND_TEMPLATES" in app_js
-        and "Doğrula ve MINA işi oluştur" in app_js
+        and "Doğrula ve MINA işi oluştur" in app_js and "Ek İnceleme" in app_js
+        and "İncelemeyi uygula" in app_js and "preview_token" in app_js
         and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js,
         "browser shell exposes synthetic inbound and relationship workflows without hiding demo mode",
     )

@@ -6784,3 +6784,14 @@ In demo mode only, a deterministic local inbound parser replaces the external AI
 The demo ships with three synthetic scenarios: a quote-ready standard FTL textile load, a machine shipment that must stop for missing dimensions, and a quote-ready temperature-controlled reefer load. These scenarios are intended to make both successful progression and clarification blocking observable through the same real workflow services.
 
 Normal and controlled-pilot runtime continue to use the configured production email parser. Demo inbound messages must use synthetic `.invalid` identities and must never be confused with real mailbox evidence.
+
+## DEC-205 — Demo/Sandbox Includes Real Attachment Interpretation Review
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The functional demo seeds pending attachment-interpretation reviews for both customer and supplier routes. A synthetic customer XLSX produces a non-authoritative shipment candidate; a synthetic supplier PDF produces a commercial quote candidate linked to a real awaiting-response RFQ.
+
+The browser `Gelen Talepler` workspace exposes these reviews through the normal field-level preview/apply/reject services. Operator edits must be validated by the existing preview-token contract before apply. Applying a customer review creates a normal ExtractionProposal; applying a supplier review attaches a normal SupplierRFQResponse to the frozen RFQ snapshot.
+
+Synthetic attachment examples must preserve uncertainty and safety attention instead of pretending perfect extraction. Demo seed therefore includes an unknown high-value flag on the customer candidate and an uncertain transit-time field on the supplier candidate. Normal and controlled-pilot attachment retrieval, verification and interpretation paths are unchanged.

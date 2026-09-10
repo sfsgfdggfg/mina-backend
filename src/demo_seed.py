@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from src.core.agency_branding import AgencyBrandingSettings
 from src.core.agency_branding_repository import SQLiteAgencyBrandingRepository
+from src.core.attachment_interpretation_review import AttachmentInterpretationReview, AttachmentReviewEvidence
+from src.core.attachment_interpretation_review_service import supplier_rfq_review_snapshot_sha256
 from src.core.automation_policy import AgencyAutomationPolicy
 from src.core.automation_policy_repository import SQLiteAgencyAutomationPolicyRepository
 from src.core.learning_fact import LearningEvidence, LearningFact
@@ -20,7 +23,10 @@ from src.core.master_data import (
 from src.core.master_data_repository import SQLiteMasterDataRepository
 from src.core.mina_job import MinaJobEvent
 from src.core.mina_job_service import create_manual_mina_job
-from src.core.models import CustomerQuote, QuoteDraft, Shipment, SupplierQuote
+from src.core.models import CustomerQuote, Package, QuoteDraft, Shipment, SupplierQuote
+from src.core.extraction_confirmation import ShipmentProposalSnapshot
+from src.core.mail import InboundAttachmentMetadata, InboundMailEnvelope
+from src.core.supplier_response_ingestion import SupplierResponseExtraction
 from src.core.operation_execution import OperationException, OperationExecutionSnapshot
 from src.core.operation_execution_repository import SQLiteOperationExecutionRepository
 from src.core.operational_work_assignment import OperationalWorkAssignment
@@ -56,7 +62,7 @@ from src.core.supplier_rfq import (
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
 DEMO_OPERATOR = "Demo Operator"
-DEMO_SEED_VERSION = 1
+DEMO_SEED_VERSION = 2
 
 
 def _utc_now() -> datetime:
@@ -421,6 +427,74 @@ def _seed_quote(
     quote_repo.save(case)
     job = _set_job_state(job_repo, job, stage=job.stage, when=now, quote_case_id=case.case_id)
     return job, case, approval
+
+
+def _seed_attachment_reviews(store: SQLitePilotStore, now: datetime) -> int:
+    reviews = SQLiteAttachmentInterpretationReviewRepository(store)
+    rfqs = SQLiteSupplierRFQRepository(store)
+
+    customer_mail_body = "Ekli yük listesinde Bursa-Stuttgart makina sevkiyat detayları bulunmaktadır."
+    customer_mail_hash = hashlib.sha256(customer_mail_body.encode("utf-8")).hexdigest()
+    customer_review = AttachmentInterpretationReview(
+        review_id="demo-attachment-review-customer", route="customer",
+        source_message_key="demo-attachment-message-customer",
+        source_fingerprint_sha256=hashlib.sha256(b"demo-customer-attachment").hexdigest(),
+        inbound_mail=InboundMailEnvelope(
+            external_message_id="demo-attachment-customer-001", provider_name="synthetic_demo_mailbox",
+            mailbox_id="demo", sender_address="lojistik@mavi-makina.customer.invalid", sender_name="Mavi Makina",
+            recipient_addresses=["ops@minai.invalid"], subject="Bursa Stuttgart makina yük listesi",
+            body_text=customer_mail_body, raw_body_sha256=customer_mail_hash, privacy_transformed=True,
+            privacy_transform_version="demo-synthetic-v1", received_at=now - timedelta(minutes=22),
+            has_attachments=True, attachment_manifest=[InboundAttachmentMetadata(
+                name="yuk-listesi.xlsx", content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                size_bytes=18432, kind="file",
+            )], source="email",
+        ),
+        attachment_evidence=[AttachmentReviewEvidence(
+            content_profile="xlsx", size_bytes=18432,
+            sha256_hex=hashlib.sha256(b"demo-xlsx-bytes").hexdigest(),
+        )],
+        privacy_transform_version="demo-synthetic-v1", source_character_count=428, source_table_count=1,
+        trusted_customer_name="Mavi Makina", customer_candidate=ShipmentProposalSnapshot(
+            customer_name="Mavi Makina", pickup_country="Türkiye", pickup_city="Bursa",
+            delivery_country="Germany", delivery_city="Stuttgart", delivery_postcode="70173",
+            commodity="Makina", gross_weight_kg=3200, weight_is_approximate=False, service_type="FTL",
+            transport_mode="road", equipment_type="Tenteli", cargo_ready_date="2026-09-12",
+            is_adr=False, is_temperature_controlled=False, is_high_value=None,
+            packages=[Package(package_type="kasa", quantity=1, length_cm=320, width_cm=190, height_cm=280, weight_kg=3200)],
+        ), created_at=now - timedelta(minutes=20),
+    )
+    reviews.save(customer_review)
+
+    draft = next((item for item in rfqs.list_drafts() if item.status == "awaiting_response" and item.recipient_email and not rfqs.list_responses(item.rfq_id)), None)
+    if draft is not None:
+        supplier_body = "Teklifimiz ekli PDF'dedir. All-in 2470 EUR, transit 5 gün."
+        supplier_hash = hashlib.sha256(supplier_body.encode("utf-8")).hexdigest()
+        supplier_review = AttachmentInterpretationReview(
+            review_id="demo-attachment-review-supplier", route="supplier",
+            source_message_key="demo-attachment-message-supplier",
+            source_fingerprint_sha256=hashlib.sha256(b"demo-supplier-attachment").hexdigest(),
+            inbound_mail=InboundMailEnvelope(
+                external_message_id="demo-attachment-supplier-001", provider_name="synthetic_demo_mailbox", mailbox_id="demo",
+                sender_address=draft.recipient_email, sender_name=draft.supplier_name, recipient_addresses=["ops@minai.invalid"],
+                subject=f"Re: {draft.subject}", body_text=supplier_body, raw_body_sha256=supplier_hash,
+                privacy_transformed=True, privacy_transform_version="demo-synthetic-v1", received_at=now - timedelta(minutes=15),
+                explicit_rfq_reference=draft.rfq_id, has_attachments=True, attachment_manifest=[InboundAttachmentMetadata(
+                    name="teklif.pdf", content_type="application/pdf", size_bytes=56320, kind="file",
+                )], source="email",
+            ),
+            attachment_evidence=[AttachmentReviewEvidence(
+                content_profile="pdf", size_bytes=56320, sha256_hex=hashlib.sha256(b"demo-pdf-bytes").hexdigest(),
+            )], privacy_transform_version="demo-synthetic-v1", source_character_count=186, source_table_count=1,
+            rfq_id=draft.rfq_id, correlation_method="explicit_demo_rfq",
+            expected_rfq_snapshot_sha256=supplier_rfq_review_snapshot_sha256(draft),
+            supplier_candidate=SupplierResponseExtraction(
+                status="quoted", cost=2470.0, currency="EUR", transit_time=None, equipment_type="Tenteli",
+                pricing_basis="all_in", uncertain_fields=["transit_time"],
+            ), created_at=now - timedelta(minutes=14),
+        )
+        reviews.save(supplier_review)
+    return len(reviews.list_all())
 
 
 def _seed_operational_assignments(store: SQLitePilotStore, now: datetime) -> int:
@@ -789,6 +863,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
         updated_at=now - timedelta(hours=6),
     ))
 
+    attachment_review_count = _seed_attachment_reviews(store, now)
     assignment_count = _seed_operational_assignments(store, now)
 
     store.upsert(
@@ -799,6 +874,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
             "seeded_at": now.isoformat(),
             "job_count": len(jobs),
             "assignment_count": assignment_count,
+            "attachment_review_count": attachment_review_count,
             "synthetic_only": True,
         },
         event_type="demo_database_seeded",
@@ -811,6 +887,7 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
         "customer_count": len(customers),
         "supplier_count": len(suppliers),
         "assignment_count": assignment_count,
+        "attachment_review_count": attachment_review_count,
     }
 
 

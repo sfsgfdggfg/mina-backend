@@ -589,7 +589,95 @@ function inboxProposalCard(proposal, refresh) {
   return card;
 }
 
-function renderInbox(proposals = []) {
+
+const ATTACHMENT_FIELD_LABELS = {
+  customer_name:"Müşteri", pickup_country:"Yükleme ülkesi", pickup_city:"Yükleme şehri", pickup_postcode:"Yükleme posta kodu",
+  delivery_country:"Teslim ülkesi", delivery_city:"Teslim şehri", delivery_postcode:"Teslim posta kodu", commodity:"Ürün",
+  gross_weight_kg:"Brüt ağırlık (kg)", service_type:"Servis", quote_mode:"Fiyat tipi", transport_mode:"Taşıma modu",
+  equipment_type:"Ekipman", cargo_ready_date:"Yük hazır tarihi", required_delivery_date:"Gerekli teslim tarihi",
+  is_adr:"ADR", adr_class:"ADR sınıfı", is_temperature_controlled:"Sıcaklık kontrollü", temperature_requirement:"Sıcaklık",
+  is_high_value:"Yüksek değerli", packages:"Paketler", status:"Tedarikçi yanıtı", cost:"Maliyet", currency:"Para birimi",
+  transit_time:"Transit süre", validity_date:"Geçerlilik", vehicle_available_date:"Araç hazır tarihi", pricing_basis:"Fiyat kapsamı",
+  included_costs:"Dahil masraflar", excluded_costs:"Hariç masraflar", notes:"Notlar"
+};
+const ATTACHMENT_BOOLEAN_FIELDS = new Set(["is_adr","is_temperature_controlled","is_high_value"]);
+const ATTACHMENT_NUMBER_FIELDS = new Set(["gross_weight_kg","cost"]);
+const ATTACHMENT_JSON_FIELDS = new Set(["packages","included_costs","excluded_costs","commodity_attributes"]);
+
+function attachmentFieldInput(field, disabled = false) {
+  let input;
+  const value = field.preview_value;
+  if (ATTACHMENT_BOOLEAN_FIELDS.has(field.field)) {
+    input = document.createElement("select");
+    [["","Belirsiz"],["true","Evet"],["false","Hayır"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;input.append(o);});
+    input.value = value === true ? "true" : value === false ? "false" : "";
+  } else if (ATTACHMENT_JSON_FIELDS.has(field.field)) {
+    input = document.createElement("textarea"); input.rows = 3;
+    input.value = value == null ? "" : JSON.stringify(value, null, 2);
+  } else {
+    input = document.createElement("input"); input.type = ATTACHMENT_NUMBER_FIELDS.has(field.field) ? "number" : "text";
+    input.value = value == null ? "" : String(value);
+  }
+  input.disabled = disabled || !field.editable;
+  input.dataset.field = field.field;
+  input.dataset.original = JSON.stringify(field.original_value);
+  return input;
+}
+
+function attachmentCorrections(card) {
+  const corrections = {};
+  card.querySelectorAll("[data-field]").forEach(input => {
+    const name = input.dataset.field; const original = JSON.parse(input.dataset.original || "null");
+    let value = input.value;
+    if (ATTACHMENT_BOOLEAN_FIELDS.has(name)) value = value === "" ? null : value === "true";
+    else if (ATTACHMENT_NUMBER_FIELDS.has(name)) value = value.trim() === "" ? null : Number(value);
+    else if (ATTACHMENT_JSON_FIELDS.has(name)) value = value.trim() === "" ? null : JSON.parse(value);
+    else value = value.trim() === "" ? null : value.trim();
+    if (JSON.stringify(value) !== JSON.stringify(original)) corrections[name] = value;
+  });
+  return corrections;
+}
+
+function attachmentReviewCard(review, refresh) {
+  const card = node("article", "", "attachment-review-card");
+  const head = node("div", "", "inbox-proposal-head");
+  const left=node("div");
+  left.append(node("strong", review.route === "customer" ? "Müşteri eki incelemesi" : "Tedarikçi teklif eki incelemesi"),
+    node("div", `${(review.attachment_profiles||[]).join(", ").toUpperCase()} · ${review.attachment_count||0} ek · ${formatDate(review.created_at)}`,"small muted"));
+  head.append(left,node("span",review.status === "pending" ? "İnceleme bekliyor" : review.status === "applied" ? "Uygulandı" : "Reddedildi",`badge ${review.status === "pending" ? "open" : ""}`));
+  card.append(head);
+  if (review.rfq_id) card.append(node("div",`RFQ: ${review.rfq_id}`,"small muted attachment-rfq"));
+  const preview = review.field_review || {}; const fieldWrap=node("div","","attachment-field-grid");
+  (preview.fields||[]).filter(f=>["safety","operational","commercial","commercial_critical"].includes(f.category)).forEach(field=>{
+    const row=node("label","","attachment-field-row");
+    const meta=node("div","","attachment-field-meta");
+    meta.append(node("span",ATTACHMENT_FIELD_LABELS[field.field]||codeLabel(field.field)),node("small",`${codeLabel(field.category)}${field.requires_attention?" · dikkat":""}`,field.requires_attention?"attachment-attention":"muted"));
+    row.append(meta,attachmentFieldInput(field,review.status!=="pending")); fieldWrap.append(row);
+  });
+  card.append(fieldWrap);
+  const feedback=node("div","","muted settings-feedback");
+  if ((preview.warnings||[]).length) feedback.textContent=`Dikkat: ${preview.warnings.map(codeLabel).join(" · ")}`;
+  const actions=node("div","","actions inbox-actions");
+  if (review.status === "pending") {
+    actions.append(actionButton("Önizle", "", async()=>{
+      try { const corrections=attachmentCorrections(card); const result=await api(`/attachment-reviews/${encodeURIComponent(review.review_id)}/preview`,{method:"POST",body:JSON.stringify({corrections})});
+        feedback.textContent=result.apply_ready?`Önizleme hazır · ${result.changed_field_count||0} alan değişti${result.warnings?.length?` · ${result.warnings.length} dikkat`:""}`:`Uygulanamaz: ${result.validation_error||result.blockers?.join(", ")}`;
+      } catch(e){feedback.textContent=e.message||String(e);setStatus("Hata",false);}
+    }));
+    actions.append(actionButton("İncelemeyi uygula", "primary", async()=>{
+      try { const corrections=attachmentCorrections(card); const previewResult=await api(`/attachment-reviews/${encodeURIComponent(review.review_id)}/preview`,{method:"POST",body:JSON.stringify({corrections})});
+        if(!previewResult.apply_ready){feedback.textContent=`Uygulanamaz: ${previewResult.validation_error||previewResult.blockers?.join(", ")}`;return;}
+        await api(`/attachment-reviews/${encodeURIComponent(review.review_id)}/apply`,{method:"POST",body:JSON.stringify({corrections,preview_token:previewResult.preview_token})});
+        feedback.textContent=review.route==="customer"?"Ek doğrulandı; Extraction Kuyruğu'na yeni öneri aktarıldı.":"Tedarikçi eki doğrulandı; RFQ yanıtına işlendi."; await refresh();
+      } catch(e){feedback.textContent=e.message||String(e);setStatus("Hata",false);}
+    }));
+    const rejectField=inboxField("Reddetme nedeni"); rejectField.label.classList.add("attachment-reject-field"); card.append(rejectField.label);
+    actions.append(actionButton("Reddet", "", async()=>{const reason=rejectField.input.value.trim();if(!reason){feedback.textContent="Reddetme nedeni gerekli.";return;}try{await api(`/attachment-reviews/${encodeURIComponent(review.review_id)}/reject`,{method:"POST",body:JSON.stringify({rejection_reason:reason})});await refresh();}catch(e){feedback.textContent=e.message||String(e);setStatus("Hata",false);}}));
+  }
+  card.append(actions,feedback); return card;
+}
+
+function renderInbox(proposals = [], attachmentReviews = []) {
   setPageContext("Gelen Talepler", "Müşteri Talep Girişi");
   const root = node("div", "", "inbox-page");
   const intro = node("div", "", "notice");
@@ -629,6 +717,14 @@ function renderInbox(proposals = []) {
   });
   composer.append(submit, composeFeedback); root.append(composer);
 
+  const attachments = node("section", "", "section attachment-review-section");
+  const pendingAttachments = attachmentReviews.filter(item => item.status === "pending").length;
+  attachments.append(node("h2", `Ek İnceleme · ${attachmentReviews.length}`), node("div", `${pendingAttachments} ek operatör incelemesi bekliyor.`, "small muted"));
+  const attachmentList=node("div","","inbox-proposal-list");
+  attachmentReviews.forEach(item=>attachmentList.append(attachmentReviewCard(item,loadInbox)));
+  if(!attachmentReviews.length) attachmentList.append(emptyState("Bekleyen ek incelemesi yok"));
+  attachments.append(attachmentList); root.append(attachments);
+
   const queue = node("section", "", "section inbox-queue");
   const proposedCount = proposals.filter(item => item.extraction_status === "proposed").length;
   queue.append(node("h2", `Extraction Kuyruğu · ${proposals.length}`), node("div", `${proposedCount} talep operatör doğrulaması bekliyor.`, "small muted"));
@@ -639,8 +735,9 @@ function renderInbox(proposals = []) {
 }
 
 async function loadInbox() {
-  const payload = await api("/extraction-proposals");
-  renderInbox(payload.proposals || []);
+  const [proposalPayload, reviewPayload] = await Promise.all([api("/extraction-proposals"),api("/attachment-reviews")]);
+  const reviews = await Promise.all((reviewPayload.reviews || []).map(item => api(`/attachment-reviews/${encodeURIComponent(item.review_id)}`)));
+  renderInbox(proposalPayload.proposals || [], reviews);
 }
 
 function renderJobs(data) {

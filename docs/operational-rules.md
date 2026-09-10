@@ -3932,3 +3932,11 @@ Synthetic inbound mail may use a deterministic local parser, but parser output r
 Demo scenarios must preserve real blocking logic. A complete standard road request may proceed to supplier-RFQ preparation, while a machine request without dimensions must remain in clarification. Temperature-controlled loads must carry explicit temperature-control evidence and equipment data before they may proceed.
 
 The `Gelen Talepler` UI must call the same `/process-email`, extraction-confirmation and resume boundaries used by the application. It may provide synthetic templates for convenience, but it must not paint successful outcomes directly into the frontend or skip server-side state transitions.
+
+## RULE-222 — Demo Attachment Interpretation Must Preserve Human Review Authority
+
+Synthetic attachment content may pre-populate a candidate, but it never becomes shipment or supplier-response authority automatically. The operator must preview the current corrections and apply with the matching preview token through the normal attachment-review service.
+
+Customer attachment apply may create only an ExtractionProposal, which still requires the ordinary extraction-confirmation boundary before a MINA job is created. Supplier attachment apply may affect only the RFQ whose frozen snapshot and sender identity still match the review evidence.
+
+Unknown safety values and parser-marked uncertain commercial fields must remain visible in the demo review UI. The demo must contain at least one customer attachment and one supplier attachment example, and regression coverage must prove their mutations flow through normal repositories rather than frontend-only state.
