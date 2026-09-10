@@ -6,6 +6,7 @@ from typing import Optional, Protocol
 from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
     SupplierRFQAcknowledgementEvidence,
+    SupplierContactAttemptEvidence,
     SupplierRFQDraft,
     SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpDraft,
@@ -157,6 +158,18 @@ class SupplierRFQRepository(Protocol):
     ) -> list[SupplierRFQAcknowledgementEvidence]:
         ...
 
+    def save_contact_attempt(
+        self,
+        evidence: SupplierContactAttemptEvidence,
+    ) -> SupplierContactAttemptEvidence:
+        ...
+
+    def list_contact_attempts(
+        self,
+        rfq_id: Optional[str] = None,
+    ) -> list[SupplierContactAttemptEvidence]:
+        ...
+
     def save_secondary_dispatch_authorization(
         self,
         evidence: SupplierSecondaryDispatchAuthorization,
@@ -267,6 +280,7 @@ class InMemorySupplierRFQRepository:
             str, SupplierRFQFollowUpManualSentEvidence
         ] = {}
         self._acknowledgements: list[SupplierRFQAcknowledgementEvidence] = []
+        self._contact_attempts: dict[str, SupplierContactAttemptEvidence] = {}
         self._secondary_dispatch_authorizations: dict[
             str, SupplierSecondaryDispatchAuthorization
         ] = {}
@@ -442,6 +456,21 @@ class InMemorySupplierRFQRepository:
         rfq_id: Optional[str] = None,
     ) -> list[SupplierRFQAcknowledgementEvidence]:
         items = list(self._acknowledgements)
+        return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
+
+    def save_contact_attempt(
+        self, evidence: SupplierContactAttemptEvidence
+    ) -> SupplierContactAttemptEvidence:
+        existing = self._contact_attempts.get(evidence.attempt_id)
+        if existing is not None:
+            return existing
+        self._contact_attempts[evidence.attempt_id] = evidence
+        return evidence
+
+    def list_contact_attempts(
+        self, rfq_id: Optional[str] = None
+    ) -> list[SupplierContactAttemptEvidence]:
+        items = list(self._contact_attempts.values())
         return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
 
     def save_secondary_dispatch_authorization(

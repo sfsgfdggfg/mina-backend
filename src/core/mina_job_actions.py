@@ -73,12 +73,18 @@ def _current_reminder_context(
         raise MinaJobActionError("Supplier RFQ has no recipient email.")
     if latest_supplier_response_status(supplier_repository, draft.rfq_id) is not None:
         raise MinaJobActionError("Supplier already has a commercial response.")
+    acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
+    latest_acknowledgement = (
+        max(acknowledgements, key=lambda item: aware_utc(item.acknowledged_at))
+        if acknowledgements else None
+    )
     learning_policy = resolve_supplier_operational_learning_policy(
         supplier_name=draft.supplier_name,
         master_data_repository=master_data_repository,
         learning_repository=learning_fact_repository,
         base_first_reminder_minutes=workflow.dispatch_policy.no_response_reminder_minutes,
         base_acknowledged_wait_minutes=workflow.dispatch_policy.acknowledged_grace_minutes,
+        acknowledgement_channel=(None if latest_acknowledgement is None else latest_acknowledgement.channel),
         as_of=now,
     )
     first_minutes = (
@@ -91,9 +97,8 @@ def _current_reminder_context(
         if learning_policy is None
         else learning_policy.effective_acknowledged_wait_minutes
     )
-    acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
     if acknowledgements:
-        anchor = max(aware_utc(item.acknowledged_at) for item in acknowledgements)
+        anchor = aware_utc(latest_acknowledgement.acknowledged_at)
         action_type = "supplier_acknowledged_reminder"
         due_at = add_supplier_business_minutes(anchor, acknowledged_minutes)
     else:

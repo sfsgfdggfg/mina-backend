@@ -80,6 +80,7 @@ def build_mina_job_detail(
                 continue
             responses = supplier_repository.list_responses(draft.rfq_id)
             acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
+            contact_attempts = supplier_repository.list_contact_attempts(draft.rfq_id)
             plan = supplier_reminder_plan(
                 supplier_repository=supplier_repository,
                 action_repository=action_repository,
@@ -100,6 +101,11 @@ def build_mina_job_detail(
                 "sent_at": draft.sent_at,
                 "responded_at": draft.responded_at,
                 "latest_acknowledgement_at": None if latest_ack is None else latest_ack.acknowledged_at,
+                "latest_acknowledgement_channel": None if latest_ack is None else latest_ack.channel,
+                "contact_attempts": [
+                    item.model_dump(mode="json")
+                    for item in sorted(contact_attempts, key=lambda item: item.attempted_at, reverse=True)[:5]
+                ],
                 "commercial_response": None if latest_response is None else {
                     "status": latest_response.status,
                     "cost": latest_response.cost,

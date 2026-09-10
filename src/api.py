@@ -196,10 +196,12 @@ from src.core.quote_send_service import prepare_quote_for_sending
 from src.core.supplier_rfq import SupplierRFQResponse
 from src.core.supplier_dispatch_control import (
     SupplierAcknowledgementError,
+    SupplierContactAttemptError,
     SupplierSecondaryDispatchBlockedError,
     authorize_secondary_after_price_negotiation,
     build_supplier_dispatch_status,
     record_supplier_acknowledgement,
+    record_supplier_contact_attempt,
 )
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQFollowUpNotFoundError,
@@ -913,6 +915,12 @@ class SupplierRFQManualSentRequest(BaseModel):
 
 class SupplierRFQAcknowledgementRequest(BaseModel):
     channel: Literal["phone", "whatsapp", "manual"]
+
+
+class SupplierContactAttemptRequest(BaseModel):
+    channel: Literal["phone", "whatsapp"]
+    outcome: Literal["acknowledged_working", "no_response", "unreachable"]
+    note: Optional[str] = Field(default=None, max_length=500)
 
 
 class DemoSupplierResponseRequest(BaseModel):
@@ -3825,6 +3833,19 @@ def record_supplier_rfq_seen(
             recorded_by=_authenticated_operator(http_request),
         )
     except SupplierAcknowledgementError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfqs/{rfq_id}/contact-attempts")
+def record_supplier_rfq_contact_attempt(
+    rfq_id: str, request: SupplierContactAttemptRequest, http_request: Request,
+):
+    try:
+        return record_supplier_contact_attempt(
+            repository=supplier_rfq_repository, rfq_id=rfq_id, channel=request.channel,
+            outcome=request.outcome, note=request.note, recorded_by=_authenticated_operator(http_request),
+        )
+    except SupplierContactAttemptError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 

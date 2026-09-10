@@ -122,6 +122,17 @@ class SupplierRFQAcknowledgementEvidence(BaseModel):
     source: Literal["supplier_acknowledgement"] = "supplier_acknowledgement"
 
 
+class SupplierContactAttemptEvidence(BaseModel):
+    attempt_id: str = Field(default_factory=lambda: str(uuid4()))
+    rfq_id: str
+    attempted_at: datetime = Field(default_factory=datetime.utcnow)
+    channel: Literal["phone", "whatsapp"]
+    outcome: Literal["acknowledged_working", "no_response", "unreachable"]
+    recorded_by: str = Field(min_length=1, max_length=200)
+    note: Optional[str] = Field(default=None, max_length=500)
+    source: Literal["supplier_contact_attempt"] = "supplier_contact_attempt"
+
+
 class SupplierSecondaryDispatchAuthorization(BaseModel):
     workflow_id: str
     authorized_at: datetime = Field(default_factory=datetime.utcnow)

@@ -13,6 +13,9 @@ from src.core.master_data import SupplierMasterProfile
 RANKING_MIN_EFFECTIVE_CONFIDENCE = 0.70
 TIMING_MIN_EFFECTIVE_CONFIDENCE = 0.85
 NEGOTIATION_MIN_EFFECTIVE_CONFIDENCE = 0.80
+CONTACT_MIN_EFFECTIVE_CONFIDENCE = 0.80
+CONTACT_MIN_RATE_ADVANTAGE = 20.0
+CONTACT_MIN_WINNER_RATE = 50.0
 MAX_RANKING_ADJUSTMENT = 0.06
 MAX_LEARNED_FIRST_REMINDER_MINUTES = 60
 MAX_LEARNED_ACK_WAIT_MINUTES = 180
@@ -23,6 +26,10 @@ _CANONICAL_UNITS = {
     "response.after_ack_median_minutes": "minutes",
     "commercial.usable_quote_rate_percent": "percent",
     "commercial.negotiated_reduction_percent": "percent",
+    "contact.phone.ack_rate_percent": "percent",
+    "contact.whatsapp.ack_rate_percent": "percent",
+    "contact.phone.after_ack_quote_median_minutes": "minutes",
+    "contact.whatsapp.after_ack_quote_median_minutes": "minutes",
 }
 
 TimingSource = Literal["supplier_master", "confirmed_learning", "dispatch_default"]
@@ -51,9 +58,12 @@ class SupplierOperationalLearningPolicy(BaseModel):
     effective_acknowledged_wait_minutes: int = Field(ge=15, le=720)
     acknowledged_wait_source: TimingSource
     negotiation_advisory_percent: float | None = Field(default=None, ge=0, le=30)
+    preferred_contact_channel_advisory: Literal["phone", "whatsapp"] | None = None
+    preferred_contact_channel_reason: str | None = None
+    acknowledgement_channel_context: Literal["email", "phone", "whatsapp", "manual"] | None = None
     contact_escalation_learning_applied: bool = False
     evaluations: list[SupplierLearningFactEvaluation] = Field(default_factory=list)
-    source: str = "supplier_operational_learning_policy_v1"
+    source: str = "supplier_operational_learning_policy_v2"
 
     @property
     def applied_fact_ids(self) -> list[str]:
@@ -103,6 +113,14 @@ def _recency_factor(fact_key: str, age_days: float) -> float:
             return 0.80
         if age_days <= 1095:
             return 0.50
+        return 0.0
+    if fact_key.startswith("contact."):
+        if age_days <= 90:
+            return 1.0
+        if age_days <= 365:
+            return 0.85
+        if age_days <= 730:
+            return 0.60
         return 0.0
     return 0.0
 
@@ -157,6 +175,7 @@ def build_supplier_operational_learning_policy(
     learning_repository: LearningFactRepository | None,
     base_first_reminder_minutes: int,
     base_acknowledged_wait_minutes: int,
+    acknowledgement_channel: str | None = None,
     as_of: datetime | None = None,
 ) -> SupplierOperationalLearningPolicy:
     current = _utc(as_of)
@@ -176,6 +195,10 @@ def build_supplier_operational_learning_policy(
         bounded = valid and (
             (key.startswith("response.") and value >= 0)
             or (key.startswith("commercial.") and 0 <= value <= 100)
+            or (key.startswith("contact.") and (
+                (key.endswith("_percent") and 0 <= value <= 100)
+                or (key.endswith("_minutes") and value >= 0)
+            ))
         )
         eligible = bool(bounded and recency > 0)
         reason = "eligible_confirmed_metric"
@@ -249,7 +272,12 @@ def build_supplier_operational_learning_policy(
         ack_minutes = relationship.acknowledged_wait_minutes
         ack_source = "supplier_master"
     else:
-        after_ack = usable.get("response.after_ack_median_minutes")
+        normalized_ack_channel = (acknowledgement_channel or "").strip().lower()
+        channel_after_ack = (
+            usable.get(f"contact.{normalized_ack_channel}.after_ack_quote_median_minutes")
+            if normalized_ack_channel in {"phone", "whatsapp"} else None
+        )
+        after_ack = channel_after_ack or usable.get("response.after_ack_median_minutes")
         if after_ack is not None and quote_rate is not None:
             a_fact, after_ack_minutes, after_ack_conf = after_ack
             q_fact, quote_percent, quote_conf = quote_rate
@@ -263,10 +291,33 @@ def build_supplier_operational_learning_policy(
                     ack_minutes = learned
                     ack_source = "confirmed_learning"
                     by_fact_id[a_fact.fact_id].effect = "timing"
-                    by_fact_id[a_fact.fact_id].reason = "high_confidence_after_ack_history_extends_ack_wait"
+                    by_fact_id[a_fact.fact_id].reason = (
+                        "high_confidence_channel_after_ack_history_extends_ack_wait"
+                        if channel_after_ack is not None
+                        else "high_confidence_after_ack_history_extends_ack_wait"
+                    )
                     if by_fact_id[q_fact.fact_id].effect == "none":
                         by_fact_id[q_fact.fact_id].effect = "timing"
                         by_fact_id[q_fact.fact_id].reason = "high_quote_rate_supports_patient_supplier_timing"
+
+    preferred_contact_channel = None
+    preferred_contact_reason = None
+    phone_rate = usable.get("contact.phone.ack_rate_percent")
+    whatsapp_rate = usable.get("contact.whatsapp.ack_rate_percent")
+    if phone_rate is not None and whatsapp_rate is not None:
+        p_fact, p_rate, p_conf = phone_rate
+        w_fact, w_rate, w_conf = whatsapp_rate
+        if p_conf >= CONTACT_MIN_EFFECTIVE_CONFIDENCE and w_conf >= CONTACT_MIN_EFFECTIVE_CONFIDENCE:
+            difference = abs(p_rate - w_rate)
+            winner_rate = max(p_rate, w_rate)
+            if difference >= CONTACT_MIN_RATE_ADVANTAGE and winner_rate >= CONTACT_MIN_WINNER_RATE:
+                preferred_contact_channel = "phone" if p_rate > w_rate else "whatsapp"
+                preferred_contact_reason = (
+                    f"confirmed_contact_ack_rate_advantage_{round(difference, 1)}pp"
+                )
+                winner_fact = p_fact if preferred_contact_channel == "phone" else w_fact
+                by_fact_id[winner_fact.fact_id].effect = "advisory"
+                by_fact_id[winner_fact.fact_id].reason = "confirmed_contact_history_supports_channel_advisory"
 
     negotiation_advisory = None
     negotiation = usable.get("commercial.negotiated_reduction_percent")
@@ -286,6 +337,11 @@ def build_supplier_operational_learning_policy(
         effective_acknowledged_wait_minutes=ack_minutes,
         acknowledged_wait_source=ack_source,
         negotiation_advisory_percent=negotiation_advisory,
+        preferred_contact_channel_advisory=preferred_contact_channel,
+        preferred_contact_channel_reason=preferred_contact_reason,
+        acknowledgement_channel_context=(
+            acknowledgement_channel if acknowledgement_channel in {"email", "phone", "whatsapp", "manual"} else None
+        ),
         contact_escalation_learning_applied=False,
         evaluations=list(by_fact_id.values()),
     )
@@ -298,6 +354,7 @@ def resolve_supplier_operational_learning_policy(
     learning_repository: LearningFactRepository | None,
     base_first_reminder_minutes: int,
     base_acknowledged_wait_minutes: int,
+    acknowledgement_channel: str | None = None,
     as_of: datetime | None = None,
 ) -> SupplierOperationalLearningPolicy | None:
     if master_data_repository is None or not supplier_name.strip():
@@ -314,5 +371,6 @@ def resolve_supplier_operational_learning_policy(
         learning_repository=resolved_learning,
         base_first_reminder_minutes=base_first_reminder_minutes,
         base_acknowledged_wait_minutes=base_acknowledged_wait_minutes,
+        acknowledgement_channel=acknowledgement_channel,
         as_of=as_of,
     )

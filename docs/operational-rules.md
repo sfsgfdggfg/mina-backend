@@ -4039,3 +4039,11 @@ A supplier-learning fact may alter supplier ranking or reminder timing only when
 Learning must never make supplier contact earlier than the explicit/default operational rule. It may only extend waiting windows within the accepted caps. Supplier-specific manual timing always wins over learned timing.
 
 Learning must never promote a secondary supplier into the primary group, bypass capability/safety eligibility, release secondary suppliers, infer availability, alter phone/WhatsApp/management escalation, or create an outbound commercial target. Any applied learning effect must remain visible in backend read models with its source and bounded policy output.
+
+## RULE-237 — Silence and Unreachability Are Contact Evidence, Not Supplier Unavailability
+
+A phone or WhatsApp contact attempt must preserve its explicit outcome. `no_response` and `unreachable` are evidence that contact was attempted, not evidence that the supplier lacks capacity. They must not satisfy any secondary-supplier release condition.
+
+A contact attempt marked `acknowledged_working` is non-commercial evidence and starts the same acknowledged-supplier grace flow used by email/manual acknowledgements. It does not create a price, capacity decision or quote.
+
+Channel-learning requires durable attempt denominators; acknowledgement records alone must not be presented as a channel success rate. Confirmed high-confidence channel metrics may recommend phone or WhatsApp and may only make an acknowledged wait more patient within accepted limits. Explicit supplier-master channel/timing settings and all commercial safety gates remain superior authority.
