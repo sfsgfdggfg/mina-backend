@@ -1,5 +1,6 @@
 import json
 import shutil
+import os
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -20,6 +21,16 @@ from src.paths import data_path
 
 CUSTOMER_MEMORY_FILE = data_path("customer_memory.json")
 CUSTOMER_MEMORY_BACKUP_DIR = data_path("backups")
+
+
+def customer_memory_file() -> Path:
+    override = os.environ.get("MINAI_CUSTOMER_MEMORY_PATH", "").strip()
+    return Path(override).expanduser().resolve() if override else CUSTOMER_MEMORY_FILE
+
+
+def customer_memory_backup_dir() -> Path:
+    override = os.environ.get("MINAI_CUSTOMER_MEMORY_BACKUP_DIR", "").strip()
+    return Path(override).expanduser().resolve() if override else CUSTOMER_MEMORY_BACKUP_DIR
 
 
 class CustomerMemoryProfile(BaseModel):
@@ -71,7 +82,7 @@ def load_customer_memory(
     """
 
     if operational_data_sources is None:
-        source_path = CUSTOMER_MEMORY_FILE
+        source_path = customer_memory_file()
     else:
         source_path = operational_data_sources.customer_memory_path
 
@@ -458,7 +469,9 @@ def save_customer_profile(profile: CustomerMemoryProfile) -> CustomerMemoryProfi
         for existing_profile in customer_memory
     ]
 
-    with CUSTOMER_MEMORY_FILE.open("w", encoding="utf-8") as file:
+    target_path = customer_memory_file()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with target_path.open("w", encoding="utf-8") as file:
         json.dump(
             raw_profiles,
             file,
@@ -502,7 +515,9 @@ def set_customer_profile_active_status(
         for profile in customer_memory
     ]
 
-    with CUSTOMER_MEMORY_FILE.open("w", encoding="utf-8") as file:
+    target_path = customer_memory_file()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with target_path.open("w", encoding="utf-8") as file:
         json.dump(
             raw_profiles,
             file,
@@ -595,7 +610,9 @@ def update_customer_profile(
         for profile in customer_memory
     ]
 
-    with CUSTOMER_MEMORY_FILE.open("w", encoding="utf-8") as file:
+    target_path = customer_memory_file()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with target_path.open("w", encoding="utf-8") as file:
         json.dump(
             raw_profiles,
             file,
@@ -610,13 +627,13 @@ def create_customer_memory_backup() -> str:
     Creates a timestamped backup of data/customer_memory.json before import.
     """
 
-    backup_dir = CUSTOMER_MEMORY_BACKUP_DIR
+    backup_dir = customer_memory_backup_dir()
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = now_iso().replace(":", "-").replace("+", "_")
     backup_path = backup_dir / f"customer_memory_backup_{timestamp}.json"
 
-    shutil.copyfile(CUSTOMER_MEMORY_FILE, backup_path)
+    shutil.copyfile(customer_memory_file(), backup_path)
 
     return str(backup_path)
 
@@ -686,7 +703,9 @@ def apply_customer_memory_import(import_data: dict, updated_by: str = "import") 
 
     final_profiles = untouched_profiles + imported_profiles
 
-    CUSTOMER_MEMORY_FILE.write_text(
+    target_path = customer_memory_file()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(
         json.dumps(
             [profile.model_dump() for profile in final_profiles],
             ensure_ascii=False,
@@ -710,7 +729,7 @@ def list_customer_memory_backups() -> list[dict]:
     Lists customer memory backup files.
     """
 
-    backup_dir = CUSTOMER_MEMORY_BACKUP_DIR
+    backup_dir = customer_memory_backup_dir()
 
     if not backup_dir.exists():
         return []
@@ -742,7 +761,7 @@ def read_customer_memory_backup(file_name: str) -> dict:
     Reads a backup file from data/backups safely.
     """
 
-    backup_dir = CUSTOMER_MEMORY_BACKUP_DIR
+    backup_dir = customer_memory_backup_dir()
     backup_path = backup_dir / file_name
 
     if not backup_path.exists():
@@ -796,7 +815,9 @@ def restore_customer_memory_from_backup(
 
         restored_profiles.append(profile)
 
-    CUSTOMER_MEMORY_FILE.write_text(
+    target_path = customer_memory_file()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(
         json.dumps(
             [profile.model_dump() for profile in restored_profiles],
             ensure_ascii=False,

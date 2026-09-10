@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import hashlib
+import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -68,6 +69,27 @@ ISTANBUL = ZoneInfo("Europe/Istanbul")
 DEMO_OPERATOR = "Demo Operator"
 DEMO_SEED_VERSION = 4
 
+
+
+
+def seed_demo_customer_memory(path: Path, *, reset: bool = False) -> dict:
+    path = Path(path).expanduser().resolve()
+    if path.exists() and not reset:
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+            return {"seeded": False, "profile_count": len(existing), "path": str(path)}
+        except Exception:
+            pass
+    now = _utc_now().isoformat()
+    profiles = [
+        {"customer_name":"Atlas Tekstil","active":True,"aliases":["atlas","atlas textile"],"trusted_sender_addresses":["atlas@atlas-tekstil.customer.invalid"],"trusted_sender_domains":["atlas-tekstil.customer.invalid"],"default_commodity":"Tekstil","default_equipment_type":"Tenteli / Curtainsider","price_sensitivity":"high","time_sensitivity":"medium","pricing_policy":{"method":"cost_markup_percentage","value":12.0},"default_pickup_city":"Adana","default_pickup_area":"Hacı Sabancı OSB","default_pickup_country":"Türkiye","default_delivery_city":"Hamburg","default_delivery_country":"Almanya","created_at":now,"last_updated_at":now,"last_updated_by":"MINAI Demo Seeder","change_note":"Synthetic demo customer memory.","operational_notes":["Standart tekstil FTL taleplerinde bilinen adres ve ekipman varsayımları kullanılabilir."]},
+        {"customer_name":"Mavi Makina","active":True,"aliases":["mavi machine"],"trusted_sender_addresses":["lojistik@mavi-makina.customer.invalid"],"trusted_sender_domains":["mavi-makina.customer.invalid"],"default_commodity":"Makina","default_equipment_type":"Tenteli / Curtainsider","price_sensitivity":"medium","time_sensitivity":"medium","pricing_policy":{"method":"cost_markup_percentage","value":15.0},"default_pickup_city":"Bursa","default_pickup_country":"Türkiye","default_delivery_city":"Stuttgart","default_delivery_country":"Almanya","created_at":now,"last_updated_at":now,"last_updated_by":"MINAI Demo Seeder","change_note":"Synthetic demo customer memory.","operational_notes":["Makina taleplerinde ölçü ve net ağırlık doğrulanmadan fiyatlama tamamlanmaz."]},
+        {"customer_name":"Nova Gıda","active":True,"aliases":["nova food"],"trusted_sender_addresses":["export@nova-gida.customer.invalid"],"trusted_sender_domains":["nova-gida.customer.invalid"],"default_commodity":"Gıda","default_equipment_type":"Reefer","price_sensitivity":"medium","time_sensitivity":"high","pricing_policy":{"method":"cost_markup_percentage","value":14.0},"default_pickup_city":"Mersin","default_pickup_country":"Türkiye","default_delivery_city":"Münih","default_delivery_country":"Almanya","created_at":now,"last_updated_at":now,"last_updated_by":"MINAI Demo Seeder","change_note":"Synthetic demo customer memory.","operational_notes":["Isı kontrollü taleplerde sıcaklık gereksinimi müşteri mailinden ayrıca doğrulanır."]},
+        {"customer_name":"Delta Elektrik","active":False,"aliases":["delta electric"],"trusted_sender_addresses":["ops@delta-elektrik.customer.invalid"],"trusted_sender_domains":["delta-elektrik.customer.invalid"],"default_commodity":"Elektrik ekipmanı","default_equipment_type":"Tenteli / Curtainsider","price_sensitivity":"high","time_sensitivity":"high","pricing_policy":None,"default_pickup_city":"Adana","default_pickup_country":"Türkiye","default_delivery_city":"Nürnberg","default_delivery_country":"Almanya","created_at":now,"last_updated_at":now,"last_updated_by":"MINAI Demo Seeder","change_note":"Synthetic inactive profile for status demo.","operational_notes":["Demo pasif profil örneği."]}
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(profiles, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"seeded": True, "profile_count": len(profiles), "path": str(path)}
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)

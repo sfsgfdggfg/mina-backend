@@ -3976,3 +3976,11 @@ A fixed rate may enter job pricing only when the existing applicability engine s
 Runtime and data validation status shown in the browser must come from current backend validators and release/automation projections. The UI may summarize or label their returned state but may not persist a replacement status, suppress a failing validation, or create operational authority from a health card.
 
 Validation endpoints exposed to the browser are read-only GET surfaces.
+
+## RULE-228 — Demo Customer Memory Must Never Share Production File State
+
+Legacy customer-memory reads/writes in Demo mode must resolve to a demo-specific file and backup directory outside repository operational data. The default production path remains unchanged when no demo override is configured.
+
+Controlled-pilot browser allowlisting must not be expanded for legacy Customer Memory mutations merely to support the Sandbox. Demo UI may call those existing APIs only because Demo runs outside pilot mode with authenticated local browser sessions and CSRF protection.
+
+Import apply and backup restore remain backend-authoritative. The browser may require dry-run before apply, but it may not suppress alias/name conflicts, fabricate a successful restore, or treat imported memory as stronger evidence than the existing customer identity rules allow.

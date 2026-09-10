@@ -67,12 +67,13 @@ def _login_html(*, nonce: str, error: str | None = None) -> str:
 def _shell_html(*, page: str, operator_name: str, csrf_token: str, job_id: str = "") -> str:
     operator = html.escape(operator_name)
     safe_job_id = html.escape(job_id)
-    demo = '<span class="demo-banner">DEMO · SENTETİK VERİ</span>' if demo_mode_enabled() else ""
+    demo_enabled = demo_mode_enabled()
+    demo = '<span class="demo-banner">DEMO · SENTETİK VERİ</span>' if demo_enabled else ""
     return f'''<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="csrf-token" content="{html.escape(csrf_token)}"><title>MINAI</title>
 <link rel="stylesheet" href="/app/assets/app.css"></head>
-<body data-page="{html.escape(page)}" data-job-id="{safe_job_id}"><div class="shell">
+<body data-page="{html.escape(page)}" data-job-id="{safe_job_id}" data-demo-mode="{str(demo_enabled).lower()}"><div class="shell">
 <aside><a class="brand" href="/app/dashboard"><span class="brand-mark small" id="shell-brand-mark">M</span><strong id="shell-brand-name">MINAI</strong></a>
 <nav><a href="/app/dashboard">Ana Ekran</a><a href="/app/inbox">Gelen Talepler</a><a href="/app/work">İş Kuyruğu</a><a href="/app/jobs">MINA İşleri</a><a href="/app/reports">Raporlar</a><a href="/app/settings">Ayarlar</a></nav>
 <div class="sidebar-footer"><span>{operator}</span><form method="post" action="/app/logout">

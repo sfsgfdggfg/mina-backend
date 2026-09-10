@@ -2199,11 +2199,73 @@ function renderPerformanceSettings(settings = {}) {
   panel.append(firstRow,decisionRow,note,save,fb);return panel;
 }
 
+
+function renderCustomerMemorySettings(bundle = {}) {
+  const payload = bundle.memory || {profiles:[]};
+  const backups = bundle.backups?.backups || [];
+  const profiles = payload.profiles || [];
+  const panel=node("section","","settings-panel");
+  const h=node("div","","settings-heading");
+  h.append(node("h2","Müşteri Hafızası · Demo"),node("p","Legacy customer-memory fonksiyonları bu sekmede yalnız sentetik demo dosyasına bağlıdır; gerçek/pilot müşteri verisine dokunmaz.","muted"));
+  panel.append(h,node("div",`${profiles.length} sentetik profil · ${backups.length} backup`,"notice"));
+
+  const selectorLabel=node("label","Profil"); const selector=document.createElement("select");
+  const fresh=document.createElement("option");fresh.value="__new__";fresh.textContent="+ Yeni profil";selector.append(fresh);
+  profiles.forEach((profile,index)=>{const o=document.createElement("option");o.value=String(index);o.textContent=`${profile.customer_name}${profile.active?"":" · pasif"}`;selector.append(o);});
+  selector.value=profiles.length?"0":"__new__";selectorLabel.append(selector); panel.append(selectorLabel);
+  const editor=node("div","","customer-memory-editor"); panel.append(editor);
+
+  function drawEditor(){
+    editor.replaceChildren(); const existing=selector.value!=="__new__"; const profile=existing?profiles[Number(selector.value)]:{};
+    const nameLabel=node("label","Müşteri adı");const name=document.createElement("input");name.value=profile.customer_name||"";nameLabel.append(name);
+    const activeLabel=node("label","","check-label");const active=document.createElement("input");active.type="checkbox";active.checked=profile.active!==false;activeLabel.append(active,node("span","Profil aktif"));
+    const aliases=textareaLines("Alias / alternatif isimler",profile.aliases||[],3); const senders=textareaLines("Güvenilir gönderen adresleri",profile.trusted_sender_addresses||[],3); const domains=textareaLines("Güvenilir gönderen domainleri",profile.trusted_sender_domains||[],3);
+    const commodityLabel=node("label","Varsayılan emtia");const commodity=document.createElement("input");commodity.value=profile.default_commodity||"";commodityLabel.append(commodity);
+    const equipmentLabel=node("label","Varsayılan ekipman");const equipment=document.createElement("select");["","Tenteli / Curtainsider","Kapalı Kasa / Box Trailer","Mega Trailer","Reefer","Special ADR Equipment"].forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v||"Belirtilmemiş";equipment.append(o);});equipment.value=profile.default_equipment_type||"";equipmentLabel.append(equipment);
+    const priceLabel=node("label","Fiyat hassasiyeti");const price=document.createElement("select");["","low","medium","high"].forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v||"Belirtilmemiş";price.append(o);});price.value=profile.price_sensitivity||"";priceLabel.append(price);
+    const timeLabel=node("label","Zaman hassasiyeti");const time=document.createElement("select");["","low","medium","high"].forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v||"Belirtilmemiş";time.append(o);});time.value=profile.time_sensitivity||"";timeLabel.append(time);
+    const methodLabel=node("label","Fiyatlama kuralı");const method=document.createElement("select");[["","Yok"],["cost_markup_percentage","Maliyet üzerine %"],["gross_margin_percentage","Brüt marj %"],["fixed_profit","Sabit kâr"],["manual_sell_price","Manuel satış fiyatı"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;method.append(o);});method.value=profile.pricing_policy?.method||"";methodLabel.append(method);
+    const valueLabel=node("label","Fiyatlama değeri");const value=document.createElement("input");value.type="number";value.step="0.1";value.min="0";value.value=profile.pricing_policy?.value??"";valueLabel.append(value);
+    const pickupCity=node("label","Varsayılan yükleme şehri");const pc=document.createElement("input");pc.value=profile.default_pickup_city||"";pickupCity.append(pc);
+    const pickupArea=node("label","Varsayılan yükleme bölgesi");const pa=document.createElement("input");pa.value=profile.default_pickup_area||"";pickupArea.append(pa);
+    const pickupCountry=node("label","Varsayılan yükleme ülkesi");const pco=document.createElement("input");pco.value=profile.default_pickup_country||"";pickupCountry.append(pco);
+    const deliveryCity=node("label","Varsayılan teslim şehri");const dc=document.createElement("input");dc.value=profile.default_delivery_city||"";deliveryCity.append(dc);
+    const deliveryCountry=node("label","Varsayılan teslim ülkesi");const dco=document.createElement("input");dco.value=profile.default_delivery_country||"";deliveryCountry.append(dco);
+    const notes=textareaLines("Operasyon notları",profile.operational_notes||[],4);
+    const grid=node("div","","settings-two-col");grid.append(nameLabel,commodityLabel,equipmentLabel,priceLabel,timeLabel,methodLabel,valueLabel,pickupCity,pickupArea,pickupCountry,deliveryCity,deliveryCountry);
+    const feedback=node("div","","muted settings-feedback");
+    const save=actionButton(existing?"Profili Güncelle":"Yeni Profili Oluştur","primary",async()=>{
+      if(!name.value.trim()){feedback.textContent="Müşteri adı gerekli.";return;} const numeric=value.value===""?null:Number(value.value);
+      if(method.value&&(!Number.isFinite(numeric)||numeric<0)){feedback.textContent="Fiyatlama kuralı için geçerli değer gerekli.";return;}
+      const body={customer_name:name.value.trim(),active:active.checked,aliases:aliases.value(),trusted_sender_addresses:senders.value(),trusted_sender_domains:domains.value(),default_commodity:commodity.value.trim()||null,default_equipment_type:equipment.value||null,price_sensitivity:price.value||null,time_sensitivity:time.value||null,pricing_policy:method.value?{method:method.value,value:numeric}:null,default_pickup_city:pc.value.trim()||null,default_pickup_area:pa.value.trim()||null,default_pickup_country:pco.value.trim()||null,default_delivery_city:dc.value.trim()||null,default_delivery_country:dco.value.trim()||null,last_updated_by:"Demo Operator",change_note:existing?"Demo UI profile update.":"Demo UI profile create.",operational_notes:notes.value()};
+      if(existing)body.original_customer_name=profile.customer_name; save.disabled=true;feedback.textContent="Kaydediliyor…";
+      try{await api("/customer-memory",{method:existing?"PUT":"POST",body:JSON.stringify(body)});feedback.textContent="Kaydedildi.";await loadSettings();}catch(e){feedback.textContent=e.message||String(e);}finally{save.disabled=false;}
+    });
+    const actions=node("div","","actions");actions.append(save);
+    if(existing){actions.append(actionButton(profile.active?"Profili Pasif Yap":"Profili Aktif Yap","",async()=>{try{await api("/customer-memory/status",{method:"PATCH",body:JSON.stringify({customer_name:profile.customer_name,active:!profile.active})});await loadSettings();}catch(e){feedback.textContent=e.message||String(e);}}));}
+    editor.append(activeLabel,grid,aliases.label,senders.label,domains.label,notes.label,actions,feedback);
+  }
+  selector.addEventListener("change",drawEditor);drawEditor();
+
+  const transfer=node("div","","customer-memory-transfer");transfer.append(node("h3","Export / Import / Backup"));
+  const jsonLabel=node("label","Import JSON");const jsonInput=document.createElement("textarea");jsonInput.rows=9;jsonInput.placeholder='{"profiles":[...]}';jsonLabel.append(jsonInput);
+  const result=node("pre","","customer-memory-import-result");const transferActions=node("div","","actions");let dryRunReady=false;
+  transferActions.append(actionButton("Export JSON","",async()=>{try{const data=await api("/customer-memory/export");const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="minai-demo-customer-memory.json";a.click();URL.revokeObjectURL(url);}catch(e){result.textContent=e.message||String(e);}}));
+  const validate=actionButton("Validate","",async()=>{try{const parsed=JSON.parse(jsonInput.value);const r=await api("/customer-memory/import/validate",{method:"POST",body:JSON.stringify({import_data:parsed})});result.textContent=JSON.stringify(r,null,2);dryRunReady=false;}catch(e){result.textContent=e.message||String(e);dryRunReady=false;}});
+  const dry=actionButton("Dry-run","",async()=>{try{const parsed=JSON.parse(jsonInput.value);const r=await api("/customer-memory/import/dry-run",{method:"POST",body:JSON.stringify({import_data:parsed})});result.textContent=JSON.stringify(r,null,2);dryRunReady=!((r.alias_conflicts||[]).length||(r.name_conflicts||[]).length);}catch(e){result.textContent=e.message||String(e);dryRunReady=false;}});
+  const apply=actionButton("Importu Uygula","reject",async()=>{if(!dryRunReady){result.textContent="Önce başarılı bir dry-run çalıştır.";return;}if(!window.confirm("Sentetik demo müşteri hafızasına bu importu uygulamak istiyor musun? Önce backup alınacaktır."))return;try{const parsed=JSON.parse(jsonInput.value);const r=await api("/customer-memory/import/apply",{method:"POST",body:JSON.stringify({import_data:parsed})});result.textContent=JSON.stringify(r,null,2);await loadSettings();}catch(e){result.textContent=e.message||String(e);}});
+  transferActions.append(validate,dry,apply);transfer.append(jsonLabel,transferActions,result);
+  const backupList=node("div","","customer-memory-backups");backupList.append(node("h3","Backup geçmişi"));
+  backups.slice(0,10).forEach(item=>{const row=node("div","","shift-history-row");row.append(node("span",`${item.file_name} · ${Math.round((item.size_bytes||0)/1024)} KB`,"small"),actionButton("Geri Yükle","",async()=>{if(!window.confirm("Bu sentetik backup geri yüklensin mi?"))return;try{await api("/customer-memory/backups/restore",{method:"POST",body:JSON.stringify({file_name:item.file_name})});await loadSettings();}catch(e){result.textContent=e.message||String(e);}}));backupList.append(row);});
+  if(!backups.length)backupList.append(node("div","Henüz backup yok. İlk import uygulandığında otomatik oluşur.","small muted"));
+  transfer.append(backupList);panel.append(transfer);return panel;
+}
+
 let settingsSelectedTab="automation";
-function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}, fixedRates = {}, systemHealth = {}) {
+function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}, fixedRates = {}, systemHealth = {}, customerMemoryBundle = null) {
   setPageContext("Ayarlar", "Sistem Ayarları"); const page=node("div","","settings-page");const tabs=node("div","","settings-tabs");const body=node("div","","settings-tab-body");
-  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding),health:()=>renderSystemHealthSettings(systemHealth)};
-  function draw(){tabs.replaceChildren();[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"],["health","Sistem Sağlığı"]].forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));body.replaceChildren(panels[settingsSelectedTab]());}
+  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding),health:()=>renderSystemHealthSettings(systemHealth),memory:()=>renderCustomerMemorySettings(customerMemoryBundle||{})};
+  function draw(){tabs.replaceChildren();const defs=[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"],["health","Sistem Sağlığı"]];if(customerMemoryBundle)defs.splice(4,0,["memory","Müşteri Hafızası"]);defs.forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));if(!panels[settingsSelectedTab])settingsSelectedTab="automation";body.replaceChildren(panels[settingsSelectedTab]());}
   page.append(tabs,body);content.replaceChildren(page);draw();
 }
 
@@ -2211,7 +2273,9 @@ async function loadSettings() {
   const [branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates, runtime, automation, dataHealth, commodityValidation, supplierValidation, customerMemoryValidation, hsValidation] = await Promise.all([
     api("/settings/branding"), api("/automation-policy/agency"), api("/master-data/customers"), api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status"), api("/supplier-fixed-rates"), api("/runtime/release"), api("/automation/status"), api("/data-health/summary"), api("/commodity-dictionary/validation"), api("/supplier-capabilities/validation"), api("/customer-memory/validation"), api("/hs-commodity-map/validation")
   ]);
-  applyBranding(branding); renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates, {runtime,automation,data:dataHealth,commodity:commodityValidation,suppliers:supplierValidation,customerMemory:customerMemoryValidation,hs:hsValidation});
+  let customerMemoryBundle=null;
+  if(demoMode){const [memory,backups]=await Promise.all([api("/customer-memory"),api("/customer-memory/backups")]);customerMemoryBundle={memory,backups};}
+  applyBranding(branding); renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates, {runtime,automation,data:dataHealth,commodity:commodityValidation,suppliers:supplierValidation,customerMemory:customerMemoryValidation,hs:hsValidation}, customerMemoryBundle);
 }
 
 async function boot() {

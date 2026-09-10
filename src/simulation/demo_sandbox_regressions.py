@@ -31,11 +31,14 @@ from src.core.mail import InboundMailEnvelope
 from src.core.missing_info import check_missing_information
 from src.core.road_rfq_readiness import apply_road_rfq_readiness
 from src.core.learning_fact_repository import SQLiteLearningFactRepository
+from src.core.customer_memory import CustomerMemoryProfile, apply_customer_memory_import, load_customer_memory, save_customer_profile
+from src.core.customer_memory_validator import validate_customer_memory_file
+from src.paths import data_path
 from src.core.operational_shift_continuity_ledger import build_operational_shift_continuity_ledger
 from src.core.operational_shift_open_reconciliation import build_operational_shift_open_reconciliation
 from src.demo_launcher import _configure_environment
 from src.core.web_session import list_active_web_operators
-from src.demo_seed import seed_demo_database
+from src.demo_seed import seed_demo_customer_memory, seed_demo_database
 from src.workflow.demo_relationship_onboarding import run_demo_relationship_onboarding
 from src.workflow.demo_inbound import parse_demo_customer_email
 from src.workflow.extraction_confirmation import confirm_extraction_proposal
@@ -300,6 +303,48 @@ def evaluate_demo_sandbox_regressions() -> dict:
         finally:
             os.environ.clear(); os.environ.update(old)
 
+
+    default_memory_path = data_path("customer_memory.json")
+    default_memory_before = default_memory_path.read_bytes() if default_memory_path.exists() else b""
+    with tempfile.TemporaryDirectory(prefix="minai-demo-memory-") as memory_dir:
+        memory_root = Path(memory_dir)
+        memory_path = memory_root / "customer_memory.json"
+        backup_dir = memory_root / "backups"
+        old_memory_path = os.environ.get("MINAI_CUSTOMER_MEMORY_PATH")
+        old_backup_dir = os.environ.get("MINAI_CUSTOMER_MEMORY_BACKUP_DIR")
+        try:
+            os.environ["MINAI_CUSTOMER_MEMORY_PATH"] = str(memory_path)
+            os.environ["MINAI_CUSTOMER_MEMORY_BACKUP_DIR"] = str(backup_dir)
+            seeded_memory = seed_demo_customer_memory(memory_path, reset=True)
+            save_customer_profile(CustomerMemoryProfile(
+                customer_name="Sandbox Yeni Müşteri",
+                aliases=["sandbox yeni"],
+                trusted_sender_addresses=["ops@sandbox-new.customer.invalid"],
+                trusted_sender_domains=["sandbox-new.customer.invalid"],
+                default_commodity="Tekstil",
+                default_equipment_type="Tenteli / Curtainsider",
+                last_updated_by="Demo Operator",
+            ))
+            export_profiles = [item.model_dump(mode="json") for item in load_customer_memory()]
+            imported = apply_customer_memory_import(
+                {"profiles": export_profiles}, updated_by="demo-regression"
+            )
+            check(
+                seeded_memory.get("profile_count") == 4
+                and len(load_customer_memory()) == 5
+                and validate_customer_memory_file().get("valid") is True
+                and imported.get("total_profile_count") == 5
+                and backup_dir.exists()
+                and any(backup_dir.glob("customer_memory_backup_*.json"))
+                and (default_memory_path.read_bytes() if default_memory_path.exists() else b"") == default_memory_before,
+                "demo customer memory stays file-isolated from repository operational data",
+            )
+        finally:
+            if old_memory_path is None: os.environ.pop("MINAI_CUSTOMER_MEMORY_PATH", None)
+            else: os.environ["MINAI_CUSTOMER_MEMORY_PATH"] = old_memory_path
+            if old_backup_dir is None: os.environ.pop("MINAI_CUSTOMER_MEMORY_BACKUP_DIR", None)
+            else: os.environ["MINAI_CUSTOMER_MEMORY_BACKUP_DIR"] = old_backup_dir
+
     root = Path(__file__).resolve().parents[2]
     shell = (root / "src" / "web_shell.py").read_text(encoding="utf-8")
     api_text = (root / "src" / "api.py").read_text(encoding="utf-8")
@@ -326,7 +371,9 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and route_allowed("POST", "/operational-work-items/demo-work/handoff")
         and "demo_supplier_response_unavailable" in api_text
         and route_allowed("POST", "/demo/supplier-rfqs/demo-rfq/simulate-response")
-        and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js,
+        and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js
+        and "Müşteri Hafızası · Demo" in app_js and "/customer-memory/import/dry-run" in app_js
+        and not route_allowed("POST", "/customer-memory") and not route_allowed("PUT", "/customer-memory"),
         "browser shell exposes synthetic inbound and relationship workflows without hiding demo mode",
     )
 

@@ -6846,3 +6846,14 @@ The demo seed includes synthetic Germany FTL, Netherlands FTL and Germany Reefer
 The Settings workspace includes a `Sistem Sağlığı` panel that reads runtime release, automation status, aggregate data-health, commodity dictionary, supplier capability, customer-memory and HS-map validation results. These are read-only operational diagnostics; the browser cannot mutate validation truth or mark an unhealthy dataset healthy.
 
 The controlled browser allowlist permits only GET access to these validation surfaces. Existing backend validators remain authoritative and normal/demo/pilot behavior is unchanged.
+
+## DEC-211 — Legacy Customer Memory Is Demo-Only and File-Isolated
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The functional Sandbox may expose the legacy Customer Memory profile, import/export and backup/restore APIs only when the browser is running in Demo mode. Controlled-pilot navigation must not load or receive mutation authority for these legacy file-backed endpoints.
+
+Demo runtime resolves customer-memory storage and backups beneath its isolated state directory. Profile creation, update, active-status changes, import dry-run/apply and restore must never write the repository-owned production/customer-memory file.
+
+The demo seeds synthetic customer-memory profiles using reserved `.invalid` identities. Import apply remains preview-oriented: the browser requires a successful dry-run before allowing apply, while the existing backend creates the durable backup and remains authoritative for conflict validation.
