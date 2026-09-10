@@ -313,6 +313,8 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and "Demo tedarikçi yanıtı" in app_js
         and "Manuel MINA işi oluştur" in app_js and "/mina-jobs/manual" in app_js
         and "Sabit Fiyatlar" in app_js and "/supplier-fixed-rates" in app_js
+        and "Sistem Sağlığı" in app_js and "/data-health/summary" in app_js
+        and route_allowed("GET", "/data-health/summary") and route_allowed("GET", "/commodity-dictionary/validation")
         and route_allowed("POST", "/mina-jobs/manual")
         and "Vardiya Sürekliliği" in app_js and "Vardiyaya Devret" in app_js
         and "/operational-work-shift-close-readiness" in app_js

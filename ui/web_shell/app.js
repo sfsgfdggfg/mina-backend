@@ -2152,6 +2152,29 @@ function renderRelationshipOnboardingSettings(status = {}) {
 }
 
 
+
+function healthStatus(value) {
+  if (value === true || value === "pass" || value === "healthy" || value === "ok" || value === "ready") return "Sağlıklı";
+  if (value === false || value === "fail" || value === "error") return "Sorun";
+  return codeLabel(value ?? "-");
+}
+
+function renderSystemHealthSettings(payload = {}) {
+  const panel=node("section","","settings-panel"); const h=node("div","","settings-heading");
+  h.append(node("h2","Sistem Sağlığı"),node("p","Runtime, otomasyon ve statik operasyon verisi doğrulamalarının salt-okunur görünümü.","muted")); panel.append(h);
+  const runtime=payload.runtime||{}, automation=payload.automation||{}, data=payload.data||{};
+  const metrics=node("div","","grid settings-health-grid"); metrics.append(
+    metric("Release", runtime.release_sha || runtime.git_sha || runtime.version || "-"),
+    metric("Outbound", codeLabel(automation.outbound_runtime_mode || "-")),
+    metric("Scheduler", automation.running ? "Çalışıyor" : "Durdurulmuş"),
+    metric("Demo", document.querySelector(".demo-banner") ? "Sentetik" : "Hayır")
+  ); panel.append(metrics);
+  const cards=node("div","","health-validation-list");
+  const rows=[["Veri sağlığı",data],["Commodity dictionary",payload.commodity],["Supplier capabilities",payload.suppliers],["Customer memory",payload.customerMemory],["HS commodity map",payload.hs]];
+  rows.forEach(([label,obj])=>{obj=obj||{};const card=node("div","","health-validation-card");const status=obj.status ?? obj.valid ?? obj.passed ?? obj.ok ?? obj.healthy ?? "bilgi";card.append(node("strong",label),node("span",healthStatus(status),`badge ${(status===true||["pass","healthy","ok","ready"].includes(status))?"open":""}`));const details=Object.entries(obj).filter(([k,v])=>!["status","valid","passed","ok","healthy"].includes(k)&&["string","number","boolean"].includes(typeof v)).slice(0,6);details.forEach(([k,v])=>card.append(node("div",`${codeLabel(k)}: ${String(v)}`,"small muted")));cards.append(card);});
+  panel.append(cards,node("div","Bu ekran yalnız raporlar; doğrulama sonucunu browser’dan değiştirmez.","notice")); return panel;
+}
+
 function renderFixedRateSettings(payload = {}, suppliersPayload = {}) {
   const panel=node("section","","settings-panel");
   const heading=node("div","","settings-heading"); heading.append(node("h2","Sabit Fiyatlar"),node("p","Hat/ekipman bazlı anlaşma ve sabit fiyatlar. Uygun işlerde aynı fiyat seçim motoruna girer.","muted")); panel.append(heading);
@@ -2177,18 +2200,18 @@ function renderPerformanceSettings(settings = {}) {
 }
 
 let settingsSelectedTab="automation";
-function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}, fixedRates = {}) {
+function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}, fixedRates = {}, systemHealth = {}) {
   setPageContext("Ayarlar", "Sistem Ayarları"); const page=node("div","","settings-page");const tabs=node("div","","settings-tabs");const body=node("div","","settings-tab-body");
-  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding)};
-  function draw(){tabs.replaceChildren();[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"]].forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));body.replaceChildren(panels[settingsSelectedTab]());}
+  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding),health:()=>renderSystemHealthSettings(systemHealth)};
+  function draw(){tabs.replaceChildren();[["automation","Otomasyon"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"],["health","Sistem Sağlığı"]].forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));body.replaceChildren(panels[settingsSelectedTab]());}
   page.append(tabs,body);content.replaceChildren(page);draw();
 }
 
 async function loadSettings() {
-  const [branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates] = await Promise.all([
-    api("/settings/branding"), api("/automation-policy/agency"), api("/master-data/customers"), api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status"), api("/supplier-fixed-rates")
+  const [branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates, runtime, automation, dataHealth, commodityValidation, supplierValidation, customerMemoryValidation, hsValidation] = await Promise.all([
+    api("/settings/branding"), api("/automation-policy/agency"), api("/master-data/customers"), api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status"), api("/supplier-fixed-rates"), api("/runtime/release"), api("/automation/status"), api("/data-health/summary"), api("/commodity-dictionary/validation"), api("/supplier-capabilities/validation"), api("/customer-memory/validation"), api("/hs-commodity-map/validation")
   ]);
-  applyBranding(branding); renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates);
+  applyBranding(branding); renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates, {runtime,automation,data:dataHealth,commodity:commodityValidation,suppliers:supplierValidation,customerMemory:customerMemoryValidation,hs:hsValidation});
 }
 
 async function boot() {
@@ -2211,11 +2234,7 @@ async function boot() {
     } else if (page === "reports") {
       renderReports(await api("/reports"));
     } else if (page === "settings") {
-      const [automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates] = await Promise.all([
-        api("/automation-policy/agency"), api("/master-data/customers"),
-        api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status"), api("/supplier-fixed-rates")
-      ]);
-      renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates);
+      await loadSettings(); return;
     }
     setStatus("Güncel");
   } catch (error) { showError(error); }

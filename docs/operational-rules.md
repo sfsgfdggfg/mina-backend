@@ -3970,3 +3970,9 @@ Synthetic historical continuity evidence may populate the demo ledger, but stale
 Supplier fixed rates must be durable commercial records with supplier, lane, equipment/service scope, validity period, price, currency and evidence source. Activating or deactivating a rate must use the normal repository/service boundary.
 
 A fixed rate may enter job pricing only when the existing applicability engine says it matches the shipment. Demo seed rates are synthetic examples only and must never be exported or interpreted as real supplier commercial commitments.
+
+## RULE-227 — Browser Health Views Are Diagnostic Only
+
+Runtime and data validation status shown in the browser must come from current backend validators and release/automation projections. The UI may summarize or label their returned state but may not persist a replacement status, suppress a failing validation, or create operational authority from a health card.
+
+Validation endpoints exposed to the browser are read-only GET surfaces.

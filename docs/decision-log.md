@@ -6837,3 +6837,12 @@ The demo seed includes one historical synthetic close→open evidence cycle so t
 The browser Settings workspace includes a `Sabit Fiyatlar` panel backed by the existing SupplierFixedRate repository and API. Operators may list, create, activate and deactivate lane/equipment fixed rates; the browser must not maintain a separate price table or bypass repository idempotency.
 
 The demo seed includes synthetic Germany FTL, Netherlands FTL and Germany Reefer fixed rates so applicability can be observed immediately in normal MINA job pricing. These rates remain synthetic and use the same applicability/selection engine as operator-entered or imported production rates.
+
+## DEC-210 — Browser Settings Exposes Read-Only Runtime and Data Health
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The Settings workspace includes a `Sistem Sağlığı` panel that reads runtime release, automation status, aggregate data-health, commodity dictionary, supplier capability, customer-memory and HS-map validation results. These are read-only operational diagnostics; the browser cannot mutate validation truth or mark an unhealthy dataset healthy.
+
+The controlled browser allowlist permits only GET access to these validation surfaces. Existing backend validators remain authoritative and normal/demo/pilot behavior is unchanged.
