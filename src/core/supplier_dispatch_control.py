@@ -344,6 +344,12 @@ def build_supplier_dispatch_status(
             "automatic_customer_deadline_updates_enabled": (
                 workflow.dispatch_policy.automatic_customer_deadline_updates_enabled
             ),
+            "capacity_secondary_release_enabled": (
+                workflow.dispatch_policy.secondary_after_all_primary_unavailable
+            ),
+            "commercial_secondary_release_enabled": (
+                workflow.dispatch_policy.secondary_after_primary_price_negotiation_exhausted
+            ),
             "supplier_communication_calendar": supplier_calendar_metadata(),
         },
         "secondary_gate": gate,

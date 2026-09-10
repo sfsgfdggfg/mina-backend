@@ -6877,3 +6877,23 @@ When a supplier RFQ contains an incomplete commercial quote that the existing pr
 The job detail may create the follow-up only by re-running the normal supplier-price progression, then uses the existing approve, provider-send, manual-sent and send-reconciliation endpoints. In Demo mode, a synthetic incomplete-quote scenario is available so the full follow-up path can be exercised without a real supplier.
 
 A supplier asking for new operational/customer information is not the same as an incomplete commercial quote. The browser must not pretend the commercial follow-up generator can answer such a question; it remains an operator-review condition until an authoritative answer path exists.
+
+## DEC-214 — Browser Exposes Supplier RFQ Lifecycle and Manual Acknowledgement Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+The MINA job detail must expose the existing Supplier RFQ draft approval, controlled provider send, manual-sent evidence and send-reconciliation lifecycle. Secondary drafts remain visibly held while the server-side primary-group gate is closed; the browser does not infer permission to approve or send them.
+
+Operators may record a supplier's non-commercial “received / working” acknowledgement when it was obtained by phone or WhatsApp. This action uses the existing acknowledgement endpoint and authenticated operator evidence, extends the acknowledgement grace logic, and must never create a quote or capacity response.
+
+Supplier dispatch status may expose neutral browser capabilities such as whether commercial or capacity secondary release is enabled. Internal protected commercial evidence labels and customer target-price data must not be embedded in browser source.
+
+## DEC-215 — Commercial Secondary Release Is an Explicit Operator Action
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+When every primary supplier has reached a terminal result and at least one primary quote exists, the browser may offer an explicit action to record that primary price negotiation is exhausted and open the secondary supplier group, if the current dispatch policy permits that commercial fallback.
+
+The action writes only the existing durable secondary-dispatch authorization evidence. It must not disclose the customer's target price, treat silence as unavailability, or bypass unresolved primary suppliers. After authorization, normal supplier-price progression may prepare the secondary RFQ draft; approval and send still use the ordinary Supplier RFQ lifecycle.

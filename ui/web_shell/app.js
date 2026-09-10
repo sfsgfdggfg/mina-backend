@@ -1017,7 +1017,62 @@ async function simulateDemoSupplierResponse(rfqId, scenario, feedback, refresh) 
   } catch (error) { feedback.textContent = error.message || String(error); setStatus("Hata", false); }
 }
 
-async function renderSupplier(container, jobId, supplier, refresh, effectivePolicy = null) {
+function renderSupplierDispatchControl(container, data, dispatchStatus, refresh) {
+  if (!dispatchStatus) return;
+  const gate = dispatchStatus.secondary_gate || {};
+  const policy = dispatchStatus.policy || {};
+  const items = dispatchStatus.items || [];
+  const primaryItems = items.filter(item => item.dispatch_tier === "primary");
+  const secondaryItems = items.filter(item => item.dispatch_tier === "secondary");
+  const anyPrimaryQuoted = primaryItems.some(item => item.response_state === "quoted");
+  const workflowId = dispatchStatus.workflow_id || data.job?.supplier_rfq_workflow_id;
+  const box = node("div", "", "supplier-dispatch-control");
+  box.append(node("strong", "Tedarikçi dispatch kontrolü"));
+  const state = gate.allowed ? "Secondary grup açılabilir" : "Secondary grup beklemede";
+  const gateDetail = gate.allowed
+    ? (gate.all_primary_unavailable ? "Primary grup kapasite nedeniyle tükendi" : (gate.commercial_release_recorded ? "Ticari release operatör tarafından kaydedildi" : "Secondary kullanımına izin var"))
+    : (gate.all_primary_terminal ? "Primary sonuçları tamamlandı; secondary için ticari karar bekleniyor" : "Primary grup henüz tamamlanmadı");
+  box.append(node("div", `${state} · ${gateDetail}`, "small muted"));
+  box.append(node("div", `Primary: ${gate.primary_count ?? primaryItems.length} · Tümü terminal: ${gate.all_primary_terminal ? "evet" : "hayır"} · Ticari release: ${gate.commercial_release_recorded ? "var" : "yok"}`, "small muted"));
+  const feedback = node("div", "", "muted settings-feedback");
+  const actions = node("div", "", "actions supplier-dispatch-actions");
+  const canCommercialRelease = (
+    !gate.allowed
+    && !gate.commercial_release_recorded
+    && gate.all_primary_terminal
+    && anyPrimaryQuoted
+    && policy.commercial_secondary_release_enabled !== false
+    && !data.quote?.case_id
+  );
+  if (canCommercialRelease) {
+    actions.append(actionButton("Pahalı primary fiyatları sonrası secondary grubu aç", "", async () => {
+      feedback.textContent = "Secondary ticari release kaydediliyor…";
+      try {
+        await api(`/supplier-rfq-workflows/${encodeURIComponent(workflowId)}/authorize-secondary-after-negotiation`, { method: "POST" });
+        try {
+          await api(`/mina-jobs/${encodeURIComponent(data.job.job_id)}/supplier-prices/progress`, { method: "POST", body: "{}" });
+        } catch (progressError) {
+          feedback.textContent = `Release kaydedildi; ilerletme sonucu: ${progressError.message || String(progressError)}`;
+        }
+        await refresh();
+      } catch (error) { feedback.textContent = error.message || String(error); }
+    }));
+    box.append(node("div", "Bu aksiyon müşteri hedef fiyatını tedarikçiye açıklamaz; yalnız primary fiyat pazarlığının tükendiğine dair operatör kanıtı yazar.", "notice small"));
+  }
+  if (gate.allowed && !secondaryItems.length && !data.quote?.case_id) {
+    actions.append(actionButton("Secondary RFQ taslağını hazırla", "", async () => {
+      feedback.textContent = "Secondary RFQ hazırlanıyor…";
+      try {
+        await api(`/mina-jobs/${encodeURIComponent(data.job.job_id)}/supplier-prices/progress`, { method: "POST", body: "{}" });
+        await refresh();
+      } catch (error) { feedback.textContent = error.message || String(error); }
+    }));
+  }
+  if (actions.childElementCount) box.append(actions);
+  box.append(feedback); container.append(box);
+}
+
+async function renderSupplier(container, jobId, supplier, refresh, effectivePolicy = null, dispatchStatus = null) {
   const card = node("div", "", "supplier-card");
   const head = node("div", "", "supplier-card-head");
   head.append(node("h3", supplier.supplier_name || "Tedarikçi"), node("span", supplier.dispatch_tier || "-", "badge"));
@@ -1030,6 +1085,66 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     summaryItem("Yanıt", formatDate(supplier.responded_at))
   );
   card.append(facts);
+
+  const secondaryGate = dispatchStatus?.secondary_gate || {};
+  const secondaryHeld = supplier.dispatch_tier === "secondary" && !secondaryGate.allowed;
+  const lifecycleFeedback = node("div", "", "muted settings-feedback");
+  const lifecycleActions = node("div", "", "actions supplier-lifecycle-actions");
+  if (supplier.status === "draft") {
+    if (secondaryHeld) {
+      card.append(node("div", "Secondary RFQ primary grup tükenmeden veya operatör ticari release kaydı olmadan onaylanamaz.", "notice small"));
+    } else {
+      lifecycleActions.append(actionButton("RFQ'yu Onayla", "approve", async () => {
+        lifecycleFeedback.textContent = "RFQ onaylanıyor…";
+        try {
+          await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/approve`, { method: "POST", body: "{}" });
+          await refresh();
+        } catch (error) { lifecycleFeedback.textContent = error.message || String(error); }
+      }));
+    }
+  } else if (supplier.status === "approved") {
+    if (secondaryHeld) {
+      card.append(node("div", "Secondary RFQ gönderimi primary grup gate'i açılana kadar bloklu.", "notice small"));
+    } else {
+      lifecycleActions.append(
+        actionButton("RFQ'yu Gönder", "approve", async () => {
+          lifecycleFeedback.textContent = "RFQ gönderiliyor…";
+          try {
+            await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/send`, { method: "POST" });
+            await refresh();
+          } catch (error) { lifecycleFeedback.textContent = error.message || String(error); }
+        }),
+        actionButton("Harici Gönderildi Olarak Kaydet", "", async () => {
+          lifecycleFeedback.textContent = "Harici gönderim kanıtı kaydediliyor…";
+          try {
+            await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/record-manually-sent`, { method: "POST", body: "{}" });
+            await refresh();
+          } catch (error) { lifecycleFeedback.textContent = error.message || String(error); }
+        })
+      );
+    }
+  }
+  if (lifecycleActions.childElementCount) card.append(lifecycleActions, lifecycleFeedback);
+
+  if (supplier.status === "awaiting_response" && !supplier.commercial_response && !supplier.latest_acknowledgement_at) {
+    const ackBox = node("div", "", "supplier-acknowledgement-box");
+    ackBox.append(node("strong", "Manuel tedarikçi teyidi"), node("div", "Telefon veya WhatsApp üzerinden yalnız ‘aldık / çalışıyoruz’ teyidi aldıysan kaydet. Bu fiyat veya kapasite cevabı sayılmaz.", "small muted"));
+    const ackFeedback = node("div", "", "muted settings-feedback");
+    const ackActions = node("div", "", "actions supplier-acknowledgement-actions");
+    const recordAck = async channel => {
+      ackFeedback.textContent = `${channel === "phone" ? "Telefon" : "WhatsApp"} teyidi kaydediliyor…`;
+      try {
+        await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/acknowledge-seen`, { method: "POST", body: JSON.stringify({ channel }) });
+        await refresh();
+      } catch (error) { ackFeedback.textContent = error.message || String(error); }
+    };
+    ackActions.append(
+      actionButton("Telefon teyidi kaydet", "", () => recordAck("phone")),
+      actionButton("WhatsApp teyidi kaydet", "", () => recordAck("whatsapp"))
+    );
+    ackBox.append(ackActions, ackFeedback); card.append(ackBox);
+  }
+
   if (supplier.commercial_response) {
     const response = supplier.commercial_response;
     const commercial = node("div", "", "supplier-commercial");
@@ -1800,9 +1915,16 @@ async function renderJob(data, jobId) {
 
   renderSupplierPricesSection(root, data, jobId, async () => loadJob(jobId));
   await renderQuoteSection(root, data, async () => loadJob(jobId));
+  let dispatchStatus = null;
+  const workflowId = data.job?.supplier_rfq_workflow_id;
+  if (workflowId) {
+    try { dispatchStatus = await api(`/supplier-rfq-workflows/${encodeURIComponent(workflowId)}/dispatch-status`); }
+    catch (_) { dispatchStatus = null; }
+  }
   const suppliers = sectionBlock("Tedarikçiler", "RFQ durumu, fiyat ve takip aksiyonları.");
+  renderSupplierDispatchControl(suppliers, data, dispatchStatus, async () => loadJob(jobId));
   for (const supplier of (data.suppliers || [])) await renderSupplier(
-    suppliers, jobId, supplier, async () => loadJob(jobId), data.automation?.supplier_reminder_policy || null
+    suppliers, jobId, supplier, async () => loadJob(jobId), data.automation?.supplier_reminder_policy || null, dispatchStatus
   );
   if (!(data.suppliers || []).length) suppliers.append(emptyState("Henüz tedarikçi çalışması yok")); root.append(suppliers);
   renderOperationStartSection(root, data, jobId, async () => loadJob(jobId));

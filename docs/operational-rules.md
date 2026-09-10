@@ -3998,3 +3998,15 @@ An incomplete quoted response that can be clarified must reopen the same RFQ and
 A follow-up reply may inherit previously confirmed commercial fields only through the existing consolidation rules. The browser must never merge price/transit/equipment fields itself.
 
 Supplier questions that request new shipment/customer information are a separate operational clarification class. They must not be auto-answered merely because a commercial follow-up generator exists.
+
+## RULE-231 — Manual Supplier Acknowledgement Is Non-Commercial Evidence
+
+Phone or WhatsApp confirmation that a supplier has received the request or is working on it may be recorded only while that RFQ is awaiting response and has no commercial response. The authenticated operator and channel must be preserved as evidence.
+
+Such acknowledgement starts the configured acknowledgement grace period but never counts as a quote, no-capacity result, decline or secondary-release condition.
+
+## RULE-232 — Browser Secondary Release Must Preserve the Primary Gate
+
+The browser may expose commercial secondary release only after all primary suppliers have terminal outcomes and at least one primary quote exists, with the dispatch policy allowing commercial fallback. An unresolved or merely silent primary must keep the action unavailable.
+
+Commercial release records operator evidence only and must never include or transmit customer target price. Once released, secondary RFQ preparation, approval and sending remain subject to the normal progression, lifecycle, recipient and business-hours controls.
