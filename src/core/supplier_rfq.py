@@ -53,6 +53,30 @@ class SupplierContact(BaseModel):
     active: bool = True
 
 
+class SupplierSelectionExplanation(BaseModel):
+    selection_rank: int = Field(ge=1)
+    eligibility_passed: bool = True
+    eligibility_basis: Literal["route_service_equipment"] = "route_service_equipment"
+    base_total_score: float = Field(ge=0, le=1)
+    total_score: float = Field(ge=0, le=1)
+    route_score: float = Field(ge=0, le=1)
+    equipment_score: float = Field(ge=0, le=1)
+    risk_score: float = Field(ge=0, le=1)
+    price_score: float = Field(ge=0, le=1)
+    speed_score: float = Field(ge=0, le=1)
+    global_learning_adjustment: float = Field(ge=-0.06, le=0.06)
+    context_learning_adjustment: float = Field(ge=-0.04, le=0.04)
+    combined_learning_adjustment: float = Field(ge=-0.06, le=0.06)
+    learning_adjustment_capped: bool = False
+    learning_context_key: Optional[str] = Field(default=None, max_length=240)
+    global_learning_fact_ids: list[str] = Field(default_factory=list, max_length=20)
+    context_learning_fact_ids: list[str] = Field(default_factory=list, max_length=20)
+    selection_strategy: Optional[str] = Field(default=None, max_length=600)
+    data_source: Optional[str] = Field(default=None, max_length=600)
+    reason: str = Field(min_length=1, max_length=1200)
+    source: Literal["supplier_selection_snapshot_v1"] = "supplier_selection_snapshot_v1"
+
+
 class SupplierRFQDraft(BaseModel):
     rfq_id: str = Field(default_factory=lambda: str(uuid4()))
     workflow_id: str = Field(default_factory=lambda: str(uuid4()))
@@ -61,6 +85,7 @@ class SupplierRFQDraft(BaseModel):
     recipient_email: Optional[str] = None
     supplier_role: Optional[Literal["primary", "backup", "specialist"]] = None
     dispatch_tier: Literal["primary", "secondary"] = "primary"
+    selection_explanation: Optional[SupplierSelectionExplanation] = None
     subject: str
     body: str
     status: SupplierRFQStatus = "draft"

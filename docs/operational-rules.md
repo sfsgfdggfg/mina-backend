@@ -4083,3 +4083,13 @@ A contextual supplier metric requires at least three supplier responses in that 
 Runtime selection must prefer the most specific confirmed supported context (mode + lane + equipment) and fall back to mode + lane only when the more specific context has no eligible ranking effect. A contextual fact must never leak into another lane or equipment context.
 
 Contextual learning may only adjust ranking among already eligible suppliers. It must not alter capability eligibility, ADR/equipment safety gates, primary/secondary role, dispatch tier, reminder timing, escalation/contact policy, negotiation authority or secondary-supplier release. Global and contextual learning combined must remain inside the existing ±0.06 ranking cap.
+
+## RULE-242 — Explain Why a Supplier Was Selected Without Rewriting the Past
+
+A selected supplier's explanation must state separately that eligibility was passed and how ranking was calculated. Learning may explain a bounded ranking movement; it must never be presented as the reason an otherwise ineligible supplier became eligible.
+
+The selection explanation shown on a MINA job must come from the durable RFQ selection snapshot. Current master-data scores or newly confirmed learning must not retroactively alter the historical reason, score or evidence used when that RFQ was created.
+
+The operator view should expose the base score, final score, route/equipment/risk/price/speed components, global and contextual learning effects, applied context and visible cap status. Confirmed fact identifiers may be retained for audit while the normal UI may summarize them as evidence counts.
+
+Missing explanation on a legacy RFQ is historical absence of evidence, not permission to invent an explanation. Existing eligibility, dispatch-tier, commercial-safety and human-approval rules remain unchanged.

@@ -13,6 +13,7 @@ from src.core.road_rfq_readiness import (
 )
 from src.core.supplier_rfq import (
     SupplierRFQDraft,
+    SupplierSelectionExplanation,
     build_supplier_rfq_reference,
 )
 
@@ -72,6 +73,38 @@ def _package_summary(shipment: Shipment) -> str:
 
     return "; ".join(parts)
 
+
+
+
+def _selection_explanation(
+    supplier: dict[str, Any], supplier_selection: dict[str, Any],
+) -> SupplierSelectionExplanation | None:
+    required = (
+        "priority", "base_total_score", "total_score", "route_score",
+        "equipment_score", "risk_score", "price_score", "speed_score",
+    )
+    if any(supplier.get(key) is None for key in required):
+        return None
+    return SupplierSelectionExplanation(
+        selection_rank=int(supplier["priority"]),
+        base_total_score=float(supplier["base_total_score"]),
+        total_score=float(supplier["total_score"]),
+        route_score=float(supplier["route_score"]),
+        equipment_score=float(supplier["equipment_score"]),
+        risk_score=float(supplier["risk_score"]),
+        price_score=float(supplier["price_score"]),
+        speed_score=float(supplier["speed_score"]),
+        global_learning_adjustment=float(supplier.get("global_learning_adjustment") or 0),
+        context_learning_adjustment=float(supplier.get("context_learning_adjustment") or 0),
+        combined_learning_adjustment=float(supplier.get("learning_adjustment") or 0),
+        learning_adjustment_capped=bool(supplier.get("learning_adjustment_capped")),
+        learning_context_key=supplier.get("learning_context_key"),
+        global_learning_fact_ids=list(supplier.get("global_learning_fact_ids") or []),
+        context_learning_fact_ids=list(supplier.get("context_learning_fact_ids") or []),
+        selection_strategy=supplier_selection.get("selection_strategy"),
+        data_source=supplier_selection.get("data_source"),
+        reason=str(supplier.get("reason") or "Eligibility ve ağırlıklı supplier skoru ile seçildi."),
+    )
 
 def generate_supplier_rfq_drafts(
     *,
@@ -218,6 +251,7 @@ MINAI Freight OS
                 recipient_email=recipient_email,
                 supplier_role=supplier.get("supplier_role"),
                 dispatch_tier=supplier.get("dispatch_tier", "primary"),
+                selection_explanation=_selection_explanation(supplier, supplier_selection),
                 subject=subject,
                 body=body,
             )

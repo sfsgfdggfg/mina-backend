@@ -415,9 +415,21 @@ def select_suppliers_for_shipment(
         context_learning_adjustment = (
             0.0 if context_overlay is None else context_overlay.ranking_adjustment
         )
+        raw_learning_adjustment = global_learning_adjustment + context_learning_adjustment
         learning_adjustment = max(
             -MAX_RANKING_ADJUSTMENT,
-            min(MAX_RANKING_ADJUSTMENT, global_learning_adjustment + context_learning_adjustment),
+            min(MAX_RANKING_ADJUSTMENT, raw_learning_adjustment),
+        )
+        learning_adjustment_capped = abs(raw_learning_adjustment - learning_adjustment) > 1e-9
+        global_learning_fact_ids = (
+            [] if learning_policy is None else [
+                item.fact_id for item in learning_policy.evaluations if item.effect == "ranking"
+            ]
+        )
+        context_learning_fact_ids = (
+            [] if context_overlay is None else [
+                item.fact_id for item in context_overlay.evaluations if item.effect == "ranking"
+            ]
         )
         total_score = max(0.0, min(1.0, base_score + learning_adjustment))
 
@@ -441,6 +453,9 @@ def select_suppliers_for_shipment(
                 "global_learning_adjustment": round(global_learning_adjustment, 4),
                 "context_learning_adjustment": round(context_learning_adjustment, 4),
                 "learning_context_key": context_key,
+                "learning_adjustment_capped": learning_adjustment_capped,
+                "global_learning_fact_ids": global_learning_fact_ids,
+                "context_learning_fact_ids": context_learning_fact_ids,
                 "context_learning_policy": (
                     None if context_overlay is None
                     else context_overlay.model_dump(mode="json")

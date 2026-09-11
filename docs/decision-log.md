@@ -7008,3 +7008,16 @@ Contextual learning is derived only from durable RFQ workflow history whose ship
 Global and contextual facts are independent reviewed authorities. Confirming a lane-specific response metric does not replace the supplier's global response metric, and a changed contextual history creates an explicit replacement proposal for that same supplier/key/context rather than overwriting confirmed knowledge.
 
 In v1, contextual learning may affect only bounded supplier ranking. It cannot change eligibility, supplier role, dispatch tier, reminder timing, contact/escalation behavior, negotiation targets or secondary-release gates. Global plus contextual learning remains inside the existing total ±0.06 ranking cap.
+
+## DEC-225 — Supplier Selection Explainability Is a Durable Selection-Time Snapshot
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+When MINAI creates a Supplier RFQ from the selection engine, it must persist the reason for that supplier selection with the RFQ draft. The explanation is evidence of the decision made at that moment; it must not be reconstructed later from current Supplier Master or current LearningFacts.
+
+The snapshot separates eligibility from ranking. It records that route, service and equipment eligibility already passed before scoring, then preserves the weighted base score, final score, component scores, global-learning adjustment, contextual-learning adjustment, the bounded combined adjustment and whether the learning cap was applied.
+
+For auditability, the snapshot also preserves the confirmed ranking LearningFact identifiers used at selection time, any matching shipment-context key, the selection strategy, capability data source and human-readable selection reason. It stores bounded decision evidence, not raw historical mail or hidden model reasoning.
+
+Lifecycle changes such as RFQ approval, send, response or later supplier-learning updates must preserve the original snapshot unchanged. Legacy RFQs without a snapshot remain valid and readable.
