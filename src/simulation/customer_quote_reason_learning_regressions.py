@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from src.core.customer_loss_feedback import record_loss_feedback
 from src.core.customer_quote_reason_learning import derive_customer_quote_reason_learning
@@ -290,6 +291,62 @@ def evaluate_customer_quote_reason_learning_regressions() -> dict:
             for fact in facts.list_all()
         ),
         "reason learning does not manufacture pricing or causal facts",
+    )
+
+    root = Path(__file__).resolve().parents[2]
+    browser_source = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
+    panel_start = browser_source.index("function renderCustomerQuoteReasonLearning")
+    panel_end = browser_source.index("function renderMasterDataSettings", panel_start)
+    panel_source = browser_source[panel_start:panel_end]
+    check(
+        "Neden Bazlı Müşteri Ticari Öğrenimi" in panel_source
+        and "derive-quote-reason-learning" in panel_source
+        and "quote-reason-policy" in panel_source,
+        "customer Master Data UI exposes reason-specific learning derivation and consumes advisory policy",
+    )
+    check(
+        "/learning-facts/${encodeURIComponent(f.fact_id)}/confirm" in panel_source
+        and "/learning-facts/${encodeURIComponent(f.fact_id)}/reject" in panel_source
+        and 'f.status==="proposed"' in panel_source,
+        "reason-specific UI preserves explicit human confirm and reject review lifecycle",
+    )
+    safety_terms = [
+        "nedensel açıklama", "fiyat hassasiyeti", "ödeme isteği", "win probability",
+        "otomatik fiyat hedefi", "marj komutu", "tedarikçi pazarlık hedefi", "pricing authority",
+        "Geçmiş müşteri-beyanlı hedef fiyat · yalnız advisory kanıt",
+    ]
+    check(
+        all(term in panel_source for term in safety_terms),
+        "reason-specific UI makes non-causal advisory and no-pricing-authority boundaries visible",
+    )
+    check(
+        "en az 5" in panel_source and "%80" in panel_source
+        and panel_source.count("en az 3") >= 2
+        and "Kanonik bağlam" in panel_source,
+        "reason-specific UI explains evidence gates and contextual target-price advisory scope",
+    )
+    check(
+        "renderCustomerQuoteReasonLearning(reasons,c)" in browser_source,
+        "existing customer Master Data editor attaches the reason-specific learning panel",
+    )
+
+    supplier_facing_paths = [
+        root / "src" / "ai" / "supplier_rfq_generator.py",
+        root / "src" / "ai" / "supplier_follow_up_generator.py",
+        root / "src" / "workflow" / "mail_delivery.py",
+        root / "src" / "core" / "supplier_rfq_lifecycle.py",
+        root / "src" / "core" / "supplier_dispatch_control.py",
+        root / "src" / "core" / "supplier_price_service.py",
+    ]
+    prohibited_supplier_tokens = [
+        "derive-quote-reason-learning", "quote-reason-policy",
+        "commercial.customer_stated_target_price_median",
+        "customer_stated_target_price",
+    ]
+    supplier_sources = {path: path.read_text(encoding="utf-8") for path in supplier_facing_paths}
+    check(
+        all(token not in source for source in supplier_sources.values() for token in prohibited_supplier_tokens),
+        "supplier RFQ, dispatch, negotiation, follow-up, and outbound mail sources receive no reason API or raw target-price propagation",
     )
 
     result = {"passed": not failures, "passes": passes, "failures": failures}
