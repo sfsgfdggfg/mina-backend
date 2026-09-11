@@ -4147,3 +4147,13 @@ Runtime enrichment requires trusted customer identity. MINAI may use a confirmed
 The only v1 runtime-default fields are commodity, equipment type, pickup country/city and delivery country/city. Never learn or fill cargo ready date, required delivery date, customer quote deadline, package dimensions, weight, ADR class, temperature, high-value status or similar shipment-specific/safety facts from repetition alone.
 
 Accepted-quote currency history is advisory only. It cannot alter pricing policy, quote currency, margin, supplier eligibility, supplier ranking, automation mode or commercial approval authority. Missing evidence stays missing; historical acceptance must not be interpreted as proof of price sensitivity, time sensitivity or supplier preference.
+
+## RULE-249 — Learn Only From Sent-and-Resolved Quote Outcomes and Never Turn Historical Acceptance Into a Price Command
+
+Quote acceptance metrics may use only price-request jobs with durable `customer_quote_sent` evidence followed by an observed `accepted` or `lost` stage. Unresolved sent quotes remain unresolved; jobs lost before send are excluded. The observed quote snapshot must match the last revision actually sent before the outcome. A later unsent revision must never be treated as customer-visible commercial evidence.
+
+Overall acceptance and negotiation rates require at least five resolved sent quotes before proposal. Accepted-price and accepted-markup medians require at least three accepted sent quotes in the same deterministic shipment/currency context; markup observations additionally remain bound to the recorded markup method. Currencies and unrelated shipment contexts must never be pooled.
+
+All quote-acceptance facts remain human-reviewed and advisory-only. Recency decay applies, future-dated evidence has no effect, and stale evidence leaves the advisory policy. These facts must not alter pricing formulas, margins, sell price, supplier ranking, capability, eligibility, automation, quote send authority or Customer Master.
+
+MINAI must not infer a lost reason, customer price sensitivity, willingness to pay, target price, win probability or counterfactual outcome from accepted/lost status alone. Reason-specific commercial learning requires explicit structured outcome evidence in a later policy.

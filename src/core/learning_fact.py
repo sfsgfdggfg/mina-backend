@@ -74,15 +74,29 @@ class LearningFact(BaseModel):
     def validate_context_scope(self):
         if self.context_key is None:
             return self
-        if self.subject_type != "supplier":
-            raise ValueError("Learning fact context_key is supported only for supplier facts.")
         shipment_context = r"mode=[a-z0-9-]+\|lane=[a-z0-9-]+>[a-z0-9-]+(?:\|equipment=[a-z0-9-]+)?"
-        pattern = rf"^(?:customer=[a-z0-9-]+\|)?{shipment_context}$"
-        if re.fullmatch(pattern, self.context_key) is None:
-            raise ValueError(
-                "Supplier learning context_key must use canonical [customer/]mode/lane[/equipment] format."
-            )
-        return self
+        if self.subject_type == "supplier":
+            pattern = rf"^(?:customer=[a-z0-9-]+\|)?{shipment_context}$"
+            if re.fullmatch(pattern, self.context_key) is None:
+                raise ValueError(
+                    "Supplier learning context_key must use canonical [customer/]mode/lane[/equipment] format."
+                )
+            return self
+        customer_quote_keys = {
+            "commercial.quote_outcome_acceptance_rate_percent",
+            "commercial.accepted_final_price_median",
+            "commercial.accepted_markup_value_median",
+        }
+        if self.subject_type == "customer" and self.fact_key in customer_quote_keys:
+            pattern = rf"^quote\|{shipment_context}\|currency=[a-z0-9-]+(?:\|markup=[a-z0-9-]+)?$"
+            if re.fullmatch(pattern, self.context_key) is None:
+                raise ValueError(
+                    "Customer quote context_key must use canonical quote/mode/lane[/equipment]/currency[/markup] format."
+                )
+            return self
+        raise ValueError(
+            "Learning fact context_key is supported only for supplier facts or canonical customer quote observations."
+        )
 
     @field_validator("created_at", "updated_at", "reviewed_at", "superseded_at")
     @classmethod
