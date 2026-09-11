@@ -2333,6 +2333,60 @@ function renderOperatorPerformance(section) {
   return wrap;
 }
 
+function renderSupplierDecisionAnalytics(analytics = {}) {
+  const wrap=node("section","","section report-decision-analytics");
+  wrap.append(node("h2","MINAI vs Operatör Supplier Kararları"));
+  wrap.append(node("div",analytics.note||"Yalnız gerçekleşmiş supplier seçiminin sonucu ölçülür; seçilmeyen alternatif için varsayımsal sonuç üretilmez.","notice"));
+  const summary=analytics.summary||{};
+  const summaryGrid=node("div","","grid report-decision-summary");
+  summaryGrid.append(
+    metric("Karar",summary.analyzable_decision_count??0),
+    metric("MINAI önerisi uygulandı",summary.recommendation_followed_count??0),
+    metric("Override",summary.override_count??0),
+    metric("Override %",summary.override_rate_percent??"-"),
+    metric("Final outcome",summary.outcome_feedback_count??0),
+    metric("Outcome kapsamı %",summary.outcome_feedback_coverage_percent??"-")
+  );
+  wrap.append(summaryGrid);
+
+  const cohorts=analytics.cohorts||{};
+  const cohortGrid=node("div","","grid report-decision-cohorts");
+  [["recommendation_followed","MINAI önerisi uygulandı"],["operator_override","Operatör override"]].forEach(([key,label])=>{
+    const row=cohorts[key]||{};const card=node("div","","metric decision-cohort-card");
+    card.append(node("span",label),node("strong",`${row.outcome_feedback_count??0} outcome`),
+      node("small",`Başarılı % ${row.successful_outcome_percent??"-"} · Problemli % ${row.problematic_outcome_percent??"-"} · Zamanında % ${row.on_time_delivery_percent??"-"} · Tekrar seçer % ${row.choose_again_yes_percent??"-"}`,"muted"));
+    if(key==="operator_override"){
+      const score=row.selected_minus_engine_score_delta||{};
+      const price=Object.entries(row.selected_minus_engine_price_delta_by_currency||{}).map(([ccy,v])=>`${ccy} ${v.average==null?"-":Number(v.average).toFixed(2)}`).join(" · ");
+      card.append(node("small",`Seçilen−MINAI skor Δ ort.: ${score.average??"-"}${price?` · Fiyat Δ ort.: ${price}`:""}`,"muted"));
+    }
+    cohortGrid.append(card);
+  });
+  wrap.append(node("h3","Gözlenen Sonuç Cohortları"),cohortGrid);
+
+  function table(titleText, headers, rows, cells) {
+    if(!rows?.length)return;
+    wrap.append(node("h3",titleText));const box=node("div","","table-wrap");const t=document.createElement("table");
+    const th=document.createElement("thead"),hr=document.createElement("tr");headers.forEach(h=>hr.append(node("th",h)));th.append(hr);t.append(th);
+    const tb=document.createElement("tbody");rows.forEach(r=>{const tr=document.createElement("tr");cells(r).forEach(v=>tr.append(node("td",String(v??"-"))));tb.append(tr);});t.append(tb);box.append(t);wrap.append(box);
+  }
+  const categoryNames={price:"Fiyat",capacity_certainty:"Araç kesinliği",relationship_loyalty:"İlişki / sadakat",customer_preference:"Müşteri tercihi",operational_experience:"Operasyon tecrübesi",timing_transit:"Transit / zamanlama",management_decision:"Yönetim kararı",other:"Diğer",unknown:"Legacy / bilinmiyor"};
+  table("Override Nedenleri",["Kategori","Override","Outcome","Başarılı %","Problemli %","Zamanında %","Tekrar seçer %","Skor Δ"],analytics.override_categories||[],r=>[
+    categoryNames[r.category]||codeLabel(r.category),r.decision_count,r.outcome_feedback_count,r.successful_outcome_percent,r.problematic_outcome_percent,r.on_time_delivery_percent,r.choose_again_yes_percent,r.selected_minus_engine_score_delta?.average
+  ]);
+  table("Context Bazında Karar Davranışı",["Context","Karar","Override","Override %","Outcome","Başarılı %","Problemli %"],analytics.contexts||[],r=>[
+    r.name,r.decision_count,r.override_count,r.override_rate_percent,r.outcome_feedback_count,r.successful_outcome_percent,r.problematic_outcome_percent
+  ]);
+  table("MINAI Önerileri ve Override-away",["MINAI önerisi","Öneri","Uygulandı","Override-away","Override %","Uygulanan outcome","Başarılı %"],analytics.recommended_suppliers||[],r=>[
+    r.name,r.recommendation_count,r.followed_count,r.overridden_away_count,r.override_away_rate_percent,r.followed_observed_outcomes?.outcome_feedback_count,r.followed_observed_outcomes?.successful_outcome_percent
+  ]);
+  table("Override Operatör Kanıtı",["Operatör","Override","Outcome","Başarılı %","Problemli %","Neden dağılımı"],analytics.override_operators||[],r=>[
+    r.name,r.decision_count,r.outcome_feedback_count,r.successful_outcome_percent,r.problematic_outcome_percent,Object.entries(r.override_reason_category_counts||{}).map(([k,v])=>`${categoryNames[k]||k}: ${v}`).join(" · ")||"-"
+  ]);
+  wrap.append(node("div","Operatör satırlarında normal seçim kararlarının operatör kimliği durable olmadığı için override oranı veya personel skoru hesaplanmaz.","small muted"));
+  return wrap;
+}
+
 function renderReports(data) {
   title.textContent = "Raporlar";
   const overview = data.overview || {};
@@ -2346,8 +2400,9 @@ function renderReports(data) {
     metric("Zamanında teslimat %", overview.on_time_delivery_percent ?? "-")
   );
   const operatorPerformance = renderOperatorPerformance(data.operations || {});
+  const decisionAnalytics = renderSupplierDecisionAnalytics(data.decision_analytics || {});
   const note = node("div", "Finansal değerler para birimleri arasında toplanmaz; eksik kanıt sıfır kabul edilmez.", "notice section");
-  content.replaceChildren(grid, operatorPerformance, note);
+  content.replaceChildren(grid, operatorPerformance, decisionAnalytics, note);
 }
 
 let currentBranding = null;
