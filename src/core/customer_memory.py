@@ -3,7 +3,7 @@ import shutil
 import os
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Any, Optional, List
 from src.core.models import Shipment
 from src.core.pricing_policy import PricingFormula
 from src.core.extraction_confirmation import require_operational_shipment
@@ -34,6 +34,7 @@ def customer_memory_backup_dir() -> Path:
 
 
 class CustomerMemoryProfile(BaseModel):
+    customer_id: Optional[str] = None
     customer_name: str
     active: bool = True
     aliases: List[str] = Field(default_factory=list)
@@ -70,6 +71,8 @@ class CustomerMemoryResult(BaseModel):
     source: str = "customer_memory"
     matched_by: Optional[str] = None
     identity_status: str = "unmatched"
+    preference_fact_ids_applied: List[str] = Field(default_factory=list)
+    preference_policy_source: Optional[str] = None
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -234,6 +237,7 @@ def enrich_shipment_with_customer_memory(
     sender_address: Optional[str] = None,
     operational_data_sources: OperationalDataSources | None = None,
     customer_profiles: Optional[List[CustomerMemoryProfile]] = None,
+    learning_repository: Any | None = None,
 ) -> CustomerMemoryResult:
     """
     Customer Memory identity-safe matching.
@@ -300,26 +304,56 @@ def enrich_shipment_with_customer_memory(
 
     matched_by = "trusted_sender"
     notes_applied = []
+    preference_fact_ids_applied: list[str] = []
+    preference_policy = None
+    if profile.customer_id and learning_repository is not None:
+        from src.core.customer_preference_policy import build_customer_preference_policy
+        preference_policy = build_customer_preference_policy(
+            customer_id=profile.customer_id, learning_repository=learning_repository,
+        )
 
     shipment.customer_name = profile.customer_name
 
-    if not shipment.commodity and profile.default_commodity:
-        shipment.commodity = profile.default_commodity
-        notes_applied.append(
-            f"Ürün müşteri hafızasından tamamlandı: {profile.default_commodity}"
-        )
+    def learned_default(field_name: str):
+        master_value = getattr(profile, field_name, None)
+        if master_value:
+            return master_value, None, "master"
+        if preference_policy is not None:
+            value = preference_policy.learned_defaults.get(field_name)
+            fact_id = preference_policy.learned_default_fact_ids.get(field_name)
+            if value and fact_id:
+                return value, fact_id, "learning"
+        return None, None, None
 
-    if not shipment.equipment_type and profile.default_equipment_type:
-        shipment.equipment_type = profile.default_equipment_type
-        notes_applied.append(
-            f"Varsayılan ekipman müşteri hafızasından geldi: {profile.default_equipment_type}"
-        )
+    if not shipment.commodity:
+        value, fact_id, source_kind = learned_default("default_commodity")
+        if value:
+            shipment.commodity = value
+            notes_applied.append(
+                f"Ürün " + ("doğrulanmış müşteri tercihinden" if source_kind == "learning" else "müşteri hafızasından") + f" tamamlandı: {value}"
+            )
+            if fact_id:
+                preference_fact_ids_applied.append(fact_id)
 
-    if not shipment.pickup_city and profile.default_pickup_city:
-        shipment.pickup_city = profile.default_pickup_city
-        notes_applied.append(
-            f"Yükleme şehri müşteri hafızasından tamamlandı: {profile.default_pickup_city}"
-        )
+    if not shipment.equipment_type:
+        value, fact_id, source_kind = learned_default("default_equipment_type")
+        if value:
+            shipment.equipment_type = value
+            notes_applied.append(
+                f"Varsayılan ekipman " + ("doğrulanmış müşteri tercihinden" if source_kind == "learning" else "müşteri hafızasından") + f" tamamlandı: {value}"
+            )
+            if fact_id:
+                preference_fact_ids_applied.append(fact_id)
+
+    if not shipment.pickup_city:
+        value, fact_id, source_kind = learned_default("default_pickup_city")
+        if value:
+            shipment.pickup_city = value
+            notes_applied.append(
+                f"Yükleme şehri " + ("doğrulanmış müşteri tercihinden" if source_kind == "learning" else "müşteri hafızasından") + f" tamamlandı: {value}"
+            )
+            if fact_id:
+                preference_fact_ids_applied.append(fact_id)
 
     if not shipment.pickup_area and profile.default_pickup_area:
         shipment.pickup_area = profile.default_pickup_area
@@ -327,23 +361,35 @@ def enrich_shipment_with_customer_memory(
             f"Yükleme bölgesi müşteri hafızasından tamamlandı: {profile.default_pickup_area}"
         )
 
-    if not shipment.pickup_country and profile.default_pickup_country:
-        shipment.pickup_country = profile.default_pickup_country
-        notes_applied.append(
-            f"Yükleme ülkesi müşteri hafızasından tamamlandı: {profile.default_pickup_country}"
-        )
+    if not shipment.pickup_country:
+        value, fact_id, source_kind = learned_default("default_pickup_country")
+        if value:
+            shipment.pickup_country = value
+            notes_applied.append(
+                f"Yükleme ülkesi " + ("doğrulanmış müşteri tercihinden" if source_kind == "learning" else "müşteri hafızasından") + f" tamamlandı: {value}"
+            )
+            if fact_id:
+                preference_fact_ids_applied.append(fact_id)
 
-    if not shipment.delivery_city and profile.default_delivery_city:
-        shipment.delivery_city = profile.default_delivery_city
-        notes_applied.append(
-            f"Teslim şehri müşteri hafızasından tamamlandı: {profile.default_delivery_city}"
-        )
+    if not shipment.delivery_city:
+        value, fact_id, source_kind = learned_default("default_delivery_city")
+        if value:
+            shipment.delivery_city = value
+            notes_applied.append(
+                f"Teslim şehri " + ("doğrulanmış müşteri tercihinden" if source_kind == "learning" else "müşteri hafızasından") + f" tamamlandı: {value}"
+            )
+            if fact_id:
+                preference_fact_ids_applied.append(fact_id)
 
-    if not shipment.delivery_country and profile.default_delivery_country:
-        shipment.delivery_country = profile.default_delivery_country
-        notes_applied.append(
-            f"Teslim ülkesi müşteri hafızasından tamamlandı: {profile.default_delivery_country}"
-        )
+    if not shipment.delivery_country:
+        value, fact_id, source_kind = learned_default("default_delivery_country")
+        if value:
+            shipment.delivery_country = value
+            notes_applied.append(
+                f"Teslim ülkesi " + ("doğrulanmış müşteri tercihinden" if source_kind == "learning" else "müşteri hafızasından") + f" tamamlandı: {value}"
+            )
+            if fact_id:
+                preference_fact_ids_applied.append(fact_id)
 
     notes_applied.extend(profile.operational_notes)
 
@@ -355,6 +401,8 @@ def enrich_shipment_with_customer_memory(
         source=("customer_master_projection" if customer_profiles is not None else "customer_memory"),
         matched_by=matched_by,
         identity_status="trusted_sender",
+        preference_fact_ids_applied=preference_fact_ids_applied,
+        preference_policy_source=(None if preference_policy is None else preference_policy.source),
     )
 
 RESERVED_CUSTOMER_MEMORY_TERMS = {

@@ -134,6 +134,7 @@ def process_shipment(
     operational_data_sources: OperationalDataSources | None = None,
     supplier_dispatch_policy: SupplierDispatchPolicy | None = None,
     master_data_repository: MasterDataRepository | None = None,
+    learning_fact_repository=None,
 ):
     if not isinstance(shipment, Shipment) or isinstance(
         shipment,
@@ -166,6 +167,7 @@ def process_shipment(
             sender_address=sender_address,
             operational_data_sources=operational_data_sources,
             customer_profiles=customer_profiles,
+            learning_repository=learning_fact_repository,
         )
     except DataProvenanceError:
         return build_data_provenance_blocked_result(shipment)

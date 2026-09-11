@@ -240,6 +240,7 @@ def resume_confirmed_extraction(
     evidence_recorder: PilotEvidenceRecorder | None = None,
     operational_data_sources: OperationalDataSources | None = None,
     master_data_repository: MasterDataRepository | None = None,
+    learning_fact_repository=None,
 ) -> dict:
     proposal = _load_proposal(repository, proposal_id)
     if proposal.extraction_status != "confirmed" or proposal.confirmed_shipment is None:
@@ -277,6 +278,7 @@ def resume_confirmed_extraction(
             quote_case_repository=quote_case_repository,
             _persist_rfq_transition=False,
             master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository,
         )
     except DataProvenanceError:
         result = build_data_provenance_blocked_result(

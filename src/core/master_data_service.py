@@ -294,7 +294,7 @@ def bootstrap_legacy_master_data(
 
 def customer_to_legacy_memory(profile: CustomerMasterProfile) -> CustomerMemoryProfile:
     return CustomerMemoryProfile(
-        customer_name=profile.customer_name, active=profile.active, aliases=profile.aliases,
+        customer_id=profile.customer_id, customer_name=profile.customer_name, active=profile.active, aliases=profile.aliases,
         trusted_sender_addresses=profile.trusted_sender_addresses,
         trusted_sender_domains=profile.trusted_sender_domains,
         default_commodity=profile.default_commodity,

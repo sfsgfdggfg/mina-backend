@@ -7082,3 +7082,16 @@ Customer identity must resolve uniquely through active Customer Master data. Can
 Customer-context learning is a third ranking overlay, separate from global supplier learning and ordinary lane/equipment learning. Its own contribution is capped at ±0.025 and the sum of global, shipment-context and customer-context learning remains inside the existing total ±0.06 supplier-ranking cap. It cannot create capability, eligibility or dispatch authority.
 
 The supplier-selection snapshot must preserve customer-context adjustment, applied context key and reviewed LearningFact identifiers used at selection time. Later Customer Master or LearningFact changes must not rewrite the historical selection explanation.
+
+## DEC-231 — Customer Preference Memory Uses Repeated Confirmed Requests, Not Guessed Commercial Intent
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+MINAI may derive reviewable customer preference LearningFacts from durable, human-confirmed MINA shipment requests that resolve uniquely to an active Customer Master profile. The first runtime-default candidates are commodity, equipment, pickup country/city, and delivery country/city. A preference requires at least five observed values with at least 80% dominance before a proposal may be created.
+
+Five recent observations are intentionally insufficient for runtime defaulting even after human confirmation. Confirmed request preferences require effective confidence of at least 0.85, so stronger recent repetition is required before MINAI may fill a missing field. Explicit values in the current request always win, and explicit Customer Master defaults outrank confirmed learned preferences.
+
+Customer preference learning must not infer ready dates, required-delivery dates, dimensions, weights, ADR class, temperature requirements, quote deadlines or other shipment-specific/safety-critical fields. Current operational rules and equipment/safety engines remain authoritative after any learned default is applied.
+
+Accepted customer quote history may derive a dominant accepted-quote currency observation, but this is advisory commercial memory only. It must not change pricing policy, margin, sell price, currency conversion or quote acceptance assumptions automatically. Price sensitivity, time sensitivity, supplier preference and reasons for quote acceptance/rejection require separate evidence and a later policy.
