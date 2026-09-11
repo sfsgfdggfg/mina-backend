@@ -7095,3 +7095,16 @@ Five recent observations are intentionally insufficient for runtime defaulting e
 Customer preference learning must not infer ready dates, required-delivery dates, dimensions, weights, ADR class, temperature requirements, quote deadlines or other shipment-specific/safety-critical fields. Current operational rules and equipment/safety engines remain authoritative after any learned default is applied.
 
 Accepted customer quote history may derive a dominant accepted-quote currency observation, but this is advisory commercial memory only. It must not change pricing policy, margin, sell price, currency conversion or quote acceptance assumptions automatically. Price sensitivity, time sensitivity, supplier preference and reasons for quote acceptance/rejection require separate evidence and a later policy.
+
+## DEC-232 — Quote Acceptance Learning Is Observational Commercial Memory, Not a Causal Pricing Model
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+MINAI may derive reviewable customer commercial observations from price-request jobs only when a customer quote has durable send evidence and a later observed `accepted` or `lost` lifecycle outcome. Jobs lost before a quote was actually sent and sent quotes with no resolved outcome are excluded from the acceptance denominator rather than being guessed as failures or successes.
+
+The first supported observations are quote-outcome acceptance rate, negotiation-stage rate, accepted final-price median and accepted markup-value median. Price and markup observations must come from the last revision actually sent before the observed outcome, not from a later unsent working draft. Currency and deterministic shipment context remain separated so unrelated lanes, equipment or currencies are never averaged together.
+
+These metrics describe what happened; they do not explain why. A lost quote does not prove that price was too high, and an accepted historical price does not become a target price, win probability, customer willingness-to-pay estimate or optimal margin. All derived facts remain proposed until human review and confirmed facts are advisory only.
+
+Quote acceptance learning creates no pricing authority, margin mutation, automatic discount, supplier preference, customer price-sensitivity field or Customer Master update. Structured lost reasons and explicit customer feedback require a later separately reviewed policy before causal or reason-specific learning is possible.
