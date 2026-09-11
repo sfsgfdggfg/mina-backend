@@ -7021,3 +7021,14 @@ The snapshot separates eligibility from ranking. It records that route, service 
 For auditability, the snapshot also preserves the confirmed ranking LearningFact identifiers used at selection time, any matching shipment-context key, the selection strategy, capability data source and human-readable selection reason. It stores bounded decision evidence, not raw historical mail or hidden model reasoning.
 
 Lifecycle changes such as RFQ approval, send, response or later supplier-learning updates must preserve the original snapshot unchanged. Legacy RFQs without a snapshot remain valid and readable.
+
+## DEC-226 — Supplier Selection Feedback Is Auditable Evidence Before It Is Learning
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+After MINAI exposes a durable supplier-selection explanation, an authenticated operator may explicitly record whether they agree or disagree with that supplier's ranking for the current MINA job. The feedback is bound to the exact MINA job, RFQ, supplier, selection rank and SHA-256 of the durable selection snapshot.
+
+Disagreement requires a structured reason such as missing relationship context, inaccurate route/equipment fit, inaccurate price/response expectation, a temporary supplier issue or another explained reason. Unstructured `other` feedback requires a note. Feedback on a closed job, a foreign workflow RFQ or a legacy RFQ without a durable selection snapshot fails closed.
+
+Selection feedback is evidence-only in v1. It does not directly alter supplier ranking, eligibility, primary/secondary dispatch, reminder timing, escalation behavior or learning facts. Future calibration may use aggregated reviewed feedback only through a separately accepted learning policy with explicit denominators and safeguards.

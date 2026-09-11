@@ -225,6 +225,11 @@ from src.core.supplier_price_repository import (
     SQLiteSupplierPriceRepository,
     SupplierPriceIdempotencyConflictError,
 )
+from src.core.supplier_selection_feedback_repository import (
+    SQLiteSupplierSelectionFeedbackRepository,
+    SupplierSelectionFeedbackIdempotencyConflictError,
+)
+from src.core.supplier_selection_feedback_service import record_supplier_selection_feedback
 from src.core.supplier_price_service import (
     build_job_supplier_price_view,
     create_direct_supplier_price_offer,
@@ -494,6 +499,7 @@ quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
+supplier_selection_feedback_repository = SQLiteSupplierSelectionFeedbackRepository(pilot_store)
 operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
 operation_start_message_repository = SQLiteOperationStartMessageRepository(pilot_store)
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
@@ -933,6 +939,18 @@ class SupplierContactAttemptRequest(BaseModel):
     channel: Literal["phone", "whatsapp"]
     outcome: Literal["acknowledged_working", "no_response", "unreachable"]
     note: Optional[str] = Field(default=None, max_length=500)
+
+
+class SupplierSelectionFeedbackRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    verdict: Literal["agree", "disagree"]
+    reason_code: Literal[
+        "selection_looks_right", "relationship_context_missing",
+        "route_fit_inaccurate", "equipment_fit_inaccurate",
+        "price_expectation_inaccurate", "response_expectation_inaccurate",
+        "temporary_supplier_issue", "other",
+    ]
+    note: Optional[str] = Field(default=None, max_length=1200)
 
 
 class SupplierEscalationEvidenceRequest(BaseModel):
@@ -2236,6 +2254,29 @@ def progress_mina_job_supplier_prices(
     return serialize_result(result)
 
 
+@app.post("/mina-jobs/{job_id}/supplier-rfqs/{rfq_id}/selection-feedback")
+def post_supplier_selection_feedback(
+    job_id: str, rfq_id: str, request: SupplierSelectionFeedbackRequest, http_request: Request,
+):
+    try:
+        evidence = record_supplier_selection_feedback(
+            feedback_repository=supplier_selection_feedback_repository,
+            mina_repository=mina_job_repository, supplier_repository=supplier_rfq_repository,
+            job_id=job_id, rfq_id=rfq_id, entry_id=request.entry_id,
+            verdict=request.verdict, reason_code=request.reason_code, note=request.note,
+            recorded_by=_authenticated_operator(http_request),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}") from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=f"Supplier RFQ not found: {rfq_id}") from exc
+    except SupplierSelectionFeedbackIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return evidence.model_dump(mode="json")
+
+
 @app.get("/mina-jobs/{job_id}")
 def get_mina_job(job_id: str):
     try:
@@ -2250,6 +2291,7 @@ def get_mina_job(job_id: str):
             operation_execution_repository=operation_execution_repository,
             operation_start_message_repository=operation_start_message_repository,
             learning_fact_repository=learning_fact_repository,
+            selection_feedback_repository=supplier_selection_feedback_repository,
             job_id=job_id,
         )
     except MinaJobNotFoundError as exc:

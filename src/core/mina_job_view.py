@@ -23,6 +23,7 @@ from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.core.supplier_next_best_action import build_supplier_next_best_action
 from src.core.supplier_price_repository import SupplierPriceRepository
+from src.core.supplier_selection_feedback_repository import SupplierSelectionFeedbackRepository
 from src.core.supplier_price_service import PRICE_SOURCING_STAGES, build_job_supplier_price_view
 
 
@@ -65,6 +66,7 @@ def build_mina_job_detail(
     operation_execution_repository: OperationExecutionRepository | None = None,
     operation_start_message_repository: OperationStartMessageRepository | None = None,
     learning_fact_repository: LearningFactRepository | None = None,
+    selection_feedback_repository: SupplierSelectionFeedbackRepository | None = None,
     job_id: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -75,6 +77,10 @@ def build_mina_job_detail(
         if job.supplier_rfq_workflow_id else None
     )
     supplier_rows: list[dict[str, Any]] = []
+    selection_feedback = (
+        selection_feedback_repository.list_all(job.job_id)
+        if selection_feedback_repository is not None else []
+    )
     if workflow is not None:
         for draft in supplier_repository.list_drafts():
             if draft.workflow_id != workflow.workflow_id:
@@ -108,6 +114,11 @@ def build_mina_job_detail(
                     None if draft.selection_explanation is None
                     else draft.selection_explanation.model_dump(mode="json")
                 ),
+                "selection_feedback": [
+                    item.model_dump(mode="json")
+                    for item in selection_feedback if item.rfq_id == draft.rfq_id
+                ],
+                "selection_feedback_allowed": (not job.is_closed and draft.selection_explanation is not None),
                 "status": draft.status,
                 "sent_at": draft.sent_at,
                 "responded_at": draft.responded_at,

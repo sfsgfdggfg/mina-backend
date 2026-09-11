@@ -4093,3 +4093,11 @@ The selection explanation shown on a MINA job must come from the durable RFQ sel
 The operator view should expose the base score, final score, route/equipment/risk/price/speed components, global and contextual learning effects, applied context and visible cap status. Confirmed fact identifiers may be retained for audit while the normal UI may summarize them as evidence counts.
 
 Missing explanation on a legacy RFQ is historical absence of evidence, not permission to invent an explanation. Existing eligibility, dispatch-tier, commercial-safety and human-approval rules remain unchanged.
+
+## RULE-243 — Operator Disagreement With Supplier Ranking Must Be Recorded Without Silently Changing Authority
+
+Supplier-selection feedback must reference the durable selection-time snapshot for the same MINA job and RFQ. A disagreement must carry a structured reason; `other` requires an explanatory note. Feedback must not be accepted for a different workflow, a closed job or an RFQ without an auditable selection snapshot.
+
+An operator's agree/disagree feedback is review evidence, not runtime supplier authority. Recording feedback must not by itself change eligibility, ranking, primary/secondary status, dispatch release, supplier timing, escalation, negotiation or commercial behavior.
+
+Feedback may support future calibration only after separate aggregation, sample-size rules, human review and an explicitly approved policy. Until then, the selection engine must behave identically before and after feedback is recorded.

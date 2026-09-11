@@ -1288,6 +1288,27 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     const globalFacts=(selection.global_learning_fact_ids||[]).length, contextFacts=(selection.context_learning_fact_ids||[]).length;
     if(globalFacts||contextFacts) explain.append(node("div",`Doğrulanmış ranking kanıtı: global ${globalFacts} · bağlamsal ${contextFacts}.`,"muted small"));
     explain.append(node("div",selection.reason||"Supplier selection engine ağırlıklı skoru ile seçildi.","muted small"));
+    const reviews=supplier.selection_feedback||[];
+    if(reviews.length){
+      const labels={agree:"Katılıyor",disagree:"Katılmıyor"};
+      explain.append(node("div",`Operatör feedback: ${reviews.slice(-3).map(item=>`${labels[item.verdict]||item.verdict} · ${codeLabel(item.reason_code)} · ${formatDate(item.recorded_at)}`).join(" | ")}`,"muted small"));
+    }
+    if(supplier.selection_feedback_allowed){
+      const reviewBox=node("div","","supplier-selection-feedback");
+      const reasonLabel=node("label","Katılmama nedeni"); const reason=document.createElement("select");
+      [["relationship_context_missing","İlişki bağlamı eksik"],["route_fit_inaccurate","Hat uyumu hatalı"],["equipment_fit_inaccurate","Ekipman uyumu hatalı"],["price_expectation_inaccurate","Fiyat beklentisi hatalı"],["response_expectation_inaccurate","Yanıt beklentisi hatalı"],["temporary_supplier_issue","Geçici tedarikçi sorunu"],["other","Diğer"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;reason.append(o);}); reasonLabel.append(reason);
+      const noteLabel=node("label","Not (Diğer için zorunlu)"); const note=document.createElement("textarea");note.rows=2;note.maxLength=1200;noteLabel.append(note);
+      const feedback=node("div","","muted settings-feedback");
+      const submit=async(verdict)=>{
+        const body={entry_id:freshPriceEntryId("selection-feedback"),verdict,reason_code:verdict==="agree"?"selection_looks_right":reason.value,note:note.value.trim()||null};
+        if(body.reason_code==="other"&&!body.note){feedback.textContent="Diğer nedeni için kısa bir not gerekli.";return;}
+        feedback.textContent="Feedback kaydediliyor…";
+        try{await api(`/mina-jobs/${encodeURIComponent(jobId)}/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/selection-feedback`,{method:"POST",body:JSON.stringify(body)});await refresh();}
+        catch(e){feedback.textContent=e.message||String(e);}
+      };
+      const actions=node("div","","actions");actions.append(actionButton("Sıralamaya Katılıyorum","approve",()=>submit("agree")),actionButton("Sıralamaya Katılmıyorum","reject",()=>submit("disagree")));
+      reviewBox.append(reasonLabel,noteLabel,actions,feedback);explain.append(reviewBox);
+    }
     card.append(explain);
   }
 

@@ -49,6 +49,8 @@ PERSISTENT_STATE_NAMESPACES = (
     "supplier_price_offer_by_job_fixed_rate",
     "supplier_negotiation_evidence",
     "supplier_negotiation_by_entry",
+    "supplier_selection_feedback",
+    "supplier_selection_feedback_by_entry",
     "customer_master_profiles",
     "customer_master_by_entry",
     "customer_master_by_name",
