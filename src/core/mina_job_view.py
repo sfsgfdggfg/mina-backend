@@ -104,6 +104,10 @@ def build_mina_job_detail(
                 "rfq_id": draft.rfq_id,
                 "supplier_name": draft.supplier_name,
                 "dispatch_tier": draft.dispatch_tier,
+                "selection_explanation": (
+                    None if draft.selection_explanation is None
+                    else draft.selection_explanation.model_dump(mode="json")
+                ),
                 "status": draft.status,
                 "sent_at": draft.sent_at,
                 "responded_at": draft.responded_at,

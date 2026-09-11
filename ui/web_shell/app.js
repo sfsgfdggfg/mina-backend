@@ -1270,6 +1270,26 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
     summaryItem("Yanıt", formatDate(supplier.responded_at))
   );
   card.append(facts);
+  const selection=supplier.selection_explanation;
+  if(selection){
+    const explain=node("div","","supplier-acknowledgement-box supplier-selection-explanation");
+    const pct=value=>`${(Number(value||0)*100).toFixed(1)}%`;
+    const points=value=>{const n=Number(value||0)*100;return `${n>0?"+":""}${n.toFixed(1)} puan`;};
+    explain.append(
+      node("strong","Neden seçildi?"),
+      node("div",`Sıra #${selection.selection_rank} · Eligibility geçti (hat + servis + ekipman) · Baz skor ${pct(selection.base_total_score)} · Nihai skor ${pct(selection.total_score)}`,"small"),
+      node("div",`Hat ${pct(selection.route_score)} · Ekipman ${pct(selection.equipment_score)} · Risk uyumu ${pct(selection.risk_score)} · Fiyat ${pct(selection.price_score)} · Hız ${pct(selection.speed_score)}`,"muted small")
+    );
+    const globalAdj=Number(selection.global_learning_adjustment||0), contextAdj=Number(selection.context_learning_adjustment||0);
+    if(globalAdj!==0||contextAdj!==0){
+      explain.append(node("div",`Öğrenme etkisi: global ${points(globalAdj)} · bağlamsal ${points(contextAdj)} · toplam ${points(selection.combined_learning_adjustment)}${selection.learning_adjustment_capped?" · güvenlik sınırında cap uygulandı":""}.`,"muted small"));
+    }
+    if(selection.learning_context_key) explain.append(node("div",`Bağlam: ${selection.learning_context_key}`,"muted small"));
+    const globalFacts=(selection.global_learning_fact_ids||[]).length, contextFacts=(selection.context_learning_fact_ids||[]).length;
+    if(globalFacts||contextFacts) explain.append(node("div",`Doğrulanmış ranking kanıtı: global ${globalFacts} · bağlamsal ${contextFacts}.`,"muted small"));
+    explain.append(node("div",selection.reason||"Supplier selection engine ağırlıklı skoru ile seçildi.","muted small"));
+    card.append(explain);
+  }
 
   const secondaryGate = dispatchStatus?.secondary_gate || {};
   const secondaryHeld = supplier.dispatch_tier === "secondary" && !secondaryGate.allowed;
