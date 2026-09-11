@@ -16,6 +16,10 @@ NEGOTIATION_MIN_EFFECTIVE_CONFIDENCE = 0.80
 CONTACT_MIN_EFFECTIVE_CONFIDENCE = 0.80
 CONTACT_MIN_RATE_ADVANTAGE = 20.0
 CONTACT_MIN_WINNER_RATE = 50.0
+ESCALATION_MIN_EFFECTIVE_CONFIDENCE = 0.80
+ESCALATION_MIN_RATE_ADVANTAGE = 15.0
+ESCALATION_MIN_WINNER_RATE = 50.0
+MANAGEMENT_MIN_SUCCESS_RATE = 50.0
 MAX_RANKING_ADJUSTMENT = 0.06
 MAX_LEARNED_FIRST_REMINDER_MINUTES = 60
 MAX_LEARNED_ACK_WAIT_MINUTES = 180
@@ -30,6 +34,9 @@ _CANONICAL_UNITS = {
     "contact.whatsapp.ack_rate_percent": "percent",
     "contact.phone.after_ack_quote_median_minutes": "minutes",
     "contact.whatsapp.after_ack_quote_median_minutes": "minutes",
+    "escalation.phone.ack_rate_percent": "percent",
+    "escalation.whatsapp.ack_rate_percent": "percent",
+    "escalation.management.ack_rate_percent": "percent",
 }
 
 TimingSource = Literal["supplier_master", "confirmed_learning", "dispatch_default"]
@@ -60,10 +67,13 @@ class SupplierOperationalLearningPolicy(BaseModel):
     negotiation_advisory_percent: float | None = Field(default=None, ge=0, le=30)
     preferred_contact_channel_advisory: Literal["phone", "whatsapp"] | None = None
     preferred_contact_channel_reason: str | None = None
+    preferred_escalation_channel_advisory: Literal["phone", "whatsapp"] | None = None
+    preferred_escalation_channel_reason: str | None = None
+    management_escalation_advisory: bool = False
     acknowledgement_channel_context: Literal["email", "phone", "whatsapp", "manual"] | None = None
     contact_escalation_learning_applied: bool = False
     evaluations: list[SupplierLearningFactEvaluation] = Field(default_factory=list)
-    source: str = "supplier_operational_learning_policy_v2"
+    source: str = "supplier_operational_learning_policy_v3"
 
     @property
     def applied_fact_ids(self) -> list[str]:
@@ -114,7 +124,7 @@ def _recency_factor(fact_key: str, age_days: float) -> float:
         if age_days <= 1095:
             return 0.50
         return 0.0
-    if fact_key.startswith("contact."):
+    if fact_key.startswith("contact.") or fact_key.startswith("escalation."):
         if age_days <= 90:
             return 1.0
         if age_days <= 365:
@@ -195,7 +205,7 @@ def build_supplier_operational_learning_policy(
         bounded = valid and (
             (key.startswith("response.") and value >= 0)
             or (key.startswith("commercial.") and 0 <= value <= 100)
-            or (key.startswith("contact.") and (
+            or ((key.startswith("contact.") or key.startswith("escalation.")) and (
                 (key.endswith("_percent") and 0 <= value <= 100)
                 or (key.endswith("_minutes") and value >= 0)
             ))
@@ -319,6 +329,32 @@ def build_supplier_operational_learning_policy(
                 by_fact_id[winner_fact.fact_id].effect = "advisory"
                 by_fact_id[winner_fact.fact_id].reason = "confirmed_contact_history_supports_channel_advisory"
 
+    preferred_escalation_channel = None
+    preferred_escalation_reason = None
+    escalation_phone = usable.get("escalation.phone.ack_rate_percent")
+    escalation_whatsapp = usable.get("escalation.whatsapp.ack_rate_percent")
+    if escalation_phone is not None and escalation_whatsapp is not None:
+        ep_fact, ep_rate, ep_conf = escalation_phone
+        ew_fact, ew_rate, ew_conf = escalation_whatsapp
+        if ep_conf >= ESCALATION_MIN_EFFECTIVE_CONFIDENCE and ew_conf >= ESCALATION_MIN_EFFECTIVE_CONFIDENCE:
+            difference = abs(ep_rate - ew_rate)
+            winner_rate = max(ep_rate, ew_rate)
+            if difference >= ESCALATION_MIN_RATE_ADVANTAGE and winner_rate >= ESCALATION_MIN_WINNER_RATE:
+                preferred_escalation_channel = "phone" if ep_rate > ew_rate else "whatsapp"
+                preferred_escalation_reason = f"confirmed_escalation_ack_rate_advantage_{round(difference, 1)}pp"
+                winner_fact = ep_fact if preferred_escalation_channel == "phone" else ew_fact
+                by_fact_id[winner_fact.fact_id].effect = "advisory"
+                by_fact_id[winner_fact.fact_id].reason = "confirmed_escalation_history_supports_channel_advisory"
+
+    management_advisory = False
+    management = usable.get("escalation.management.ack_rate_percent")
+    if management is not None:
+        m_fact, m_rate, m_conf = management
+        if m_conf >= ESCALATION_MIN_EFFECTIVE_CONFIDENCE and m_rate >= MANAGEMENT_MIN_SUCCESS_RATE:
+            management_advisory = True
+            by_fact_id[m_fact.fact_id].effect = "advisory"
+            by_fact_id[m_fact.fact_id].reason = "confirmed_management_escalation_history_supports_advisory"
+
     negotiation_advisory = None
     negotiation = usable.get("commercial.negotiated_reduction_percent")
     if negotiation is not None:
@@ -339,10 +375,13 @@ def build_supplier_operational_learning_policy(
         negotiation_advisory_percent=negotiation_advisory,
         preferred_contact_channel_advisory=preferred_contact_channel,
         preferred_contact_channel_reason=preferred_contact_reason,
+        preferred_escalation_channel_advisory=preferred_escalation_channel,
+        preferred_escalation_channel_reason=preferred_escalation_reason,
+        management_escalation_advisory=management_advisory,
         acknowledgement_channel_context=(
             acknowledgement_channel if acknowledgement_channel in {"email", "phone", "whatsapp", "manual"} else None
         ),
-        contact_escalation_learning_applied=False,
+        contact_escalation_learning_applied=bool(preferred_escalation_channel or management_advisory),
         evaluations=list(by_fact_id.values()),
     )
 

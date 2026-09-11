@@ -276,6 +276,10 @@ const WORK_ACTION_LABELS = {
   review_and_approve_supplier_reminder: "Tedarikçi hatırlatmasını onayla",
   contact_supplier_phone_or_whatsapp: "Tedarikçiyi ara / WhatsApp ile takip et",
   contact_supplier_using_profile: "Tedarikçiyi profilindeki kanalla takip et",
+  contact_supplier_phone: "Tedarikçiyi telefonla takip et",
+  contact_supplier_whatsapp: "Tedarikçiyi WhatsApp ile takip et",
+  management_supplier_contact: "Yönetici / patron eskalasyonu yap",
+  manual_supplier_relationship_review: "Tedarikçi ilişkisini manuel değerlendir",
   inspect_supplier_automation_delivery: "Tedarikçi gönderim hatasını incele",
   inspect_supplier_automation_state: "Tedarikçi otomasyon durumunu incele",
   inspect_supplier_contact_data: "Tedarikçi iletişim bilgisini kontrol et",
@@ -1334,6 +1338,50 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
       ackBox.append(node("div", `Son temaslar: ${supplier.contact_attempts.map(item => `${item.channel === "phone" ? "Telefon" : "WhatsApp"} · ${attemptLabel(item.outcome)} · ${formatDate(item.attempted_at)}`).join(" | ")}`, "small muted"));
     }
     ackBox.append(ackFeedback); card.append(ackBox);
+  }
+
+  const nba = supplier.next_best_action || {};
+  if (nba.action && !["none", "wait", "follow_reminder_workflow"].includes(nba.action) && supplier.status === "awaiting_response" && !supplier.commercial_response) {
+    const nbaBox = node("div", "", "supplier-acknowledgement-box supplier-next-best-action");
+    const sourceLabel = ({ supplier_master:"Tedarikçi ayarı", confirmed_learning:"Doğrulanmış öğrenme", operational_rule:"Operasyon kuralı", current_evidence:"Mevcut kanıt", reminder_workflow:"Reminder akışı" })[nba.source] || codeLabel(nba.source);
+    nbaBox.append(
+      node("strong", `Sıradaki öneri: ${nba.label || codeLabel(nba.action)}`),
+      node("div", `${sourceLabel} · ${codeLabel(nba.reason)}. Bu yalnız operatör tavsiyesidir; otomatik arama/mesaj veya secondary release yapmaz.`, "small muted")
+    );
+    const escalationFeedback = node("div", "", "muted settings-feedback");
+    const escalationActions = node("div", "", "actions supplier-acknowledgement-actions");
+    const escalationOutcomeLabel = outcome => ({ acknowledged_working:"çalışıyoruz teyidi", no_response:"cevap yok", unreachable:"ulaşılamadı" }[outcome] || codeLabel(outcome));
+    const saveEscalation = async (level, channel, outcome) => {
+      escalationFeedback.textContent = "Escalation kanıtı kaydediliyor…";
+      try {
+        await api(`/supplier-rfqs/${encodeURIComponent(supplier.rfq_id)}/escalations`, { method:"POST", body:JSON.stringify({ level, channel, outcome }) });
+        await refresh();
+      } catch(error) { escalationFeedback.textContent = error.message || String(error); }
+    };
+    if (nba.action === "contact_supplier") {
+      const channels = nba.channel ? [nba.channel] : ["phone", "whatsapp"];
+      channels.forEach(channel => {
+        const label = channel === "phone" ? "Telefon" : "WhatsApp";
+        escalationActions.append(
+          actionButton(`${label} · Çalışıyoruz`, "", () => saveEscalation("operator", channel, "acknowledged_working")),
+          actionButton(`${label} · Cevap yok`, "", () => saveEscalation("operator", channel, "no_response")),
+          actionButton(`${label} · Ulaşılamadı`, "", () => saveEscalation("operator", channel, "unreachable"))
+        );
+      });
+    } else if (nba.action === "management_contact") {
+      const channel = nba.channel || "phone";
+      const label = channel === "phone" ? "Yönetici telefonu" : "Yönetici WhatsApp";
+      escalationActions.append(
+        actionButton(`${label} · Çalışıyoruz`, "", () => saveEscalation("management", channel, "acknowledged_working")),
+        actionButton(`${label} · Cevap yok`, "", () => saveEscalation("management", channel, "no_response")),
+        actionButton(`${label} · Ulaşılamadı`, "", () => saveEscalation("management", channel, "unreachable"))
+      );
+    }
+    if (escalationActions.childElementCount) nbaBox.append(escalationActions);
+    if ((supplier.escalation_evidence || []).length) {
+      nbaBox.append(node("div", `Escalation geçmişi: ${supplier.escalation_evidence.map(item => `${item.level === "management" ? "Yönetici" : "Operatör"}/${item.channel === "phone" ? "Telefon" : "WhatsApp"} · ${escalationOutcomeLabel(item.outcome)} · ${formatDate(item.escalated_at)}`).join(" | ")}`, "small muted"));
+    }
+    nbaBox.append(escalationFeedback); card.append(nbaBox);
   }
 
   if (supplier.commercial_response) {

@@ -37,6 +37,7 @@ PERSISTENT_STATE_NAMESPACES = (
     "supplier_rfq_responses",
     "supplier_rfq_acknowledgements",
     "supplier_contact_attempts",
+    "supplier_escalation_evidence",
     "supplier_secondary_dispatch_authorizations",
     "supplier_ingested_messages",
     "quote_approvals",

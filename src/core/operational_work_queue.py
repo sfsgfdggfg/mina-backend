@@ -16,6 +16,7 @@ from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.extraction_confirmation_repository import ExtractionProposalRepository
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.master_data_repository import MasterDataRepository
+from src.core.learning_fact_repository import LearningFactRepository
 from src.core.automation_policy_repository import AgencyAutomationPolicyRepository
 from src.core.operation_start_repository import OperationStartMessageRepository
 from src.core.operational_priority import (
@@ -32,6 +33,7 @@ from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQFollowUpDraft
 from src.core.supplier_rfq_repository import SupplierRFQRepository
+from src.core.supplier_next_best_action import build_supplier_next_best_action
 
 _HUMAN_ACTION_BASE_SCORE = 20
 _ACTIVE_FOLLOW_UP_STATUSES = {"draft", "approved", "awaiting_response"}
@@ -362,6 +364,7 @@ def _automation_attention_items(
     mina_job_repository: MinaJobRepository | None = None,
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
+    learning_fact_repository: LearningFactRepository | None = None,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     supplier_states = {
@@ -395,6 +398,7 @@ def _automation_attention_items(
         ),
     }
     for draft in supplier_repository.list_drafts():
+        nba = None
         plan = supplier_reminder_plan(
             supplier_repository=supplier_repository,
             action_repository=action_repository,
@@ -409,9 +413,30 @@ def _automation_attention_items(
         if config is None:
             continue
         next_action, score, reason = config
+        if state == "human_contact_required":
+            workflow = supplier_repository.get_workflow(draft.workflow_id)
+            if workflow is not None:
+                nba = build_supplier_next_best_action(
+                    draft=draft, workflow=workflow, reminder_plan=plan,
+                    supplier_repository=supplier_repository,
+                    master_data_repository=master_data_repository,
+                    learning_fact_repository=learning_fact_repository, as_of=now,
+                )
+                if nba.action == "contact_supplier":
+                    next_action = (
+                        "contact_supplier_phone" if nba.channel == "phone"
+                        else "contact_supplier_whatsapp" if nba.channel == "whatsapp"
+                        else "contact_supplier_using_profile"
+                    )
+                elif nba.action == "management_contact":
+                    next_action = "management_supplier_contact"
+                elif nba.action == "manual_relationship_review":
+                    next_action = "manual_supplier_relationship_review"
         created_at = plan.get("due_at") or draft.sent_at or draft.created_at
         age_hours = _age_hours(created_at, now=now)
         reasons = [reason]
+        if nba is not None:
+            reasons.append(f"next_best_action:{nba.reason}")
         if plan.get("reason"):
             reasons.append(str(plan["reason"]))
         score, nearest_kind, nearest_days = _add_deadlines(
@@ -640,6 +665,7 @@ def build_operational_work_queue(
     resolved_master_data_repository = master_data_repository
     resolved_agency_policy_repository = agency_policy_repository
     resolved_operation_start_repository = operation_start_repository
+    resolved_learning_fact_repository = None
     if getattr(supplier_repository, "store", None) is not None:
         from src.core.sqlite_repositories import (
             SQLiteAutomationActionRepository,
@@ -648,6 +674,7 @@ def build_operational_work_queue(
         from src.core.master_data_repository import SQLiteMasterDataRepository
         from src.core.automation_policy_repository import SQLiteAgencyAutomationPolicyRepository
         from src.core.operation_start_repository import SQLiteOperationStartMessageRepository
+        from src.core.learning_fact_repository import SQLiteLearningFactRepository
         if resolved_automation_repository is None:
             resolved_automation_repository = SQLiteAutomationActionRepository(
                 supplier_repository.store
@@ -668,6 +695,7 @@ def build_operational_work_queue(
             resolved_operation_start_repository = SQLiteOperationStartMessageRepository(
                 supplier_repository.store
             )
+        resolved_learning_fact_repository = SQLiteLearningFactRepository(supplier_repository.store)
     if resolved_automation_repository is not None:
         items.extend(_automation_attention_items(
             supplier_repository=supplier_repository,
@@ -676,6 +704,7 @@ def build_operational_work_queue(
             mina_job_repository=resolved_mina_job_repository,
             master_data_repository=resolved_master_data_repository,
             agency_policy_repository=resolved_agency_policy_repository,
+            learning_fact_repository=resolved_learning_fact_repository,
         ))
 
     if resolved_operation_start_repository is not None:

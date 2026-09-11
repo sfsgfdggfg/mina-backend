@@ -197,11 +197,13 @@ from src.core.supplier_rfq import SupplierRFQResponse
 from src.core.supplier_dispatch_control import (
     SupplierAcknowledgementError,
     SupplierContactAttemptError,
+    SupplierEscalationEvidenceError,
     SupplierSecondaryDispatchBlockedError,
     authorize_secondary_after_price_negotiation,
     build_supplier_dispatch_status,
     record_supplier_acknowledgement,
     record_supplier_contact_attempt,
+    record_supplier_escalation_evidence,
 )
 from src.core.supplier_rfq_lifecycle import (
     SupplierRFQFollowUpNotFoundError,
@@ -927,6 +929,13 @@ class SupplierRFQAcknowledgementRequest(BaseModel):
 
 
 class SupplierContactAttemptRequest(BaseModel):
+    channel: Literal["phone", "whatsapp"]
+    outcome: Literal["acknowledged_working", "no_response", "unreachable"]
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class SupplierEscalationEvidenceRequest(BaseModel):
+    level: Literal["operator", "management"]
     channel: Literal["phone", "whatsapp"]
     outcome: Literal["acknowledged_working", "no_response", "unreachable"]
     note: Optional[str] = Field(default=None, max_length=500)
@@ -3879,6 +3888,23 @@ def record_supplier_rfq_contact_attempt(
             outcome=request.outcome, note=request.note, recorded_by=_authenticated_operator(http_request),
         )
     except SupplierContactAttemptError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/supplier-rfqs/{rfq_id}/escalations")
+def record_supplier_rfq_escalation(
+    rfq_id: str, request: SupplierEscalationEvidenceRequest, http_request: Request,
+):
+    try:
+        return record_supplier_escalation_evidence(
+            repository=supplier_rfq_repository, action_repository=automation_action_repository,
+            rfq_id=rfq_id, level=request.level, channel=request.channel, outcome=request.outcome,
+            note=request.note, recorded_by=_authenticated_operator(http_request),
+            mina_job_repository=mina_job_repository, master_data_repository=master_data_repository,
+            agency_policy_repository=agency_automation_policy_repository,
+            learning_fact_repository=learning_fact_repository,
+        )
+    except SupplierEscalationEvidenceError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 

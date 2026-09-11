@@ -6969,3 +6969,16 @@ The negotiation service validates both offer identities, chronology, supplier id
 Supplier-history learning may derive `commercial.negotiated_reduction_percent` only from these explicit negotiation records. Multiple successful records may produce a median reduction observation, but the resulting LearningFact remains proposed until human confirmation.
 
 Even after confirmation, negotiation learning is advisory only. It may tell the operator what reduction has historically been achieved with that supplier; it does not create a supplier target price, disclose a customer target, send a counter-offer, authorize secondary dispatch or change supplier eligibility.
+
+## DEC-222 — Supplier Escalation Intelligence Uses Explicit Reminder-Stage Evidence and Advisory Next Best Action
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+MINAI may learn supplier escalation behavior only from explicit escalation evidence recorded while the supplier reminder workflow is in `human_contact_required`. Ordinary phone/WhatsApp contact before that stage remains ordinary contact evidence and must not be relabeled as escalation history.
+
+An escalation record preserves RFQ, reminder state/action identity when available, escalation level (`operator` or `management`), channel, outcome, operator and timestamp. `no_response` and `unreachable` remain contact outcomes only; they do not establish no-capacity, do not release secondary suppliers and do not create a commercial supplier response. `acknowledged_working` reuses the existing non-commercial acknowledgement/grace authority.
+
+Supplier-history learning may derive phone, WhatsApp and management acknowledgement-rate metrics only from this explicit escalation denominator. Facts remain proposed until human confirmation. Confirmed escalation learning may influence only an operator-facing Next Best Action advisory; it never initiates a call, WhatsApp message or management contact automatically.
+
+Next Best Action combines the current reminder state, explicit supplier relationship settings, confirmed escalation history and current-RFQ failed escalation attempts. Explicit supplier settings remain superior authority. After operator channels are exhausted, management/patron escalation may be recommended only when it is not explicitly disabled. Failed management escalation ends in manual relationship review, not automatic fallback or secondary dispatch.

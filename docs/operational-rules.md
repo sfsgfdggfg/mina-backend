@@ -4055,3 +4055,11 @@ Two supplier prices must never be treated as a negotiation round solely because 
 The recorded negotiation percentage is derived from the linked supplier prices; it is not manually invented. Invalid cross-supplier, cross-currency, reverse-time or non-reduction pairs must fail closed.
 
 Negotiation history may become an operator-facing advisory only after structured LearningFact review and confirmation. It must not generate or reveal customer target prices, automatically contact the supplier, create a counter-offer, release secondary suppliers or bypass commercial safety gates.
+
+## RULE-239 — Escalation History May Recommend the Next Human Action but Must Never Manufacture Supplier Unavailability
+
+Only a contact performed when the supplier reminder flow requires human contact may be recorded as escalation evidence. Earlier phone/WhatsApp activity stays ordinary contact evidence.
+
+Escalation silence, no-response and unreachability never mean `araç yok`, never satisfy a secondary-release gate and never create commercial response authority. A `çalışıyoruz` result is non-commercial acknowledgement evidence and uses the existing grace timer.
+
+Confirmed escalation history may recommend phone, WhatsApp or management/patron contact to the operator. It must not automatically perform that contact, override an explicit supplier-level prohibition, expose customer targets, bypass primary-supplier protection or authorize secondary dispatch. If operator channels and any permitted management escalation fail, the required next step is manual relationship review.
