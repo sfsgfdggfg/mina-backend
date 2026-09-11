@@ -22,15 +22,20 @@ def evaluate_supplier_selection_override_regressions() -> dict:
     comparisons=[_cmp("Alpha",0.91,2500),_cmp("Beta",0.83,2350),_cmp("Blocked",0.95,2200,eligible=False)]
     normal=build_supplier_quote_selection_decision(comparisons)
     check(normal.selected_supplier=="Alpha" and normal.engine_recommended_supplier=="Alpha" and not normal.override_applied, "normal supplier quote selection preserves engine recommendation without override evidence")
-    overridden=build_supplier_quote_selection_decision(comparisons,override_supplier_name="Beta",override_reason="Customer relationship requires Beta.",overridden_by="Ops User")
-    check(overridden.selected_supplier=="Beta" and overridden.engine_recommended_supplier=="Alpha" and overridden.override_applied and overridden.override_reason=="Customer relationship requires Beta." and overridden.overridden_by=="Ops User" and "MINAI Alpha" in overridden.selection_reason, "human override selects an eligible alternative while preserving engine recommendation and reason evidence")
+    overridden=build_supplier_quote_selection_decision(comparisons,override_supplier_name="Beta",override_reason="Customer relationship requires Beta.",override_reason_category="relationship_loyalty",overridden_by="Ops User")
+    check(overridden.selected_supplier=="Beta" and overridden.engine_recommended_supplier=="Alpha" and overridden.override_applied and overridden.override_reason=="Customer relationship requires Beta." and overridden.override_reason_category=="relationship_loyalty" and overridden.overridden_by=="Ops User" and "MINAI Alpha" in overridden.selection_reason, "human override selects an eligible alternative while preserving engine recommendation and reason evidence")
     try:
         build_supplier_quote_selection_decision(comparisons,override_supplier_name="Beta",overridden_by="Ops User")
         missing_reason=False
     except ValueError: missing_reason=True
     check(missing_reason,"supplier selection override fails closed without a human reason")
     try:
-        build_supplier_quote_selection_decision(comparisons,override_supplier_name="Blocked",override_reason="Try blocked",overridden_by="Ops User")
+        build_supplier_quote_selection_decision(comparisons,override_supplier_name="Beta",override_reason="Relationship",overridden_by="Ops User")
+        missing_category=False
+    except ValueError: missing_category=True
+    check(missing_category,"supplier selection override fails closed without a structured reason category")
+    try:
+        build_supplier_quote_selection_decision(comparisons,override_supplier_name="Blocked",override_reason="Try blocked",override_reason_category="other",overridden_by="Ops User")
         blocked=False
     except ValueError: blocked=True
     check(blocked,"supplier selection override cannot target a commercially ineligible quote")

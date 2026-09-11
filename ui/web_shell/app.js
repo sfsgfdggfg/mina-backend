@@ -1846,12 +1846,14 @@ function renderSupplierPricesSection(container, data, jobId, refresh) {
     const overrideLabel=node("label","Supplier seçimi (opsiyonel override)"); const overrideSupplier=document.createElement("select");
     const autoOpt=document.createElement("option");autoOpt.value="";autoOpt.textContent="MINAI önerisini kullan";overrideSupplier.append(autoOpt);
     supplierNames.forEach(name=>{const o=document.createElement("option");o.value=name;o.textContent=name;overrideSupplier.append(o);});overrideLabel.append(overrideSupplier);
+    const categoryLabel=node("label","Override nedeni kategorisi"); const overrideCategory=document.createElement("select");
+    [["","Kategori seç…"],["price","Fiyat"],["capacity_certainty","Araç kesinliği"],["relationship_loyalty","İlişki / sadakat"],["customer_preference","Müşteri tercihi"],["operational_experience","Operasyon tecrübesi"],["timing_transit","Transit / zamanlama"],["management_decision","Yönetim kararı"],["other","Diğer"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;overrideCategory.append(o);});categoryLabel.append(overrideCategory);
     const reasonLabel=node("label","Override gerekçesi"); const overrideReason=document.createElement("input");overrideReason.maxLength=1200;overrideReason.placeholder="örn. müşteri bu tedarikçiyi tercih ediyor";reasonLabel.append(overrideReason);
     const feedback=node("div","","muted settings-feedback");
     const prepare=actionButton("Teklifi Hazırla","approve",async()=>{
       const raw=margin.value.trim(); const body={};
       if(raw){const value=Number(raw);if(!Number.isFinite(value)||value<0){feedback.textContent="Geçerli bir yüzde gir.";return;}body.quote_pricing_override={method:"cost_markup_percentage",value};}
-      if(overrideSupplier.value){if(!overrideReason.value.trim()){feedback.textContent="Supplier override için gerekçe zorunlu.";return;}body.supplier_selection_override_name=overrideSupplier.value;body.supplier_selection_override_reason=overrideReason.value.trim();}
+      if(overrideSupplier.value){if(!overrideCategory.value){feedback.textContent="Supplier override için neden kategorisi zorunlu.";return;}if(!overrideReason.value.trim()){feedback.textContent="Supplier override için gerekçe zorunlu.";return;}body.supplier_selection_override_name=overrideSupplier.value;body.supplier_selection_override_reason_category=overrideCategory.value;body.supplier_selection_override_reason=overrideReason.value.trim();}
       prepare.disabled=true;feedback.textContent="Tüm fiyat kaynakları karşılaştırılıyor…";
       try {
         const result=await api(`/mina-jobs/${encodeURIComponent(jobId)}/supplier-prices/progress`,{method:"POST",body:JSON.stringify(body)});
@@ -1859,7 +1861,7 @@ function renderSupplierPricesSection(container, data, jobId, refresh) {
         else await refresh();
       } catch(error){feedback.textContent=error.message||String(error);} finally{prepare.disabled=false;}
     });
-    progress.append(marginLabel,overrideLabel,reasonLabel,prepare,feedback); section.append(progress);
+    progress.append(marginLabel,overrideLabel,categoryLabel,reasonLabel,prepare,feedback); section.append(progress);
   }
   container.append(section);
 }
@@ -2037,10 +2039,30 @@ async function renderQuoteSection(container, data, refresh) {
   section.append(grid);
   if(selectionDecision.override_applied){
     const overrideBox=node("div","","notice");
-    overrideBox.append(node("strong",`Supplier seçimi operatör tarafından değiştirildi: ${selectionDecision.engine_recommended_supplier} → ${selectionDecision.selected_supplier}`),node("div",`Gerekçe: ${selectionDecision.override_reason || "-"} · Operatör: ${selectionDecision.overridden_by || "-"}`,"small"));
+    const categoryText=({price:"Fiyat",capacity_certainty:"Araç kesinliği",relationship_loyalty:"İlişki / sadakat",customer_preference:"Müşteri tercihi",operational_experience:"Operasyon tecrübesi",timing_transit:"Transit / zamanlama",management_decision:"Yönetim kararı",other:"Diğer"})[selectionDecision.override_reason_category]||"-";
+    overrideBox.append(node("strong",`Supplier seçimi operatör tarafından değiştirildi: ${selectionDecision.engine_recommended_supplier} → ${selectionDecision.selected_supplier}`),node("div",`Kategori: ${categoryText} · Gerekçe: ${selectionDecision.override_reason || "-"} · Operatör: ${selectionDecision.overridden_by || "-"}`,"small"));
     section.append(overrideBox);
   } else if(selectionDecision.engine_recommended_supplier){
     section.append(node("div",`Supplier seçimi MINAI önerisiyle aynı: ${selectionDecision.engine_recommended_supplier}.`,"muted small"));
+  }
+  const outcome=quoteCase.supplier_decision_outcome_feedback;
+  if(outcome){
+    const outcomeBox=node("div","","approval-focused");outcomeBox.append(node("h3","Supplier Karar Sonucu"));
+    const outcomeLabel=({successful:"Başarılı",acceptable:"Kabul edilebilir",problematic:"Problemli"})[outcome.overall_outcome]||codeLabel(outcome.overall_outcome);
+    const commLabel=({good:"İyi",acceptable:"Kabul edilebilir",poor:"Zayıf"})[outcome.communication_quality]||codeLabel(outcome.communication_quality);
+    const againLabel=({yes:"Evet",unsure:"Kararsız",no:"Hayır"})[outcome.would_choose_again]||codeLabel(outcome.would_choose_again);
+    const onTime=outcome.on_time_delivery===null||outcome.on_time_delivery===undefined?"Ölçülemedi":(outcome.on_time_delivery?"Evet":"Hayır");
+    const metrics=node("div","","detail-grid");metrics.append(summaryItem("Genel sonuç",outcomeLabel),summaryItem("İletişim",commLabel),summaryItem("Tekrar tercih",againLabel),summaryItem("Zamanında teslim",onTime),summaryItem("Gerçek gecikme",outcome.actual_delay_count??0),summaryItem("Hasar olayı",outcome.damage_exception_count??0));outcomeBox.append(metrics);
+    if(outcome.note)outcomeBox.append(node("div",`Not: ${outcome.note}`,"small muted"));
+    outcomeBox.append(node("div",`Kaydeden: ${outcome.recorded_by||"-"} · ${formatDate(outcome.recorded_at)}`,"small policy-evidence"));section.append(outcomeBox);
+  } else if(data.controls?.supplier_decision_outcome_recordable){
+    const outcomeBox=node("div","","approval-focused");outcomeBox.append(node("h3","Supplier Karar Sonucunu Kaydet"),node("div","Tamamlanmış operasyondaki teslimat, gecikme ve hasar kanıtları otomatik alınır. Bu kayıt tek başına supplier ranking'ini değiştirmez.","muted small"));
+    const overallLabel=node("label","Genel sonuç");const overall=document.createElement("select");[["successful","Başarılı"],["acceptable","Kabul edilebilir"],["problematic","Problemli"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;overall.append(o);});overallLabel.append(overall);
+    const commLabel=node("label","İletişim kalitesi");const comm=document.createElement("select");[["good","İyi"],["acceptable","Kabul edilebilir"],["poor","Zayıf"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;comm.append(o);});commLabel.append(comm);
+    const againLabel=node("label","Aynı durumda tekrar tercih eder misin?");const again=document.createElement("select");[["yes","Evet"],["unsure","Kararsız"],["no","Hayır"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;again.append(o);});againLabel.append(again);
+    const noteLabel=node("label","Operatör notu (opsiyonel)");const note=document.createElement("textarea");note.rows=3;note.maxLength=1200;noteLabel.append(note);
+    const fb=node("div","","muted settings-feedback");const save=actionButton("Sonucu Kaydet","approve",async()=>{save.disabled=true;try{await api(`/mina-jobs/${encodeURIComponent(data.job.job_id)}/supplier-decision-outcome`,{method:"POST",body:JSON.stringify({entry_id:freshPriceEntryId("supplier-outcome"),overall_outcome:overall.value,communication_quality:comm.value,would_choose_again:again.value,note:note.value.trim()||null})});await refresh();}catch(error){fb.textContent=error.message||String(error);save.disabled=false;}});
+    const inputs=node("div","","settings-two-col");inputs.append(overallLabel,commLabel,againLabel);outcomeBox.append(inputs,noteLabel,save,fb);section.append(outcomeBox);
   }
   if (!approval) { section.append(node("div", "Teklif onay kaydı henüz oluşmadı.", "notice")); container.append(section); return; }
   const snapshot = approval.quote_snapshot || {};

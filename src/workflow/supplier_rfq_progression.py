@@ -103,6 +103,7 @@ def resume_supplier_rfq_workflow(
     price_repository: SupplierPriceRepository | None = None,
     supplier_selection_override_name: str | None = None,
     supplier_selection_override_reason: str | None = None,
+    supplier_selection_override_reason_category: str | None = None,
     supplier_selection_overridden_by: str | None = None,
 ) -> dict:
     workflow = rfq_repository.get_workflow(workflow_id)
@@ -136,6 +137,7 @@ def resume_supplier_rfq_workflow(
             price_repository=price_repository,
             supplier_selection_override_name=supplier_selection_override_name,
             supplier_selection_override_reason=supplier_selection_override_reason,
+            supplier_selection_override_reason_category=supplier_selection_override_reason_category,
             supplier_selection_overridden_by=supplier_selection_overridden_by,
         )
     except DataProvenanceError:
@@ -319,6 +321,7 @@ def _progress_supplier_rfq_workflow(
     price_repository: SupplierPriceRepository | None = None,
     supplier_selection_override_name: str | None = None,
     supplier_selection_override_reason: str | None = None,
+    supplier_selection_override_reason_category: str | None = None,
     supplier_selection_overridden_by: str | None = None,
 ) -> dict:
 
@@ -560,6 +563,7 @@ def _progress_supplier_rfq_workflow(
         comparisons=supplier_quote_comparisons,
         override_supplier_name=supplier_selection_override_name,
         override_reason=supplier_selection_override_reason,
+        override_reason_category=supplier_selection_override_reason_category,
         overridden_by=supplier_selection_overridden_by,
     )
     supplier_quote = None

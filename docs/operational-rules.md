@@ -4101,3 +4101,11 @@ When preparing the customer quote, an operator may choose a supplier other than 
 The original MINAI recommendation must remain visible in the durable selection decision. The override must flow through normal supplier-cost pricing, quote approval and send-safety logic rather than editing a completed quote retrospectively.
 
 Supplier selection override evidence must not change supplier eligibility, ADR/equipment capability, primary/secondary release gates or supplier learning automatically. Invalid, missing-reason or commercially ineligible override requests fail closed.
+
+## RULE-244 — Final Supplier Outcome May Measure the Chosen Decision but Must Not Pretend to Know the Counterfactual
+
+Supplier decision outcome feedback may be recorded only after a lifecycle-v2 job is completed, durable delivery evidence exists, and no operation exception remains open. The selected supplier in the quote must match the durable supplier-selection decision.
+
+MINAI must derive measurable delivery, delay and damage results from operation evidence. Operators may add a bounded qualitative assessment, but must not manually overwrite objective evidence. One final outcome record is allowed per quote case; identical retries may be idempotent, while conflicting second records fail closed.
+
+A successful or problematic chosen-supplier outcome says nothing by itself about an unselected supplier. Outcome feedback and override-reason categories are reporting evidence only until a separate human-reviewed learning policy explicitly authorizes an aggregate metric. They must not automatically modify supplier eligibility, score, ranking, dispatch role, reminder behavior, escalation, negotiation or secondary-release rules.

@@ -689,6 +689,9 @@ def build_reporting_read_model(
             "responded_count": 0, "quoted_count": 0, "no_capacity_count": 0,
             "declined_count": 0, "price_offer_count": 0, "selected_count": 0,
             "selected_completed_job_count": 0, "selected_actual_delay_count": 0,
+            "outcome_feedback_count": 0, "successful_outcome_count": 0,
+            "problematic_outcome_count": 0, "choose_again_yes_count": 0,
+            "feedback_on_time_known_count": 0, "feedback_on_time_count": 0,
             "master_reliability_score": None, "master_price_score": None,
             "master_speed_score": None,
         })
@@ -718,6 +721,9 @@ def build_reporting_read_model(
             "responded_count": 0, "quoted_count": 0, "no_capacity_count": 0,
             "declined_count": 0, "price_offer_count": 0, "selected_count": 0,
             "selected_completed_job_count": 0, "selected_actual_delay_count": 0,
+            "outcome_feedback_count": 0, "successful_outcome_count": 0,
+            "problematic_outcome_count": 0, "choose_again_yes_count": 0,
+            "feedback_on_time_known_count": 0, "feedback_on_time_count": 0,
             "master_reliability_score": None, "master_price_score": None,
             "master_speed_score": None,
         })
@@ -742,6 +748,9 @@ def build_reporting_read_model(
             "responded_count": 0, "quoted_count": 0, "no_capacity_count": 0,
             "declined_count": 0, "price_offer_count": 0, "selected_count": 0,
             "selected_completed_job_count": 0, "selected_actual_delay_count": 0,
+            "outcome_feedback_count": 0, "successful_outcome_count": 0,
+            "problematic_outcome_count": 0, "choose_again_yes_count": 0,
+            "feedback_on_time_known_count": 0, "feedback_on_time_count": 0,
             "master_reliability_score": None, "master_price_score": None,
             "master_speed_score": None,
         })
@@ -750,6 +759,15 @@ def build_reporting_read_model(
         row["selected_actual_delay_count"] += sum(
             item.impact_level == "actual_delay" for item in exceptions_by_job.get(job.job_id, [])
         )
+        feedback = case.supplier_decision_outcome_feedback
+        if feedback is not None:
+            row["outcome_feedback_count"] += 1
+            row["successful_outcome_count"] += int(feedback.overall_outcome == "successful")
+            row["problematic_outcome_count"] += int(feedback.overall_outcome == "problematic")
+            row["choose_again_yes_count"] += int(feedback.would_choose_again == "yes")
+            if feedback.on_time_delivery is not None:
+                row["feedback_on_time_known_count"] += 1
+                row["feedback_on_time_count"] += int(feedback.on_time_delivery)
 
     for profile in master_data_repository.list_suppliers():
         row = supplier_groups.get(profile.supplier_name)
@@ -766,6 +784,18 @@ def build_reporting_read_model(
             None if row["selection_provenance_gap_count"] else _ratio(row["selected_count"], row["price_offer_count"])
         )
         row["average_response_minutes"] = _avg(response_minutes_by_supplier.get(name, []))
+        row["successful_outcome_percent"] = _ratio(
+            row["successful_outcome_count"], row["outcome_feedback_count"]
+        )
+        row["problematic_outcome_percent"] = _ratio(
+            row["problematic_outcome_count"], row["outcome_feedback_count"]
+        )
+        row["choose_again_yes_percent"] = _ratio(
+            row["choose_again_yes_count"], row["outcome_feedback_count"]
+        )
+        row["feedback_on_time_delivery_percent"] = _ratio(
+            row["feedback_on_time_count"], row["feedback_on_time_known_count"]
+        )
 
     # Exception read model preserves operational impact instead of converting it into stages.
     impact_counts = {"deviation": 0, "delivery_risk": 0, "actual_delay": 0}
