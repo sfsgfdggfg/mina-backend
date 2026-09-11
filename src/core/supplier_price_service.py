@@ -8,7 +8,7 @@ from src.core.mina_job_service import MinaJobNotFoundError, MinaJobTransitionErr
 from src.core.sqlite_repositories import atomic_repository_transaction
 from src.core.supplier_price import (
     SupplierFixedRate, SupplierFixedRateApplicability, SupplierFixedRateEvidenceSource,
-    SupplierPriceOffer, SupplierPriceSource, evaluate_fixed_rate_applicability,
+    SupplierNegotiationEvidence, SupplierPriceOffer, SupplierPriceSource, evaluate_fixed_rate_applicability,
     offer_from_fixed_rate, offer_from_rfq_response,
 )
 from src.core.supplier_price_repository import SupplierPriceRepository
@@ -142,6 +142,84 @@ def create_direct_supplier_price_offer(
         return saved
 
 
+def record_supplier_negotiation_result(
+    *, price_repository: SupplierPriceRepository, mina_repository: MinaJobRepository,
+    job_id: str, entry_id: str, before_offer_id: str, after_offer_id: str,
+    supplier_repository=None,
+    channel: str, recorded_by: str, recorded_at: datetime | None = None,
+    note: str | None = None,
+) -> SupplierNegotiationEvidence:
+    timestamp = _aware_utc(recorded_at)
+    actor = _actor(recorded_by)
+    normalized_channel = channel.strip().lower()
+    if normalized_channel not in {"phone", "whatsapp", "email", "manual"}:
+        raise ValueError("Negotiation channel must be phone/whatsapp/email/manual.")
+    with atomic_repository_transaction(price_repository, mina_repository):
+        job = _open_price_job(mina_repository, job_id)
+        def resolve_offer(offer_id: str):
+            direct = price_repository.get_offer(offer_id)
+            if direct is not None:
+                return direct
+            if supplier_repository is None or not job.supplier_rfq_workflow_id:
+                return None
+            workflow = supplier_repository.get_workflow(job.supplier_rfq_workflow_id)
+            if workflow is None:
+                return None
+            for draft in supplier_repository.list_drafts():
+                if draft.workflow_id != workflow.workflow_id:
+                    continue
+                for response in supplier_repository.list_responses(draft.rfq_id):
+                    if not response.is_price_usable:
+                        continue
+                    candidate = offer_from_rfq_response(
+                        response=response, job_id=job.job_id, mina_code=job.mina_code
+                    )
+                    if candidate.offer_id == offer_id:
+                        return candidate
+            return None
+
+        before = resolve_offer(before_offer_id)
+        after = resolve_offer(after_offer_id)
+        if before is None or after is None:
+            raise ValueError("Negotiation evidence requires two existing supplier price offers.")
+        if before.offer_id == after.offer_id:
+            raise ValueError("Negotiation evidence requires two distinct supplier price offers.")
+        if before.mina_job_id != job.job_id or after.mina_job_id != job.job_id:
+            raise ValueError("Negotiation price offers must belong to the same MINA job.")
+        if before.supplier_name.strip().casefold() != after.supplier_name.strip().casefold():
+            raise ValueError("Negotiation price offers must belong to the same supplier.")
+        if before.currency.strip().upper() != after.currency.strip().upper():
+            raise ValueError("Negotiation price offers must use the same currency.")
+        if _utc_sort_time(after.recorded_at) < _utc_sort_time(before.recorded_at):
+            raise ValueError("After-negotiation price cannot predate the initial supplier price.")
+        if after.cost >= before.cost:
+            raise ValueError("Negotiation evidence requires a lower after-negotiation price.")
+        reduction_amount = round(float(before.cost) - float(after.cost), 2)
+        reduction_percent = round(100 * reduction_amount / float(before.cost), 4)
+        evidence = SupplierNegotiationEvidence(
+            entry_id=entry_id.strip(), mina_job_id=job.job_id, mina_code=job.mina_code,
+            supplier_name=before.supplier_name, before_offer_id=before.offer_id,
+            after_offer_id=after.offer_id, before_cost=float(before.cost),
+            after_cost=float(after.cost), currency=before.currency,
+            reduction_amount=reduction_amount, reduction_percent=reduction_percent,
+            channel=normalized_channel, recorded_by=actor, recorded_at=timestamp, note=note,
+        )
+        saved, created = price_repository.create_negotiation(evidence)
+        if created:
+            mina_repository.append_event(MinaJobEvent(
+                job_id=job.job_id, mina_code=job.mina_code,
+                event_type="supplier_negotiation_recorded", occurred_at=timestamp, actor=actor,
+                resource_type="supplier_negotiation_evidence", resource_id=saved.negotiation_id,
+                metadata={
+                    "supplier_name": saved.supplier_name, "channel": saved.channel,
+                    "before_offer_id": saved.before_offer_id, "after_offer_id": saved.after_offer_id,
+                    "before_cost": saved.before_cost, "after_cost": saved.after_cost,
+                    "currency": saved.currency, "reduction_percent": saved.reduction_percent,
+                },
+            ))
+        return saved
+
+
 def use_fixed_rate_for_job(
     *, price_repository: SupplierPriceRepository, mina_repository: MinaJobRepository,
     job_id: str, rate_id: str, entry_id: str, recorded_by: str,
@@ -213,11 +291,14 @@ def build_job_supplier_price_view(
         else:
             rejected_count += 1
 
+    offers = list({item.offer_id: item for item in offers}.values())
     offers.sort(key=lambda item: (item.recorded_at, item.offer_id))
+    negotiations = list(price_repository.list_negotiations(job_id=job.job_id))
     return {
         "job_id": job.job_id,
         "mina_code": job.mina_code,
         "price_offers": [item.model_dump() for item in offers],
+        "negotiations": [item.model_dump() for item in negotiations],
         "applicable_fixed_rates": applicable_rates,
         "non_applicable_fixed_rate_count": rejected_count,
     }

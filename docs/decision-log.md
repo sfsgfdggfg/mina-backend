@@ -6956,3 +6956,16 @@ MINAI may learn phone and WhatsApp relationship patterns only from durable conta
 Historical derivation may propose channel acknowledgement-rate and channel-specific acknowledgement-to-usable-quote timing facts. These remain proposed until human confirmation. Evidence recency is anchored to the latest underlying RFQ/response/contact observation rather than the date MINAI reruns the analysis, so old history cannot be made artificially fresh by re-derivation.
 
 Confirmed channel history may only provide an operator-facing preferred-channel advisory and, when the current acknowledgement came through that channel, extend the acknowledged waiting window within the existing 180-minute cap. It cannot shorten waiting, remove manually preferred channels, initiate a call/WhatsApp message, change explicit escalation delays or create commercial/secondary-dispatch authority.
+
+## DEC-221 — Supplier Negotiation Learning Requires Explicit Before/After Price Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-10
+
+MINAI does not infer a supplier negotiation merely because two prices from the same supplier differ. A negotiation becomes durable evidence only when an authenticated operator explicitly links a before-price offer and a later lower after-price offer for the same MINA job, supplier and currency.
+
+The negotiation service validates both offer identities, chronology, supplier identity, currency and a strictly positive price reduction. RFQ-derived offers may serve as the initial price and a later phone/WhatsApp/email/manual offer may serve as the negotiated result. The computed reduction amount and percentage are stored as append-only evidence and referenced in the MINA job timeline.
+
+Supplier-history learning may derive `commercial.negotiated_reduction_percent` only from these explicit negotiation records. Multiple successful records may produce a median reduction observation, but the resulting LearningFact remains proposed until human confirmation.
+
+Even after confirmation, negotiation learning is advisory only. It may tell the operator what reduction has historically been achieved with that supplier; it does not create a supplier target price, disclose a customer target, send a counter-offer, authorize secondary dispatch or change supplier eligibility.

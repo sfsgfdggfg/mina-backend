@@ -53,6 +53,7 @@ from src.core.sqlite_repositories import (
 )
 from src.core.supplier_price import SupplierFixedRate, SupplierPriceOffer, offer_from_rfq_response
 from src.core.supplier_price_repository import SQLiteSupplierPriceRepository
+from src.core.supplier_price_service import create_direct_supplier_price_offer, record_supplier_negotiation_result
 from src.core.supplier_quote_selection import (
     RejectedSupplierQuoteAlternative,
     SupplierQuoteSelectionDecision,
@@ -67,7 +68,7 @@ from src.core.supplier_rfq import (
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
 DEMO_OPERATOR = "Demo Operator"
-DEMO_SEED_VERSION = 5
+DEMO_SEED_VERSION = 6
 
 
 
@@ -815,11 +816,26 @@ def seed_demo_database(db_path: str | Path, *, reset: bool = False) -> dict:
     ))
     j7, w7, d7, r7 = _seed_workflow(
         rfq_repo=rfq_repo, price_repo=price_repo, job_repo=job_repo, job=j7, now=now,
-        specs=[{"name":"EuroHaul","sent_minutes_ago":90,"sent_evidence":True,"response":{"status":"quoted","cost":2620,"currency":"EUR","transit_time":"4 gün"}}],
+        specs=[{"name":"EuroHaul","sent_minutes_ago":90,"response_minutes_ago":45,"sent_evidence":True,"response":{"status":"quoted","cost":2620,"currency":"EUR","transit_time":"4 gün"}}],
+    )
+    negotiated_offer = create_direct_supplier_price_offer(
+        price_repository=price_repo, mina_repository=job_repo, job_id=j7.job_id,
+        entry_id="demo-7-eurohaul-negotiated", supplier_name="EuroHaul", source_type="phone",
+        cost=2490, currency="EUR", transit_time="4 gün", equipment_type=j7.shipment.equipment_type,
+        pricing_basis="all_in", included_costs=[], excluded_costs=[], recorded_by=DEMO_OPERATOR,
+        recorded_at=now - timedelta(minutes=35), notes="Sentetik telefon pazarlığı sonrası revize fiyat.",
+    )
+    initial_offer = offer_from_rfq_response(response=r7[0], job_id=j7.job_id, mina_code=j7.mina_code)
+    record_supplier_negotiation_result(
+        price_repository=price_repo, mina_repository=job_repo, supplier_repository=rfq_repo,
+        job_id=j7.job_id, entry_id="demo-7-eurohaul-negotiation",
+        before_offer_id=initial_offer.offer_id, after_offer_id=negotiated_offer.offer_id,
+        channel="phone", recorded_by=DEMO_OPERATOR, recorded_at=now - timedelta(minutes=34),
+        note="Sentetik demo pazarlık kanıtı.",
     )
     j7, c7, a7 = _seed_quote(
         quote_repo=quote_repo, approval_repo=approval_repo, job_repo=job_repo, job=j7,
-        supplier_name="EuroHaul", supplier_cost=2620, final_price=2890,
+        supplier_name="EuroHaul", supplier_cost=2490, final_price=2890,
         approval_status="approved", selected_rfq_id=d7[0].rfq_id, sent=True, now=now,
     )
     jobs.append(j7)

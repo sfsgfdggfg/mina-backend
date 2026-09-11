@@ -118,8 +118,18 @@ def evaluate_demo_sandbox_regressions() -> dict:
         )
         check(repeated.get("reason") == "already_seeded" and len(jobs) == 11, "demo seed is idempotent without reset")
         check(len(masters.list_customers()) == 12 and len(masters.list_suppliers()) == 6, "demo seed includes synthetic customer and supplier master data")
-        fixed_rates = SQLiteSupplierPriceRepository(store).list_fixed_rates()
+        demo_prices = SQLiteSupplierPriceRepository(store)
+        fixed_rates = demo_prices.list_fixed_rates()
         check(seeded.get("fixed_rate_count") == 3 and len(fixed_rates) == 3 and all(rate.active for rate in fixed_rates), "demo seed exposes active synthetic supplier fixed rates")
+        negotiations = demo_prices.list_negotiations()
+        check(
+            len(negotiations) == 1
+            and negotiations[0].supplier_name == "EuroHaul"
+            and negotiations[0].before_cost == 2620
+            and negotiations[0].after_cost == 2490
+            and negotiations[0].channel == "phone",
+            "demo negotiation job carries explicit before-after supplier price evidence",
+        )
 
         shift_closes = SQLiteOperationalShiftCloseReceiptRepository(store)
         shift_opens = SQLiteOperationalShiftOpenAcceptanceReceiptRepository(store)

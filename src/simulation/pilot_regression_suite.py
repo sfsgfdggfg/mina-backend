@@ -24,6 +24,7 @@ from src.simulation.supplier_dispatch_policy_regressions import evaluate_supplie
 from src.simulation.supplier_primary_dispatch_regressions import evaluate_supplier_primary_dispatch_regressions
 from src.simulation.supplier_intelligence_policy_regressions import evaluate_supplier_intelligence_policy_regressions
 from src.simulation.supplier_relationship_intelligence_regressions import evaluate_supplier_relationship_intelligence_regressions
+from src.simulation.supplier_negotiation_intelligence_regressions import evaluate_supplier_negotiation_intelligence_regressions
 from src.simulation.automatic_followup_deadline_regressions import evaluate_automatic_followup_deadline_regressions
 from src.simulation.mina_job_case_regressions import evaluate_mina_job_case_regressions
 from src.simulation.mina_operations_ui_regressions import evaluate_mina_operations_ui_regressions
@@ -266,6 +267,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Primary supplier dispatch and response timing", evaluate_supplier_primary_dispatch_regressions),
     Suite("Supplier intelligence operational policy", evaluate_supplier_intelligence_policy_regressions),
     Suite("Supplier relationship intelligence", evaluate_supplier_relationship_intelligence_regressions),
+    Suite("Supplier negotiation intelligence", evaluate_supplier_negotiation_intelligence_regressions),
     Suite("Business-hours outbound automation", evaluate_business_hours_automation_regressions),
     Suite("Automatic supplier follow-up and customer quote deadline", evaluate_automatic_followup_deadline_regressions),
     Suite("MINA job and case model", evaluate_mina_job_case_regressions),

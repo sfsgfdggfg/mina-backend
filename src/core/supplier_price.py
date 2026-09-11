@@ -164,6 +164,49 @@ class SupplierPriceOffer(BaseModel):
         return self.cost > 0 and bool(self.currency)
 
 
+class SupplierNegotiationEvidence(BaseModel):
+    negotiation_id: str = Field(default_factory=lambda: str(uuid4()))
+    entry_id: str = Field(min_length=1, max_length=300)
+    mina_job_id: str = Field(min_length=1, max_length=300)
+    mina_code: str = Field(pattern=r"^MINA\d{4}/[1-9]\d*$")
+    supplier_name: str = Field(min_length=1, max_length=200)
+    before_offer_id: str = Field(min_length=1, max_length=300)
+    after_offer_id: str = Field(min_length=1, max_length=300)
+    before_cost: float = Field(gt=0)
+    after_cost: float = Field(gt=0)
+    currency: str
+    reduction_amount: float = Field(gt=0)
+    reduction_percent: float = Field(gt=0, lt=100)
+    channel: Literal["phone", "whatsapp", "email", "manual"]
+    recorded_by: str = Field(min_length=1, max_length=200)
+    recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    note: Optional[str] = Field(default=None, max_length=1000)
+    source: Literal["supplier_negotiation_evidence"] = "supplier_negotiation_evidence"
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_negotiation_currency(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if len(normalized) != 3 or not normalized.isalpha():
+            raise ValueError("Negotiation currency must be a 3-letter code.")
+        return normalized
+
+    @field_validator("recorded_at")
+    @classmethod
+    def require_negotiation_aware_time(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("Negotiation evidence timestamp must be timezone-aware.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_negotiation_reduction(self):
+        if self.before_offer_id == self.after_offer_id:
+            raise ValueError("Negotiation evidence requires two distinct price offers.")
+        if self.after_cost >= self.before_cost:
+            raise ValueError("Negotiation evidence requires a lower after-negotiation cost.")
+        return self
+
+
 def evaluate_fixed_rate_applicability(
     *, rate: SupplierFixedRate, shipment: Shipment, as_of: date | None = None,
 ) -> SupplierFixedRateApplicability:

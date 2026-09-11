@@ -4,7 +4,7 @@ from threading import Lock
 from typing import Protocol
 
 from src.core.pilot_store import SQLitePilotStore
-from src.core.supplier_price import SupplierFixedRate, SupplierPriceOffer
+from src.core.supplier_price import SupplierFixedRate, SupplierNegotiationEvidence, SupplierPriceOffer
 
 
 
@@ -25,6 +25,12 @@ def _offer_idempotency_payload(offer: SupplierPriceOffer) -> dict:
     )
 
 
+def _negotiation_idempotency_payload(evidence: SupplierNegotiationEvidence) -> dict:
+    return evidence.model_dump(
+        mode="json", exclude={"negotiation_id", "recorded_at"}
+    )
+
+
 class SupplierPriceRepository(Protocol):
     def create_fixed_rate(self, rate: SupplierFixedRate) -> tuple[SupplierFixedRate, bool]: ...
     def save_fixed_rate(self, rate: SupplierFixedRate) -> SupplierFixedRate: ...
@@ -37,6 +43,9 @@ class SupplierPriceRepository(Protocol):
     def find_offer_by_entry_id(self, entry_id: str) -> SupplierPriceOffer | None: ...
     def find_offer_for_job_fixed_rate(self, job_id: str, rate_id: str) -> SupplierPriceOffer | None: ...
     def list_offers(self, job_id: str | None = None) -> list[SupplierPriceOffer]: ...
+    def create_negotiation(self, evidence: SupplierNegotiationEvidence) -> tuple[SupplierNegotiationEvidence, bool]: ...
+    def find_negotiation_by_entry_id(self, entry_id: str) -> SupplierNegotiationEvidence | None: ...
+    def list_negotiations(self, job_id: str | None = None) -> list[SupplierNegotiationEvidence]: ...
 
 
 class InMemorySupplierPriceRepository:
@@ -46,6 +55,8 @@ class InMemorySupplierPriceRepository:
         self._offers: dict[str, SupplierPriceOffer] = {}
         self._offer_by_entry: dict[str, str] = {}
         self._offer_by_job_rate: dict[tuple[str, str], str] = {}
+        self._negotiations: dict[str, SupplierNegotiationEvidence] = {}
+        self._negotiation_by_entry: dict[str, str] = {}
         self._lock = Lock()
 
     def create_fixed_rate(self, rate: SupplierFixedRate) -> tuple[SupplierFixedRate, bool]:
@@ -122,6 +133,30 @@ class InMemorySupplierPriceRepository:
             offers = [item for item in offers if item.mina_job_id == job_id]
         return sorted(offers, key=lambda item: (item.recorded_at, item.offer_id))
 
+    def create_negotiation(self, evidence: SupplierNegotiationEvidence) -> tuple[SupplierNegotiationEvidence, bool]:
+        with self._lock:
+            existing_id = self._negotiation_by_entry.get(evidence.entry_id)
+            if existing_id is not None:
+                existing = self._negotiations[existing_id]
+                if _negotiation_idempotency_payload(existing) != _negotiation_idempotency_payload(evidence):
+                    raise SupplierPriceIdempotencyConflictError(
+                        "Negotiation entry_id was reused with different evidence."
+                    )
+                return existing, False
+            self._negotiations[evidence.negotiation_id] = evidence
+            self._negotiation_by_entry[evidence.entry_id] = evidence.negotiation_id
+            return evidence, True
+
+    def find_negotiation_by_entry_id(self, entry_id: str) -> SupplierNegotiationEvidence | None:
+        negotiation_id = self._negotiation_by_entry.get(entry_id)
+        return None if negotiation_id is None else self._negotiations.get(negotiation_id)
+
+    def list_negotiations(self, job_id: str | None = None) -> list[SupplierNegotiationEvidence]:
+        items = list(self._negotiations.values())
+        if job_id is not None:
+            items = [item for item in items if item.mina_job_id == job_id]
+        return sorted(items, key=lambda item: (item.recorded_at, item.negotiation_id))
+
 
 def _payload(model):
     return model.model_dump(mode="json")
@@ -133,6 +168,8 @@ class SQLiteSupplierPriceRepository:
     OFFER_NAMESPACE = "supplier_price_offers"
     OFFER_ENTRY_INDEX_NAMESPACE = "supplier_price_offer_by_entry"
     JOB_RATE_INDEX_NAMESPACE = "supplier_price_offer_by_job_fixed_rate"
+    NEGOTIATION_NAMESPACE = "supplier_negotiation_evidence"
+    NEGOTIATION_ENTRY_INDEX_NAMESPACE = "supplier_negotiation_by_entry"
 
     def __init__(self, store: SQLitePilotStore) -> None:
         self.store = store
@@ -241,3 +278,41 @@ class SQLiteSupplierPriceRepository:
     def list_offers(self, job_id: str | None = None) -> list[SupplierPriceOffer]:
         offers = [SupplierPriceOffer.model_validate(p) for p in self.store.list_all(namespace=self.OFFER_NAMESPACE)]
         return offers if job_id is None else [item for item in offers if item.mina_job_id == job_id]
+
+
+    def create_negotiation(self, evidence: SupplierNegotiationEvidence) -> tuple[SupplierNegotiationEvidence, bool]:
+        existing = self.find_negotiation_by_entry_id(evidence.entry_id)
+        if existing is not None:
+            if _negotiation_idempotency_payload(existing) != _negotiation_idempotency_payload(evidence):
+                raise SupplierPriceIdempotencyConflictError(
+                    "Negotiation entry_id was reused with different evidence."
+                )
+            return existing, False
+        if not self.store.insert_once(
+            namespace=self.NEGOTIATION_NAMESPACE, record_key=evidence.negotiation_id, payload=_payload(evidence),
+            event_type="supplier_negotiation_recorded", entity_type="supplier_negotiation_evidence",
+        ):
+            raise RuntimeError("Supplier negotiation identifier collision.")
+        if not self.store.insert_once(
+            namespace=self.NEGOTIATION_ENTRY_INDEX_NAMESPACE, record_key=evidence.entry_id,
+            payload={"record_id": evidence.negotiation_id}, event_type="supplier_negotiation_indexed",
+            entity_type="supplier_negotiation_index",
+        ):
+            raise RuntimeError("Supplier negotiation entry identity collision.")
+        return evidence, True
+
+    def find_negotiation_by_entry_id(self, entry_id: str) -> SupplierNegotiationEvidence | None:
+        payload = self.store.get(namespace=self.NEGOTIATION_ENTRY_INDEX_NAMESPACE, record_key=entry_id)
+        if payload is None:
+            return None
+        record = self.store.get(namespace=self.NEGOTIATION_NAMESPACE, record_key=str(payload.get("record_id") or ""))
+        return None if record is None else SupplierNegotiationEvidence.model_validate(record)
+
+    def list_negotiations(self, job_id: str | None = None) -> list[SupplierNegotiationEvidence]:
+        items = [
+            SupplierNegotiationEvidence.model_validate(payload)
+            for payload in self.store.list_all(namespace=self.NEGOTIATION_NAMESPACE)
+        ]
+        if job_id is not None:
+            items = [item for item in items if item.mina_job_id == job_id]
+        return sorted(items, key=lambda item: (item.recorded_at, item.negotiation_id))
