@@ -105,6 +105,7 @@ def resume_supplier_rfq_workflow(
     supplier_selection_override_reason: str | None = None,
     supplier_selection_override_reason_category: str | None = None,
     supplier_selection_overridden_by: str | None = None,
+    learning_fact_repository=None,
 ) -> dict:
     workflow = rfq_repository.get_workflow(workflow_id)
     if workflow is None:
@@ -139,6 +140,7 @@ def resume_supplier_rfq_workflow(
             supplier_selection_override_reason=supplier_selection_override_reason,
             supplier_selection_override_reason_category=supplier_selection_override_reason_category,
             supplier_selection_overridden_by=supplier_selection_overridden_by,
+            learning_fact_repository=learning_fact_repository,
         )
     except DataProvenanceError:
         drafts = [
@@ -323,6 +325,7 @@ def _progress_supplier_rfq_workflow(
     supplier_selection_override_reason: str | None = None,
     supplier_selection_override_reason_category: str | None = None,
     supplier_selection_overridden_by: str | None = None,
+    learning_fact_repository=None,
 ) -> dict:
 
     shipment = workflow.shipment
@@ -345,6 +348,7 @@ def _progress_supplier_rfq_workflow(
         sender_address=workflow.sender_address,
         operational_data_sources=operational_data_sources,
         customer_profiles=customer_profiles,
+        learning_repository=learning_fact_repository,
     )
     commodity_profile = get_commodity_record(shipment.commodity)
     missing_info = apply_road_rfq_readiness(

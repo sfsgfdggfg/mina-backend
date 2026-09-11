@@ -4137,3 +4137,13 @@ Customer-context outcome metrics require the same real denominators as outcome-i
 The customer-context ranking contribution is independently bounded to ±0.025 and all learning together remains inside the existing ±0.06 total ranking cap. Customer-specific learning may reorder only suppliers that already passed route, service, equipment, ADR and other safety/eligibility checks; it must not change supplier role, primary/secondary dispatch order, secondary release, reminders, contact/escalation, negotiation authority or Supplier Master.
 
 Every RFQ created from a customer-context ranking decision must retain the customer-context adjustment, context key and reviewed fact identifiers in the durable supplier-selection explanation. Missing legacy evidence must remain missing rather than being reconstructed from current customer or supplier state.
+
+## RULE-248 — Learned Customer Defaults Fill Only Missing Low-Ambiguity Fields and Never Override Current or Master Facts
+
+A learned customer request default may be proposed only from at least five durable requests for the same Customer Master identity with at least 80% dominance. It remains proposed until human review and requires effective confidence of at least 0.85 for runtime use. Additional evidence must create an explicit replacement proposal rather than silently refreshing reviewed history.
+
+Runtime enrichment requires trusted customer identity. MINAI may use a confirmed mature preference only when the corresponding field is absent from the current request and Customer Master has no explicit default for that field. Current-request content has highest authority, followed by Customer Master, followed by confirmed learned preference. Unmatched or ambiguous customer identity provides no learned default.
+
+The only v1 runtime-default fields are commodity, equipment type, pickup country/city and delivery country/city. Never learn or fill cargo ready date, required delivery date, customer quote deadline, package dimensions, weight, ADR class, temperature, high-value status or similar shipment-specific/safety facts from repetition alone.
+
+Accepted-quote currency history is advisory only. It cannot alter pricing policy, quote currency, margin, supplier eligibility, supplier ranking, automation mode or commercial approval authority. Missing evidence stays missing; historical acceptance must not be interpreted as proof of price sensitivity, time sensitivity or supplier preference.

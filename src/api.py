@@ -268,6 +268,8 @@ from src.core.learning_fact_service import (
     reject_learning_fact,
 )
 from src.core.supplier_learning_service import derive_supplier_history_learning
+from src.core.customer_preference_learning import derive_customer_preference_learning
+from src.core.customer_preference_policy import build_customer_preference_policy
 from src.core.supplier_intelligence_policy import build_supplier_operational_learning_policy
 from src.core.reporting_read_model import (
     REPORTING_SECTIONS,
@@ -2035,6 +2037,32 @@ def get_customer_learning_facts(customer_id: str):
     )
 
 
+@app.post("/master-data/customers/{customer_id}/derive-preferences")
+def derive_customer_preferences(customer_id: str, http_request: Request):
+    try:
+        return derive_customer_preference_learning(
+            customer_id=customer_id, master_repository=master_data_repository,
+            mina_repository=mina_job_repository, learning_repository=learning_fact_repository,
+            quote_case_repository=quote_case_repository,
+            created_by=_authenticated_operator(http_request),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}") from exc
+    except (LearningFactConflictError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/master-data/customers/{customer_id}/preference-policy")
+def get_customer_preference_policy(customer_id: str):
+    customer = master_data_repository.get_customer(customer_id)
+    if customer is None:
+        raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}")
+    return build_customer_preference_policy(
+        customer_id=customer_id, learning_repository=learning_fact_repository,
+        as_of=datetime.now(timezone.utc),
+    ).model_dump(mode="json")
+
+
 @app.post("/master-data/suppliers/{supplier_id}/derive-learning")
 def derive_supplier_learning_from_history(supplier_id: str, http_request: Request):
     try:
@@ -2247,6 +2275,7 @@ def progress_mina_job_supplier_prices(
             ),
             master_data_repository=_runtime_master_data_authority(),
             price_repository=supplier_price_repository,
+            learning_fact_repository=learning_fact_repository,
             supplier_selection_override_name=(request.supplier_selection_override_name if request is not None else None),
             supplier_selection_override_reason=(request.supplier_selection_override_reason if request is not None else None),
             supplier_selection_override_reason_category=(request.supplier_selection_override_reason_category if request is not None else None),
@@ -3708,6 +3737,7 @@ def resume_extraction_proposal_endpoint(proposal_id: str):
             evidence_recorder=pilot_store,
             operational_data_sources=operational_data_sources,
             master_data_repository=_runtime_master_data_authority(),
+            learning_fact_repository=learning_fact_repository,
         )
     except ExtractionProposalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -4150,6 +4180,7 @@ def resume_supplier_rfq_quote(
             ),
             master_data_repository=_runtime_master_data_authority(),
             price_repository=supplier_price_repository,
+            learning_fact_repository=learning_fact_repository,
         )
     except SupplierRFQWorkflowNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

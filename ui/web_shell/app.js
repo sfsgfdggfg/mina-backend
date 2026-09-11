@@ -2599,6 +2599,44 @@ function renderAutomationSettings(policyPayload, customers = []) {
 }
 
 
+function renderCustomerPreferenceLearning(container, customer) {
+  const labels={
+    "preference.default_commodity":"Varsayılan emtia",
+    "preference.default_equipment_type":"Varsayılan ekipman",
+    "preference.default_pickup_country":"Yükleme ülkesi",
+    "preference.default_pickup_city":"Yükleme şehri",
+    "preference.default_delivery_country":"Teslim ülkesi",
+    "preference.default_delivery_city":"Teslim şehri",
+    "commercial.accepted_quote_currency":"Kabul edilen teklif para birimi"
+  };
+  async function load(){
+    container.replaceChildren(node("div","Müşteri tercih hafızası yükleniyor…","muted"));
+    try{
+      const [factsPayload,policy]=await Promise.all([
+        api(`/master-data/customers/${encodeURIComponent(customer.customer_id)}/learning-facts`),
+        api(`/master-data/customers/${encodeURIComponent(customer.customer_id)}/preference-policy`)
+      ]);
+      container.replaceChildren();
+      const head=node("div","","settings-subheading");
+      head.append(node("h3","Öğrenilen Müşteri Tercihleri"),node("p","Tekrarlanan gerçek taleplerden çıkarılan varsayımlar öneridir. Master Veri ve mevcut talepte açıkça yazılan bilgi her zaman üstündür; tarih, ağırlık/ölçü, ADR, sıcaklık ve deadline geçmişten doldurulmaz.","muted"));
+      const derive=actionButton("Geçmişten Tercih Üret","",async()=>{derive.disabled=true;try{await api(`/master-data/customers/${encodeURIComponent(customer.customer_id)}/derive-preferences`,{method:"POST"});await load();}catch(e){container.append(node("div",e.message||String(e),"error"));}finally{derive.disabled=false;}});
+      head.append(derive);container.append(head);
+      const policyCard=node("div","","learning-fact-card");
+      const defaults=Object.entries(policy.learned_defaults||{});
+      policyCard.append(node("strong","Aktif doğrulanmış hafıza"));
+      policyCard.append(node("div",defaults.length?defaults.map(([k,v])=>`${k}: ${v}`).join(" · "):"Runtime'da kullanılabilecek öğrenilmiş default yok.","small"));
+      if(policy.accepted_quote_currency_advisory) policyCard.append(node("div",`Kabul edilmiş teklif para birimi geçmişi: ${policy.accepted_quote_currency_advisory} · yalnız tavsiye, pricing authority değildir.`,"muted small"));
+      container.append(policyCard);
+      const facts=(factsPayload.facts||[]).filter(f=>f.fact_key.startsWith("preference.")||f.fact_key==="commercial.accepted_quote_currency");
+      if(!facts.length){container.append(emptyState("Henüz müşteri tercih gözlemi yok","En az 5 tekrarlanan talep güçlü bir default adayı oluşturabilir."));return;}
+      const list=node("div","","learning-fact-list");facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
+        card.append(node("strong",labels[f.fact_key]||f.fact_key),node("div",String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}%`,"muted small"));
+        if((f.evidence||[])[0]?.summary)card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
+        if(f.status==="proposed"){const a=node("div","","actions");a.append(actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"Müşteri Master ekranında operatör tarafından doğrulandı."})});await load();}),actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"Müşteri Master ekranında operatör tarafından reddedildi."})});await load();}));card.append(a);}list.append(card);});container.append(list);
+    }catch(e){container.replaceChildren(node("div",e.message||String(e),"error"));}
+  } load();
+}
+
 function renderMasterDataSettings(customersPayload = {}, suppliersPayload = {}) {
   const customers=customersPayload.customers||[]; const suppliers=suppliersPayload.suppliers||[];
   const panel=node("section","","settings-panel"); const h=node("div","","settings-heading");
@@ -2616,7 +2654,7 @@ function renderMasterDataSettings(customersPayload = {}, suppliersPayload = {}) 
     const methodLabel=node("label","Pricing method");const method=document.createElement("select");[["","Yok"],["cost_markup_percentage","Maliyet üzerine %"],["gross_margin_percentage","Brüt marj %"],["fixed_profit","Sabit kâr"],["manual_sell_price","Manuel satış fiyatı"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;method.append(o);});method.value=c.pricing_policy?.method||"";methodLabel.append(method);const pricingValue=numberField("Pricing value",c.pricing_policy?.value,0,1000000);
     const grid=node("div","","settings-two-col");grid.append(name.label,owner.label,contactName.label,contactEmail.label,contactPhone.label,commodity.label,equipment.label,pickup.label,pCountry.label,delivery.label,dCountry.label,price.label,time.label,methodLabel,pricingValue.label,supplierMode.label,deadlineMode.label);
     const fb=node("div","","muted settings-feedback");const save=actionButton(existing?"Müşteriyi Güncelle":"Müşteri Oluştur","primary",async()=>{if(!name.input.value.trim()){fb.textContent="Müşteri adı gerekli.";return;}const contacts=(contactName.input.value.trim()||contactEmail.input.value.trim()||contactPhone.input.value.trim())?[{contact_name:contactName.input.value.trim()||null,email:contactEmail.input.value.trim()||null,phone:contactPhone.input.value.trim()||null,roles:["operations"],is_primary:true,active:true}]:[];const pv=pricingValue.value();if(method.value&&pv==null){fb.textContent="Pricing value gerekli.";return;}const body={customer_name:name.input.value.trim(),active:active.checked,aliases:aliases.value(),trusted_sender_addresses:senders.value(),trusted_sender_domains:domains.value(),contacts,sales_owner:owner.input.value.trim()||null,default_commodity:commodity.input.value.trim()||null,default_equipment_type:equipment.input.value.trim()||null,default_pickup_city:pickup.input.value.trim()||null,default_pickup_area:c.default_pickup_area||null,default_pickup_country:pCountry.input.value.trim()||null,default_delivery_city:delivery.input.value.trim()||null,default_delivery_country:dCountry.input.value.trim()||null,price_sensitivity:price.input.value.trim()||null,time_sensitivity:time.input.value.trim()||null,pricing_policy:method.value?{method:method.value,value:pv}:null,supplier_reminder_mode:supplierMode.value(),customer_deadline_update_mode:deadlineMode.value(),operational_notes:notes.value()};if(!existing)body.entry_id=freshPriceEntryId("web-customer-master");save.disabled=true;try{await api(existing?`/master-data/customers/${encodeURIComponent(c.customer_id)}`:"/master-data/customers",{method:"POST",body:JSON.stringify(body)});await loadSettings();}catch(e){fb.textContent=e.message||String(e);}finally{save.disabled=false;}});
-    cEditor.append(activeLabel,grid,aliases.label,senders.label,domains.label,notes.label,save,fb);}
+    cEditor.append(activeLabel,grid,aliases.label,senders.label,domains.label,notes.label,save,fb);if(existing){const learning=node("div","","customer-preference-learning");cEditor.append(learning);renderCustomerPreferenceLearning(learning,c);}}
   cSelect.addEventListener("change",drawCustomer);drawCustomer();panel.append(customerBox);
 
   const supplierBox=node("div","","master-data-box");supplierBox.append(node("h3","Tedarikçiler"));const sSelect=document.createElement("select");const sNew=document.createElement("option");sNew.value="__new__";sNew.textContent="+ Yeni tedarikçi";sSelect.append(sNew);suppliers.forEach((item,i)=>{const o=document.createElement("option");o.value=String(i);o.textContent=`${item.supplier_name}${item.active===false?" · pasif":""}`;sSelect.append(o);});sSelect.value=suppliers.length?"0":"__new__";supplierBox.append(sSelect);const sEditor=node("div","","settings-inline-editor");supplierBox.append(sEditor);
