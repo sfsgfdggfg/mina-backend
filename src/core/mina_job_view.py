@@ -22,6 +22,7 @@ from src.core.mina_job_service import (
     get_mina_job_or_raise,
 )
 from src.core.quote_case_repository import QuoteCaseRepository
+from src.core.quote_approval_repository import QuoteApprovalRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.core.supplier_next_best_action import build_supplier_next_best_action
 from src.core.supplier_price_repository import SupplierPriceRepository
@@ -61,6 +62,7 @@ def build_mina_job_detail(
     supplier_repository: SupplierRFQRepository,
     quote_case_repository: QuoteCaseRepository,
     action_repository: AutomationActionRepository,
+    quote_approval_repository: QuoteApprovalRepository | None = None,
     price_repository: SupplierPriceRepository | None = None,
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
@@ -182,11 +184,51 @@ def build_mina_job_detail(
     quote_summary = None
     if quote_case is not None:
         approval = quote_case.quote_approval
+        approval_commercial_history = []
+        if quote_approval_repository is not None and approval is not None:
+            approval_refs: list[tuple[int, str]] = []
+            revisions = sorted(quote_case.quote_revisions, key=lambda item: item.revision_number)
+            if revisions:
+                approval_refs.append((0, revisions[0].previous_approval_id))
+                approval_refs.extend((item.revision_number, item.new_approval_id) for item in revisions)
+            else:
+                approval_refs.append((0, approval.approval_id))
+            seen_ids: set[str] = set()
+            for revision_number, approval_id in approval_refs:
+                if approval_id in seen_ids:
+                    continue
+                seen_ids.add(approval_id)
+                historical = quote_approval_repository.get(approval_id)
+                if historical is None:
+                    approval_commercial_history.append({
+                        "revision_number": revision_number,
+                        "approval_id": approval_id,
+                        "record_state": "approval_record_missing",
+                        "is_current": approval_id == approval.approval_id,
+                    })
+                    continue
+                snapshot = historical.customer_commercial_context_snapshot
+                decided_by = (historical.approved_by or historical.rejected_by or historical.invalidated_by)
+                decided_at = (historical.approved_at or historical.rejected_at or historical.invalidated_at)
+                approval_commercial_history.append({
+                    "revision_number": revision_number,
+                    "approval_id": historical.approval_id,
+                    "approval_status": historical.approval_status,
+                    "created_at": historical.created_at,
+                    "decided_by": decided_by,
+                    "decided_at": decided_at,
+                    "record_state": "snapshot_present" if snapshot is not None else "legacy_snapshot_missing",
+                    "is_current": historical.approval_id == approval.approval_id,
+                    "customer_commercial_context_snapshot": (
+                        None if snapshot is None else snapshot.model_dump(mode="json", exclude_none=True)
+                    ),
+                })
         quote_summary = {
             "case_id": quote_case.case_id,
             "revision_count": len(quote_case.quote_revisions),
             "current_revision_number": len(quote_case.quote_revisions),
             "approval_status": None if approval is None else approval.approval_status,
+            "approval_commercial_history": approval_commercial_history,
             "manual_send_count": len(quote_case.manual_sent_evidence),
             "automated_send_count": len(quote_case.automated_sent_evidence),
             "supplier_decision_outcome_feedback": (

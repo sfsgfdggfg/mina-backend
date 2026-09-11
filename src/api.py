@@ -2410,6 +2410,7 @@ def get_mina_job(job_id: str):
             supplier_repository=supplier_rfq_repository,
             quote_case_repository=quote_case_repository,
             action_repository=automation_action_repository,
+            quote_approval_repository=quote_approval_repository,
             price_repository=supplier_price_repository,
             master_data_repository=master_data_repository,
             agency_policy_repository=agency_automation_policy_repository,
