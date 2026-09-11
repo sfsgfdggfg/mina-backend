@@ -1632,6 +1632,7 @@ function freshPriceEntryId(prefix) {
 function renderSupplierPricesSection(container, data, jobId, refresh) {
   const view = data.supplier_prices || {};
   const offers = view.price_offers || [];
+  const negotiations = view.negotiations || [];
   const rates = view.applicable_fixed_rates || [];
   const section = sectionBlock(
     "Tedarikçi Fiyatları",
@@ -1653,6 +1654,53 @@ function renderSupplierPricesSection(container, data, jobId, refresh) {
     section.append(list);
   } else {
     section.append(emptyState("Henüz kullanılabilir tedarikçi fiyatı yok", "RFQ yanıtı bekleyebilir veya telefon/WhatsApp fiyatı kaydedebilirsin."));
+  }
+
+  if (negotiations.length) {
+    const history = node("div", "", "supplier-price-list supplier-negotiation-history");
+    history.append(node("h3", "Pazarlık Kanıtları"));
+    negotiations.slice().sort((a,b)=>new Date(b.recorded_at||0)-new Date(a.recorded_at||0)).forEach(item=>{
+      const row=node("div","","supplier-commercial supplier-price-card");
+      row.append(
+        node("strong",`${item.supplier_name} · ${moneyLabel(item.before_cost,item.currency)} → ${moneyLabel(item.after_cost,item.currency)}`),
+        node("span",`Kazanç: %${Number(item.reduction_percent||0).toFixed(2)}`,"badge"),
+        node("span",`${item.channel==="phone"?"Telefon":item.channel==="whatsapp"?"WhatsApp":item.channel==="email"?"E-posta":"Manuel"} · operatör kanıtı`,"small muted")
+      );
+      history.append(row);
+    });
+    section.append(history);
+  }
+
+  if (data.controls?.supplier_price_entry_available && offers.length > 1) {
+    const recordedPairs=new Set(negotiations.map(item=>`${item.before_offer_id}|${item.after_offer_id}`));
+    const candidates=[];
+    const groups={};
+    offers.forEach(item=>{
+      const key=`${String(item.supplier_name||"").toLocaleLowerCase("tr-TR")}|${String(item.currency||"").toUpperCase()}`;
+      (groups[key] ||= []).push(item);
+    });
+    Object.values(groups).forEach(group=>{
+      const ordered=group.slice().sort((a,b)=>new Date(a.recorded_at||0)-new Date(b.recorded_at||0));
+      for(let i=1;i<ordered.length;i++){
+        const after=ordered[i];
+        const before=ordered.slice(0,i).reverse().find(item=>Number(item.cost)>Number(after.cost));
+        if(before && !recordedPairs.has(`${before.offer_id}|${after.offer_id}`)) candidates.push({before,after});
+      }
+    });
+    if(candidates.length){
+      const form=node("div","","approval-focused supplier-negotiation-entry");
+      form.append(node("h3","Pazarlık Sonucu Kaydet"),node("div","İki fiyat arasındaki düşüş ancak operatör ilişkilendirirse pazarlık kanıtı sayılır.","small muted"));
+      const pairLabel=node("label","Fiyat çifti"); const pair=document.createElement("select");
+      candidates.forEach((item,index)=>{const o=document.createElement("option");o.value=String(index);o.textContent=`${item.before.supplier_name} · ${moneyLabel(item.before.cost,item.before.currency)} → ${moneyLabel(item.after.cost,item.after.currency)}`;pair.append(o);});pairLabel.append(pair);
+      const channelLabel=node("label","Pazarlık kanalı"); const channel=document.createElement("select");
+      [["phone","Telefon"],["whatsapp","WhatsApp"],["email","E-posta"],["manual","Manuel"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;channel.append(o);});channelLabel.append(channel);
+      const feedback=node("div","","muted settings-feedback"); const save=actionButton("Pazarlık Kanıtını Kaydet","",async()=>{
+        const selected=candidates[Number(pair.value)]; if(!selected)return; save.disabled=true; feedback.textContent="Pazarlık kanıtı kaydediliyor…";
+        try{await api(`/mina-jobs/${encodeURIComponent(jobId)}/supplier-prices/negotiations`,{method:"POST",body:JSON.stringify({entry_id:freshPriceEntryId("web-negotiation"),before_offer_id:selected.before.offer_id,after_offer_id:selected.after.offer_id,channel:channel.value})});await refresh();}
+        catch(error){feedback.textContent=error.message||String(error);save.disabled=false;}
+      });
+      const grid=node("div","","settings-two-col");grid.append(pairLabel,channelLabel);form.append(grid,save,feedback);section.append(form);
+    }
   }
 
   if (rates.length) {

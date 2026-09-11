@@ -4047,3 +4047,11 @@ A phone or WhatsApp contact attempt must preserve its explicit outcome. `no_resp
 A contact attempt marked `acknowledged_working` is non-commercial evidence and starts the same acknowledged-supplier grace flow used by email/manual acknowledgements. It does not create a price, capacity decision or quote.
 
 Channel-learning requires durable attempt denominators; acknowledgement records alone must not be presented as a channel success rate. Confirmed high-confidence channel metrics may recommend phone or WhatsApp and may only make an acknowledged wait more patient within accepted limits. Explicit supplier-master channel/timing settings and all commercial safety gates remain superior authority.
+
+## RULE-238 — A Lower Later Price Is Not Negotiation Evidence Until an Operator Links It
+
+Two supplier prices must never be treated as a negotiation round solely because one is lower. Negotiation evidence requires an explicit operator link between a before offer and a later lower after offer belonging to the same MINA job, supplier and currency.
+
+The recorded negotiation percentage is derived from the linked supplier prices; it is not manually invented. Invalid cross-supplier, cross-currency, reverse-time or non-reduction pairs must fail closed.
+
+Negotiation history may become an operator-facing advisory only after structured LearningFact review and confirmation. It must not generate or reveal customer target prices, automatically contact the supplier, create a counter-offer, release secondary suppliers or bypass commercial safety gates.

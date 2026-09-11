@@ -10,6 +10,7 @@ from src.core.learning_fact_repository import LearningFactRepository
 from src.core.learning_fact_service import create_learning_fact
 from src.core.master_data_repository import MasterDataRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
+from src.core.supplier_price_repository import SupplierPriceRepository
 
 
 def _aware(value: datetime) -> datetime:
@@ -29,6 +30,7 @@ def derive_supplier_history_learning(
     *, supplier_id: str, master_repository: MasterDataRepository,
     supplier_repository: SupplierRFQRepository, learning_repository: LearningFactRepository,
     created_by: str, occurred_at: datetime | None = None,
+    price_repository: SupplierPriceRepository | None = None,
 ) -> dict:
     supplier = master_repository.get_supplier(supplier_id)
     if supplier is None:
@@ -47,6 +49,8 @@ def derive_supplier_history_learning(
     responded_count = 0
     evidence_ids: list[str] = []
     observed_times: list[datetime] = []
+    negotiation_reductions: list[float] = []
+    negotiation_ids: list[str] = []
     for draft in drafts:
         if draft.sent_at is not None:
             observed_times.append(_aware(draft.sent_at))
@@ -88,6 +92,14 @@ def derive_supplier_history_learning(
                     if elapsed_channel is not None:
                         contact_ack_to_quote_minutes[channel].append(elapsed_channel)
 
+    if price_repository is not None:
+        for negotiation in price_repository.list_negotiations():
+            if negotiation.supplier_name.strip().casefold() != supplier.supplier_name.strip().casefold():
+                continue
+            negotiation_reductions.append(float(negotiation.reduction_percent))
+            negotiation_ids.append(negotiation.negotiation_id)
+            observed_times.append(_aware(negotiation.recorded_at))
+
     fingerprint_source = {
         "supplier_id": supplier.supplier_id,
         "rfq_ids": sorted(evidence_ids),
@@ -98,6 +110,8 @@ def derive_supplier_history_learning(
         "contact_attempt_counts": contact_attempt_counts,
         "contact_ack_counts": contact_ack_counts,
         "contact_ack_to_quote_minutes": contact_ack_to_quote_minutes,
+        "negotiation_ids": sorted(negotiation_ids),
+        "negotiation_reductions": negotiation_reductions,
     }
     digest = hashlib.sha256(
         json.dumps(fingerprint_source, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -110,7 +124,8 @@ def derive_supplier_history_learning(
             f"Derived from {len(drafts)} RFQ records, {responded_count} supplier responses "
             f"and {quoted_count} usable quotes for {supplier.supplier_name}; "
             f"contact attempts: phone={contact_attempt_counts['phone']}, "
-            f"whatsapp={contact_attempt_counts['whatsapp']}."
+            f"whatsapp={contact_attempt_counts['whatsapp']}; "
+            f"explicit negotiation records={len(negotiation_reductions)}."
         ),
     )
 
@@ -147,6 +162,13 @@ def derive_supplier_history_learning(
                 min(0.95, 0.55 + 0.05 * len(channel_timings)),
             ))
 
+    if negotiation_reductions:
+        metrics.append((
+            "commercial.negotiated_reduction_percent",
+            round(float(median(negotiation_reductions)), 2), "percent",
+            min(0.95, 0.55 + 0.05 * len(negotiation_reductions)),
+        ))
+
     for fact_key, value, unit, confidence in metrics:
         fact = create_learning_fact(
             repository=learning_repository,
@@ -164,6 +186,7 @@ def derive_supplier_history_learning(
         "rfq_count": len(drafts),
         "responded_count": responded_count,
         "usable_quote_count": quoted_count,
+        "negotiation_evidence_count": len(negotiation_reductions),
         "proposed_facts": [item.model_dump() for item in proposals],
         "note": "Derived observations remain proposed until a human confirms them.",
     }

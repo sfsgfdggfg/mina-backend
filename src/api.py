@@ -226,6 +226,7 @@ from src.core.supplier_price_repository import (
 from src.core.supplier_price_service import (
     build_job_supplier_price_view,
     create_direct_supplier_price_offer,
+    record_supplier_negotiation_result,
     create_supplier_fixed_rate,
     set_supplier_fixed_rate_active,
     use_fixed_rate_for_job,
@@ -691,6 +692,14 @@ class SupplierDirectPriceCreateRequest(BaseModel):
     included_costs: Optional[list[str]] = None
     excluded_costs: Optional[list[str]] = None
     notes: Optional[str] = Field(default=None, max_length=2000)
+
+
+class SupplierNegotiationCreateRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    before_offer_id: str = Field(min_length=1, max_length=300)
+    after_offer_id: str = Field(min_length=1, max_length=300)
+    channel: Literal["phone", "whatsapp", "email", "manual"]
+    note: Optional[str] = Field(default=None, max_length=1000)
 
 
 class SupplierFixedRateUseRequest(BaseModel):
@@ -2002,6 +2011,7 @@ def derive_supplier_learning_from_history(supplier_id: str, http_request: Reques
         return derive_supplier_history_learning(
             supplier_id=supplier_id, master_repository=master_data_repository,
             supplier_repository=supplier_rfq_repository, learning_repository=learning_fact_repository,
+            price_repository=supplier_price_repository,
             created_by=_authenticated_operator(http_request),
         )
     except KeyError as exc:
@@ -2134,6 +2144,29 @@ def create_mina_job_supplier_price(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return offer.model_dump()
+
+
+@app.post("/mina-jobs/{job_id}/supplier-prices/negotiations")
+def create_mina_job_supplier_negotiation(
+    job_id: str, request: SupplierNegotiationCreateRequest, http_request: Request,
+):
+    try:
+        evidence = record_supplier_negotiation_result(
+            price_repository=supplier_price_repository,
+            mina_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            job_id=job_id, recorded_by=_authenticated_operator(http_request),
+            **request.model_dump(),
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SupplierPriceIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return evidence.model_dump()
 
 
 @app.post("/mina-jobs/{job_id}/supplier-prices/fixed-rate/{rate_id}")
