@@ -4179,3 +4179,13 @@ A reason rate requires at least five sent-and-lost jobs with current structured 
 A customer-stated target-price median requires at least three current `customer_explicit` observations containing both target price and currency in the same canonical sent-quote shipment/currency context. Feedback currency must match the reconstructed sent quote, and currencies, lanes, modes or equipment contexts must not be pooled. The median is historical advisory evidence only and never an automatic price command.
 
 Derivation creates proposed LearningFacts only. Human confirmation remains mandatory, and confirmed facts are subject to recency decay before advisory display. No reason or target-price fact may change pricing formulas, margins, sell price, supplier ranking or eligibility, automation, quote-send authority, Customer Master or any operational dispatch authority.
+
+## RULE-252 — Preserve the Commercial Advisory Snapshot Per Quote Approval and Never Rewrite Historical Decision Context
+
+Every new quote approval must freeze the customer commercial advisory context available when that approval is created. Quote revisions must create a new approval with a newly evaluated snapshot, while the invalidated, rejected or previously approved record keeps its original advisory snapshot unchanged.
+
+Snapshot evaluation must use the same stable Customer Master identity, recency gates and exact canonical shipment/currency/markup matching as the read-only customer commercial context policy. Only confirmed advisory facts may appear. Missing, ambiguous, stale, future-dated, unrelated-context or unconfirmed evidence remains absent.
+
+The snapshot is audit evidence only. It must not participate in quote-content equality, send-safety validity, pricing formulas, margin calculation, supplier selection, supplier negotiation, automation, recipient authority or dispatch. Raw evidence and manually maintained price/time sensitivity fields must not be copied into it.
+
+Legacy approvals that predate this rule keep a missing snapshot. Historical absence must never be filled from current LearningFacts. Operator quote-review UI must prefer the approval's frozen commercial snapshot over a live recomputation whenever it explains what commercial advisory was visible for that approval decision.

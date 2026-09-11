@@ -2038,12 +2038,12 @@ async function renderQuoteSection(container, data, refresh) {
     summaryItem("Gönderim", (quoteCase.automated_sent_evidence || []).length + (quoteCase.manual_sent_evidence || []).length + (quoteCase.send_reconciliation_evidence || []).filter(item => item.outcome === "confirmed_sent").length)
   );
   section.append(grid);
-  const commercialContext = data.customer_commercial_context;
+  const commercialContext = approval?.customer_commercial_context_snapshot || null;
   if (commercialContext?.advisory_only === true) {
     const advisory = node("div", "", "customer-commercial-context approval-focused");
     advisory.append(
-      node("h3", "Müşteri Ticari Bağlamı"),
-      node("div", "Teyit edilmiş geçmiş gözlemlerdir; nedensel açıklama, kazanma olasılığı, ödeme isteği veya pricing authority değildir.", "muted small")
+      node("h3", "Müşteri Ticari Bağlamı · Teklif Snapshot"),
+      node("div", "Bu teklif onayı hazırlanırken görülen teyit edilmiş geçmiş gözlemler dondurulmuştur; sonradan değişen öğrenmeler geçmiş kararı yeniden yazmaz. Nedensel açıklama, kazanma olasılığı, ödeme isteği veya pricing authority değildir.", "muted small")
     );
     const metrics = node("div", "", "detail-grid customer-commercial-context-metrics");
     const addMetric = (label, metric, formatter) => {

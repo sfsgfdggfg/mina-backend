@@ -3102,6 +3102,8 @@ def revise_quote_case_endpoint(
                 http_request
             ),
             mina_job_repository=mina_job_repository,
+            master_data_repository=_runtime_master_data_authority(),
+            learning_fact_repository=learning_fact_repository,
         )
     except QuoteRevisionNotFoundError as exc:
         raise HTTPException(

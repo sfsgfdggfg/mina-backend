@@ -6,6 +6,9 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from src.core.customer_commercial_context import build_customer_commercial_context
+from src.core.learning_fact_repository import LearningFactRepository
+from src.core.master_data_repository import MasterDataRepository
 from src.core.models import CustomerQuote, QuoteDraft
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.mina_job_service import record_mina_job_quote_revision
@@ -206,6 +209,8 @@ def revise_quote_case(
     operator_note: Optional[str] = None,
     edited_at: Optional[datetime] = None,
     mina_job_repository: MinaJobRepository | None = None,
+    master_data_repository: MasterDataRepository | None = None,
+    learning_fact_repository: LearningFactRepository | None = None,
 ) -> QuoteRevisionResult:
     normalized_subject = subject.strip()
     normalized_operator = edited_by.strip()
@@ -375,12 +380,23 @@ def revise_quote_case(
                 previous_approval
             )
 
+        revised_case_for_context = quote_case.model_copy(update={
+            "customer_quote": revised_customer_quote,
+            "quote_draft": revised_quote_draft,
+        })
+        commercial_context_snapshot = build_customer_commercial_context(
+            quote_case=revised_case_for_context,
+            master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository,
+            as_of=now,
+        )
         new_approval = QuoteApproval(
             quote_snapshot=QuoteApprovalSnapshot.from_quote(
                 supplier_quote=quote_case.supplier_quote,
                 customer_quote=revised_customer_quote,
                 quote_draft=revised_quote_draft,
-            )
+            ),
+            customer_commercial_context_snapshot=commercial_context_snapshot,
         )
 
         new_approval = approval_repository.save(

@@ -313,11 +313,11 @@ def evaluate_customer_commercial_context_regressions():
     ui = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
     check(
         "Müşteri Ticari Bağlamı" in ui
-        and "data.customer_commercial_context" in ui
+        and "approval?.customer_commercial_context_snapshot" in ui
         and "bu işin hedef fiyatı değildir" in ui
         and "pricing authority değildir" in ui
         and "tedarikçi pazarlık hedefi değildir" in ui,
-        "quote review UI consumes commercial context while making no-pricing no-current-target boundaries visible",
+        "quote review UI consumes the frozen approval commercial snapshot while preserving no-pricing no-current-target boundaries",
     )
     supplier_and_pricing_paths = [
         root / "src" / "ai" / "supplier_rfq_generator.py",

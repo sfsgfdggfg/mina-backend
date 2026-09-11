@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -18,8 +18,10 @@ from src.core.customer_quote_reason_policy import (
 )
 from src.core.learning_fact_repository import LearningFactRepository
 from src.core.master_data_repository import MasterDataRepository
-from src.core.quote_case import QuoteCase
 from src.core.supplier_customer_context import resolve_customer_master_profile
+
+if TYPE_CHECKING:
+    from src.core.quote_case import QuoteCase
 
 
 class AdvisoryValue(BaseModel):
