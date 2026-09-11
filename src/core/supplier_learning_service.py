@@ -12,7 +12,9 @@ from src.core.learning_fact_service import create_learning_fact
 from src.core.master_data_repository import MasterDataRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.core.supplier_price_repository import SupplierPriceRepository
+from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_context import shipment_context_keys
+from src.core.supplier_outcome_learning import OUTCOME_MIN_SAMPLE_COUNT, derive_supplier_outcome_learning
 
 
 def _aware(value: datetime) -> datetime:
@@ -33,6 +35,7 @@ def derive_supplier_history_learning(
     supplier_repository: SupplierRFQRepository, learning_repository: LearningFactRepository,
     created_by: str, occurred_at: datetime | None = None,
     price_repository: SupplierPriceRepository | None = None,
+    quote_case_repository: QuoteCaseRepository | None = None,
 ) -> dict:
     supplier = master_repository.get_supplier(supplier_id)
     if supplier is None:
@@ -283,6 +286,28 @@ def derive_supplier_history_learning(
             )
             contextual_proposals.append(fact)
 
+    outcome_learning = (
+        derive_supplier_outcome_learning(
+            supplier_id=supplier.supplier_id,
+            master_repository=master_repository,
+            quote_case_repository=quote_case_repository,
+            learning_repository=learning_repository,
+            created_by=created_by,
+            occurred_at=timestamp,
+        )
+        if quote_case_repository is not None
+        else {
+            "outcome_feedback_count": 0,
+            "excluded_integrity_count": 0,
+            "minimum_sample_count": OUTCOME_MIN_SAMPLE_COUNT,
+            "proposed_fact_count": 0,
+            "proposed_facts": [],
+            "contextual_proposed_fact_count": 0,
+            "contextual_proposed_facts": [],
+            "note": "Outcome learning repository was not supplied.",
+        }
+    )
+
     return {
         "supplier_id": supplier.supplier_id,
         "supplier_name": supplier.supplier_name,
@@ -294,5 +319,6 @@ def derive_supplier_history_learning(
         "proposed_facts": [item.model_dump() for item in proposals],
         "contextual_proposed_fact_count": len(contextual_proposals),
         "contextual_proposed_facts": [item.model_dump() for item in contextual_proposals],
+        "outcome_learning": outcome_learning,
         "note": "Derived observations remain proposed until a human confirms them.",
     }

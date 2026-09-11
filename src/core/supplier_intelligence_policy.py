@@ -12,6 +12,7 @@ from src.core.master_data import SupplierMasterProfile
 
 RANKING_MIN_EFFECTIVE_CONFIDENCE = 0.70
 CONTEXT_RANKING_MIN_EFFECTIVE_CONFIDENCE = 0.80
+OUTCOME_RANKING_MIN_EFFECTIVE_CONFIDENCE = 0.85
 TIMING_MIN_EFFECTIVE_CONFIDENCE = 0.85
 NEGOTIATION_MIN_EFFECTIVE_CONFIDENCE = 0.80
 CONTACT_MIN_EFFECTIVE_CONFIDENCE = 0.80
@@ -39,6 +40,11 @@ _CANONICAL_UNITS = {
     "escalation.phone.ack_rate_percent": "percent",
     "escalation.whatsapp.ack_rate_percent": "percent",
     "escalation.management.ack_rate_percent": "percent",
+    "operation.on_time_delivery_rate_percent": "percent",
+    "operation.problematic_outcome_rate_percent": "percent",
+    "operation.actual_delay_rate_percent": "percent",
+    "operation.damage_incident_rate_percent": "percent",
+    "operation.choose_again_rate_percent": "percent",
 }
 
 TimingSource = Literal["supplier_master", "confirmed_learning", "dispatch_default"]
@@ -145,6 +151,14 @@ def _recency_factor(fact_key: str, age_days: float) -> float:
         if age_days <= 730:
             return 0.60
         return 0.0
+    if fact_key.startswith("operation."):
+        if age_days <= 90:
+            return 1.0
+        if age_days <= 365:
+            return 0.85
+        if age_days <= 730:
+            return 0.60
+        return 0.0
     return 0.0
 
 
@@ -170,6 +184,48 @@ def _quote_rate_ranking_delta(percent: float) -> float:
     if percent >= 30:
         return -0.015
     return -0.035
+
+
+def _outcome_ranking_delta(fact_key: str, percent: float) -> float:
+    if fact_key == "operation.on_time_delivery_rate_percent":
+        if percent >= 95:
+            return 0.025
+        if percent >= 85:
+            return 0.015
+        if percent >= 70:
+            return 0.005
+        if percent >= 50:
+            return -0.005
+        return -0.025
+    if fact_key in {"operation.problematic_outcome_rate_percent", "operation.actual_delay_rate_percent"}:
+        if percent <= 5:
+            return 0.015
+        if percent <= 15:
+            return 0.005
+        if percent <= 30:
+            return -0.005
+        if percent <= 50:
+            return -0.015
+        return -0.025
+    if fact_key == "operation.damage_incident_rate_percent":
+        if percent == 0:
+            return 0.015
+        if percent <= 5:
+            return 0.005
+        if percent <= 15:
+            return -0.010
+        return -0.025
+    if fact_key == "operation.choose_again_rate_percent":
+        if percent >= 90:
+            return 0.020
+        if percent >= 75:
+            return 0.010
+        if percent >= 50:
+            return 0.0
+        if percent >= 30:
+            return -0.010
+        return -0.020
+    return 0.0
 
 
 def _round_up(value: float, step: int) -> int:
@@ -219,6 +275,7 @@ def build_supplier_operational_learning_policy(
         bounded = valid and (
             (key.startswith("response.") and value >= 0)
             or (key.startswith("commercial.") and 0 <= value <= 100)
+            or (key.startswith("operation.") and 0 <= value <= 100)
             or ((key.startswith("contact.") or key.startswith("escalation.")) and (
                 (key.endswith("_percent") and 0 <= value <= 100)
                 or (key.endswith("_minutes") and value >= 0)
@@ -264,6 +321,13 @@ def build_supplier_operational_learning_policy(
         ranking_adjustment += _quote_rate_ranking_delta(value) * effective
         by_fact_id[fact.fact_id].effect = "ranking"
         by_fact_id[fact.fact_id].reason = "confirmed_quote_rate_affects_bounded_ranking"
+    for key in sorted(k for k in usable if k.startswith("operation.")):
+        fact, value, effective = usable[key]
+        if effective < OUTCOME_RANKING_MIN_EFFECTIVE_CONFIDENCE:
+            continue
+        ranking_adjustment += _outcome_ranking_delta(key, value) * effective
+        by_fact_id[fact.fact_id].effect = "ranking"
+        by_fact_id[fact.fact_id].reason = "confirmed_outcome_metric_affects_bounded_ranking"
     ranking_adjustment = max(-MAX_RANKING_ADJUSTMENT, min(MAX_RANKING_ADJUSTMENT, ranking_adjustment))
 
     relationship = supplier.relationship
@@ -434,7 +498,14 @@ def _active_confirmed_context_facts(
 ) -> dict[str, LearningFact]:
     if repository is None:
         return {}
-    supported = {"response.median_minutes", "commercial.usable_quote_rate_percent"}
+    supported = {
+        "response.median_minutes", "commercial.usable_quote_rate_percent",
+        "operation.on_time_delivery_rate_percent",
+        "operation.problematic_outcome_rate_percent",
+        "operation.actual_delay_rate_percent",
+        "operation.damage_incident_rate_percent",
+        "operation.choose_again_rate_percent",
+    }
     candidates = [
         fact for fact in repository.list_all()
         if fact.subject_type == "supplier" and fact.subject_id == supplier_id
@@ -467,6 +538,7 @@ def build_supplier_contextual_learning_overlay(
         bounded = valid and (
             (key == "response.median_minutes" and value >= 0)
             or (key == "commercial.usable_quote_rate_percent" and 0 <= value <= 100)
+            or (key.startswith("operation.") and 0 <= value <= 100)
         )
         eligible = bool(bounded and recency > 0)
         effect = "none"
@@ -479,13 +551,22 @@ def build_supplier_contextual_learning_overlay(
             reason = "future_evidence_not_authoritative"
         elif recency == 0:
             reason = "evidence_too_old_for_runtime_effect"
-        elif effective >= CONTEXT_RANKING_MIN_EFFECTIVE_CONFIDENCE:
+        elif effective >= (
+            OUTCOME_RANKING_MIN_EFFECTIVE_CONFIDENCE
+            if key.startswith("operation.") else CONTEXT_RANKING_MIN_EFFECTIVE_CONFIDENCE
+        ):
             if key == "response.median_minutes":
                 adjustment += _response_ranking_delta(float(value)) * effective
-            else:
+            elif key == "commercial.usable_quote_rate_percent":
                 adjustment += _quote_rate_ranking_delta(float(value)) * effective
+            else:
+                adjustment += _outcome_ranking_delta(key, float(value)) * effective
             effect = "ranking"
-            reason = "confirmed_context_metric_affects_bounded_ranking"
+            reason = (
+                "confirmed_context_outcome_metric_affects_bounded_ranking"
+                if key.startswith("operation.")
+                else "confirmed_context_metric_affects_bounded_ranking"
+            )
         evaluations.append(SupplierLearningFactEvaluation(
             fact_id=fact.fact_id, fact_key=key, value=0.0 if value is None else float(value),
             value_unit=fact.value_unit or "", raw_confidence=fact.confidence,

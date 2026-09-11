@@ -7056,3 +7056,16 @@ Override analytics may report structured reason categories, lane/equipment conte
 A recommended supplier may be shown as frequently followed or frequently overridden-away. Outcome performance for that supplier may be calculated only from jobs where it was actually selected. The observed outcome of an override belongs to the supplier that was chosen, not to the MINAI recommendation that was rejected.
 
 Operator rows are descriptive override evidence only. Because normal supplier selections do not yet preserve a durable deciding-operator identity, v1 must not fabricate an operator override-rate denominator, personnel score or performance ranking. Decision analytics creates no LearningFact, Supplier Master update or runtime ranking authority.
+
+## DEC-229 — Completed Supplier Outcomes May Create Reviewed Ranking Evidence, Not Autonomous Supplier Authority
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+MINAI may derive supplier LearningFact proposals from final `SupplierDecisionOutcomeFeedback` records only when the supplier was actually selected and the durable quote-selection decision agrees with the outcome record. An overridden-away supplier receives no hypothetical or counterfactual outcome. The first supported outcome metrics are on-time-delivery rate, problematic-outcome rate, actual-delay rate, damage-incident rate, and choose-again rate.
+
+Outcome learning requires a real denominator of at least five final outcome records for the supplier or shipment context. Delay and damage rates count affected jobs rather than raw incident totals, and on-time-delivery rate requires at least five outcomes with measurable delivery-date evidence. The evidence observation time comes from the actual final outcome records; rerunning derivation does not make old outcomes current.
+
+Five recent outcomes may create a reviewable proposal but are intentionally insufficient for runtime effect even after human confirmation. Outcome ranking requires effective confidence of at least 0.85, so a larger recent evidence set is necessary. When additional evidence strengthens confidence or recency without changing the numeric value, MINAI creates an explicit replacement proposal rather than silently refreshing a previously reviewed fact.
+
+Confirmed outcome metrics may affect only the existing bounded supplier-ranking layer. They cannot create eligibility, change ADR/equipment capability, alter primary/secondary role or release gates, change reminder/escalation/contact behavior, set negotiation authority, or update Supplier Master automatically. Global plus contextual effects remain inside the existing ranking caps.

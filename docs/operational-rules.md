@@ -4117,3 +4117,13 @@ Operator-vs-MINAI reporting may compare recommendation-followed and operator-ove
 If a supplier recommended by MINAI is overridden, the chosen supplier's later result must not be attributed to the unchosen supplier. Recommended-supplier success metrics require that the recommendation was actually followed. Override category, route/equipment context, score delta and same-currency price delta may be reported as descriptive evidence only.
 
 Operator-specific reporting may count documented overrides and their observed outcomes, but must not calculate an override rate or personnel score until normal supplier-selection decisions also carry durable operator identity. These analytics must not create supplier learning, change Supplier Master, alter ranking, relax commercial eligibility or affect primary/secondary release authority.
+
+## RULE-246 — Learn From the Supplier That Actually Performed the Job, With Real Denominators and Higher Runtime Confidence
+
+Outcome-informed supplier learning may use only durable final outcome records for the supplier actually selected on completed operations. Never assign the chosen supplier's success, delay, damage or failure to a MINAI recommendation that was overridden and never infer how an unselected supplier would have performed.
+
+At least five final outcome records are required before an outcome metric may be proposed. Problematic-outcome, actual-delay and damage rates use affected jobs as the numerator; repeated incidents inside one job must not multiply that job's weight. On-time-delivery rate requires at least five outcomes with measurable required-delivery evidence. Contextual metrics must remain bound to deterministic mode/lane/equipment keys.
+
+Outcome-derived facts remain proposed until human confirmation and require effective confidence of at least 0.85 before they may influence ranking. New evidence that materially improves denominator, confidence or recency must create an explicit replacement proposal for an existing confirmed fact rather than rewriting reviewed history in place. Stale or future-dated evidence has no runtime effect.
+
+Outcome learning may only move ranking among suppliers that already passed all eligibility and safety gates, and its contribution remains inside the existing global/contextual ranking caps. It must not change supplier role, primary/secondary dispatch order, ADR/equipment eligibility, reminder timing, contact or escalation policy, negotiation behavior, Supplier Master, or secondary-release authority.
