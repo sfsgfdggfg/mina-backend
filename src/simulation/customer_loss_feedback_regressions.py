@@ -190,8 +190,12 @@ def evaluate_customer_loss_feedback_regressions():
     ui = Path("ui/web_shell/app.js").read_text(encoding="utf-8")
     check(
         "Kayıp Nedeni / Müşteri Geri Bildirimi" in ui
-        and "/loss-feedback" in ui and "/stage" not in ui,
-        "browser captures loss evidence without inventing generic stage-transition authority",
+        and "/loss-feedback" in ui
+        and "renderCustomerOutcomeControls" in ui
+        and '["accepted", "lost", "cancelled"]' in ui
+        and 'submitClosure("lost")' in ui
+        and 'submitClosure("cancelled")' in ui,
+        "browser captures structured loss evidence alongside fixed backend-authorized customer outcome controls",
     )
     quote_learning = Path("src/core/customer_quote_acceptance_learning.py").read_text(encoding="utf-8")
     check(

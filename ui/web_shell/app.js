@@ -2314,6 +2314,66 @@ function timeline(container, events) {
 }
 
 
+function renderCustomerOutcomeControls(container, data, jobId, refresh) {
+  const allowed = new Set(data.controls?.allowed_next_stages || []);
+  const actions = ["accepted", "lost", "cancelled"].filter(stage => allowed.has(stage));
+  if (!actions.length) return;
+
+  const section = sectionBlock("Müşteri Kararı / İş Kapanışı", "Yalnız backend'in izin verdiği müşteri kabulü ve explicit kapanış aksiyonları. Teklif hazırlama/gönderme ve operasyon milestone'ları burada elle ilerletilmez.");
+  const feedback = node("div", "", "muted approval-feedback");
+
+  if (actions.includes("accepted")) {
+    const acceptBox = node("div", "", "customer-outcome-action approval-focused");
+    acceptBox.append(
+      node("strong", "Müşteri teklifi kabul etti"),
+      node("div", "Bu kayıt işi accepted aşamasına geçirir ve Operasyonu Başlat kontrolünü açar.", "muted small")
+    );
+    const acceptActions = node("div", "", "actions");
+    const accept = actionButton("Müşteri Kabul Etti", "approve", () => {
+      acceptConfirm.hidden = false;
+      accept.disabled = true;
+    });
+    const acceptConfirm = node("div", "", "approval-reject-panel"); acceptConfirm.hidden = true;
+    acceptConfirm.append(
+      node("div", "Müşteri kabulü kaydedilecek. Bu işlem teklif sonucunun durable lifecycle kanıtıdır.", "notice"),
+      actionButton("Kabulü Kaydet", "approve", async () => {
+        feedback.textContent = "Müşteri kabulü kaydediliyor…";
+        try {
+          await api(`/mina-jobs/${encodeURIComponent(jobId)}/stage`, { method: "POST", body: JSON.stringify({ target_stage: "accepted" }) });
+          await refresh();
+        } catch (error) { feedback.textContent = error.message || String(error); accept.disabled = false; acceptConfirm.hidden = true; }
+      }),
+      actionButton("Vazgeç", "", () => { accept.disabled = false; acceptConfirm.hidden = true; })
+    );
+    acceptActions.append(accept); acceptBox.append(acceptActions, acceptConfirm); section.append(acceptBox);
+  }
+
+  const closureActions = actions.filter(stage => stage === "lost" || stage === "cancelled");
+  if (closureActions.length) {
+    const closeBox = node("div", "", "customer-outcome-action");
+    closeBox.append(node("strong", "İşi ticari olarak kapat"));
+    const reasonLabel = node("label", "Kapanış nedeni");
+    const reason = document.createElement("textarea"); reason.rows = 3; reason.maxLength = 1000;
+    reason.placeholder = "Kaybedildi / iptal kapanışı için kısa ve gerçek bir neden gerekli."; reasonLabel.append(reason);
+    const closeActions = node("div", "", "actions");
+    const submitClosure = async targetStage => {
+      const value = reason.value.trim();
+      if (!value) { feedback.textContent = "Kaybedildi / iptal için kapanış nedeni gerekli."; return; }
+      feedback.textContent = `${stageLabel(targetStage)} kaydediliyor…`;
+      try {
+        await api(`/mina-jobs/${encodeURIComponent(jobId)}/stage`, { method: "POST", body: JSON.stringify({ target_stage: targetStage, reason: value }) });
+        await refresh();
+      } catch (error) { feedback.textContent = error.message || String(error); }
+    };
+    if (closureActions.includes("lost")) closeActions.append(actionButton("Kaybedildi Olarak Kapat", "reject", () => submitClosure("lost")));
+    if (closureActions.includes("cancelled")) closeActions.append(actionButton("İptal Olarak Kapat", "", () => submitClosure("cancelled")));
+    closeBox.append(reasonLabel, closeActions, node("div", "Kaybedildi sonrası structured müşteri geri bildirimi ayrı kanıt olarak kaydedilebilir; kapanış notu otomatik olarak fiyat nedeni sayılmaz.", "muted small"));
+    section.append(closeBox);
+  }
+
+  section.append(feedback); container.append(section);
+}
+
 function renderLossFeedbackSection(container, data, jobId, refresh) {
   const view=data.loss_feedback||{}; const current=view.current||null; const history=view.history||[];
   if(data.summary?.stage!=="lost" && !history.length) return;
@@ -2371,6 +2431,7 @@ async function renderJob(data, jobId) {
 
   renderSupplierPricesSection(root, data, jobId, async () => loadJob(jobId));
   await renderQuoteSection(root, data, async () => loadJob(jobId));
+  renderCustomerOutcomeControls(root, data, jobId, async () => loadJob(jobId));
   renderLossFeedbackSection(root, data, jobId, async () => loadJob(jobId));
   let dispatchStatus = null;
   const workflowId = data.job?.supplier_rfq_workflow_id;

@@ -49,9 +49,16 @@ def evaluate_ui_completion_regressions() -> dict:
         "quote decision and send workspace stays controlled and uses inline rejection/revision UI",
     )
     check(
-        "/stage" not in js_text and "/owners" not in js_text
+        "renderCustomerOutcomeControls" in js_text
+        and '["accepted", "lost", "cancelled"]' in js_text
+        and 'target_stage: "accepted"' in js_text
+        and 'submitClosure("lost")' in js_text
+        and 'submitClosure("cancelled")' in js_text
+        and "Kaybedildi / iptal için kapanış nedeni gerekli." in js_text
+        and "/mina-jobs/${encodeURIComponent(jobId)}/stage" in js_text
+        and "/owners" not in js_text
         and "Operasyonu Başlat" in plan_text,
-        "UI completion does not invent stage-start or directed-owner authority while semantics are parked",
+        "job detail exposes only backend-authorized customer outcome controls without generic stage or directed-owner authority",
     )
     check(
         "markActiveNavigation" in js_text
@@ -110,6 +117,15 @@ def evaluate_ui_completion_regressions() -> dict:
                     headers={"X-CSRF-Token": csrf},
                     json={"disable_supplier_reminders": True},
                 )
+                stage_no_csrf = client.post(
+                    "/mina-jobs/missing-job/stage",
+                    json={"target_stage": "accepted"},
+                )
+                stage_with_csrf = client.post(
+                    "/mina-jobs/missing-job/stage",
+                    headers={"X-CSRF-Token": csrf},
+                    json={"target_stage": "accepted"},
+                )
                 quote_read = client.get("/quote-cases/missing-case")
                 quote_no_csrf = client.post("/quote-approvals/missing-approval/approve", json={})
                 quote_with_csrf = client.post(
@@ -130,10 +146,12 @@ def evaluate_ui_completion_regressions() -> dict:
                 check(
                     job_no_csrf.status_code == 403
                     and job_with_csrf.status_code == 404
+                    and stage_no_csrf.status_code == 403
+                    and stage_with_csrf.status_code == 404
                     and quote_read.status_code == 404
                     and quote_no_csrf.status_code == 403
                     and quote_with_csrf.status_code == 404,
-                    "job automation and quote decision APIs remain browser-session allowlisted and CSRF guarded",
+                    "job automation, customer outcome stage, and quote decision APIs remain browser-session allowlisted and CSRF guarded",
                 )
     finally:
         api_module.agency_automation_policy_repository = previous_repository
