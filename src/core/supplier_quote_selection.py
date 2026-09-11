@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -26,11 +26,18 @@ class RejectedSupplierQuoteAlternative(BaseModel):
     rejection_reason: str
 
 
+SupplierSelectionOverrideReasonCategory = Literal[
+    "price", "capacity_certainty", "relationship_loyalty", "customer_preference",
+    "operational_experience", "timing_transit", "management_decision", "other",
+]
+
+
 class SupplierQuoteSelectionDecision(BaseModel):
     selected_supplier: str
     engine_recommended_supplier: Optional[str] = None
     override_applied: bool = False
     override_reason: Optional[str] = None
+    override_reason_category: Optional[SupplierSelectionOverrideReasonCategory] = None
     overridden_by: Optional[str] = None
     selected_rfq_id: Optional[str] = None
     selected_price_offer_id: Optional[str] = None
@@ -128,6 +135,7 @@ def build_supplier_quote_selection_decision(
     *,
     override_supplier_name: str | None = None,
     override_reason: str | None = None,
+    override_reason_category: SupplierSelectionOverrideReasonCategory | None = None,
     overridden_by: str | None = None,
 ) -> Optional[SupplierQuoteSelectionDecision]:
     ranked = sorted(
@@ -152,6 +160,7 @@ def build_supplier_quote_selection_decision(
     override_applied = False
     normalized_reason = None
     normalized_actor = None
+    normalized_reason_category = None
     if normalized_override:
         candidates = [
             item for item in ranked
@@ -167,6 +176,9 @@ def build_supplier_quote_selection_decision(
                 raise ValueError("Supplier selection override reason is required.")
             if not normalized_actor:
                 raise ValueError("Supplier selection override operator identity is required.")
+            if override_reason_category is None:
+                raise ValueError("Supplier selection override reason category is required.")
+            normalized_reason_category = override_reason_category
             override_applied = True
     runner_up = next((item for item in ranked if item is not selected), None)
 
@@ -271,6 +283,7 @@ def build_supplier_quote_selection_decision(
         engine_recommended_supplier=engine_recommended.supplier_name,
         override_applied=override_applied,
         override_reason=normalized_reason,
+        override_reason_category=normalized_reason_category,
         overridden_by=normalized_actor,
         selected_rfq_id=selected.rfq_id,
         selected_price_offer_id=selected.price_offer_id,

@@ -7032,3 +7032,14 @@ MINAI may recommend the highest-scoring commercial-eligible supplier quote, but 
 The resulting SupplierQuoteSelectionDecision preserves both the engine-recommended supplier and the operator-selected supplier, plus the override reason and operator identity. Pricing and quote generation then run from the overridden supplier cost through the normal pricing, approval and send-safety pipeline; the override does not patch an already-produced customer quote after the fact.
 
 An override may never target a commercially ineligible quote, bypass supplier capability/safety validation, promote unavailable evidence, authorize secondary dispatch or create a supplier response that does not exist. Selection override evidence is audit evidence only and does not by itself create LearningFact or future ranking authority.
+
+## DEC-227 — Supplier Decision Outcome Feedback Must Be Final, Evidence-Based, and Non-Authoritative by Default
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+After a lifecycle-v2 MINA job reaches `completed`, MINAI may store one final supplier decision outcome feedback record on the quote case. The record preserves the selected supplier, the original engine-recommended supplier, whether a human override occurred, and the structured override-reason category. Override categories are limited to price, capacity certainty, relationship/loyalty, customer preference, operational experience, timing/transit, management decision, or other.
+
+Objective outcome fields are derived from durable operation evidence rather than re-entered manually: delivered time, required delivery date where available, on-time-delivery result, total operation exceptions, actual-delay exceptions, damage exceptions, and the underlying exception identifiers. Human input is limited to overall outcome, communication quality, whether the operator would choose the supplier again, and an optional note.
+
+Outcome feedback is final evidence for reporting and future analysis. It does not create or confirm a LearningFact, alter supplier ranking, change Supplier Master, or infer that an unselected supplier would have performed better or worse. Any later learning from outcomes requires a separate reviewed policy with sufficient denominators and explicit safeguards against selection bias.

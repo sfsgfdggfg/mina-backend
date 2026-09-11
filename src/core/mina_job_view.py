@@ -187,6 +187,10 @@ def build_mina_job_detail(
             "approval_status": None if approval is None else approval.approval_status,
             "manual_send_count": len(quote_case.manual_sent_evidence),
             "automated_send_count": len(quote_case.automated_sent_evidence),
+            "supplier_decision_outcome_feedback": (
+                None if quote_case.supplier_decision_outcome_feedback is None
+                else quote_case.supplier_decision_outcome_feedback.model_dump(mode="json")
+            ),
         }
     timeline = [event.model_dump() for event in repository.list_events(job.job_id)]
     supplier_prices = (
@@ -261,5 +265,11 @@ def build_mina_job_detail(
                 and bool(supplier_prices and supplier_prices.get("price_offers"))
             ),
             "operation_start_available": (not job.is_closed and job.stage == "accepted"),
+            "supplier_decision_outcome_recordable": (
+                job.lifecycle_version == 2
+                and job.stage == "completed"
+                and quote_case is not None
+                and quote_case.supplier_decision_outcome_feedback is None
+            ),
         },
     }

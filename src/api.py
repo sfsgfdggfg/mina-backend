@@ -193,6 +193,10 @@ from src.core.quote_manual_sent import (
 )
 from src.core.quote_send_safety import evaluate_quote_send_safety
 from src.core.quote_send_service import prepare_quote_for_sending
+from src.core.supplier_decision_outcome_service import (
+    SupplierDecisionOutcomeConflictError,
+    record_supplier_decision_outcome,
+)
 from src.core.supplier_rfq import SupplierRFQResponse
 from src.core.supplier_dispatch_control import (
     SupplierAcknowledgementError,
@@ -830,6 +834,14 @@ class OperationExceptionResolveRequest(BaseModel):
     resolution_note: str = Field(min_length=1, max_length=1200)
 
 
+class SupplierDecisionOutcomeRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    overall_outcome: Literal["successful", "acceptable", "problematic"]
+    communication_quality: Literal["good", "acceptable", "poor"]
+    would_choose_again: Literal["yes", "unsure", "no"]
+    note: Optional[str] = Field(default=None, max_length=1200)
+
+
 class LearningFactCreateRequest(BaseModel):
     entry_id: str = Field(min_length=1, max_length=300)
     subject_type: Literal["customer", "supplier", "route", "operation"]
@@ -976,6 +988,10 @@ class ResumeSupplierQuoteRequest(BaseModel):
     quote_pricing_override: Optional[PricingFormula] = None
     supplier_selection_override_name: Optional[str] = Field(default=None, max_length=240)
     supplier_selection_override_reason: Optional[str] = Field(default=None, max_length=1200)
+    supplier_selection_override_reason_category: Optional[Literal[
+        "price", "capacity_certainty", "relationship_loyalty", "customer_preference",
+        "operational_experience", "timing_transit", "management_decision", "other",
+    ]] = None
 
 
 class CustomerMasterCreateRequest(BaseModel):
@@ -2232,6 +2248,7 @@ def progress_mina_job_supplier_prices(
             price_repository=supplier_price_repository,
             supplier_selection_override_name=(request.supplier_selection_override_name if request is not None else None),
             supplier_selection_override_reason=(request.supplier_selection_override_reason if request is not None else None),
+            supplier_selection_override_reason_category=(request.supplier_selection_override_reason_category if request is not None else None),
             supplier_selection_overridden_by=(
                 _authenticated_operator(http_request)
                 if request is not None and request.supplier_selection_override_name
@@ -2245,6 +2262,32 @@ def progress_mina_job_supplier_prices(
     except SupplierRFQWorkflowProgressionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return serialize_result(result)
+
+
+@app.post("/mina-jobs/{job_id}/supplier-decision-outcome")
+def record_mina_job_supplier_decision_outcome(
+    job_id: str, request: SupplierDecisionOutcomeRequest, http_request: Request,
+):
+    try:
+        feedback = record_supplier_decision_outcome(
+            mina_repository=mina_job_repository,
+            quote_case_repository=quote_case_repository,
+            execution_repository=operation_execution_repository,
+            job_id=job_id,
+            entry_id=request.entry_id,
+            overall_outcome=request.overall_outcome,
+            communication_quality=request.communication_quality,
+            would_choose_again=request.would_choose_again,
+            note=request.note,
+            recorded_by=_authenticated_operator(http_request),
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (MinaJobTransitionError, SupplierDecisionOutcomeConflictError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return feedback.model_dump(mode="json")
 
 
 @app.get("/mina-jobs/{job_id}")
