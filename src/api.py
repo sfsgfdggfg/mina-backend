@@ -155,6 +155,11 @@ from src.core.mina_job_service import (
     transition_mina_job_stage,
 )
 from src.core.mina_job_view import build_mina_job_detail, build_mina_job_list
+from src.core.customer_loss_feedback import (
+    LossFeedbackConflictError,
+    build_loss_feedback_view,
+    record_loss_feedback,
+)
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -768,6 +773,27 @@ class MinaJobStageTransitionRequest(BaseModel):
         "lost", "cancelled",
     ]
     reason: Optional[str] = None
+
+
+class MinaJobLossFeedbackRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    category: Literal[
+        "price", "transit_time", "capacity_availability", "service_scope",
+        "customer_cancelled", "competitor_selected", "customer_no_response",
+        "timing_deadline", "payment_terms", "relationship_preference",
+        "internal_customer_decision", "other", "unknown",
+    ]
+    evidence_basis: Literal[
+        "customer_explicit", "operator_assessment", "internal_customer_decision", "unknown",
+    ]
+    source_channel: Literal[
+        "email", "phone", "whatsapp", "portal", "face_to_face", "internal", "other", "unknown",
+    ]
+    note: str = Field(min_length=3, max_length=1200)
+    competitor_name: Optional[str] = Field(default=None, max_length=240)
+    customer_stated_target_price: Optional[float] = Field(default=None, gt=0)
+    currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    supersedes_feedback_id: Optional[str] = Field(default=None, max_length=100)
 
 
 class OperationStartRequest(BaseModel):
@@ -2617,6 +2643,33 @@ def update_mina_job_owners(
     except MinaJobTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return updated.model_dump()
+
+
+@app.get("/mina-jobs/{job_id}/loss-feedback")
+def get_mina_job_loss_feedback(job_id: str):
+    try:
+        return build_loss_feedback_view(mina_job_repository, job_id=job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}") from exc
+
+
+@app.post("/mina-jobs/{job_id}/loss-feedback")
+def post_mina_job_loss_feedback(
+    job_id: str, request: MinaJobLossFeedbackRequest, http_request: Request,
+):
+    try:
+        feedback = record_loss_feedback(
+            repository=mina_job_repository, job_id=job_id,
+            recorded_by=_authenticated_operator(http_request),
+            **request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}") from exc
+    except LossFeedbackConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return feedback.model_dump(mode="json")
 
 
 @app.post("/mina-jobs/{job_id}/stage")

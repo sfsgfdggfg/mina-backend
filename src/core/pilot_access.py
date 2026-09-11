@@ -99,6 +99,8 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("POST", re.compile(r"^/mina-jobs/[^/]+/automation-overrides$")),
     ("POST", re.compile(r"^/mina-jobs/[^/]+/owners$")),
     ("POST", re.compile(r"^/mina-jobs/[^/]+/stage$")),
+    ("GET", re.compile(r"^/mina-jobs/[^/]+/loss-feedback$")),
+    ("POST", re.compile(r"^/mina-jobs/[^/]+/loss-feedback$")),
     ("GET", re.compile(r"^/mina-jobs/[^/]+/supplier-rfqs/[^/]+/reminder-preview$")),
     ("POST", re.compile(r"^/mina-jobs/[^/]+/supplier-rfqs/[^/]+/reminder-now$")),
     ("GET", re.compile(r"^/mina-jobs/[^/]+/supplier-rfqs/[^/]+/reminder-approval-preview$")),
