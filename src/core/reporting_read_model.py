@@ -6,6 +6,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from src.core.learning_fact_repository import LearningFactRepository
+from src.core.customer_loss_feedback import current_loss_feedback
 from src.core.master_data import normalize_country, normalize_master_text
 from src.core.master_data_repository import MasterDataRepository
 from src.core.mina_job_repository import MinaJobRepository
@@ -702,6 +703,59 @@ def _supplier_decision_analytics(*, jobs, events_by_job, quote_case_repository, 
         ),
     }
 
+def _loss_feedback_reporting(*, jobs, events_by_job, mina_repository):
+    lost_jobs = [job for job in jobs if job.stage == "lost"]
+    categories: dict[str, int] = defaultdict(int)
+    bases: dict[str, int] = defaultdict(int)
+    channels: dict[str, int] = defaultdict(int)
+    structured = customer_explicit = target_price = quote_sent_lost = 0
+    rows = []
+    for job in lost_jobs:
+        events = events_by_job[job.job_id]
+        quote_sent = _reached(job, events, target="quote_sent")
+        quote_sent_lost += int(quote_sent)
+        feedback = current_loss_feedback(mina_repository, job_id=job.job_id)
+        if feedback is None:
+            continue
+        structured += 1
+        categories[feedback.category] += 1
+        bases[feedback.evidence_basis] += 1
+        channels[feedback.source_channel] += 1
+        customer_explicit += int(feedback.evidence_basis == "customer_explicit")
+        target_price += int(feedback.customer_stated_target_price is not None)
+        rows.append({
+            "job_id": job.job_id, "mina_code": job.mina_code,
+            "customer_name": job.shipment.customer_name,
+            "category": feedback.category, "evidence_basis": feedback.evidence_basis,
+            "source_channel": feedback.source_channel, "quote_sent_before_loss": quote_sent,
+            "competitor_name": feedback.competitor_name,
+            "customer_stated_target_price": feedback.customer_stated_target_price,
+            "currency": feedback.currency, "recorded_at": feedback.recorded_at,
+        })
+    return {
+        "summary": {
+            "lost_job_count": len(lost_jobs),
+            "quote_sent_then_lost_count": quote_sent_lost,
+            "structured_feedback_count": structured,
+            "structured_feedback_coverage_percent": _ratio(structured, len(lost_jobs)),
+            "customer_explicit_feedback_count": customer_explicit,
+            "target_price_evidence_count": target_price,
+            "unstructured_or_missing_count": len(lost_jobs) - structured,
+        },
+        "categories": [
+            {"category": key, "count": value, "percent_of_structured": _ratio(value, structured)}
+            for key, value in sorted(categories.items(), key=lambda item: (-item[1], item[0]))
+        ],
+        "evidence_basis_counts": dict(sorted(bases.items())),
+        "source_channel_counts": dict(sorted(channels.items())),
+        "rows": sorted(rows, key=lambda row: (row["recorded_at"], row["mina_code"]), reverse=True),
+        "note": (
+            "Structured loss feedback is observed evidence only. Legacy free-text loss reasons are not "
+            "reclassified, and no reason-specific pricing or learning authority is created here."
+        ),
+    }
+
+
 def build_reporting_read_model(
     *,
     mina_repository: MinaJobRepository,
@@ -1151,6 +1205,9 @@ def build_reporting_read_model(
         quote_case_repository=quote_case_repository,
         quote_by_job=quote_by_job, quote_by_code=quote_by_code,
     )
+    loss_feedback = _loss_feedback_reporting(
+        jobs=jobs, events_by_job=events_by_job, mina_repository=mina_repository,
+    )
 
     return {
         "period": {
@@ -1192,6 +1249,7 @@ def build_reporting_read_model(
             "rows": sorted(supplier_groups.values(), key=lambda row: (-row["selected_count"], -row["rfq_count"], row["name"])),
         },
         "decision_analytics": decision_analytics,
+        "loss_feedback": loss_feedback,
         "routes": {"rows": _sorted_rows(route_groups)},
         "financial": {
             "by_currency": overall_money,
@@ -1246,8 +1304,8 @@ def build_reporting_read_model(
 
 
 REPORTING_SECTIONS = {
-    "overview", "sales", "operations", "customers", "suppliers", "decision_analytics", "routes",
-    "financial", "minai", "exceptions", "data_quality", "jobs",
+    "overview", "sales", "operations", "customers", "suppliers", "decision_analytics",
+    "loss_feedback", "routes", "financial", "minai", "exceptions", "data_quality", "jobs",
 }
 
 

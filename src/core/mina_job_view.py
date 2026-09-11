@@ -15,6 +15,7 @@ from src.core.learning_fact_repository import LearningFactRepository
 from src.core.learning_fact_service import build_learning_fact_view
 from src.core.automation_planning import customer_deadline_plan, supplier_reminder_plan
 from src.core.mina_job_repository import MinaJobRepository
+from src.core.customer_loss_feedback import build_loss_feedback_view
 from src.core.mina_job_service import (
     allowed_next_stages,
     get_mina_job_or_raise,
@@ -220,6 +221,7 @@ def build_mina_job_detail(
         if learning_fact_repository is not None
         else None
     )
+    loss_feedback = build_loss_feedback_view(repository, job_id=job.job_id)
     return {
         "job": job.model_dump(),
         "summary": {
@@ -249,6 +251,7 @@ def build_mina_job_detail(
         "operation": operation,
         "operation_start": operation_start,
         "learning": learning,
+        "loss_feedback": loss_feedback,
         "quote": quote_summary,
         "timeline": timeline,
         "controls": {

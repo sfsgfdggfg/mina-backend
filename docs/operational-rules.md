@@ -4157,3 +4157,13 @@ Overall acceptance and negotiation rates require at least five resolved sent quo
 All quote-acceptance facts remain human-reviewed and advisory-only. Recency decay applies, future-dated evidence has no effect, and stale evidence leaves the advisory policy. These facts must not alter pricing formulas, margins, sell price, supplier ranking, capability, eligibility, automation, quote send authority or Customer Master.
 
 MINAI must not infer a lost reason, customer price sensitivity, willingness to pay, target price, win probability or counterfactual outcome from accepted/lost status alone. Reason-specific commercial learning requires explicit structured outcome evidence in a later policy.
+
+## RULE-250 — Never Guess the Reason a Job Was Lost; Preserve Evidence Quality and Revision History
+
+A lost MINA job may receive structured loss feedback only from an authenticated operator. The reason category, evidence basis, source channel and bounded note must be stored durably. Legacy free-text loss notes must remain legacy evidence and must not be mapped into structured reasons by keyword or model inference.
+
+If better evidence arrives later, the new record must explicitly supersede the current feedback identifier and the prior record must remain in the audit history. Reusing an entry identity with different evidence fails closed. A customer-stated target price requires customer-explicit evidence and a three-letter currency; operator assessment alone may not manufacture a target price.
+
+Reporting may show structured-feedback coverage, current reason distribution, evidence-basis distribution and explicit target-price evidence counts. Missing structured feedback remains missing rather than becoming `unknown` unless an operator explicitly records `unknown`.
+
+Loss feedback v1 creates no pricing, margin, supplier-selection, automation or learning authority. Quote Acceptance Learning must not consume these reasons until a separately reviewed reason-specific learning policy defines denominators, evidence quality and anti-causal safeguards.

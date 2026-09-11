@@ -7108,3 +7108,16 @@ The first supported observations are quote-outcome acceptance rate, negotiation-
 These metrics describe what happened; they do not explain why. A lost quote does not prove that price was too high, and an accepted historical price does not become a target price, win probability, customer willingness-to-pay estimate or optimal margin. All derived facts remain proposed until human review and confirmed facts are advisory only.
 
 Quote acceptance learning creates no pricing authority, margin mutation, automatic discount, supplier preference, customer price-sensitivity field or Customer Master update. Structured lost reasons and explicit customer feedback require a later separately reviewed policy before causal or reason-specific learning is possible.
+
+## DEC-233 — Lost Reason and Customer Feedback Are Durable Evidence Before They Are Learning Authority
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+MINAI may record structured feedback for a MINA job only after the job is durably in `lost` state. The first taxonomy distinguishes price, transit time, capacity/availability, service scope, customer cancellation, competitor selection, customer no-response, timing/deadline, payment terms, relationship preference, internal customer decision, other, and unknown.
+
+Every structured loss record must preserve evidence quality separately from the reason category: customer-explicit evidence, operator assessment, internal-customer-decision evidence, or unknown; plus the observed source channel. Legacy free-text stage reasons remain visible but are never reclassified automatically into a structured category.
+
+Loss feedback is append-only audit evidence. A later clarification must explicitly supersede the current feedback record rather than overwrite it, while identical entry retries remain idempotent and conflicting retries fail closed. Customer-stated target price may be stored only when the evidence basis is explicitly customer-provided and a currency is present.
+
+Structured loss feedback is descriptive reporting evidence only in v1. It does not create a LearningFact, infer customer price sensitivity, change pricing policy or margin, set a target price, alter supplier ranking, or become reason-specific quote-acceptance learning until a separate reviewed policy authorizes that use.

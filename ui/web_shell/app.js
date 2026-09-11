@@ -2244,6 +2244,39 @@ function timeline(container, events) {
   container.append(section);
 }
 
+
+function renderLossFeedbackSection(container, data, jobId, refresh) {
+  const view=data.loss_feedback||{}; const current=view.current||null; const history=view.history||[];
+  if(data.summary?.stage!=="lost" && !history.length) return;
+  const section=sectionBlock("Kayıp Nedeni / Müşteri Geri Bildirimi","Structured kanıt raporlama içindir; tek başına fiyat nedeni, hedef fiyat veya otomatik ticari karar oluşturmaz.");
+  if(view.legacy_stage_reason) section.append(node("div",`Kapanış notu: ${view.legacy_stage_reason}`,"muted small"));
+  const categoryNames={price:"Fiyat",transit_time:"Transit süresi",capacity_availability:"Kapasite / araç",service_scope:"Servis kapsamı",customer_cancelled:"Müşteri iptal etti",competitor_selected:"Rakip seçildi",customer_no_response:"Müşteri yanıt vermedi",timing_deadline:"Zamanlama / deadline",payment_terms:"Ödeme / vade",relationship_preference:"İlişki / tercih",internal_customer_decision:"Müşteri iç kararı",other:"Diğer",unknown:"Bilinmiyor"};
+  const basisNames={customer_explicit:"Müşteri açıkça belirtti",operator_assessment:"Operatör değerlendirmesi",internal_customer_decision:"Müşteri iç karar bilgisi",unknown:"Kanıt niteliği bilinmiyor"};
+  if(current){
+    const card=node("div","","learning-fact-card");
+    card.append(node("strong",categoryNames[current.category]||current.category),node("div",current.note||"-","small"),node("div",`${basisNames[current.evidence_basis]||current.evidence_basis} · ${codeLabel(current.source_channel)} · ${formatDate(current.recorded_at)}`,"muted small"));
+    if(current.competitor_name)card.append(node("div",`Rakip: ${current.competitor_name}`,"muted small"));
+    if(current.customer_stated_target_price!=null)card.append(node("div",`Müşterinin açık hedef fiyatı: ${current.customer_stated_target_price} ${current.currency||""} · yalnız kanıt, pricing authority değil.`,"muted small"));
+    section.append(card);
+  } else section.append(emptyState("Structured kayıp nedeni henüz kaydedilmedi","Legacy serbest metin otomatik olarak kategoriye çevrilmez."));
+  if(view.recordable){
+    const form=node("div","","settings-inline-editor");
+    const categoryLabel=node("label","Kayıp nedeni");const category=document.createElement("select");Object.entries(categoryNames).forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;category.append(o);});category.value=current?.category||"unknown";categoryLabel.append(category);
+    const basisLabel=node("label","Kanıt niteliği");const basis=document.createElement("select");Object.entries(basisNames).forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;basis.append(o);});basis.value=current?.evidence_basis||"unknown";basisLabel.append(basis);
+    const channelLabel=node("label","Kaynak kanal");const channel=document.createElement("select");[["email","E-posta"],["phone","Telefon"],["whatsapp","WhatsApp"],["portal","Portal"],["face_to_face","Yüz yüze"],["internal","İç bilgi"],["other","Diğer"],["unknown","Bilinmiyor"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;channel.append(o);});channel.value=current?.source_channel||"unknown";channelLabel.append(channel);
+    const noteLabel=node("label","Kanıt / açıklama");const note=document.createElement("textarea");note.rows=3;note.maxLength=1200;note.value="";noteLabel.append(note);
+    const competitor=inboxField("Rakip (biliniyorsa)"); const target=numberField("Müşterinin açık hedef fiyatı",null,0.01,100000000);target.input.step="0.01"; const currency=inboxField("Hedef fiyat para birimi");currency.input.maxLength=3;
+    const grid=node("div","","settings-two-col");grid.append(categoryLabel,basisLabel,channelLabel,competitor.label,target.label,currency.label);form.append(grid,noteLabel);
+    const feedback=node("div","","muted settings-feedback");const save=actionButton(current?"Yeni Kanıtla Güncelle":"Kayıp Nedenini Kaydet","primary",async()=>{
+      if(note.value.trim().length<3){feedback.textContent="Kısa bir kanıt/açıklama gir.";return;} if(target.value()!=null && basis.value!=="customer_explicit"){feedback.textContent="Hedef fiyat yalnız müşteri açıkça belirttiyse kaydedilebilir.";return;} if(target.value()!=null && currency.input.value.trim().length!==3){feedback.textContent="Hedef fiyat için 3 harfli para birimi gerekli.";return;}
+      save.disabled=true;try{await api(`/mina-jobs/${encodeURIComponent(jobId)}/loss-feedback`,{method:"POST",body:JSON.stringify({entry_id:freshPriceEntryId("loss-feedback"),category:category.value,evidence_basis:basis.value,source_channel:channel.value,note:note.value.trim(),competitor_name:competitor.input.value.trim()||null,customer_stated_target_price:target.value(),currency:currency.input.value.trim().toUpperCase()||null,supersedes_feedback_id:current?.feedback_id||null})});await refresh();}catch(e){feedback.textContent=e.message||String(e);}finally{save.disabled=false;}
+    });form.append(save,feedback);section.append(form);
+  }
+  if(history.length>1)section.append(node("div",`Audit geçmişi: ${history.length} structured kayıt; önceki kayıtlar silinmedi.`,"muted small"));
+  container.append(section);
+}
+
+
 async function renderJob(data, jobId) {
   const summary = data.summary || {}; setPageContext(summary.mina_code || "MINA İşi", "MINA İş Detayı");
   const root = node("div", "", "job-detail-page");
@@ -2269,6 +2302,7 @@ async function renderJob(data, jobId) {
 
   renderSupplierPricesSection(root, data, jobId, async () => loadJob(jobId));
   await renderQuoteSection(root, data, async () => loadJob(jobId));
+  renderLossFeedbackSection(root, data, jobId, async () => loadJob(jobId));
   let dispatchStatus = null;
   const workflowId = data.job?.supplier_rfq_workflow_id;
   if (workflowId) {
@@ -2388,6 +2422,17 @@ function renderSupplierDecisionAnalytics(analytics = {}) {
   return wrap;
 }
 
+
+function renderLossFeedbackAnalytics(section={}) {
+  const wrap=node("section","","section report-loss-feedback"); const summary=section.summary||{};
+  wrap.append(node("h2","Kaybedilen İş / Teklif Nedenleri"),node("p","Yalnız operatörün structured olarak kaydettiği evidence sayılır; legacy serbest metin otomatik sınıflandırılmaz.","muted"));
+  const grid=node("div","","grid");grid.append(metric("Kaybedilen iş",summary.lost_job_count??0),metric("Structured neden",summary.structured_feedback_count??0),metric("Coverage %",summary.structured_feedback_coverage_percent??"-"),metric("Müşteri açık feedback",summary.customer_explicit_feedback_count??0));wrap.append(grid);
+  const labels={price:"Fiyat",transit_time:"Transit",capacity_availability:"Kapasite / araç",service_scope:"Servis kapsamı",customer_cancelled:"Müşteri iptali",competitor_selected:"Rakip seçildi",customer_no_response:"Yanıt yok",timing_deadline:"Zamanlama / deadline",payment_terms:"Ödeme / vade",relationship_preference:"İlişki / tercih",internal_customer_decision:"İç karar",other:"Diğer",unknown:"Bilinmiyor"};
+  const cats=section.categories||[]; if(cats.length){const tableEl=document.createElement("table");const head=document.createElement("tr");["Neden","Adet","Structured %"].forEach(x=>{const th=document.createElement("th");th.textContent=x;head.append(th);});tableEl.append(head);cats.forEach(r=>{const tr=document.createElement("tr");[labels[r.category]||r.category,r.count,r.percent_of_structured??"-"].forEach(x=>{const td=document.createElement("td");td.textContent=x;tr.append(td);});tableEl.append(tr);});wrap.append(tableEl);} else wrap.append(emptyState("Structured kayıp nedeni henüz yok"));
+  wrap.append(node("div","Bu dağılım açıklayıcı kanıttır; fiyat optimizasyonu veya reason-specific learning authority değildir.","small muted")); return wrap;
+}
+
+
 function renderReports(data) {
   title.textContent = "Raporlar";
   const overview = data.overview || {};
@@ -2402,8 +2447,9 @@ function renderReports(data) {
   );
   const operatorPerformance = renderOperatorPerformance(data.operations || {});
   const decisionAnalytics = renderSupplierDecisionAnalytics(data.decision_analytics || {});
+  const lossFeedback = renderLossFeedbackAnalytics(data.loss_feedback || {});
   const note = node("div", "Finansal değerler para birimleri arasında toplanmaz; eksik kanıt sıfır kabul edilmez.", "notice section");
-  content.replaceChildren(grid, operatorPerformance, decisionAnalytics, note);
+  content.replaceChildren(grid, operatorPerformance, decisionAnalytics, lossFeedback, note);
 }
 
 let currentBranding = null;
