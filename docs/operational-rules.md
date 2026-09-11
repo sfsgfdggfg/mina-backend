@@ -4109,3 +4109,11 @@ Supplier decision outcome feedback may be recorded only after a lifecycle-v2 job
 MINAI must derive measurable delivery, delay and damage results from operation evidence. Operators may add a bounded qualitative assessment, but must not manually overwrite objective evidence. One final outcome record is allowed per quote case; identical retries may be idempotent, while conflicting second records fail closed.
 
 A successful or problematic chosen-supplier outcome says nothing by itself about an unselected supplier. Outcome feedback and override-reason categories are reporting evidence only until a separate human-reviewed learning policy explicitly authorizes an aggregate metric. They must not automatically modify supplier eligibility, score, ranking, dispatch role, reminder behavior, escalation, negotiation or secondary-release rules.
+
+## RULE-245 — Compare Observed Supplier Decisions Without Inventing the Unchosen Outcome
+
+Operator-vs-MINAI reporting may compare recommendation-followed and operator-override cohorts only from durable decisions and final observed supplier outcomes. Missing final outcome evidence stays missing and is never coerced to success, failure or zero.
+
+If a supplier recommended by MINAI is overridden, the chosen supplier's later result must not be attributed to the unchosen supplier. Recommended-supplier success metrics require that the recommendation was actually followed. Override category, route/equipment context, score delta and same-currency price delta may be reported as descriptive evidence only.
+
+Operator-specific reporting may count documented overrides and their observed outcomes, but must not calculate an override rate or personnel score until normal supplier-selection decisions also carry durable operator identity. These analytics must not create supplier learning, change Supplier Master, alter ranking, relax commercial eligibility or affect primary/secondary release authority.

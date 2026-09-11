@@ -448,6 +448,260 @@ def _sorted_rows(groups: dict[str, dict], *, count_key: str = "job_count") -> li
     return sorted(groups.values(), key=lambda row: (-int(row.get(count_key, 0)), str(row.get("name", ""))))
 
 
+
+def _decision_analytics_bucket(name: str | None = None) -> dict[str, Any]:
+    bucket: dict[str, Any] = {
+        "decision_count": 0,
+        "completed_decision_count": 0,
+        "outcome_feedback_count": 0,
+        "successful_outcome_count": 0,
+        "acceptable_outcome_count": 0,
+        "problematic_outcome_count": 0,
+        "on_time_known_count": 0,
+        "on_time_count": 0,
+        "choose_again_yes_count": 0,
+        "actual_delay_feedback_count": 0,
+        "damage_feedback_count": 0,
+        "good_communication_count": 0,
+        "_score_deltas": [],
+        "_price_deltas": defaultdict(list),
+    }
+    if name is not None:
+        bucket["name"] = name
+    return bucket
+
+
+def _record_decision_analytics(
+    bucket: dict[str, Any], *, completed: bool, feedback,
+    score_delta: float | None = None, price_delta: float | None = None,
+    currency: str | None = None,
+) -> None:
+    bucket["decision_count"] += 1
+    bucket["completed_decision_count"] += int(completed)
+    if score_delta is not None:
+        bucket["_score_deltas"].append(float(score_delta))
+    if price_delta is not None and currency:
+        bucket["_price_deltas"][str(currency).upper()].append(float(price_delta))
+    if feedback is None:
+        return
+    bucket["outcome_feedback_count"] += 1
+    bucket["successful_outcome_count"] += int(feedback.overall_outcome == "successful")
+    bucket["acceptable_outcome_count"] += int(feedback.overall_outcome == "acceptable")
+    bucket["problematic_outcome_count"] += int(feedback.overall_outcome == "problematic")
+    if feedback.on_time_delivery is not None:
+        bucket["on_time_known_count"] += 1
+        bucket["on_time_count"] += int(feedback.on_time_delivery)
+    bucket["choose_again_yes_count"] += int(feedback.would_choose_again == "yes")
+    bucket["actual_delay_feedback_count"] += int(feedback.actual_delay_count > 0)
+    bucket["damage_feedback_count"] += int(feedback.damage_exception_count > 0)
+    bucket["good_communication_count"] += int(feedback.communication_quality == "good")
+
+
+def _finalize_decision_analytics_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
+    result = dict(bucket)
+    score_deltas = result.pop("_score_deltas", [])
+    price_deltas = result.pop("_price_deltas", {})
+    feedback_count = int(result["outcome_feedback_count"])
+    result["outcome_feedback_coverage_percent"] = _ratio(
+        feedback_count, int(result["completed_decision_count"])
+    )
+    result["successful_outcome_percent"] = _ratio(
+        int(result["successful_outcome_count"]), feedback_count
+    )
+    result["acceptable_outcome_percent"] = _ratio(
+        int(result["acceptable_outcome_count"]), feedback_count
+    )
+    result["problematic_outcome_percent"] = _ratio(
+        int(result["problematic_outcome_count"]), feedback_count
+    )
+    result["on_time_delivery_percent"] = _ratio(
+        int(result["on_time_count"]), int(result["on_time_known_count"])
+    )
+    result["choose_again_yes_percent"] = _ratio(
+        int(result["choose_again_yes_count"]), feedback_count
+    )
+    result["actual_delay_feedback_percent"] = _ratio(
+        int(result["actual_delay_feedback_count"]), feedback_count
+    )
+    result["damage_feedback_percent"] = _ratio(
+        int(result["damage_feedback_count"]), feedback_count
+    )
+    result["good_communication_percent"] = _ratio(
+        int(result["good_communication_count"]), feedback_count
+    )
+    result["selected_minus_engine_score_delta"] = {
+        "count": len(score_deltas),
+        "average": _avg(score_deltas),
+        "median": _median(score_deltas),
+    }
+    result["selected_minus_engine_price_delta_by_currency"] = {
+        code: {"count": len(values), "average": _avg(values), "median": _median(values)}
+        for code, values in sorted(price_deltas.items())
+    }
+    return result
+
+
+def _supplier_decision_analytics(*, jobs, events_by_job, quote_case_repository, quote_by_job, quote_by_code):
+    followed = _decision_analytics_bucket("recommendation_followed")
+    overridden = _decision_analytics_bucket("operator_override")
+    category_groups: dict[str, dict[str, Any]] = {}
+    context_groups: dict[str, dict[str, Any]] = {}
+    recommended_groups: dict[str, dict[str, Any]] = {}
+    operator_groups: dict[str, dict[str, Any]] = {}
+    total_decisions = analyzable = legacy_missing_engine = integrity_gaps = 0
+
+    for job in jobs:
+        case = (
+            quote_case_repository.get(job.quote_case_id) if job.quote_case_id else None
+        ) or quote_by_job.get(job.job_id) or quote_by_code.get(job.mina_code)
+        if case is None or case.supplier_quote_selection_decision is None:
+            continue
+        decision = case.supplier_quote_selection_decision
+        total_decisions += 1
+        engine = (decision.engine_recommended_supplier or "").strip()
+        selected = (decision.selected_supplier or "").strip()
+        if not engine:
+            legacy_missing_engine += 1
+            continue
+        analyzable += 1
+        followed_decision = (not decision.override_applied and selected == engine)
+        override_decision = (decision.override_applied and selected != engine)
+        if not followed_decision and not override_decision:
+            integrity_gaps += 1
+            continue
+        completed = _reached(job, events_by_job[job.job_id], target="completed")
+        feedback = case.supplier_decision_outcome_feedback
+        score_delta = decision.score_difference if override_decision else None
+        price_delta = decision.price_difference if override_decision else None
+        currency = None if case.supplier_quote is None else case.supplier_quote.currency
+        target = overridden if override_decision else followed
+        _record_decision_analytics(
+            target, completed=completed, feedback=feedback,
+            score_delta=score_delta, price_delta=price_delta, currency=currency,
+        )
+
+        route_key, route_name = _route_identity(job)
+        mode = str(job.shipment.transport_mode or "unknown")
+        equipment = str(job.shipment.equipment_type or "unspecified")
+        equipment_key = normalize_master_text(equipment) or "unspecified"
+        context_key = f"mode={mode}|route={route_key}|equipment={equipment_key}"
+        context = context_groups.setdefault(context_key, {
+            **_decision_analytics_bucket(f"{mode} · {route_name} · {equipment}"),
+            "context_key": context_key,
+            "transport_mode": mode,
+            "route": route_name,
+            "equipment_type": equipment,
+            "recommendation_followed_count": 0,
+            "override_count": 0,
+        })
+        context["recommendation_followed_count"] += int(followed_decision)
+        context["override_count"] += int(override_decision)
+        _record_decision_analytics(
+            context, completed=completed, feedback=feedback,
+            score_delta=score_delta, price_delta=price_delta, currency=currency,
+        )
+
+        recommended = recommended_groups.setdefault(engine, {
+            "name": engine,
+            "recommendation_count": 0,
+            "followed_count": 0,
+            "overridden_away_count": 0,
+            "_followed_outcomes": _decision_analytics_bucket(),
+        })
+        recommended["recommendation_count"] += 1
+        recommended["followed_count"] += int(followed_decision)
+        recommended["overridden_away_count"] += int(override_decision)
+        if followed_decision:
+            _record_decision_analytics(
+                recommended["_followed_outcomes"], completed=completed, feedback=feedback
+            )
+
+        if override_decision:
+            category_key = str(decision.override_reason_category or "unknown")
+            category = category_groups.setdefault(
+                category_key, {**_decision_analytics_bucket(category_key), "category": category_key}
+            )
+            _record_decision_analytics(
+                category, completed=completed, feedback=feedback,
+                score_delta=score_delta, price_delta=price_delta, currency=currency,
+            )
+            actor = (decision.overridden_by or "Unknown operator").strip() or "Unknown operator"
+            operator = operator_groups.setdefault(actor, {
+                **_decision_analytics_bucket(actor),
+                "override_reason_category_counts": defaultdict(int),
+                "rate_denominator_status": "normal_selection_operator_identity_not_persisted",
+            })
+            operator["override_reason_category_counts"][category_key] += 1
+            _record_decision_analytics(
+                operator, completed=completed, feedback=feedback,
+                score_delta=score_delta, price_delta=price_delta, currency=currency,
+            )
+
+    followed_final = _finalize_decision_analytics_bucket(followed)
+    overridden_final = _finalize_decision_analytics_bucket(overridden)
+    contexts = []
+    for row in context_groups.values():
+        final = _finalize_decision_analytics_bucket(row)
+        final["override_rate_percent"] = _ratio(final["override_count"], final["decision_count"])
+        contexts.append(final)
+    categories = [
+        _finalize_decision_analytics_bucket(row) for row in category_groups.values()
+    ]
+    operators = []
+    for row in operator_groups.values():
+        final = _finalize_decision_analytics_bucket(row)
+        final["override_reason_category_counts"] = dict(sorted(final["override_reason_category_counts"].items()))
+        final["override_rate_percent"] = None
+        operators.append(final)
+    recommended_rows = []
+    for row in recommended_groups.values():
+        followed_outcomes = _finalize_decision_analytics_bucket(row.pop("_followed_outcomes"))
+        row["override_away_rate_percent"] = _ratio(row["overridden_away_count"], row["recommendation_count"])
+        row["followed_observed_outcomes"] = followed_outcomes
+        recommended_rows.append(row)
+
+    completed_analyzable = followed_final["completed_decision_count"] + overridden_final["completed_decision_count"]
+    feedback_total = followed_final["outcome_feedback_count"] + overridden_final["outcome_feedback_count"]
+    return {
+        "summary": {
+            "selection_decision_count": total_decisions,
+            "analyzable_decision_count": analyzable,
+            "recommendation_followed_count": followed_final["decision_count"],
+            "override_count": overridden_final["decision_count"],
+            "override_rate_percent": _ratio(overridden_final["decision_count"], analyzable - integrity_gaps),
+            "completed_analyzable_decision_count": completed_analyzable,
+            "outcome_feedback_count": feedback_total,
+            "outcome_feedback_coverage_percent": _ratio(feedback_total, completed_analyzable),
+            "legacy_missing_engine_recommendation_count": legacy_missing_engine,
+            "decision_integrity_gap_count": integrity_gaps,
+        },
+        "cohorts": {
+            "recommendation_followed": followed_final,
+            "operator_override": overridden_final,
+        },
+        "override_categories": sorted(
+            categories, key=lambda row: (-row["decision_count"], row["name"])
+        ),
+        "contexts": sorted(
+            contexts, key=lambda row: (-row["override_count"], -row["decision_count"], row["name"])
+        ),
+        "recommended_suppliers": sorted(
+            recommended_rows,
+            key=lambda row: (-row["overridden_away_count"], -row["recommendation_count"], row["name"]),
+        ),
+        "override_operators": sorted(
+            operators, key=lambda row: (-row["decision_count"], row["name"])
+        ),
+        "counterfactual_outcomes_inferred": False,
+        "learning_authority_created": False,
+        "operator_performance_score_created": False,
+        "note": (
+            "Cohorts report only the observed outcome of the supplier actually selected. "
+            "A supplier that was not selected is never assigned a hypothetical success or failure. "
+            "Operator rows contain override evidence only because normal-selection operator identity is not durable."
+        ),
+    }
+
 def build_reporting_read_model(
     *,
     mina_repository: MinaJobRepository,
@@ -892,6 +1146,11 @@ def build_reporting_read_model(
     milestone_performance = _operation_milestone_performance(
         jobs=jobs, mina_repository=mina_repository, operation_repository=operation_execution_repository,
     )
+    decision_analytics = _supplier_decision_analytics(
+        jobs=jobs, events_by_job=events_by_job,
+        quote_case_repository=quote_case_repository,
+        quote_by_job=quote_by_job, quote_by_code=quote_by_code,
+    )
 
     return {
         "period": {
@@ -932,6 +1191,7 @@ def build_reporting_read_model(
         "suppliers": {
             "rows": sorted(supplier_groups.values(), key=lambda row: (-row["selected_count"], -row["rfq_count"], row["name"])),
         },
+        "decision_analytics": decision_analytics,
         "routes": {"rows": _sorted_rows(route_groups)},
         "financial": {
             "by_currency": overall_money,
@@ -986,7 +1246,7 @@ def build_reporting_read_model(
 
 
 REPORTING_SECTIONS = {
-    "overview", "sales", "operations", "customers", "suppliers", "routes",
+    "overview", "sales", "operations", "customers", "suppliers", "decision_analytics", "routes",
     "financial", "minai", "exceptions", "data_quality", "jobs",
 }
 

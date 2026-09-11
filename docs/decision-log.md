@@ -7043,3 +7043,16 @@ After a lifecycle-v2 MINA job reaches `completed`, MINAI may store one final sup
 Objective outcome fields are derived from durable operation evidence rather than re-entered manually: delivered time, required delivery date where available, on-time-delivery result, total operation exceptions, actual-delay exceptions, damage exceptions, and the underlying exception identifiers. Human input is limited to overall outcome, communication quality, whether the operator would choose the supplier again, and an optional note.
 
 Outcome feedback is final evidence for reporting and future analysis. It does not create or confirm a LearningFact, alter supplier ranking, change Supplier Master, or infer that an unselected supplier would have performed better or worse. Any later learning from outcomes requires a separate reviewed policy with sufficient denominators and explicit safeguards against selection bias.
+
+## DEC-228 — Operator vs MINAI Decision Analytics Is Observational, Not Counterfactual Authority
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+MINAI may compare supplier-selection decisions by observed cohorts only: cases where the engine recommendation was followed and cases where an authenticated operator overrode it. The analytics may use the durable selection decision, shipment context and final supplier outcome feedback, but it must never assign a hypothetical success or failure to a supplier that was not actually selected.
+
+Override analytics may report structured reason categories, lane/equipment context, selected-minus-engine score difference and same-currency price difference. Price deltas remain currency-separated and must never be averaged across currencies.
+
+A recommended supplier may be shown as frequently followed or frequently overridden-away. Outcome performance for that supplier may be calculated only from jobs where it was actually selected. The observed outcome of an override belongs to the supplier that was chosen, not to the MINAI recommendation that was rejected.
+
+Operator rows are descriptive override evidence only. Because normal supplier selections do not yet preserve a durable deciding-operator identity, v1 must not fabricate an operator override-rate denominator, personnel score or performance ranking. Decision analytics creates no LearningFact, Supplier Master update or runtime ranking authority.
