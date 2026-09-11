@@ -40,6 +40,7 @@ from src.simulation.learning_fact_provenance_regressions import evaluate_learnin
 from src.simulation.relationship_history_onboarding_regressions import (
     evaluate_relationship_history_onboarding_regressions,
 )
+from src.simulation.supplier_history_backfill_regressions import evaluate_supplier_history_backfill_regressions
 from src.simulation.counterparty_discovery_regressions import (
     evaluate_counterparty_discovery_regressions,
 )
@@ -283,6 +284,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Operation execution and exception layer", evaluate_operation_execution_exception_regressions),
     Suite("Learning fact and provenance authority", evaluate_learning_fact_provenance_regressions),
     Suite("Historical relationship onboarding", evaluate_relationship_history_onboarding_regressions),
+    Suite("Supplier Outlook history operational backfill", evaluate_supplier_history_backfill_regressions),
     Suite("Read-only Outlook counterparty discovery", evaluate_counterparty_discovery_regressions),
     Suite("Reporting read models", evaluate_reporting_read_model_regressions),
     Suite("Reporting development UI", evaluate_reporting_ui_regressions),

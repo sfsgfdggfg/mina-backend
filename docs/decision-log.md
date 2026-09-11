@@ -6982,3 +6982,16 @@ An escalation record preserves RFQ, reminder state/action identity when availabl
 Supplier-history learning may derive phone, WhatsApp and management acknowledgement-rate metrics only from this explicit escalation denominator. Facts remain proposed until human confirmation. Confirmed escalation learning may influence only an operator-facing Next Best Action advisory; it never initiates a call, WhatsApp message or management contact automatically.
 
 Next Best Action combines the current reminder state, explicit supplier relationship settings, confirmed escalation history and current-RFQ failed escalation attempts. Explicit supplier settings remain superior authority. After operator channels are exhausted, management/patron escalation may be recommended only when it is not explicitly disabled. Failed management escalation ends in manual relationship review, not automatic fallback or secondary dispatch.
+
+## DEC-223 — Outlook Supplier History Backfill Creates Proposed Operational Facts, Not Synthetic Operations
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+Authorized historical Outlook onboarding may bridge deterministic supplier email-response measurements into Supplier Intelligence, but it must not manufacture RFQs, contact attempts, escalation events, negotiation rounds or supplier availability outcomes that were not explicitly recorded at the time.
+
+For a supplier already matched through Supplier Master Data, deterministic outbound-to-inbound thread pairs may propose the canonical `response.median_minutes` fact when at least three response samples exist. The canonical proposal preserves the historical evidence digest and the latest underlying email observation time; rerunning an old mailbox window cannot make the evidence artificially fresh.
+
+The backfill proposal is always `proposed`. Human confirmation remains mandatory before the existing bounded Supplier Intelligence policy can use it, and normal confidence/recency thresholds still apply after confirmation. Stale historical evidence may therefore remain reviewable while having zero runtime effect.
+
+An existing confirmed `response.median_minutes` authority is never automatically replaced or superseded by Outlook backfill. Unmatched or ambiguous email parties are not automatically created as suppliers. Raw historical message bodies remain transient and are cleared after analysis.
