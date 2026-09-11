@@ -2042,6 +2042,7 @@ def derive_supplier_learning_from_history(supplier_id: str, http_request: Reques
             supplier_id=supplier_id, master_repository=master_data_repository,
             supplier_repository=supplier_rfq_repository, learning_repository=learning_fact_repository,
             price_repository=supplier_price_repository,
+            quote_case_repository=quote_case_repository,
             created_by=_authenticated_operator(http_request),
         )
     except KeyError as exc:

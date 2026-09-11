@@ -2632,7 +2632,7 @@ function renderSupplierLearning(container, supplier) {
         api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/learning-facts`),
         api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/operational-policy`)
       ]); area.replaceChildren();
-      const head=node("div","","settings-subheading"); head.append(node("h3","MINAI Geçmiş Gözlemleri"),node("p","Geçmiş mail/operasyon kanıtından türetilen gözlemler öneridir; yalnız operatörün doğruladığı ve policy eşiğini geçen yapılandırılmış metrikler operasyonu etkiler.","muted"));
+      const head=node("div","","settings-subheading"); head.append(node("h3","MINAI Geçmiş Gözlemleri"),node("p","Geçmiş mail/RFQ ve tamamlanmış operasyon outcome kanıtından türetilen gözlemler öneridir; outcome öğrenmesi en az 5 kayıt ister ve yalnız operatörün doğruladığı, ayrıca policy güven eşiğini geçen metrikler bounded supplier sıralamasını etkileyebilir.","muted"));
       const derive=actionButton("Geçmişten Gözlem Üret","",async()=>{derive.disabled=true;try{await api(`/master-data/suppliers/${encodeURIComponent(supplier.supplier_id)}/derive-learning`,{method:"POST"});await load();}catch(e){area.append(node("div",e.message||String(e),"error"));}finally{derive.disabled=false;}}); head.append(derive); area.append(head);
       const policyCard=node("div","","learning-fact-card");
       const sourceText=v=>v==="confirmed_learning"?"Doğrulanmış öğrenme":v==="supplier_master"?"Tedarikçi ayarı":"Genel kural";
