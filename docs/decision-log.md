@@ -7069,3 +7069,16 @@ Outcome learning requires a real denominator of at least five final outcome reco
 Five recent outcomes may create a reviewable proposal but are intentionally insufficient for runtime effect even after human confirmation. Outcome ranking requires effective confidence of at least 0.85, so a larger recent evidence set is necessary. When additional evidence strengthens confidence or recency without changing the numeric value, MINAI creates an explicit replacement proposal rather than silently refreshing a previously reviewed fact.
 
 Confirmed outcome metrics may affect only the existing bounded supplier-ranking layer. They cannot create eligibility, change ADR/equipment capability, alter primary/secondary role or release gates, change reminder/escalation/contact behavior, set negotiation authority, or update Supplier Master automatically. Global plus contextual effects remain inside the existing ranking caps.
+
+## DEC-230 — Customer-Specific Supplier Learning Uses Stable Customer Identity and Remains a Bounded Ranking Overlay
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+A supplier may perform differently for different customers even on the same lane and equipment, so final selected-supplier outcome evidence may be scoped to a stable Customer Master identity in addition to the existing shipment context. Customer-specific context keys use the durable `customer_id` plus deterministic mode/lane[/equipment] context; raw customer display text is never itself the authority key.
+
+Customer identity must resolve uniquely through active Customer Master data. Canonical names are preferred and aliases may resolve to the same profile, but unmatched or ambiguous aliases fail closed and create no customer-specific ranking effect. Customer-specific outcome learning uses only the supplier that actually performed the completed job and inherits the existing minimum sample, human-review, confidence, recency and anti-counterfactual rules from outcome-informed supplier learning.
+
+Customer-context learning is a third ranking overlay, separate from global supplier learning and ordinary lane/equipment learning. Its own contribution is capped at ±0.025 and the sum of global, shipment-context and customer-context learning remains inside the existing total ±0.06 supplier-ranking cap. It cannot create capability, eligibility or dispatch authority.
+
+The supplier-selection snapshot must preserve customer-context adjustment, applied context key and reviewed LearningFact identifiers used at selection time. Later Customer Master or LearningFact changes must not rewrite the historical selection explanation.

@@ -16,9 +16,14 @@ from src.core.master_data_repository import MasterDataRepository
 from src.core.supplier_intelligence_policy import (
     MAX_RANKING_ADJUSTMENT,
     resolve_supplier_contextual_learning_overlay,
+    resolve_supplier_customer_context_learning_overlay,
     resolve_supplier_operational_learning_policy,
 )
 from src.core.supplier_context import shipment_context_keys
+from src.core.supplier_customer_context import (
+    resolve_customer_master_profile,
+    supplier_customer_context_keys,
+)
 from src.core.data_provenance import (
     DataProvenanceError,
     require_pilot_operational_dataset,
@@ -415,7 +420,40 @@ def select_suppliers_for_shipment(
         context_learning_adjustment = (
             0.0 if context_overlay is None else context_overlay.ranking_adjustment
         )
-        raw_learning_adjustment = global_learning_adjustment + context_learning_adjustment
+        customer_context_overlay = None
+        customer_context_key = None
+        customer_profile = resolve_customer_master_profile(
+            customer_name=getattr(shipment, "customer_name", None), master_repository=master_data_repository,
+        )
+        if customer_profile is not None:
+            for candidate_context in supplier_customer_context_keys(
+                shipment, customer_id=customer_profile.customer_id,
+                equipment_decision=equipment_decision,
+            ):
+                candidate_overlay = resolve_supplier_customer_context_learning_overlay(
+                    supplier_name=supplier["supplier_name"], context_key=candidate_context,
+                    master_data_repository=master_data_repository,
+                    learning_repository=learning_fact_repository, as_of=policy_as_of,
+                )
+                if candidate_overlay is None:
+                    continue
+                sufficiently_supported = any(
+                    item.runtime_eligible and item.effect == "ranking"
+                    for item in candidate_overlay.evaluations
+                )
+                if sufficiently_supported:
+                    customer_context_overlay = candidate_overlay
+                    customer_context_key = candidate_context
+                    break
+        customer_context_learning_adjustment = (
+            0.0 if customer_context_overlay is None
+            else customer_context_overlay.ranking_adjustment
+        )
+        raw_learning_adjustment = (
+            global_learning_adjustment
+            + context_learning_adjustment
+            + customer_context_learning_adjustment
+        )
         learning_adjustment = max(
             -MAX_RANKING_ADJUSTMENT,
             min(MAX_RANKING_ADJUSTMENT, raw_learning_adjustment),
@@ -429,6 +467,12 @@ def select_suppliers_for_shipment(
         context_learning_fact_ids = (
             [] if context_overlay is None else [
                 item.fact_id for item in context_overlay.evaluations if item.effect == "ranking"
+            ]
+        )
+        customer_context_learning_fact_ids = (
+            [] if customer_context_overlay is None else [
+                item.fact_id for item in customer_context_overlay.evaluations
+                if item.effect == "ranking"
             ]
         )
         total_score = max(0.0, min(1.0, base_score + learning_adjustment))
@@ -452,10 +496,19 @@ def select_suppliers_for_shipment(
                 "learning_adjustment": round(learning_adjustment, 4),
                 "global_learning_adjustment": round(global_learning_adjustment, 4),
                 "context_learning_adjustment": round(context_learning_adjustment, 4),
+                "customer_context_learning_adjustment": round(
+                    customer_context_learning_adjustment, 4
+                ),
                 "learning_context_key": context_key,
+                "customer_learning_context_key": customer_context_key,
                 "learning_adjustment_capped": learning_adjustment_capped,
                 "global_learning_fact_ids": global_learning_fact_ids,
                 "context_learning_fact_ids": context_learning_fact_ids,
+                "customer_context_learning_fact_ids": customer_context_learning_fact_ids,
+                "customer_context_learning_policy": (
+                    None if customer_context_overlay is None
+                    else customer_context_overlay.model_dump(mode="json")
+                ),
                 "context_learning_policy": (
                     None if context_overlay is None
                     else context_overlay.model_dump(mode="json")

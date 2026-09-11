@@ -4127,3 +4127,13 @@ At least five final outcome records are required before an outcome metric may be
 Outcome-derived facts remain proposed until human confirmation and require effective confidence of at least 0.85 before they may influence ranking. New evidence that materially improves denominator, confidence or recency must create an explicit replacement proposal for an existing confirmed fact rather than rewriting reviewed history in place. Stale or future-dated evidence has no runtime effect.
 
 Outcome learning may only move ranking among suppliers that already passed all eligibility and safety gates, and its contribution remains inside the existing global/contextual ranking caps. It must not change supplier role, primary/secondary dispatch order, ADR/equipment eligibility, reminder timing, contact or escalation policy, negotiation behavior, Supplier Master, or secondary-release authority.
+
+## RULE-247 — Customer-Specific Supplier History Must Never Leak Across Customers or Override Hard Supplier Gates
+
+Customer-specific supplier learning may be derived only when the job's customer resolves uniquely to an active Customer Master profile. Canonical names and aliases may map to that stable customer identity; ambiguous or unmatched customer identity must produce no customer-specific context and no borrowed supplier history.
+
+Customer-context outcome metrics require the same real denominators as outcome-informed learning: at least five final selected-supplier outcomes to create a proposal, human confirmation before authority, and effective confidence of at least 0.85 before ranking impact. Context remains bound to customer + deterministic mode/lane[/equipment], so evidence for one customer, lane or equipment must not affect another.
+
+The customer-context ranking contribution is independently bounded to ±0.025 and all learning together remains inside the existing ±0.06 total ranking cap. Customer-specific learning may reorder only suppliers that already passed route, service, equipment, ADR and other safety/eligibility checks; it must not change supplier role, primary/secondary dispatch order, secondary release, reminders, contact/escalation, negotiation authority or Supplier Master.
+
+Every RFQ created from a customer-context ranking decision must retain the customer-context adjustment, context key and reviewed fact identifiers in the durable supplier-selection explanation. Missing legacy evidence must remain missing rather than being reconstructed from current customer or supplier state.

@@ -1280,13 +1280,14 @@ async function renderSupplier(container, jobId, supplier, refresh, effectivePoli
       node("div",`Sıra #${selection.selection_rank} · Eligibility geçti (hat + servis + ekipman) · Baz skor ${pct(selection.base_total_score)} · Nihai skor ${pct(selection.total_score)}`,"small"),
       node("div",`Hat ${pct(selection.route_score)} · Ekipman ${pct(selection.equipment_score)} · Risk uyumu ${pct(selection.risk_score)} · Fiyat ${pct(selection.price_score)} · Hız ${pct(selection.speed_score)}`,"muted small")
     );
-    const globalAdj=Number(selection.global_learning_adjustment||0), contextAdj=Number(selection.context_learning_adjustment||0);
-    if(globalAdj!==0||contextAdj!==0){
-      explain.append(node("div",`Öğrenme etkisi: global ${points(globalAdj)} · bağlamsal ${points(contextAdj)} · toplam ${points(selection.combined_learning_adjustment)}${selection.learning_adjustment_capped?" · güvenlik sınırında cap uygulandı":""}.`,"muted small"));
+    const globalAdj=Number(selection.global_learning_adjustment||0), contextAdj=Number(selection.context_learning_adjustment||0), customerAdj=Number(selection.customer_context_learning_adjustment||0);
+    if(globalAdj!==0||contextAdj!==0||customerAdj!==0){
+      explain.append(node("div",`Öğrenme etkisi: global ${points(globalAdj)} · hat/ekipman ${points(contextAdj)} · müşteri bağlamı ${points(customerAdj)} · toplam ${points(selection.combined_learning_adjustment)}${selection.learning_adjustment_capped?" · güvenlik sınırında cap uygulandı":""}.`,"muted small"));
     }
-    if(selection.learning_context_key) explain.append(node("div",`Bağlam: ${selection.learning_context_key}`,"muted small"));
-    const globalFacts=(selection.global_learning_fact_ids||[]).length, contextFacts=(selection.context_learning_fact_ids||[]).length;
-    if(globalFacts||contextFacts) explain.append(node("div",`Doğrulanmış ranking kanıtı: global ${globalFacts} · bağlamsal ${contextFacts}.`,"muted small"));
+    if(selection.learning_context_key) explain.append(node("div",`Hat/ekipman bağlamı: ${selection.learning_context_key}`,"muted small"));
+    if(selection.customer_learning_context_key) explain.append(node("div",`Müşteri bağlamı: ${selection.customer_learning_context_key}`,"muted small"));
+    const globalFacts=(selection.global_learning_fact_ids||[]).length, contextFacts=(selection.context_learning_fact_ids||[]).length, customerFacts=(selection.customer_context_learning_fact_ids||[]).length;
+    if(globalFacts||contextFacts||customerFacts) explain.append(node("div",`Doğrulanmış ranking kanıtı: global ${globalFacts} · hat/ekipman ${contextFacts} · müşteri ${customerFacts}.`,"muted small"));
     explain.append(node("div",selection.reason||"Supplier selection engine ağırlıklı skoru ile seçildi.","muted small"));
     card.append(explain);
   }
@@ -2643,7 +2644,7 @@ function renderSupplierLearning(container, supplier) {
       area.append(policyCard);
       const facts=data.facts||[]; if(!facts.length){area.append(emptyState("Henüz öğrenilmiş gözlem yok","Geçmiş RFQ/yanıt kanıtı oluştukça MINAI öneriler üretebilir."));return;}
       const list=node("div","","learning-fact-list"); facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
-        card.append(node("strong",f.fact_key),node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small")); if(f.context_key) card.append(node("div",`Bağlam: ${f.context_key}`,"muted small"));
+        card.append(node("strong",f.fact_key),node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small")); if(f.context_key) card.append(node("div",`${String(f.context_key).startsWith("customer=")?"Müşteri bağlamı":"Bağlam"}: ${f.context_key}`,"muted small"));
         if(f.source_type==="minai_inference" && (f.evidence||[])[0]?.summary) card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
         if(f.status==="proposed"){const a=node("div","","actions"); a.append(actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"Tedarikçi profili ekranında operatör tarafından doğrulandı."})});await load();}),actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"Tedarikçi profili ekranında operatör tarafından reddedildi."})});await load();}));card.append(a);} list.append(card);}); area.append(list);
     } catch(e){area.replaceChildren(node("div",e.message||String(e),"error"));}
