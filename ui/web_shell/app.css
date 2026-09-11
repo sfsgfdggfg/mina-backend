@@ -303,6 +303,9 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .quote-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
 .quote-decision-card, .quote-send-box { border: 1px solid var(--line); border-radius: 13px; padding: 15px; margin-top: 12px; }
 .quote-decision-card h3, .quote-send-box h3 { margin: 0 0 8px; font-size: 15px; }
+.customer-commercial-context { border: 1px solid var(--line); border-radius: 13px; padding: 13px 15px; margin-top: 12px; }
+.customer-commercial-context h3 { margin: 0 0 5px; font-size: 15px; }
+.customer-commercial-context-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 9px; }
 .quote-revision-editor { display: grid; gap: 12px; margin-top: 14px; border-top: 1px solid #edf0f5; padding-top: 14px; }
 .quote-send-box { margin-top: 14px; background: #fbfcfe; }
 .quote-subject { margin-top: 12px; font-weight: 750; }

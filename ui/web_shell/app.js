@@ -2038,6 +2038,33 @@ async function renderQuoteSection(container, data, refresh) {
     summaryItem("Gönderim", (quoteCase.automated_sent_evidence || []).length + (quoteCase.manual_sent_evidence || []).length + (quoteCase.send_reconciliation_evidence || []).filter(item => item.outcome === "confirmed_sent").length)
   );
   section.append(grid);
+  const commercialContext = data.customer_commercial_context;
+  if (commercialContext?.advisory_only === true) {
+    const advisory = node("div", "", "customer-commercial-context approval-focused");
+    advisory.append(
+      node("h3", "Müşteri Ticari Bağlamı"),
+      node("div", "Teyit edilmiş geçmiş gözlemlerdir; nedensel açıklama, kazanma olasılığı, ödeme isteği veya pricing authority değildir.", "muted small")
+    );
+    const metrics = node("div", "", "detail-grid customer-commercial-context-metrics");
+    const addMetric = (label, metric, formatter) => {
+      if (metric?.value === null || metric?.value === undefined) return;
+      metrics.append(summaryItem(label, formatter(metric)));
+    };
+    const percentLabel = item => `%${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(Number(item.value))}`;
+    addMetric("Kabul edilen para birimi gözlemi", commercialContext.accepted_quote_currency_advisory, item => String(item.value));
+    addMetric("Gözlenen kabul oranı", commercialContext.observed_acceptance_rate, percentLabel);
+    addMetric("Gözlenen pazarlık oranı", commercialContext.observed_negotiation_rate, percentLabel);
+    addMetric("Müşteri-beyanlı fiyat itiraz oranı", commercialContext.customer_stated_price_objection_rate, percentLabel);
+    addMetric("Müşteri-beyanlı transit itiraz oranı", commercialContext.customer_stated_transit_time_objection_rate, percentLabel);
+    addMetric("Kabul edilmiş geçmiş fiyat medyanı · önerilen satış fiyatı değildir", commercialContext.accepted_final_price_median, item => moneyLabel(item.value, item.unit));
+    addMetric("Kabul edilmiş geçmiş markup medyanı · marj komutu değildir", commercialContext.accepted_markup_median, item => `${moneyLabel(item.value)} · ${codeLabel(item.markup_type)}`);
+    addMetric("Geçmiş müşteri-beyanlı medyan · bu işin hedef fiyatı değildir", commercialContext.customer_stated_target_price_median, item => moneyLabel(item.value, item.unit));
+    if (metrics.childElementCount) {
+      advisory.append(metrics);
+      advisory.append(node("div", "Bu kart mevcut müşteri hedefi, otomatik fiyat/marj komutu veya tedarikçi pazarlık hedefi değildir; supplier seçimi, otomasyon, teklif gönderimi ve dispatch üzerinde yetkisi yoktur.", "notice small"));
+      section.append(advisory);
+    }
+  }
   if(selectionDecision.override_applied){
     const overrideBox=node("div","","notice");
     const categoryText=({price:"Fiyat",capacity_certainty:"Araç kesinliği",relationship_loyalty:"İlişki / sadakat",customer_preference:"Müşteri tercihi",operational_experience:"Operasyon tecrübesi",timing_transit:"Transit / zamanlama",management_decision:"Yönetim kararı",other:"Diğer"})[selectionDecision.override_reason_category]||"-";

@@ -16,6 +16,7 @@ from src.core.learning_fact_service import build_learning_fact_view
 from src.core.automation_planning import customer_deadline_plan, supplier_reminder_plan
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.customer_loss_feedback import build_loss_feedback_view
+from src.core.customer_commercial_context import build_customer_commercial_context
 from src.core.mina_job_service import (
     allowed_next_stages,
     get_mina_job_or_raise,
@@ -222,6 +223,12 @@ def build_mina_job_detail(
         else None
     )
     loss_feedback = build_loss_feedback_view(repository, job_id=job.job_id)
+    customer_commercial_context = build_customer_commercial_context(
+        quote_case=quote_case,
+        master_data_repository=master_data_repository,
+        learning_fact_repository=learning_fact_repository,
+        as_of=current,
+    )
     return {
         "job": job.model_dump(),
         "summary": {
@@ -252,6 +259,11 @@ def build_mina_job_detail(
         "operation_start": operation_start,
         "learning": learning,
         "loss_feedback": loss_feedback,
+        "customer_commercial_context": (
+            None
+            if customer_commercial_context is None
+            else customer_commercial_context.model_dump(mode="json", exclude_none=True)
+        ),
         "quote": quote_summary,
         "timeline": timeline,
         "controls": {
