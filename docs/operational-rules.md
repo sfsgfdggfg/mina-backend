@@ -4167,3 +4167,15 @@ If better evidence arrives later, the new record must explicitly supersede the c
 Reporting may show structured-feedback coverage, current reason distribution, evidence-basis distribution and explicit target-price evidence counts. Missing structured feedback remains missing rather than becoming `unknown` unless an operator explicitly records `unknown`.
 
 Loss feedback v1 creates no pricing, margin, supplier-selection, automation or learning authority. Quote Acceptance Learning must not consume these reasons until a separately reviewed reason-specific learning policy defines denominators, evidence quality and anti-causal safeguards.
+
+## RULE-251 — Learn Customer-Stated Objection Frequencies Only With Explicit Evidence and Adequate Coverage
+
+Reason-specific customer commercial learning may use only price-request jobs that resolve uniquely to an active Customer Master profile and have durable `customer_quote_sent` evidence before a durable lost outcome. The sent quote must pass the same revision-snapshot reconstruction used by quote-acceptance learning. Evidence dated after derivation, jobs lost before send, invalid snapshots and legacy free-text loss reasons provide no learning support.
+
+Only the current structured feedback record per job is eligible. Superseded records must not double-count. Only `customer_explicit` feedback may support or influence customer behavioral or commercial proposals; operator assessment, internal-customer-decision and unknown evidence remain reporting-only. Missing feedback remains missing and must never be coerced to unknown.
+
+A reason rate requires at least five sent-and-lost jobs with current structured feedback and structured-feedback coverage of at least 80% across all sent-and-lost jobs in the relevant scope. At least three customer-explicit observations must name the specific reason. Price-objection and transit-time-objection rates describe the share of current customer-explicit feedback naming that reason; they do not establish causation, win probability, price sensitivity or willingness to pay.
+
+A customer-stated target-price median requires at least three current `customer_explicit` observations containing both target price and currency in the same canonical sent-quote shipment/currency context. Feedback currency must match the reconstructed sent quote, and currencies, lanes, modes or equipment contexts must not be pooled. The median is historical advisory evidence only and never an automatic price command.
+
+Derivation creates proposed LearningFacts only. Human confirmation remains mandatory, and confirmed facts are subject to recency decay before advisory display. No reason or target-price fact may change pricing formulas, margins, sell price, supplier ranking or eligibility, automation, quote-send authority, Customer Master or any operational dispatch authority.
