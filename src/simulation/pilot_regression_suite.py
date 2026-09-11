@@ -53,6 +53,7 @@ from src.simulation.customer_quote_acceptance_learning_regressions import evalua
 from src.simulation.customer_loss_feedback_regressions import evaluate_customer_loss_feedback_regressions
 from src.simulation.customer_quote_reason_learning_regressions import evaluate_customer_quote_reason_learning_regressions
 from src.simulation.customer_commercial_context_regressions import evaluate_customer_commercial_context_regressions
+from src.simulation.customer_commercial_snapshot_regressions import evaluate_customer_commercial_snapshot_regressions
 from src.simulation.counterparty_discovery_regressions import (
     evaluate_counterparty_discovery_regressions,
 )
@@ -308,6 +309,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Customer loss feedback capture", evaluate_customer_loss_feedback_regressions),
     Suite("Customer quote reason learning", evaluate_customer_quote_reason_learning_regressions),
     Suite("Customer commercial quote context", evaluate_customer_commercial_context_regressions),
+    Suite("Customer commercial advisory snapshot", evaluate_customer_commercial_snapshot_regressions),
     Suite("Supplier contextual intelligence", evaluate_supplier_contextual_intelligence_regressions),
     Suite("Read-only Outlook counterparty discovery", evaluate_counterparty_discovery_regressions),
     Suite("Reporting read models", evaluate_reporting_read_model_regressions),

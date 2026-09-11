@@ -8,6 +8,7 @@ from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
 from src.core.action_recommendation import generate_action_recommendation
 from src.core.commodity_profile import get_commodity_record
 from src.core.customer_memory import enrich_shipment_with_customer_memory
+from src.core.customer_commercial_context import build_customer_commercial_context
 from src.core.data_provenance import DataProvenanceError
 from src.core.equipment import decide_equipment
 from src.core.missing_info import check_missing_information
@@ -959,20 +960,6 @@ def _progress_supplier_rfq_workflow(
         supplier_quote=supplier_quote,
         customer_quote=customer_quote,
     )
-    quote_approval = QuoteApproval(
-        quote_snapshot=QuoteApprovalSnapshot.from_quote(
-            supplier_quote=supplier_quote,
-            customer_quote=customer_quote,
-            quote_draft=quote_draft,
-        )
-    )
-    quote_send_safety = evaluate_quote_send_safety(
-        approval=quote_approval,
-        supplier_quote=supplier_quote,
-        customer_quote=customer_quote,
-        quote_draft=quote_draft,
-        regulatory_compliance=regulatory_compliance,
-    )
     quote_case = QuoteCase(
         shipment=shipment,
         mina_job_id=workflow.mina_job_id,
@@ -984,10 +971,32 @@ def _progress_supplier_rfq_workflow(
         supplier_quote=supplier_quote,
         customer_quote=customer_quote,
         quote_draft=quote_draft,
-        quote_approval=quote_approval,
-        quote_send_safety=quote_send_safety,
         regulatory_compliance=regulatory_compliance,
     )
+    commercial_context_snapshot = build_customer_commercial_context(
+        quote_case=quote_case,
+        master_data_repository=master_data_repository,
+        learning_fact_repository=learning_fact_repository,
+    )
+    quote_approval = QuoteApproval(
+        quote_snapshot=QuoteApprovalSnapshot.from_quote(
+            supplier_quote=supplier_quote,
+            customer_quote=customer_quote,
+            quote_draft=quote_draft,
+        ),
+        customer_commercial_context_snapshot=commercial_context_snapshot,
+    )
+    quote_send_safety = evaluate_quote_send_safety(
+        approval=quote_approval,
+        supplier_quote=supplier_quote,
+        customer_quote=customer_quote,
+        quote_draft=quote_draft,
+        regulatory_compliance=regulatory_compliance,
+    )
+    quote_case = quote_case.model_copy(update={
+        "quote_approval": quote_approval,
+        "quote_send_safety": quote_send_safety,
+    })
     action_recommendation = generate_action_recommendation(
         shipment=shipment,
         equipment_decision=equipment_decision,

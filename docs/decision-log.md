@@ -7134,3 +7134,16 @@ Behavioral and commercial proposals require `customer_explicit` evidence. Operat
 The first reason metrics are customer-stated price-objection rate and transit-time-objection rate. They are descriptive frequencies among current customer-explicit feedback records, not causal explanations, win probabilities, price sensitivity or willingness-to-pay estimates. Customer-stated target-price median requires at least three current customer-explicit target-price records in the same canonical shipment context and currency, and the feedback currency must match the sent quote snapshot. Currencies and unrelated contexts are never pooled.
 
 Every derived fact begins as proposed and follows the normal human review and supersession lifecycle. Confirmed facts may appear in a recency-decayed advisory policy, but create no pricing or margin authority, supplier ranking or eligibility authority, automation authority, quote-send authority, Customer Master mutation or automatic commercial action.
+
+## DEC-235 — Quote Review Must Freeze the Customer Commercial Advisory Seen at Decision Time
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+When a customer quote approval is created, MINAI must preserve the bounded customer commercial advisory context that was eligible and visible at that moment. The snapshot belongs to the approval decision record and is separate from the existing quote-content snapshot used for price/content integrity and send safety.
+
+A later confirmed, superseded, stale or newly derived LearningFact must not rewrite the advisory context attached to an existing approval. Every operator-created quote revision creates a fresh approval and therefore a fresh commercial advisory snapshot using the revised quote's exact canonical shipment, currency and markup context; prior approval snapshots remain unchanged.
+
+The commercial snapshot contains only the privacy-minimal advisory values and fact identifiers already allowed by the customer commercial context policy. It stores no raw evidence, mail body, manual sensitivity field, causal inference, current customer target, pricing command or supplier-negotiation target. It creates no pricing, margin, supplier-selection, supplier-negotiation, automation, quote-send or dispatch authority.
+
+Legacy approvals without a commercial advisory snapshot remain valid and readable. MINAI must not backfill or reconstruct what an operator supposedly saw in the past. The quote review UI should render the frozen approval snapshot for decision history rather than silently recomputing historical advisory context from current learning state.
