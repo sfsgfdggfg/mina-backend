@@ -4093,3 +4093,11 @@ The selection explanation shown on a MINA job must come from the durable RFQ sel
 The operator view should expose the base score, final score, route/equipment/risk/price/speed components, global and contextual learning effects, applied context and visible cap status. Confirmed fact identifiers may be retained for audit while the normal UI may summarize them as evidence counts.
 
 Missing explanation on a legacy RFQ is historical absence of evidence, not permission to invent an explanation. Existing eligibility, dispatch-tier, commercial-safety and human-approval rules remain unchanged.
+
+## RULE-243 — Human Supplier Choice May Override MINAI Only Among Commercially Eligible Quotes
+
+When preparing the customer quote, an operator may choose a supplier other than MINAI's recommendation only if that supplier has a current commercial-eligible quote in the same sourcing workflow. A human reason is mandatory and the authenticated operator identity must be stored.
+
+The original MINAI recommendation must remain visible in the durable selection decision. The override must flow through normal supplier-cost pricing, quote approval and send-safety logic rather than editing a completed quote retrospectively.
+
+Supplier selection override evidence must not change supplier eligibility, ADR/equipment capability, primary/secondary release gates or supplier learning automatically. Invalid, missing-reason or commercially ineligible override requests fail closed.

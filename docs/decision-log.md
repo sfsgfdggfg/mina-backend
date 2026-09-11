@@ -7021,3 +7021,14 @@ The snapshot separates eligibility from ranking. It records that route, service 
 For auditability, the snapshot also preserves the confirmed ranking LearningFact identifiers used at selection time, any matching shipment-context key, the selection strategy, capability data source and human-readable selection reason. It stores bounded decision evidence, not raw historical mail or hidden model reasoning.
 
 Lifecycle changes such as RFQ approval, send, response or later supplier-learning updates must preserve the original snapshot unchanged. Legacy RFQs without a snapshot remain valid and readable.
+
+## DEC-226 — Supplier Quote Selection Overrides Require Explicit Human Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+MINAI may recommend the highest-scoring commercial-eligible supplier quote, but an authenticated operator may deliberately select another commercial-eligible supplier at quote progression time. The override must identify the supplier and include a non-empty human reason.
+
+The resulting SupplierQuoteSelectionDecision preserves both the engine-recommended supplier and the operator-selected supplier, plus the override reason and operator identity. Pricing and quote generation then run from the overridden supplier cost through the normal pricing, approval and send-safety pipeline; the override does not patch an already-produced customer quote after the fact.
+
+An override may never target a commercially ineligible quote, bypass supplier capability/safety validation, promote unavailable evidence, authorize secondary dispatch or create a supplier response that does not exist. Selection override evidence is audit evidence only and does not by itself create LearningFact or future ranking authority.

@@ -101,6 +101,9 @@ def resume_supplier_rfq_workflow(
     quote_pricing_override: PricingFormula | None = None,
     master_data_repository: MasterDataRepository | None = None,
     price_repository: SupplierPriceRepository | None = None,
+    supplier_selection_override_name: str | None = None,
+    supplier_selection_override_reason: str | None = None,
+    supplier_selection_overridden_by: str | None = None,
 ) -> dict:
     workflow = rfq_repository.get_workflow(workflow_id)
     if workflow is None:
@@ -131,6 +134,9 @@ def resume_supplier_rfq_workflow(
             quote_pricing_override=quote_pricing_override,
             master_data_repository=master_data_repository,
             price_repository=price_repository,
+            supplier_selection_override_name=supplier_selection_override_name,
+            supplier_selection_override_reason=supplier_selection_override_reason,
+            supplier_selection_overridden_by=supplier_selection_overridden_by,
         )
     except DataProvenanceError:
         drafts = [
@@ -311,6 +317,9 @@ def _progress_supplier_rfq_workflow(
     quote_pricing_override: PricingFormula | None = None,
     master_data_repository: MasterDataRepository | None = None,
     price_repository: SupplierPriceRepository | None = None,
+    supplier_selection_override_name: str | None = None,
+    supplier_selection_override_reason: str | None = None,
+    supplier_selection_overridden_by: str | None = None,
 ) -> dict:
 
     shipment = workflow.shipment
@@ -549,6 +558,9 @@ def _progress_supplier_rfq_workflow(
     ]
     supplier_quote_selection_decision = build_supplier_quote_selection_decision(
         comparisons=supplier_quote_comparisons,
+        override_supplier_name=supplier_selection_override_name,
+        override_reason=supplier_selection_override_reason,
+        overridden_by=supplier_selection_overridden_by,
     )
     supplier_quote = None
     if supplier_quote_selection_decision is not None:

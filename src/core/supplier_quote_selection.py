@@ -28,6 +28,10 @@ class RejectedSupplierQuoteAlternative(BaseModel):
 
 class SupplierQuoteSelectionDecision(BaseModel):
     selected_supplier: str
+    engine_recommended_supplier: Optional[str] = None
+    override_applied: bool = False
+    override_reason: Optional[str] = None
+    overridden_by: Optional[str] = None
     selected_rfq_id: Optional[str] = None
     selected_price_offer_id: Optional[str] = None
     selected_price_source: Optional[str] = None
@@ -121,6 +125,10 @@ def select_supplier_quote_from_comparisons(
 
 def build_supplier_quote_selection_decision(
     comparisons: Iterable[SupplierQuoteComparison],
+    *,
+    override_supplier_name: str | None = None,
+    override_reason: str | None = None,
+    overridden_by: str | None = None,
 ) -> Optional[SupplierQuoteSelectionDecision]:
     ranked = sorted(
         (
@@ -138,8 +146,29 @@ def build_supplier_quote_selection_decision(
     if not ranked:
         return None
 
-    selected = ranked[0]
-    runner_up = ranked[1] if len(ranked) > 1 else None
+    engine_recommended = ranked[0]
+    selected = engine_recommended
+    normalized_override = (override_supplier_name or "").strip()
+    override_applied = False
+    normalized_reason = None
+    normalized_actor = None
+    if normalized_override:
+        candidates = [
+            item for item in ranked
+            if item.supplier_name.strip().casefold() == normalized_override.casefold()
+        ]
+        if not candidates:
+            raise ValueError("Supplier selection override must target a commercial-eligible supplier quote.")
+        selected = candidates[0]
+        if selected.supplier_name != engine_recommended.supplier_name:
+            normalized_reason = (override_reason or "").strip()
+            normalized_actor = (overridden_by or "").strip()
+            if not normalized_reason:
+                raise ValueError("Supplier selection override reason is required.")
+            if not normalized_actor:
+                raise ValueError("Supplier selection override operator identity is required.")
+            override_applied = True
+    runner_up = next((item for item in ranked if item is not selected), None)
 
     price_difference = None
     score_difference = None
@@ -156,50 +185,51 @@ def build_supplier_quote_selection_decision(
                 2,
             )
 
-    reason_parts = [
-        (
-            f"{selected.supplier_name}, "
-            f"{selected.total_score:.3f} toplam skorla "
-            "en yüksek puanı aldı."
-        ),
-        (
-            f"Tedarikçi skoru {selected.supplier_score:.3f}, "
-            f"gerçek fiyat skoru "
-            f"{selected.actual_price_score:.3f} ve "
-            f"transit skoru {selected.transit_score:.3f}."
-        ),
-    ]
+    if override_applied:
+        reason_parts = [
+            (
+                f"MINAI {engine_recommended.supplier_name} teklifini "
+                f"{engine_recommended.total_score:.3f} skorla önerdi; "
+                f"operatör {selected.supplier_name} teklifini "
+                f"{selected.total_score:.3f} skorla seçti."
+            ),
+            f"Override gerekçesi: {normalized_reason}",
+        ]
+    else:
+        reason_parts = [
+            (
+                f"{selected.supplier_name}, "
+                f"{selected.total_score:.3f} toplam skorla "
+                "en yüksek puanı aldı."
+            ),
+            (
+                f"Tedarikçi skoru {selected.supplier_score:.3f}, "
+                f"gerçek fiyat skoru {selected.actual_price_score:.3f} ve "
+                f"transit skoru {selected.transit_score:.3f}."
+            ),
+        ]
 
     if runner_up is not None:
-        reason_parts.append(
-            (
-                f"İkinci sıradaki {runner_up.supplier_name} ile "
-                f"skor farkı {score_difference:.3f}."
+        score_difference = round(selected.total_score - runner_up.total_score, 3)
+        if selected.currency == runner_up.currency:
+            price_difference = round(selected.cost - runner_up.cost, 2)
+        if not override_applied:
+            reason_parts.append(
+                f"İkinci sıradaki {runner_up.supplier_name} ile skor farkı {score_difference:.3f}."
             )
-        )
-
-        if price_difference is not None:
-            if price_difference > 0:
-                reason_parts.append(
-                    (
-                        f"Seçilen teklif ikinci alternatife göre "
-                        f"{price_difference:.2f} "
-                        f"{selected.currency} daha pahalı; "
-                        "ancak toplam puanı daha yüksek."
+            if price_difference is not None:
+                if price_difference > 0:
+                    reason_parts.append(
+                        f"Seçilen teklif ikinci alternatife göre {price_difference:.2f} "
+                        f"{selected.currency} daha pahalı; ancak toplam puanı daha yüksek."
                     )
-                )
-            elif price_difference < 0:
-                reason_parts.append(
-                    (
-                        f"Seçilen teklif ikinci alternatife göre "
-                        f"{abs(price_difference):.2f} "
+                elif price_difference < 0:
+                    reason_parts.append(
+                        f"Seçilen teklif ikinci alternatife göre {abs(price_difference):.2f} "
                         f"{selected.currency} daha ucuz."
                     )
-                )
-            else:
-                reason_parts.append(
-                    "İlk iki teklifin fiyatı eşit."
-                )
+                else:
+                    reason_parts.append("İlk iki teklifin fiyatı eşit.")
 
     rejected_alternatives = []
 
@@ -229,13 +259,19 @@ def build_supplier_quote_selection_decision(
                 price_difference=alternative_price_difference,
                 score_difference=alternative_score_difference,
                 rejection_reason=(
-                    "Toplam seçim skoru seçilen tekliften düşük."
+                    "Operatör override kararıyla seçilmedi."
+                    if override_applied
+                    else "Toplam seçim skoru seçilen tekliften düşük."
                 ),
             )
         )
 
     return SupplierQuoteSelectionDecision(
         selected_supplier=selected.supplier_name,
+        engine_recommended_supplier=engine_recommended.supplier_name,
+        override_applied=override_applied,
+        override_reason=normalized_reason,
+        overridden_by=normalized_actor,
         selected_rfq_id=selected.rfq_id,
         selected_price_offer_id=selected.price_offer_id,
         selected_price_source=selected.price_source,
