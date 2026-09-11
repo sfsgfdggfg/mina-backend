@@ -24,6 +24,7 @@ from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
     SupplierRFQAcknowledgementEvidence,
     SupplierContactAttemptEvidence,
+    SupplierEscalationEvidence,
     SupplierRFQDraft,
     SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpDraft,
@@ -494,6 +495,7 @@ class SQLiteSupplierRFQRepository:
     RESPONSE_NAMESPACE = "supplier_rfq_responses"
     ACKNOWLEDGEMENT_NAMESPACE = "supplier_rfq_acknowledgements"
     CONTACT_ATTEMPT_NAMESPACE = "supplier_contact_attempts"
+    ESCALATION_EVIDENCE_NAMESPACE = "supplier_escalation_evidence"
     SECONDARY_DISPATCH_AUTH_NAMESPACE = "supplier_secondary_dispatch_authorizations"
     INGESTED_MESSAGE_NAMESPACE = "supplier_ingested_messages"
     def __init__(self, store: SQLitePilotStore) -> None:
@@ -737,6 +739,31 @@ class SQLiteSupplierRFQRepository:
         items = [
             _model_from_payload(SupplierContactAttemptEvidence, payload)
             for payload in self.store.list_all(namespace=self.CONTACT_ATTEMPT_NAMESPACE)
+        ]
+        return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
+
+    def save_escalation_evidence(
+        self, evidence: SupplierEscalationEvidence
+    ) -> SupplierEscalationEvidence:
+        payload = _model_payload(evidence)
+        self.store.insert_once(
+            namespace=self.ESCALATION_EVIDENCE_NAMESPACE,
+            record_key=evidence.escalation_id, payload=payload,
+            event_type="supplier_escalation_evidence_recorded",
+            entity_type="supplier_escalation_evidence",
+        )
+        stored = self.store.get(
+            namespace=self.ESCALATION_EVIDENCE_NAMESPACE,
+            record_key=evidence.escalation_id,
+        )
+        return _model_from_payload(SupplierEscalationEvidence, stored)
+
+    def list_escalation_evidence(
+        self, rfq_id: str | None = None
+    ) -> list[SupplierEscalationEvidence]:
+        items = [
+            _model_from_payload(SupplierEscalationEvidence, payload)
+            for payload in self.store.list_all(namespace=self.ESCALATION_EVIDENCE_NAMESPACE)
         ]
         return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
 

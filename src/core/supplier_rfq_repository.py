@@ -7,6 +7,7 @@ from src.core.supplier_rfq import (
     SupplierRFQAutomatedSentEvidence,
     SupplierRFQAcknowledgementEvidence,
     SupplierContactAttemptEvidence,
+    SupplierEscalationEvidence,
     SupplierRFQDraft,
     SupplierRFQFollowUpAutomatedSentEvidence,
     SupplierRFQFollowUpDraft,
@@ -170,6 +171,16 @@ class SupplierRFQRepository(Protocol):
     ) -> list[SupplierContactAttemptEvidence]:
         ...
 
+    def save_escalation_evidence(
+        self, evidence: SupplierEscalationEvidence,
+    ) -> SupplierEscalationEvidence:
+        ...
+
+    def list_escalation_evidence(
+        self, rfq_id: Optional[str] = None,
+    ) -> list[SupplierEscalationEvidence]:
+        ...
+
     def save_secondary_dispatch_authorization(
         self,
         evidence: SupplierSecondaryDispatchAuthorization,
@@ -281,6 +292,7 @@ class InMemorySupplierRFQRepository:
         ] = {}
         self._acknowledgements: list[SupplierRFQAcknowledgementEvidence] = []
         self._contact_attempts: dict[str, SupplierContactAttemptEvidence] = {}
+        self._escalation_evidence: dict[str, SupplierEscalationEvidence] = {}
         self._secondary_dispatch_authorizations: dict[
             str, SupplierSecondaryDispatchAuthorization
         ] = {}
@@ -471,6 +483,21 @@ class InMemorySupplierRFQRepository:
         self, rfq_id: Optional[str] = None
     ) -> list[SupplierContactAttemptEvidence]:
         items = list(self._contact_attempts.values())
+        return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
+
+    def save_escalation_evidence(
+        self, evidence: SupplierEscalationEvidence
+    ) -> SupplierEscalationEvidence:
+        existing = self._escalation_evidence.get(evidence.escalation_id)
+        if existing is not None:
+            return existing
+        self._escalation_evidence[evidence.escalation_id] = evidence
+        return evidence
+
+    def list_escalation_evidence(
+        self, rfq_id: Optional[str] = None
+    ) -> list[SupplierEscalationEvidence]:
+        items = list(self._escalation_evidence.values())
         return items if rfq_id is None else [item for item in items if item.rfq_id == rfq_id]
 
     def save_secondary_dispatch_authorization(

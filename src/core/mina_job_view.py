@@ -21,6 +21,7 @@ from src.core.mina_job_service import (
 )
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
+from src.core.supplier_next_best_action import build_supplier_next_best_action
 from src.core.supplier_price_repository import SupplierPriceRepository
 from src.core.supplier_price_service import PRICE_SOURCING_STAGES, build_job_supplier_price_view
 
@@ -81,6 +82,7 @@ def build_mina_job_detail(
             responses = supplier_repository.list_responses(draft.rfq_id)
             acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
             contact_attempts = supplier_repository.list_contact_attempts(draft.rfq_id)
+            escalation_evidence = supplier_repository.list_escalation_evidence(draft.rfq_id)
             plan = supplier_reminder_plan(
                 supplier_repository=supplier_repository,
                 action_repository=action_repository,
@@ -90,6 +92,11 @@ def build_mina_job_detail(
                 master_data_repository=master_data_repository,
                 agency_policy_repository=agency_policy_repository,
                 learning_fact_repository=learning_fact_repository,
+            )
+            next_best_action = build_supplier_next_best_action(
+                draft=draft, workflow=workflow, reminder_plan=plan,
+                supplier_repository=supplier_repository, master_data_repository=master_data_repository,
+                learning_fact_repository=learning_fact_repository, as_of=current,
             )
             latest_response = max(responses, key=lambda item: item.received_at) if responses else None
             latest_ack = max(acknowledgements, key=lambda item: item.acknowledged_at) if acknowledgements else None
@@ -106,6 +113,11 @@ def build_mina_job_detail(
                     item.model_dump(mode="json")
                     for item in sorted(contact_attempts, key=lambda item: item.attempted_at, reverse=True)[:5]
                 ],
+                "escalation_evidence": [
+                    item.model_dump(mode="json")
+                    for item in sorted(escalation_evidence, key=lambda item: item.escalated_at, reverse=True)[:5]
+                ],
+                "next_best_action": next_best_action.model_dump(mode="json"),
                 "commercial_response": None if latest_response is None else {
                     "status": latest_response.status,
                     "cost": latest_response.cost,
@@ -115,7 +127,11 @@ def build_mina_job_detail(
                 "reminder": {
                     **{
                         key: plan.get(key)
-                        for key in ("state", "action_type", "due_at", "resume_at", "reason")
+                        for key in (
+                            "state", "action_type", "due_at", "resume_at", "reason",
+                            "escalation_due_at", "preferred_escalation_channel",
+                            "preferred_contact_channels", "management_escalation_allowed",
+                        )
                         if plan.get(key) is not None
                     },
                     "supplier_relationship": plan.get("supplier_relationship"),

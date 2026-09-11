@@ -133,6 +133,21 @@ class SupplierContactAttemptEvidence(BaseModel):
     source: Literal["supplier_contact_attempt"] = "supplier_contact_attempt"
 
 
+class SupplierEscalationEvidence(BaseModel):
+    escalation_id: str = Field(default_factory=lambda: str(uuid4()))
+    rfq_id: str
+    escalated_at: datetime = Field(default_factory=datetime.utcnow)
+    level: Literal["operator", "management"]
+    channel: Literal["phone", "whatsapp"]
+    outcome: Literal["acknowledged_working", "no_response", "unreachable"]
+    recorded_by: str = Field(min_length=1, max_length=200)
+    trigger_state: str = Field(min_length=1, max_length=120)
+    reminder_action_key: Optional[str] = Field(default=None, max_length=300)
+    note: Optional[str] = Field(default=None, max_length=500)
+    contact_attempt_id: Optional[str] = None
+    source: Literal["supplier_escalation_evidence"] = "supplier_escalation_evidence"
+
+
 class SupplierSecondaryDispatchAuthorization(BaseModel):
     workflow_id: str
     authorized_at: datetime = Field(default_factory=datetime.utcnow)

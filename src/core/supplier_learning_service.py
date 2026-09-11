@@ -45,6 +45,8 @@ def derive_supplier_history_learning(
     contact_attempt_counts = {"phone": 0, "whatsapp": 0}
     contact_ack_counts = {"phone": 0, "whatsapp": 0}
     contact_ack_to_quote_minutes: dict[str, list[float]] = {"phone": [], "whatsapp": []}
+    escalation_attempt_counts = {"phone": 0, "whatsapp": 0, "management": 0}
+    escalation_ack_counts = {"phone": 0, "whatsapp": 0, "management": 0}
     quoted_count = 0
     responded_count = 0
     evidence_ids: list[str] = []
@@ -60,6 +62,13 @@ def derive_supplier_history_learning(
             contact_attempt_counts[attempt.channel] += 1
             if attempt.outcome == "acknowledged_working":
                 contact_ack_counts[attempt.channel] += 1
+        escalations = supplier_repository.list_escalation_evidence(draft.rfq_id)
+        for escalation in escalations:
+            observed_times.append(_aware(escalation.escalated_at))
+            key = "management" if escalation.level == "management" else escalation.channel
+            escalation_attempt_counts[key] += 1
+            if escalation.outcome == "acknowledged_working":
+                escalation_ack_counts[key] += 1
         responses = supplier_repository.list_responses(draft.rfq_id)
         if not responses:
             continue
@@ -110,6 +119,8 @@ def derive_supplier_history_learning(
         "contact_attempt_counts": contact_attempt_counts,
         "contact_ack_counts": contact_ack_counts,
         "contact_ack_to_quote_minutes": contact_ack_to_quote_minutes,
+        "escalation_attempt_counts": escalation_attempt_counts,
+        "escalation_ack_counts": escalation_ack_counts,
         "negotiation_ids": sorted(negotiation_ids),
         "negotiation_reductions": negotiation_reductions,
     }
@@ -125,6 +136,9 @@ def derive_supplier_history_learning(
             f"and {quoted_count} usable quotes for {supplier.supplier_name}; "
             f"contact attempts: phone={contact_attempt_counts['phone']}, "
             f"whatsapp={contact_attempt_counts['whatsapp']}; "
+            f"explicit escalations: phone={escalation_attempt_counts['phone']}, "
+            f"whatsapp={escalation_attempt_counts['whatsapp']}, "
+            f"management={escalation_attempt_counts['management']}; "
             f"explicit negotiation records={len(negotiation_reductions)}."
         ),
     )
@@ -162,6 +176,15 @@ def derive_supplier_history_learning(
                 min(0.95, 0.55 + 0.05 * len(channel_timings)),
             ))
 
+    for escalation_key in ("phone", "whatsapp", "management"):
+        attempts = escalation_attempt_counts[escalation_key]
+        if attempts:
+            metrics.append((
+                f"escalation.{escalation_key}.ack_rate_percent",
+                round(100 * escalation_ack_counts[escalation_key] / attempts, 2), "percent",
+                min(0.90, 0.50 + 0.05 * attempts),
+            ))
+
     if negotiation_reductions:
         metrics.append((
             "commercial.negotiated_reduction_percent",
@@ -187,6 +210,7 @@ def derive_supplier_history_learning(
         "responded_count": responded_count,
         "usable_quote_count": quoted_count,
         "negotiation_evidence_count": len(negotiation_reductions),
+        "escalation_evidence_count": sum(escalation_attempt_counts.values()),
         "proposed_facts": [item.model_dump() for item in proposals],
         "note": "Derived observations remain proposed until a human confirms them.",
     }

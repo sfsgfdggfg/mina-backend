@@ -14,6 +14,7 @@ from src.core.business_calendar import (
 from src.core.supplier_rfq import (
     SupplierRFQAcknowledgementEvidence,
     SupplierContactAttemptEvidence,
+    SupplierEscalationEvidence,
     SupplierRFQDraft,
     SupplierSecondaryDispatchAuthorization,
 )
@@ -31,6 +32,10 @@ class SupplierSecondaryDispatchBlockedError(ValueError):
 
 
 class SupplierContactAttemptError(ValueError):
+    pass
+
+
+class SupplierEscalationEvidenceError(ValueError):
     pass
 
 
@@ -239,6 +244,93 @@ def record_supplier_contact_attempt(
         "commercial_response_recorded": False,
         "capacity_failure_recorded": False,
         "secondary_release_recorded": False,
+    }
+
+
+def record_supplier_escalation_evidence(
+    *, repository: SupplierRFQRepository, action_repository: AutomationActionRepository,
+    rfq_id: str, level: str, channel: str, outcome: str, recorded_by: str,
+    escalated_at: datetime | None = None, note: str | None = None,
+    mina_job_repository=None, master_data_repository=None, agency_policy_repository=None,
+    learning_fact_repository=None,
+) -> dict[str, Any]:
+    normalized_level = level.strip().lower()
+    normalized_channel = channel.strip().lower()
+    normalized_outcome = outcome.strip().lower()
+    actor = recorded_by.strip()
+    if normalized_level not in {"operator", "management"}:
+        raise SupplierEscalationEvidenceError("Supplier escalation level must be operator or management.")
+    if normalized_channel not in {"phone", "whatsapp"}:
+        raise SupplierEscalationEvidenceError("Supplier escalation supports only phone or WhatsApp.")
+    if normalized_outcome not in {"acknowledged_working", "no_response", "unreachable"}:
+        raise SupplierEscalationEvidenceError("Unsupported supplier escalation outcome.")
+    if not actor:
+        raise SupplierEscalationEvidenceError("Authenticated operator is required for supplier escalation evidence.")
+    timestamp = escalated_at or datetime.now(timezone.utc)
+    with atomic_repository_transaction(repository):
+        draft = repository.get_draft(rfq_id)
+        if draft is None:
+            raise SupplierEscalationEvidenceError("Supplier RFQ not found.")
+        if draft.status != "awaiting_response":
+            raise SupplierEscalationEvidenceError("Supplier escalation evidence requires an RFQ awaiting response.")
+        if repository.list_responses(rfq_id):
+            raise SupplierEscalationEvidenceError("Supplier escalation cannot replace an existing commercial response.")
+        workflow = repository.get_workflow(draft.workflow_id)
+        if workflow is None:
+            raise SupplierEscalationEvidenceError("Supplier RFQ workflow not found.")
+        plan = supplier_reminder_plan(
+            supplier_repository=repository, action_repository=action_repository,
+            draft=draft, now=timestamp, mina_job_repository=mina_job_repository,
+            master_data_repository=master_data_repository,
+            agency_policy_repository=agency_policy_repository,
+            learning_fact_repository=learning_fact_repository,
+        )
+        if plan.get("state") != "human_contact_required":
+            raise SupplierEscalationEvidenceError(
+                "Supplier escalation evidence is allowed only when the reminder workflow requires human contact."
+            )
+        supplier_profile = (
+            None if master_data_repository is None
+            else master_data_repository.find_supplier_by_name(draft.supplier_name)
+        )
+        relationship = None if supplier_profile is None else supplier_profile.relationship
+        if (
+            normalized_level == "management"
+            and relationship is not None
+            and relationship.management_escalation_allowed is False
+        ):
+            raise SupplierEscalationEvidenceError("Management escalation is explicitly disabled for this supplier.")
+        contact_attempt = None
+        acknowledgement = None
+        if normalized_level == "operator":
+            contact_result = record_supplier_contact_attempt(
+                repository=repository, rfq_id=rfq_id, channel=normalized_channel,
+                outcome=normalized_outcome, recorded_by=actor, attempted_at=timestamp, note=note,
+            )
+            contact_attempt = contact_result["contact_attempt"]
+            acknowledgement = contact_result["acknowledgement"]
+        elif normalized_outcome == "acknowledged_working":
+            acknowledgement_model = repository.save_acknowledgement(SupplierRFQAcknowledgementEvidence(
+                rfq_id=rfq_id, acknowledged_at=timestamp, channel=normalized_channel, recorded_by=actor,
+            ))
+            acknowledgement = acknowledgement_model.model_dump()
+        evidence = SupplierEscalationEvidence(
+            rfq_id=rfq_id, escalated_at=timestamp, level=normalized_level,
+            channel=normalized_channel, outcome=normalized_outcome, recorded_by=actor,
+            trigger_state=str(plan.get("state") or "unknown"),
+            reminder_action_key=plan.get("action_key"),
+            note=None if note is None else note.strip() or None,
+            contact_attempt_id=None if contact_attempt is None else contact_attempt.get("attempt_id"),
+        )
+        stored = repository.save_escalation_evidence(evidence)
+    return {
+        "escalation_evidence": stored.model_dump(),
+        "contact_attempt": contact_attempt,
+        "acknowledgement": acknowledgement,
+        "commercial_response_recorded": False,
+        "capacity_failure_recorded": False,
+        "secondary_release_recorded": False,
+        "automatic_contact_performed": False,
     }
 
 
