@@ -974,6 +974,8 @@ class SupplierRFQResponseRequest(BaseModel):
 
 class ResumeSupplierQuoteRequest(BaseModel):
     quote_pricing_override: Optional[PricingFormula] = None
+    supplier_selection_override_name: Optional[str] = Field(default=None, max_length=240)
+    supplier_selection_override_reason: Optional[str] = Field(default=None, max_length=1200)
 
 
 class CustomerMasterCreateRequest(BaseModel):
@@ -2205,7 +2207,7 @@ def use_mina_job_fixed_rate(
 
 @app.post("/mina-jobs/{job_id}/supplier-prices/progress")
 def progress_mina_job_supplier_prices(
-    job_id: str, request: ResumeSupplierQuoteRequest | None = None,
+    job_id: str, http_request: Request, request: ResumeSupplierQuoteRequest | None = None,
 ):
     job = mina_job_repository.get(job_id)
     if job is None:
@@ -2228,7 +2230,16 @@ def progress_mina_job_supplier_prices(
             ),
             master_data_repository=_runtime_master_data_authority(),
             price_repository=supplier_price_repository,
+            supplier_selection_override_name=(request.supplier_selection_override_name if request is not None else None),
+            supplier_selection_override_reason=(request.supplier_selection_override_reason if request is not None else None),
+            supplier_selection_overridden_by=(
+                _authenticated_operator(http_request)
+                if request is not None and request.supplier_selection_override_name
+                else None
+            ),
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except SupplierRFQWorkflowNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except SupplierRFQWorkflowProgressionError as exc:

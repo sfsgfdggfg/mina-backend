@@ -1843,10 +1843,15 @@ function renderSupplierPricesSection(container, data, jobId, refresh) {
     progress.append(node("h3", "Müşteri Teklifini Hazırla"));
     const marginLabel=node("label","Bu işe özel maliyet üzerine % (opsiyonel)"); const margin=document.createElement("input");
     margin.type="number";margin.min="0";margin.step="0.1";margin.placeholder="Müşteri/ajans kuralı yoksa gir";marginLabel.append(margin);
+    const overrideLabel=node("label","Supplier seçimi (opsiyonel override)"); const overrideSupplier=document.createElement("select");
+    const autoOpt=document.createElement("option");autoOpt.value="";autoOpt.textContent="MINAI önerisini kullan";overrideSupplier.append(autoOpt);
+    supplierNames.forEach(name=>{const o=document.createElement("option");o.value=name;o.textContent=name;overrideSupplier.append(o);});overrideLabel.append(overrideSupplier);
+    const reasonLabel=node("label","Override gerekçesi"); const overrideReason=document.createElement("input");overrideReason.maxLength=1200;overrideReason.placeholder="örn. müşteri bu tedarikçiyi tercih ediyor";reasonLabel.append(overrideReason);
     const feedback=node("div","","muted settings-feedback");
     const prepare=actionButton("Teklifi Hazırla","approve",async()=>{
       const raw=margin.value.trim(); const body={};
       if(raw){const value=Number(raw);if(!Number.isFinite(value)||value<0){feedback.textContent="Geçerli bir yüzde gir.";return;}body.quote_pricing_override={method:"cost_markup_percentage",value};}
+      if(overrideSupplier.value){if(!overrideReason.value.trim()){feedback.textContent="Supplier override için gerekçe zorunlu.";return;}body.supplier_selection_override_name=overrideSupplier.value;body.supplier_selection_override_reason=overrideReason.value.trim();}
       prepare.disabled=true;feedback.textContent="Tüm fiyat kaynakları karşılaştırılıyor…";
       try {
         const result=await api(`/mina-jobs/${encodeURIComponent(jobId)}/supplier-prices/progress`,{method:"POST",body:JSON.stringify(body)});
@@ -1854,7 +1859,7 @@ function renderSupplierPricesSection(container, data, jobId, refresh) {
         else await refresh();
       } catch(error){feedback.textContent=error.message||String(error);} finally{prepare.disabled=false;}
     });
-    progress.append(marginLabel,prepare,feedback); section.append(progress);
+    progress.append(marginLabel,overrideLabel,reasonLabel,prepare,feedback); section.append(progress);
   }
   container.append(section);
 }
@@ -2019,6 +2024,7 @@ async function renderQuoteSection(container, data, refresh) {
   catch (error) { section.append(node("div", error.message || String(error), "error")); container.append(section); return; }
   const approval = quoteCase.quote_approval;
   const q = quoteCase.customer_quote || {}; const supplier = quoteCase.supplier_quote || {};
+  const selectionDecision = quoteCase.supplier_quote_selection_decision || {};
   const grid = node("div", "", "detail-grid quote-metrics");
   grid.append(
     summaryItem("Tedarikçi", supplier.supplier_name || "-"),
@@ -2029,6 +2035,13 @@ async function renderQuoteSection(container, data, refresh) {
     summaryItem("Gönderim", (quoteCase.automated_sent_evidence || []).length + (quoteCase.manual_sent_evidence || []).length + (quoteCase.send_reconciliation_evidence || []).filter(item => item.outcome === "confirmed_sent").length)
   );
   section.append(grid);
+  if(selectionDecision.override_applied){
+    const overrideBox=node("div","","notice");
+    overrideBox.append(node("strong",`Supplier seçimi operatör tarafından değiştirildi: ${selectionDecision.engine_recommended_supplier} → ${selectionDecision.selected_supplier}`),node("div",`Gerekçe: ${selectionDecision.override_reason || "-"} · Operatör: ${selectionDecision.overridden_by || "-"}`,"small"));
+    section.append(overrideBox);
+  } else if(selectionDecision.engine_recommended_supplier){
+    section.append(node("div",`Supplier seçimi MINAI önerisiyle aynı: ${selectionDecision.engine_recommended_supplier}.`,"muted small"));
+  }
   if (!approval) { section.append(node("div", "Teklif onay kaydı henüz oluşmadı.", "notice")); container.append(section); return; }
   const snapshot = approval.quote_snapshot || {};
   const decision = node("div", "", "quote-decision-card approval-focused");
