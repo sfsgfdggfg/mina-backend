@@ -294,6 +294,8 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .supplier-reminder-line { margin-top: 10px; padding: 9px 10px; background: #f8fafc; border-radius: 9px; font-size: 12px; }
 .supplier-preview-area:empty { display: none; }
 .approval-focused { max-width: 820px; }
+.customer-outcome-action { display: grid; gap: 10px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 13px; margin-top: 10px; }
+.customer-outcome-action .approval-reject-panel { margin-top: 2px; }
 .approval-message-body { line-height: 1.55; max-height: 360px; overflow: auto; }
 .approval-primary-actions { margin-top: 14px; }
 .approval-reject-panel { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #edf0f5; }
