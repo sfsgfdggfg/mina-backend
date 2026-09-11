@@ -64,7 +64,7 @@ def create_learning_fact(
     *, repository: LearningFactRepository, entry_id: str, subject_type: str, subject_id: str,
     subject_label: str, fact_key: str, value: Any, confidence: float, source_type: str,
     evidence: list[LearningEvidence | dict], created_by: str, value_unit: str | None = None,
-    supersedes_fact_id: str | None = None, occurred_at: datetime | None = None,
+    context_key: str | None = None, supersedes_fact_id: str | None = None, occurred_at: datetime | None = None,
     master_repository: MasterDataRepository | None = None,
     mina_repository: MinaJobRepository | None = None,
 ) -> LearningFact:
@@ -78,17 +78,21 @@ def create_learning_fact(
         master_repository=master_repository, mina_repository=mina_repository,
     )
     normalized_fact_key = fact_key.strip().casefold()
+    normalized_context_key = None if context_key is None else context_key.strip().casefold() or None
     if supersedes_fact_id:
         old = repository.get(supersedes_fact_id)
         if old is None:
             raise ValueError("Superseded learning fact was not found.")
         if old.status != "confirmed":
             raise ValueError("Only a confirmed learning fact may be superseded.")
-        if old.subject_type != subject_type or old.subject_id != subject_id or old.fact_key != normalized_fact_key:
-            raise ValueError("Replacement fact must target the same subject and fact key.")
+        if (
+            old.subject_type != subject_type or old.subject_id != subject_id
+            or old.fact_key != normalized_fact_key or old.context_key != normalized_context_key
+        ):
+            raise ValueError("Replacement fact must target the same subject, fact key and context.")
     fact = LearningFact(
         entry_id=normalized_entry, subject_type=subject_type, subject_id=subject_id,
-        subject_label=subject_label.strip(), fact_key=normalized_fact_key, value=value,
+        subject_label=subject_label.strip(), fact_key=normalized_fact_key, context_key=normalized_context_key, value=value,
         value_unit=value_unit, confidence=confidence, source_type=source_type,
         evidence=[item if isinstance(item, LearningEvidence) else LearningEvidence.model_validate(item) for item in evidence],
         supersedes_fact_id=supersedes_fact_id, created_at=timestamp, created_by=actor,
@@ -126,6 +130,7 @@ def confirm_learning_fact(
             item for item in repository.list_all()
             if item.status == "confirmed" and item.subject_type == current.subject_type
             and item.subject_id == current.subject_id and item.fact_key == current.fact_key
+            and item.context_key == current.context_key
         ]
         if current.supersedes_fact_id:
             old = repository.get(current.supersedes_fact_id)
@@ -141,7 +146,7 @@ def confirm_learning_fact(
             repository.save(old_updated)
         elif confirmed:
             raise LearningFactConflictError(
-                "A confirmed fact already exists for this subject/key; create an explicit replacement fact."
+                "A confirmed fact already exists for this subject/key/context; create an explicit replacement fact."
             )
         updated = LearningFact.model_validate(current.model_copy(update={
             "status": "confirmed", "updated_at": timestamp, "reviewed_at": timestamp,

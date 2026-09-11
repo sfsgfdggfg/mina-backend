@@ -323,7 +323,7 @@ def _propose_fact(
     confirmed = [
         item for item in learning_repository.list_all()
         if item.status == "confirmed" and item.subject_type == subject_type
-        and item.subject_id == subject_id and item.fact_key == fact_key
+        and item.subject_id == subject_id and item.fact_key == fact_key and item.context_key is None
     ]
     active = max(confirmed, key=lambda item: item.updated_at) if confirmed else None
     if active is not None and active.value == value and active.value_unit == value_unit:

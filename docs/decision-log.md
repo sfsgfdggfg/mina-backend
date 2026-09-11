@@ -6995,3 +6995,16 @@ For a supplier already matched through Supplier Master Data, deterministic outbo
 The backfill proposal is always `proposed`. Human confirmation remains mandatory before the existing bounded Supplier Intelligence policy can use it, and normal confidence/recency thresholds still apply after confirmation. Stale historical evidence may therefore remain reviewable while having zero runtime effect.
 
 An existing confirmed `response.median_minutes` authority is never automatically replaced or superseded by Outlook backfill. Unmatched or ambiguous email parties are not automatically created as suppliers. Raw historical message bodies remain transient and are cleared after analysis.
+
+## DEC-224 — Supplier Learning May Be Scoped to Shipment Context Without Becoming a Separate Eligibility Authority
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+A supplier may behave differently by transport mode, lane and equipment, so confirmed supplier learning may carry an optional canonical `context_key`. Context authority is supported only for supplier LearningFacts and uses deterministic keys such as `mode=road|lane=turkiye>germany|equipment=tenteli`, with a lane-only fallback when equipment-specific evidence is unavailable.
+
+Contextual learning is derived only from durable RFQ workflow history whose shipment carries the corresponding context. At least three supplier responses are required before contextual response-time or usable-quote metrics may be proposed. Derived contextual facts remain proposed until human confirmation and preserve their own evidence recency.
+
+Global and contextual facts are independent reviewed authorities. Confirming a lane-specific response metric does not replace the supplier's global response metric, and a changed contextual history creates an explicit replacement proposal for that same supplier/key/context rather than overwriting confirmed knowledge.
+
+In v1, contextual learning may affect only bounded supplier ranking. It cannot change eligibility, supplier role, dispatch tier, reminder timing, contact/escalation behavior, negotiation targets or secondary-release gates. Global plus contextual learning remains inside the existing total ±0.06 ranking cap.

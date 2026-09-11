@@ -11,6 +11,7 @@ from src.core.learning_fact_repository import LearningFactRepository
 from src.core.master_data import SupplierMasterProfile
 
 RANKING_MIN_EFFECTIVE_CONFIDENCE = 0.70
+CONTEXT_RANKING_MIN_EFFECTIVE_CONFIDENCE = 0.80
 TIMING_MIN_EFFECTIVE_CONFIDENCE = 0.85
 NEGOTIATION_MIN_EFFECTIVE_CONFIDENCE = 0.80
 CONTACT_MIN_EFFECTIVE_CONFIDENCE = 0.80
@@ -21,6 +22,7 @@ ESCALATION_MIN_RATE_ADVANTAGE = 15.0
 ESCALATION_MIN_WINNER_RATE = 50.0
 MANAGEMENT_MIN_SUCCESS_RATE = 50.0
 MAX_RANKING_ADJUSTMENT = 0.06
+MAX_CONTEXT_RANKING_ADJUSTMENT = 0.04
 MAX_LEARNED_FIRST_REMINDER_MINUTES = 60
 MAX_LEARNED_ACK_WAIT_MINUTES = 180
 MIN_QUOTE_RATE_FOR_PATIENT_TIMING = 70.0
@@ -54,6 +56,17 @@ class SupplierLearningFactEvaluation(BaseModel):
     runtime_eligible: bool
     effect: Literal["ranking", "timing", "advisory", "none"]
     reason: str
+
+
+class SupplierContextualLearningOverlay(BaseModel):
+    supplier_id: str
+    supplier_name: str
+    context_key: str
+    ranking_adjustment: float = Field(
+        ge=-MAX_CONTEXT_RANKING_ADJUSTMENT, le=MAX_CONTEXT_RANKING_ADJUSTMENT
+    )
+    evaluations: list[SupplierLearningFactEvaluation] = Field(default_factory=list)
+    source: str = "supplier_contextual_learning_overlay_v1"
 
 
 class SupplierOperationalLearningPolicy(BaseModel):
@@ -171,7 +184,8 @@ def _active_confirmed_facts(
     candidates = [
         fact for fact in repository.list_all()
         if fact.subject_type == "supplier" and fact.subject_id == supplier_id
-        and fact.status == "confirmed" and fact.fact_key in _CANONICAL_UNITS
+        and fact.status == "confirmed" and fact.context_key is None
+        and fact.fact_key in _CANONICAL_UNITS
     ]
     selected: dict[str, LearningFact] = {}
     for fact in sorted(candidates, key=lambda item: (item.updated_at, item.fact_id)):
@@ -412,4 +426,98 @@ def resolve_supplier_operational_learning_policy(
         base_acknowledged_wait_minutes=base_acknowledged_wait_minutes,
         acknowledgement_channel=acknowledgement_channel,
         as_of=as_of,
+    )
+
+
+def _active_confirmed_context_facts(
+    repository: LearningFactRepository | None, supplier_id: str, context_key: str,
+) -> dict[str, LearningFact]:
+    if repository is None:
+        return {}
+    supported = {"response.median_minutes", "commercial.usable_quote_rate_percent"}
+    candidates = [
+        fact for fact in repository.list_all()
+        if fact.subject_type == "supplier" and fact.subject_id == supplier_id
+        and fact.status == "confirmed" and fact.context_key == context_key
+        and fact.fact_key in supported
+    ]
+    selected: dict[str, LearningFact] = {}
+    for fact in sorted(candidates, key=lambda item: (item.updated_at, item.fact_id)):
+        selected[fact.fact_key] = fact
+    return selected
+
+
+def build_supplier_contextual_learning_overlay(
+    *, supplier: SupplierMasterProfile, learning_repository: LearningFactRepository | None,
+    context_key: str, as_of: datetime | None = None,
+) -> SupplierContextualLearningOverlay:
+    current = _utc(as_of)
+    facts = _active_confirmed_context_facts(learning_repository, supplier.supplier_id, context_key)
+    evaluations: list[SupplierLearningFactEvaluation] = []
+    adjustment = 0.0
+    for key, fact in facts.items():
+        value = _numeric_value(fact)
+        expected_unit = _CANONICAL_UNITS[key]
+        latest_evidence = _latest_evidence_at(fact)
+        raw_age_days = (current - latest_evidence).total_seconds() / 86400
+        age_days = max(0.0, raw_age_days)
+        recency = _recency_factor(key, raw_age_days)
+        effective = round(fact.confidence * recency, 4)
+        valid = value is not None and (fact.value_unit or "").casefold() == expected_unit
+        bounded = valid and (
+            (key == "response.median_minutes" and value >= 0)
+            or (key == "commercial.usable_quote_rate_percent" and 0 <= value <= 100)
+        )
+        eligible = bool(bounded and recency > 0)
+        effect = "none"
+        reason = "eligible_confirmed_context_metric"
+        if not valid:
+            reason = "invalid_metric_value_or_unit"
+        elif not bounded:
+            reason = "metric_value_out_of_bounds"
+        elif raw_age_days < 0:
+            reason = "future_evidence_not_authoritative"
+        elif recency == 0:
+            reason = "evidence_too_old_for_runtime_effect"
+        elif effective >= CONTEXT_RANKING_MIN_EFFECTIVE_CONFIDENCE:
+            if key == "response.median_minutes":
+                adjustment += _response_ranking_delta(float(value)) * effective
+            else:
+                adjustment += _quote_rate_ranking_delta(float(value)) * effective
+            effect = "ranking"
+            reason = "confirmed_context_metric_affects_bounded_ranking"
+        evaluations.append(SupplierLearningFactEvaluation(
+            fact_id=fact.fact_id, fact_key=key, value=0.0 if value is None else float(value),
+            value_unit=fact.value_unit or "", raw_confidence=fact.confidence,
+            recency_factor=recency, effective_confidence=effective,
+            evidence_age_days=round(age_days, 2), runtime_eligible=eligible,
+            effect=effect, reason=reason,
+        ))
+    adjustment = max(
+        -MAX_CONTEXT_RANKING_ADJUSTMENT,
+        min(MAX_CONTEXT_RANKING_ADJUSTMENT, adjustment),
+    )
+    return SupplierContextualLearningOverlay(
+        supplier_id=supplier.supplier_id, supplier_name=supplier.supplier_name,
+        context_key=context_key, ranking_adjustment=round(adjustment, 4),
+        evaluations=evaluations,
+    )
+
+
+def resolve_supplier_contextual_learning_overlay(
+    *, supplier_name: str, context_key: str, master_data_repository: Any | None,
+    learning_repository: LearningFactRepository | None, as_of: datetime | None = None,
+) -> SupplierContextualLearningOverlay | None:
+    if master_data_repository is None or not supplier_name.strip() or not context_key.strip():
+        return None
+    supplier = master_data_repository.find_supplier_by_name(supplier_name)
+    if supplier is None or not supplier.active:
+        return None
+    resolved_learning = learning_repository
+    if resolved_learning is None and getattr(master_data_repository, "store", None) is not None:
+        from src.core.learning_fact_repository import SQLiteLearningFactRepository
+        resolved_learning = SQLiteLearningFactRepository(master_data_repository.store)
+    return build_supplier_contextual_learning_overlay(
+        supplier=supplier, learning_repository=resolved_learning,
+        context_key=context_key.strip().casefold(), as_of=as_of,
     )
