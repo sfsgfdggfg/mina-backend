@@ -277,6 +277,8 @@ from src.core.customer_preference_learning import derive_customer_preference_lea
 from src.core.customer_preference_policy import build_customer_preference_policy
 from src.core.customer_quote_acceptance_learning import derive_customer_quote_acceptance_learning
 from src.core.customer_quote_acceptance_policy import build_customer_quote_acceptance_policy
+from src.core.customer_quote_reason_learning import derive_customer_quote_reason_learning
+from src.core.customer_quote_reason_policy import build_customer_quote_reason_policy
 from src.core.supplier_intelligence_policy import build_supplier_operational_learning_policy
 from src.core.reporting_read_model import (
     REPORTING_SECTIONS,
@@ -2112,6 +2114,32 @@ def get_customer_quote_acceptance_policy(customer_id: str):
     if customer is None:
         raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}")
     return build_customer_quote_acceptance_policy(
+        customer_id=customer_id, learning_repository=learning_fact_repository,
+        as_of=datetime.now(timezone.utc),
+    ).model_dump(mode="json")
+
+
+@app.post("/master-data/customers/{customer_id}/derive-quote-reason-learning")
+def derive_customer_quote_reasons(customer_id: str, http_request: Request):
+    try:
+        return derive_customer_quote_reason_learning(
+            customer_id=customer_id, master_repository=master_data_repository,
+            mina_repository=mina_job_repository, quote_case_repository=quote_case_repository,
+            learning_repository=learning_fact_repository,
+            created_by=_authenticated_operator(http_request),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}") from exc
+    except (LearningFactConflictError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/master-data/customers/{customer_id}/quote-reason-policy")
+def get_customer_quote_reason_policy(customer_id: str):
+    customer = master_data_repository.get_customer(customer_id)
+    if customer is None:
+        raise HTTPException(status_code=404, detail=f"Customer master not found: {customer_id}")
+    return build_customer_quote_reason_policy(
         customer_id=customer_id, learning_repository=learning_fact_repository,
         as_of=datetime.now(timezone.utc),
     ).model_dump(mode="json")

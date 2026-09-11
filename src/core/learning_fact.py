@@ -87,6 +87,16 @@ class LearningFact(BaseModel):
             "commercial.accepted_final_price_median",
             "commercial.accepted_markup_value_median",
         }
+        if (
+            self.subject_type == "customer"
+            and self.fact_key == "commercial.customer_stated_target_price_median"
+        ):
+            pattern = rf"^quote\|{shipment_context}\|currency=[a-z0-9-]+$"
+            if re.fullmatch(pattern, self.context_key) is None:
+                raise ValueError(
+                    "Customer target-price context_key must use canonical quote/mode/lane[/equipment]/currency format."
+                )
+            return self
         if self.subject_type == "customer" and self.fact_key in customer_quote_keys:
             pattern = rf"^quote\|{shipment_context}\|currency=[a-z0-9-]+(?:\|markup=[a-z0-9-]+)?$"
             if re.fullmatch(pattern, self.context_key) is None:

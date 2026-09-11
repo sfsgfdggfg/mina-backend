@@ -7121,3 +7121,16 @@ Every structured loss record must preserve evidence quality separately from the 
 Loss feedback is append-only audit evidence. A later clarification must explicitly supersede the current feedback record rather than overwrite it, while identical entry retries remain idempotent and conflicting retries fail closed. Customer-stated target price may be stored only when the evidence basis is explicitly customer-provided and a currency is present.
 
 Structured loss feedback is descriptive reporting evidence only in v1. It does not create a LearningFact, infer customer price sensitivity, change pricing policy or margin, set a target price, alter supplier ranking, or become reason-specific quote-acceptance learning until a separate reviewed policy authorizes that use.
+
+## DEC-234 — Reason-Specific Customer Commercial Learning Uses Explicit Feedback With Coverage Gates
+
+**Status:** Accepted
+**Date:** 2026-09-11
+
+MINAI may derive reason-specific customer commercial LearningFact proposals only from the current durable structured loss-feedback record for price-request jobs that resolve uniquely to an active Customer Master profile. The job must have durable customer-quote-send evidence before its durable lost outcome, and the customer-visible quote snapshot must be reconstructed from the revision actually sent. Superseded feedback, legacy free-text loss reasons, evidence dated after derivation, jobs lost before send and quotes without snapshot integrity are excluded.
+
+Behavioral and commercial proposals require `customer_explicit` evidence. Operator assessment, internal-customer-decision and unknown evidence may remain available to reporting, but they neither support nor influence customer-stated objection frequencies. A reason-rate proposal requires at least five sent-and-lost jobs with current structured feedback, at least 80% structured-feedback coverage across all sent-and-lost jobs in scope, and at least three customer-explicit observations for that reason. Missing feedback stays missing and remains in the coverage denominator.
+
+The first reason metrics are customer-stated price-objection rate and transit-time-objection rate. They are descriptive frequencies among current customer-explicit feedback records, not causal explanations, win probabilities, price sensitivity or willingness-to-pay estimates. Customer-stated target-price median requires at least three current customer-explicit target-price records in the same canonical shipment context and currency, and the feedback currency must match the sent quote snapshot. Currencies and unrelated contexts are never pooled.
+
+Every derived fact begins as proposed and follows the normal human review and supersession lifecycle. Confirmed facts may appear in a recency-decayed advisory policy, but create no pricing or margin authority, supplier ranking or eligibility authority, automation authority, quote-send authority, Customer Master mutation or automatic commercial action.
