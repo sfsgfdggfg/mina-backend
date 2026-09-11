@@ -2720,6 +2720,82 @@ function renderCustomerQuoteAcceptanceLearning(container, customer) {
   } load();
 }
 
+function renderCustomerQuoteReasonLearning(container, customer) {
+  const labels={
+    "commercial.customer_stated_price_objection_rate_percent":"Müşterinin açıkça belirttiği fiyat itirazı oranı",
+    "commercial.customer_stated_transit_time_objection_rate_percent":"Müşterinin açıkça belirttiği transit süre itirazı oranı",
+    "commercial.customer_stated_target_price_median":"Müşterinin açıkça belirttiği hedef fiyat medyanı"
+  };
+  const reasonKeys=new Set(Object.keys(labels));
+  const reviewNote="Yalnız tavsiye niteliğinde, geçmişte müşterinin açıkça belirttiği kanıt olarak incelendi.";
+  const percent=value=>value==null?"Yeterli doğrulanmış gözlem yok":`%${Number(value).toFixed(1)}`;
+  async function load(){
+    container.replaceChildren(node("div","Müşteri teklif nedeni gözlemleri yükleniyor…","muted"));
+    try{
+      const [factsPayload,policy]=await Promise.all([
+        api(`/master-data/customers/${encodeURIComponent(customer.customer_id)}/learning-facts`),
+        api(`/master-data/customers/${encodeURIComponent(customer.customer_id)}/quote-reason-policy`)
+      ]);
+      container.replaceChildren();
+      const head=node("div","","settings-subheading");
+      head.append(
+        node("h3","Müşteri Teklif Nedeni Öğrenimi"),
+        node("p","Bu panel yalnız müşterinin açıkça ifade ettiği geçmiş gözlemleri gösterir. Nedensellik, kazanma olasılığı, fiyat hassasiyeti, ödeme istekliliği veya hedef fiyat belirleme yetkisi çıkarmaz; otomatik indirim ya da marj, tedarikçi seçimi, teklif gönderimi veya başka bir otomasyon yetkisi oluşturmaz.","muted")
+      );
+      const derive=actionButton("Teklif Nedenlerinden Gözlem Üret","",async()=>{derive.disabled=true;try{await api(`/master-data/customers/${encodeURIComponent(customer.customer_id)}/derive-quote-reason-learning`,{method:"POST"});await load();}catch(e){container.append(node("div",e.message||String(e),"error"));}finally{derive.disabled=false;}});
+      head.append(derive);container.append(head);
+
+      const summary=node("div","","learning-fact-card");
+      summary.append(
+        node("strong","Doğrulanmış müşteri-beyanlı tarihsel tavsiyeler"),
+        node("div",`Fiyat itirazı: ${percent(policy.price_objection_rate_percent)} · Transit süre itirazı: ${percent(policy.transit_time_objection_rate_percent)}`,"small"),
+        node("div","Değerler yalnız danışma amaçlı tarihsel müşteri beyanıdır; Quote Acceptance Learning gerçeklerinden ve yetkisinden ayrıdır.","muted small")
+      );
+      container.append(summary);
+
+      const targetPrices=policy.target_price_advisories||[];
+      if(targetPrices.length){
+        const targetList=node("div","","learning-fact-list");
+        targetPrices.forEach(item=>{const card=node("div","","learning-fact-card");
+          card.append(
+            node("strong",labels[item.fact_key]||item.fact_key),
+            node("div",`${Number(item.value).toFixed(2)} ${item.value_unit||""}`,"small"),
+            node("div",`Bağlam: ${item.context_key||"-"} · etkin güven ${Math.round((item.effective_confidence||0)*100)}%`,"muted small")
+          );
+          targetList.append(card);
+        });
+        container.append(targetList);
+      }
+
+      const facts=(factsPayload.facts||[]).filter(f=>reasonKeys.has(f.fact_key));
+      if(!facts.length){
+        container.append(emptyState(
+          "Henüz müşteri-beyanlı teklif nedeni gözlemi yok",
+          "İtiraz oranı için en az 5 güncel, yapılandırılmış, gönderilmiş-ve-kaybedilmiş geri bildirim kaydı; en az %80 yapılandırılmış geri bildirim kapsamı ve her itiraz nedeni için en az 3 müşterinin açıkça belirttiği gözlem gerekir. Hedef fiyat için aynı kanonik gönderi/para birimi bağlamında en az 3 güncel, müşterinin açıkça belirttiği hedef fiyat gözlemi gerekir."
+        ));
+        return;
+      }
+      const list=node("div","","learning-fact-list");
+      facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
+        card.append(
+          node("strong",labels[f.fact_key]||f.fact_key),
+          node("div",`${String(f.value)} ${f.value_unit||""}`,"small"),
+          node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}%`,"muted small")
+        );
+        if(f.context_key)card.append(node("div",`Bağlam: ${f.context_key}`,"muted small"));
+        if((f.evidence||[])[0]?.summary)card.append(node("div",`Kanıt özeti: ${(f.evidence||[])[0].summary}`,"muted small"));
+        if(f.review_note)card.append(node("div",`İnceleme notu: ${f.review_note}`,"muted small"));
+        if(f.status==="proposed"){const actions=node("div","","actions");actions.append(
+          actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:reviewNote})});await load();}),
+          actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:reviewNote})});await load();})
+        );card.append(actions);}
+        list.append(card);
+      });
+      container.append(list);
+    }catch(e){container.replaceChildren(node("div",e.message||String(e),"error"));}
+  } load();
+}
+
 function renderMasterDataSettings(customersPayload = {}, suppliersPayload = {}) {
   const customers=customersPayload.customers||[]; const suppliers=suppliersPayload.suppliers||[];
   const panel=node("section","","settings-panel"); const h=node("div","","settings-heading");
@@ -2737,7 +2813,7 @@ function renderMasterDataSettings(customersPayload = {}, suppliersPayload = {}) 
     const methodLabel=node("label","Pricing method");const method=document.createElement("select");[["","Yok"],["cost_markup_percentage","Maliyet üzerine %"],["gross_margin_percentage","Brüt marj %"],["fixed_profit","Sabit kâr"],["manual_sell_price","Manuel satış fiyatı"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;method.append(o);});method.value=c.pricing_policy?.method||"";methodLabel.append(method);const pricingValue=numberField("Pricing value",c.pricing_policy?.value,0,1000000);
     const grid=node("div","","settings-two-col");grid.append(name.label,owner.label,contactName.label,contactEmail.label,contactPhone.label,commodity.label,equipment.label,pickup.label,pCountry.label,delivery.label,dCountry.label,price.label,time.label,methodLabel,pricingValue.label,supplierMode.label,deadlineMode.label);
     const fb=node("div","","muted settings-feedback");const save=actionButton(existing?"Müşteriyi Güncelle":"Müşteri Oluştur","primary",async()=>{if(!name.input.value.trim()){fb.textContent="Müşteri adı gerekli.";return;}const contacts=(contactName.input.value.trim()||contactEmail.input.value.trim()||contactPhone.input.value.trim())?[{contact_name:contactName.input.value.trim()||null,email:contactEmail.input.value.trim()||null,phone:contactPhone.input.value.trim()||null,roles:["operations"],is_primary:true,active:true}]:[];const pv=pricingValue.value();if(method.value&&pv==null){fb.textContent="Pricing value gerekli.";return;}const body={customer_name:name.input.value.trim(),active:active.checked,aliases:aliases.value(),trusted_sender_addresses:senders.value(),trusted_sender_domains:domains.value(),contacts,sales_owner:owner.input.value.trim()||null,default_commodity:commodity.input.value.trim()||null,default_equipment_type:equipment.input.value.trim()||null,default_pickup_city:pickup.input.value.trim()||null,default_pickup_area:c.default_pickup_area||null,default_pickup_country:pCountry.input.value.trim()||null,default_delivery_city:delivery.input.value.trim()||null,default_delivery_country:dCountry.input.value.trim()||null,price_sensitivity:price.input.value.trim()||null,time_sensitivity:time.input.value.trim()||null,pricing_policy:method.value?{method:method.value,value:pv}:null,supplier_reminder_mode:supplierMode.value(),customer_deadline_update_mode:deadlineMode.value(),operational_notes:notes.value()};if(!existing)body.entry_id=freshPriceEntryId("web-customer-master");save.disabled=true;try{await api(existing?`/master-data/customers/${encodeURIComponent(c.customer_id)}`:"/master-data/customers",{method:"POST",body:JSON.stringify(body)});await loadSettings();}catch(e){fb.textContent=e.message||String(e);}finally{save.disabled=false;}});
-    cEditor.append(activeLabel,grid,aliases.label,senders.label,domains.label,notes.label,save,fb);if(existing){const learning=node("div","","customer-preference-learning");const acceptance=node("div","","customer-preference-learning");cEditor.append(learning,acceptance);renderCustomerPreferenceLearning(learning,c);renderCustomerQuoteAcceptanceLearning(acceptance,c);}}
+    cEditor.append(activeLabel,grid,aliases.label,senders.label,domains.label,notes.label,save,fb);if(existing){const learning=node("div","","customer-preference-learning");const acceptance=node("div","","customer-preference-learning");const reasons=node("div","","customer-preference-learning");cEditor.append(learning,acceptance,reasons);renderCustomerPreferenceLearning(learning,c);renderCustomerQuoteAcceptanceLearning(acceptance,c);renderCustomerQuoteReasonLearning(reasons,c);}}
   cSelect.addEventListener("change",drawCustomer);drawCustomer();panel.append(customerBox);
 
   const supplierBox=node("div","","master-data-box");supplierBox.append(node("h3","Tedarikçiler"));const sSelect=document.createElement("select");const sNew=document.createElement("option");sNew.value="__new__";sNew.textContent="+ Yeni tedarikçi";sSelect.append(sNew);suppliers.forEach((item,i)=>{const o=document.createElement("option");o.value=String(i);o.textContent=`${item.supplier_name}${item.active===false?" · pasif":""}`;sSelect.append(o);});sSelect.value=suppliers.length?"0":"__new__";supplierBox.append(sSelect);const sEditor=node("div","","settings-inline-editor");supplierBox.append(sEditor);

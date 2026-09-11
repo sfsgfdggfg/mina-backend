@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from src.core.customer_loss_feedback import record_loss_feedback
 from src.core.customer_quote_reason_learning import derive_customer_quote_reason_learning
@@ -283,6 +284,50 @@ def evaluate_customer_quote_reason_learning_regressions() -> dict:
         route_allowed("POST", f"/master-data/customers/{customer.customer_id}/derive-quote-reason-learning")
         and route_allowed("GET", f"/master-data/customers/{customer.customer_id}/quote-reason-policy"),
         "controlled pilot exposes reason derivation and its read-only advisory policy",
+    )
+    ui = Path("ui/web_shell/app.js").read_text(encoding="utf-8")
+    reason_panel = ui.split("function renderCustomerQuoteReasonLearning", 1)[1].split(
+        "function renderMasterDataSettings", 1
+    )[0]
+    check(
+        "Müşteri Teklif Nedeni Öğrenimi" in reason_panel
+        and "/quote-reason-policy" in reason_panel
+        and "/derive-quote-reason-learning" in reason_panel
+        and "renderCustomerQuoteReasonLearning(reasons,c)" in ui,
+        "Customer Master exposes a dedicated reason-learning panel with policy and derive wiring",
+    )
+    check(
+        PRICE_OBJECTION_RATE_KEY in reason_panel
+        and TRANSIT_TIME_OBJECTION_RATE_KEY in reason_panel
+        and CUSTOMER_STATED_TARGET_PRICE_MEDIAN_KEY in reason_panel
+        and "context_key" in reason_panel
+        and "value_unit" in reason_panel,
+        "reason-learning panel renders confirmed rates and contextual currency-scoped target-price advisories",
+    )
+    check(
+        "/learning-facts/${encodeURIComponent(f.fact_id)}/confirm" in reason_panel
+        and "/learning-facts/${encodeURIComponent(f.fact_id)}/reject" in reason_panel
+        and "Yalnız tavsiye niteliğinde, geçmişte müşterinin açıkça belirttiği kanıt" in reason_panel
+        and "evidence" in reason_panel and "confidence" in reason_panel
+        and 'f.status==="proposed"' in reason_panel,
+        "proposed reason facts use the existing human review flow with advisory evidence notes",
+    )
+    check(
+        "en az 5 güncel, yapılandırılmış, gönderilmiş-ve-kaybedilmiş" in reason_panel
+        and "en az %80" in reason_panel
+        and "her itiraz nedeni için en az 3" in reason_panel
+        and "aynı kanonik gönderi/para birimi bağlamında en az 3" in reason_panel,
+        "reason-learning empty state states every evidence and coverage gate",
+    )
+    check(
+        all(boundary in reason_panel for boundary in (
+            "Nedensellik", "kazanma olasılığı", "fiyat hassasiyeti", "ödeme istekliliği",
+            "hedef fiyat belirleme yetkisi", "otomatik indirim ya da marj", "tedarikçi seçimi",
+            "teklif gönderimi",
+        ))
+        and "Quote Acceptance Learning gerçeklerinden ve yetkisinden ayrıdır" in reason_panel
+        and "/stage" not in reason_panel,
+        "browser explains advisory-only safety boundaries without generic stage-transition authority",
     )
     check(
         not any(
