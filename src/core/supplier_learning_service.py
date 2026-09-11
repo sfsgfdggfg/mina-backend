@@ -304,6 +304,9 @@ def derive_supplier_history_learning(
             "proposed_facts": [],
             "contextual_proposed_fact_count": 0,
             "contextual_proposed_facts": [],
+            "customer_contextual_proposed_fact_count": 0,
+            "customer_contextual_proposed_facts": [],
+            "unmatched_customer_context_count": 0,
             "note": "Outcome learning repository was not supplied.",
         }
     )

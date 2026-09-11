@@ -24,6 +24,7 @@ ESCALATION_MIN_WINNER_RATE = 50.0
 MANAGEMENT_MIN_SUCCESS_RATE = 50.0
 MAX_RANKING_ADJUSTMENT = 0.06
 MAX_CONTEXT_RANKING_ADJUSTMENT = 0.04
+MAX_CUSTOMER_CONTEXT_RANKING_ADJUSTMENT = 0.025
 MAX_LEARNED_FIRST_REMINDER_MINUTES = 60
 MAX_LEARNED_ACK_WAIT_MINUTES = 180
 MIN_QUOTE_RATE_FOR_PATIENT_TIMING = 70.0
@@ -73,6 +74,18 @@ class SupplierContextualLearningOverlay(BaseModel):
     )
     evaluations: list[SupplierLearningFactEvaluation] = Field(default_factory=list)
     source: str = "supplier_contextual_learning_overlay_v1"
+
+
+class SupplierCustomerContextLearningOverlay(BaseModel):
+    supplier_id: str
+    supplier_name: str
+    context_key: str
+    ranking_adjustment: float = Field(
+        ge=-MAX_CUSTOMER_CONTEXT_RANKING_ADJUSTMENT,
+        le=MAX_CUSTOMER_CONTEXT_RANKING_ADJUSTMENT,
+    )
+    evaluations: list[SupplierLearningFactEvaluation] = Field(default_factory=list)
+    source: str = "supplier_customer_context_learning_overlay_v1"
 
 
 class SupplierOperationalLearningPolicy(BaseModel):
@@ -599,6 +612,51 @@ def resolve_supplier_contextual_learning_overlay(
         from src.core.learning_fact_repository import SQLiteLearningFactRepository
         resolved_learning = SQLiteLearningFactRepository(master_data_repository.store)
     return build_supplier_contextual_learning_overlay(
+        supplier=supplier, learning_repository=resolved_learning,
+        context_key=context_key.strip().casefold(), as_of=as_of,
+    )
+
+def build_supplier_customer_context_learning_overlay(
+    *, supplier: SupplierMasterProfile, learning_repository: LearningFactRepository | None,
+    context_key: str, as_of: datetime | None = None,
+) -> SupplierCustomerContextLearningOverlay:
+    if not context_key.startswith("customer="):
+        return SupplierCustomerContextLearningOverlay(
+            supplier_id=supplier.supplier_id, supplier_name=supplier.supplier_name,
+            context_key=context_key, ranking_adjustment=0.0, evaluations=[],
+        )
+    base = build_supplier_contextual_learning_overlay(
+        supplier=supplier, learning_repository=learning_repository,
+        context_key=context_key, as_of=as_of,
+    )
+    adjustment = max(
+        -MAX_CUSTOMER_CONTEXT_RANKING_ADJUSTMENT,
+        min(MAX_CUSTOMER_CONTEXT_RANKING_ADJUSTMENT, base.ranking_adjustment),
+    )
+    return SupplierCustomerContextLearningOverlay(
+        supplier_id=supplier.supplier_id, supplier_name=supplier.supplier_name,
+        context_key=context_key, ranking_adjustment=round(adjustment, 4),
+        evaluations=base.evaluations,
+    )
+
+
+def resolve_supplier_customer_context_learning_overlay(
+    *, supplier_name: str, context_key: str, master_data_repository: Any | None,
+    learning_repository: LearningFactRepository | None, as_of: datetime | None = None,
+) -> SupplierCustomerContextLearningOverlay | None:
+    if (
+        master_data_repository is None or not supplier_name.strip()
+        or not context_key.strip().casefold().startswith("customer=")
+    ):
+        return None
+    supplier = master_data_repository.find_supplier_by_name(supplier_name)
+    if supplier is None or not supplier.active:
+        return None
+    resolved_learning = learning_repository
+    if resolved_learning is None and getattr(master_data_repository, "store", None) is not None:
+        from src.core.learning_fact_repository import SQLiteLearningFactRepository
+        resolved_learning = SQLiteLearningFactRepository(master_data_repository.store)
+    return build_supplier_customer_context_learning_overlay(
         supplier=supplier, learning_repository=resolved_learning,
         context_key=context_key.strip().casefold(), as_of=as_of,
     )

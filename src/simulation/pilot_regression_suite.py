@@ -47,6 +47,7 @@ from src.simulation.supplier_selection_override_regressions import evaluate_supp
 from src.simulation.operator_vs_minai_decision_analytics_regressions import evaluate_operator_vs_minai_decision_analytics_regressions
 from src.simulation.supplier_decision_outcome_feedback_regressions import evaluate_supplier_decision_outcome_feedback_regressions
 from src.simulation.supplier_outcome_learning_regressions import evaluate_supplier_outcome_learning_regressions
+from src.simulation.customer_specific_supplier_learning_regressions import evaluate_customer_specific_supplier_learning_regressions
 from src.simulation.counterparty_discovery_regressions import (
     evaluate_counterparty_discovery_regressions,
 )
@@ -296,6 +297,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Operator vs MINAI decision analytics", evaluate_operator_vs_minai_decision_analytics_regressions),
     Suite("Supplier decision outcome feedback", evaluate_supplier_decision_outcome_feedback_regressions),
     Suite("Supplier outcome-informed learning", evaluate_supplier_outcome_learning_regressions),
+    Suite("Customer-specific supplier learning", evaluate_customer_specific_supplier_learning_regressions),
     Suite("Supplier contextual intelligence", evaluate_supplier_contextual_intelligence_regressions),
     Suite("Read-only Outlook counterparty discovery", evaluate_counterparty_discovery_regressions),
     Suite("Reporting read models", evaluate_reporting_read_model_regressions),

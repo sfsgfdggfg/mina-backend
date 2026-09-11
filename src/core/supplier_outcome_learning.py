@@ -11,6 +11,10 @@ from src.core.learning_fact_service import create_learning_fact
 from src.core.master_data_repository import MasterDataRepository
 from src.core.quote_case_repository import QuoteCaseRepository
 from src.core.supplier_context import shipment_context_keys
+from src.core.supplier_customer_context import (
+    resolve_customer_master_profile,
+    supplier_customer_context_keys,
+)
 
 OUTCOME_MIN_SAMPLE_COUNT = 5
 OUTCOME_FACT_KEYS = {
@@ -212,12 +216,35 @@ def derive_supplier_outcome_learning(
         occurred_at=timestamp,
     )
     contextual_groups: dict[str, list[tuple[Any, Any]]] = {}
+    customer_contextual_groups: dict[str, list[tuple[Any, Any]]] = {}
+    unmatched_customer_context_count = 0
     for case, feedback in eligible:
         for context_key in shipment_context_keys(case.shipment):
             contextual_groups.setdefault(context_key, []).append((case, feedback))
+        customer = resolve_customer_master_profile(
+            customer_name=case.shipment.customer_name, master_repository=master_repository,
+        )
+        if customer is None:
+            unmatched_customer_context_count += 1
+            continue
+        for context_key in supplier_customer_context_keys(
+            case.shipment, customer_id=customer.customer_id,
+        ):
+            customer_contextual_groups.setdefault(context_key, []).append((case, feedback))
     contextual_proposals: list[LearningFact] = []
     for context_key, items in sorted(contextual_groups.items()):
         contextual_proposals.extend(_propose_metrics(
+            supplier=supplier,
+            context_key=context_key,
+            items=items,
+            learning_repository=learning_repository,
+            master_repository=master_repository,
+            created_by=created_by,
+            occurred_at=timestamp,
+        ))
+    customer_contextual_proposals: list[LearningFact] = []
+    for context_key, items in sorted(customer_contextual_groups.items()):
+        customer_contextual_proposals.extend(_propose_metrics(
             supplier=supplier,
             context_key=context_key,
             items=items,
@@ -236,6 +263,11 @@ def derive_supplier_outcome_learning(
         "proposed_facts": [item.model_dump() for item in global_proposals],
         "contextual_proposed_fact_count": len(contextual_proposals),
         "contextual_proposed_facts": [item.model_dump() for item in contextual_proposals],
+        "customer_contextual_proposed_fact_count": len(customer_contextual_proposals),
+        "customer_contextual_proposed_facts": [
+            item.model_dump() for item in customer_contextual_proposals
+        ],
+        "unmatched_customer_context_count": unmatched_customer_context_count,
         "note": (
             "Outcome-derived facts are selected-supplier observations only. They remain proposed until human review, "
             "and runtime ranking requires an additional effective-confidence threshold."

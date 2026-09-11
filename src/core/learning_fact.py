@@ -76,9 +76,12 @@ class LearningFact(BaseModel):
             return self
         if self.subject_type != "supplier":
             raise ValueError("Learning fact context_key is supported only for supplier facts.")
-        pattern = r"^mode=[a-z0-9-]+\|lane=[a-z0-9-]+>[a-z0-9-]+(?:\|equipment=[a-z0-9-]+)?$"
+        shipment_context = r"mode=[a-z0-9-]+\|lane=[a-z0-9-]+>[a-z0-9-]+(?:\|equipment=[a-z0-9-]+)?"
+        pattern = rf"^(?:customer=[a-z0-9-]+\|)?{shipment_context}$"
         if re.fullmatch(pattern, self.context_key) is None:
-            raise ValueError("Supplier learning context_key must use canonical mode/lane[/equipment] format.")
+            raise ValueError(
+                "Supplier learning context_key must use canonical [customer/]mode/lane[/equipment] format."
+            )
         return self
 
     @field_validator("created_at", "updated_at", "reviewed_at", "superseded_at")

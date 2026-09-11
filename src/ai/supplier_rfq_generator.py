@@ -96,11 +96,18 @@ def _selection_explanation(
         speed_score=float(supplier["speed_score"]),
         global_learning_adjustment=float(supplier.get("global_learning_adjustment") or 0),
         context_learning_adjustment=float(supplier.get("context_learning_adjustment") or 0),
+        customer_context_learning_adjustment=float(
+            supplier.get("customer_context_learning_adjustment") or 0
+        ),
         combined_learning_adjustment=float(supplier.get("learning_adjustment") or 0),
         learning_adjustment_capped=bool(supplier.get("learning_adjustment_capped")),
         learning_context_key=supplier.get("learning_context_key"),
+        customer_learning_context_key=supplier.get("customer_learning_context_key"),
         global_learning_fact_ids=list(supplier.get("global_learning_fact_ids") or []),
         context_learning_fact_ids=list(supplier.get("context_learning_fact_ids") or []),
+        customer_context_learning_fact_ids=list(
+            supplier.get("customer_context_learning_fact_ids") or []
+        ),
         selection_strategy=supplier_selection.get("selection_strategy"),
         data_source=supplier_selection.get("data_source"),
         reason=str(supplier.get("reason") or "Eligibility ve ağırlıklı supplier skoru ile seçildi."),
