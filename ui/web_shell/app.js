@@ -2018,6 +2018,28 @@ async function renderApprovedQuoteSend(container, quoteCase, approval, refresh) 
   actions.append(send, manual); sendBox.append(actions, feedback); container.append(sendBox);
 }
 
+function commercialContextMetricRows(context) {
+  if (!context) return [];
+  const percentLabel = item => `%${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(Number(item.value))}`;
+  const candidates = [
+    ["Kabul edilen para birimi gözlemi", context.accepted_quote_currency_advisory, item => String(item.value)],
+    ["Gözlenen kabul oranı", context.observed_acceptance_rate, percentLabel],
+    ["Gözlenen pazarlık oranı", context.observed_negotiation_rate, percentLabel],
+    ["Müşteri-beyanlı fiyat itiraz oranı", context.customer_stated_price_objection_rate, percentLabel],
+    ["Müşteri-beyanlı transit itiraz oranı", context.customer_stated_transit_time_objection_rate, percentLabel],
+    ["Kabul edilmiş geçmiş fiyat medyanı · önerilen satış fiyatı değildir", context.accepted_final_price_median, item => moneyLabel(item.value, item.unit)],
+    ["Kabul edilmiş geçmiş markup medyanı · marj komutu değildir", context.accepted_markup_median, item => `${moneyLabel(item.value)} · ${codeLabel(item.markup_type)}`],
+    ["Geçmiş müşteri-beyanlı medyan · bu işin hedef fiyatı değildir", context.customer_stated_target_price_median, item => moneyLabel(item.value, item.unit)],
+  ];
+  return candidates
+    .filter(([, metric]) => metric?.value !== null && metric?.value !== undefined)
+    .map(([label, metric, formatter]) => [label, formatter(metric)]);
+}
+
+function appendCommercialContextMetrics(container, context) {
+  commercialContextMetricRows(context).forEach(([label, value]) => container.append(summaryItem(label, value)));
+}
+
 async function renderQuoteSection(container, data, refresh) {
   const section = sectionBlock("Teklif", "Müşteri teklifinin fiyat, onay ve gönderim otoritesi.");
   const caseId = data.quote?.case_id;
@@ -2046,24 +2068,44 @@ async function renderQuoteSection(container, data, refresh) {
       node("div", "Bu teklif onayı hazırlanırken görülen teyit edilmiş geçmiş gözlemler dondurulmuştur; sonradan değişen öğrenmeler geçmiş kararı yeniden yazmaz. Nedensel açıklama, kazanma olasılığı, ödeme isteği veya pricing authority değildir.", "muted small")
     );
     const metrics = node("div", "", "detail-grid customer-commercial-context-metrics");
-    const addMetric = (label, metric, formatter) => {
-      if (metric?.value === null || metric?.value === undefined) return;
-      metrics.append(summaryItem(label, formatter(metric)));
-    };
-    const percentLabel = item => `%${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(Number(item.value))}`;
-    addMetric("Kabul edilen para birimi gözlemi", commercialContext.accepted_quote_currency_advisory, item => String(item.value));
-    addMetric("Gözlenen kabul oranı", commercialContext.observed_acceptance_rate, percentLabel);
-    addMetric("Gözlenen pazarlık oranı", commercialContext.observed_negotiation_rate, percentLabel);
-    addMetric("Müşteri-beyanlı fiyat itiraz oranı", commercialContext.customer_stated_price_objection_rate, percentLabel);
-    addMetric("Müşteri-beyanlı transit itiraz oranı", commercialContext.customer_stated_transit_time_objection_rate, percentLabel);
-    addMetric("Kabul edilmiş geçmiş fiyat medyanı · önerilen satış fiyatı değildir", commercialContext.accepted_final_price_median, item => moneyLabel(item.value, item.unit));
-    addMetric("Kabul edilmiş geçmiş markup medyanı · marj komutu değildir", commercialContext.accepted_markup_median, item => `${moneyLabel(item.value)} · ${codeLabel(item.markup_type)}`);
-    addMetric("Geçmiş müşteri-beyanlı medyan · bu işin hedef fiyatı değildir", commercialContext.customer_stated_target_price_median, item => moneyLabel(item.value, item.unit));
+    appendCommercialContextMetrics(metrics, commercialContext);
     if (metrics.childElementCount) {
       advisory.append(metrics);
       advisory.append(node("div", "Bu kart mevcut müşteri hedefi, otomatik fiyat/marj komutu veya tedarikçi pazarlık hedefi değildir; supplier seçimi, otomasyon, teklif gönderimi ve dispatch üzerinde yetkisi yoktur.", "notice small"));
       section.append(advisory);
     }
+  }
+  const commercialHistory = data.quote?.approval_commercial_history || [];
+  if (commercialHistory.length) {
+    const historyBox = node("div", "", "customer-commercial-context");
+    historyBox.append(
+      node("h3", "Ticari Snapshot Geçmişi"),
+      node("div", "Her satır ilgili teklif approval anında dondurulan advisory kanıtını gösterir. Güncel öğrenmeler geçmiş satırları değiştirmez.", "muted small")
+    );
+    commercialHistory.forEach(item => {
+      const details = document.createElement("details");
+      details.className = "commercial-snapshot-history-entry";
+      const summary = document.createElement("summary");
+      const status = item.approval_status ? quoteStatusLabel(item.approval_status) : "Approval kaydı bulunamadı";
+      summary.textContent = `Rev.${item.revision_number ?? 0} · ${status}${item.is_current ? " · Güncel" : ""}`;
+      details.append(summary);
+      if (item.created_at || item.decided_by || item.decided_at) {
+        details.append(node("div", `Oluşturma: ${formatDate(item.created_at)} · Karar: ${item.decided_by || "-"}${item.decided_at ? ` · ${formatDate(item.decided_at)}` : ""}`, "muted small"));
+      }
+      const snapshot = item.customer_commercial_context_snapshot || null;
+      if (item.record_state === "snapshot_present" && snapshot?.advisory_only === true) {
+        const historyMetrics = node("div", "", "detail-grid customer-commercial-context-metrics");
+        appendCommercialContextMetrics(historyMetrics, snapshot);
+        if (historyMetrics.childElementCount) details.append(historyMetrics);
+        details.append(node("div", "Bu tarihsel snapshot advisory-only audit kanıtıdır; pricing, margin, supplier, send veya dispatch authority değildir.", "notice small"));
+      } else if (item.record_state === "legacy_snapshot_missing") {
+        details.append(node("div", "Bu approval ticari snapshot özelliğinden önce oluşturuldu. Geçmişe dönük veri uydurulmadı.", "muted small"));
+      } else {
+        details.append(node("div", "Approval kaydı bulunamadığı için tarihsel ticari snapshot gösterilemiyor; mevcut öğrenmeden yeniden oluşturulmadı.", "muted small"));
+      }
+      historyBox.append(details);
+    });
+    section.append(historyBox);
   }
   if(selectionDecision.override_applied){
     const overrideBox=node("div","","notice");

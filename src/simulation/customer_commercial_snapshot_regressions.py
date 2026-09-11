@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from src.core.automation_action_repository import InMemoryAutomationActionRepository
 from src.core.customer_commercial_context import build_customer_commercial_context
 from src.core.customer_quote_acceptance_policy import ACCEPTED_FINAL_PRICE_MEDIAN_KEY, QUOTE_ACCEPTANCE_RATE_KEY
 from src.core.customer_quote_context import customer_quote_context_key
@@ -12,6 +13,8 @@ from src.core.learning_fact_repository import InMemoryLearningFactRepository
 from src.core.learning_fact_service import confirm_learning_fact, create_learning_fact
 from src.core.master_data_repository import InMemoryMasterDataRepository
 from src.core.master_data_service import create_customer_master
+from src.core.mina_job_repository import InMemoryMinaJobRepository
+from src.core.mina_job_view import build_mina_job_detail
 from src.core.models import CustomerQuote, QuoteDraft, Shipment, SupplierQuote
 from src.core.quote_approval import QuoteApproval, QuoteApprovalSnapshot
 from src.core.quote_approval_repository import InMemoryQuoteApprovalRepository
@@ -20,6 +23,7 @@ from src.core.quote_case_repository import InMemoryQuoteCaseRepository
 from src.core.pilot_store import SQLitePilotStore
 from src.core.sqlite_repositories import SQLiteQuoteApprovalRepository
 from src.core.quote_revision_service import revise_quote_case
+from src.core.supplier_rfq_repository import InMemorySupplierRFQRepository
 
 NOW = datetime(2026, 9, 11, 19, 10, tzinfo=timezone.utc)
 
@@ -172,6 +176,78 @@ def evaluate_customer_commercial_snapshot_regressions() -> dict:
         and revised.new_approval.customer_commercial_context_snapshot.accepted_final_price_median.fact_id == replacement.fact_id,
         "each quote revision gets a fresh commercial snapshot while preserving the prior approval snapshot",
     )
+
+    jobs = InMemoryMinaJobRepository()
+    job, _ = jobs.create_manual(
+        manual_intake_id="commercial-snapshot-history-job", intake_channel="phone", job_kind="price_request",
+        shipment=shipment, opened_by="Regression", opened_at=NOW - timedelta(hours=1),
+        sequence_year=2026, lifecycle_version=2,
+    )
+    linked_case = revised.quote_case.model_copy(update={"mina_job_id": job.job_id, "mina_code": job.mina_code})
+    cases.save(linked_case)
+    jobs.save(job.model_copy(update={"quote_case_id": linked_case.case_id, "updated_at": NOW + timedelta(minutes=5)}))
+    history_detail = build_mina_job_detail(
+        repository=jobs, supplier_repository=InMemorySupplierRFQRepository(),
+        quote_case_repository=cases, action_repository=InMemoryAutomationActionRepository(),
+        quote_approval_repository=approvals, master_data_repository=masters,
+        learning_fact_repository=facts, job_id=job.job_id, now=NOW + timedelta(minutes=5),
+    )
+    history = history_detail["quote"]["approval_commercial_history"]
+    check(
+        [item["revision_number"] for item in history] == [0, 1]
+        and history[0]["approval_id"] == first_approval.approval_id
+        and history[1]["approval_id"] == revised.new_approval.approval_id
+        and history[0]["customer_commercial_context_snapshot"]["accepted_final_price_median"]["value"] == 2200
+        and history[1]["customer_commercial_context_snapshot"]["accepted_final_price_median"]["value"] == 2400
+        and history[0]["is_current"] is False and history[1]["is_current"] is True,
+        "job detail exposes ordered frozen commercial snapshots for each quote approval revision",
+    )
+    check(
+        "quote_snapshot" not in str(history) and "quote_body" not in str(history)
+        and "supplier_cost" not in str(history) and "evidence" not in str(history).casefold(),
+        "approval commercial history remains privacy-minimal and excludes full quote and raw learning evidence",
+    )
+
+    legacy = QuoteApproval.model_validate({
+        "quote_snapshot": first_approval.quote_snapshot.model_dump(mode="json"),
+    })
+    legacy_approvals = InMemoryQuoteApprovalRepository()
+    legacy_approvals.save(legacy)
+    legacy_case = QuoteCase(
+        shipment=shipment, supplier_quote=supplier_quote, customer_quote=customer_quote,
+        quote_draft=quote_draft, quote_approval=legacy,
+    )
+    legacy_cases = InMemoryQuoteCaseRepository(); legacy_cases.save(legacy_case)
+    legacy_jobs = InMemoryMinaJobRepository()
+    legacy_job, _ = legacy_jobs.create_manual(
+        manual_intake_id="commercial-snapshot-legacy-job", intake_channel="phone", job_kind="price_request",
+        shipment=shipment, opened_by="Regression", opened_at=NOW - timedelta(hours=1),
+        sequence_year=2026, lifecycle_version=2,
+    )
+    legacy_cases.save(legacy_case.model_copy(update={"mina_job_id": legacy_job.job_id, "mina_code": legacy_job.mina_code}))
+    legacy_jobs.save(legacy_job.model_copy(update={"quote_case_id": legacy_case.case_id, "updated_at": NOW}))
+    legacy_detail = build_mina_job_detail(
+        repository=legacy_jobs, supplier_repository=InMemorySupplierRFQRepository(),
+        quote_case_repository=legacy_cases, action_repository=InMemoryAutomationActionRepository(),
+        quote_approval_repository=legacy_approvals, job_id=legacy_job.job_id, now=NOW,
+    )
+    check(
+        legacy_detail["quote"]["approval_commercial_history"][0]["record_state"] == "legacy_snapshot_missing"
+        and legacy_detail["quote"]["approval_commercial_history"][0].get("customer_commercial_context_snapshot") is None,
+        "legacy approval history explicitly preserves missing snapshot without live backfill",
+    )
+
+    approvals._approvals.pop(first_approval.approval_id, None)
+    missing_detail = build_mina_job_detail(
+        repository=jobs, supplier_repository=InMemorySupplierRFQRepository(),
+        quote_case_repository=cases, action_repository=InMemoryAutomationActionRepository(),
+        quote_approval_repository=approvals, job_id=job.job_id, now=NOW + timedelta(minutes=6),
+    )
+    check(
+        missing_detail["quote"]["approval_commercial_history"][0]["record_state"] == "approval_record_missing"
+        and "customer_commercial_context_snapshot" not in missing_detail["quote"]["approval_commercial_history"][0],
+        "missing historical approval record fails closed instead of reconstructing commercial context",
+    )
     check(
         revised.new_approval.quote_snapshot.matches_quote(
             revised.quote_case.supplier_quote,
@@ -195,9 +271,6 @@ def evaluate_customer_commercial_snapshot_regressions() -> dict:
             "commercial advisory snapshot survives durable approval persistence and restart",
         )
 
-    legacy = QuoteApproval.model_validate({
-        "quote_snapshot": first_approval.quote_snapshot.model_dump(mode="json"),
-    })
     check(
         legacy.customer_commercial_context_snapshot is None,
         "legacy approvals remain readable without fabricating historical commercial context",
@@ -218,9 +291,12 @@ def evaluate_customer_commercial_snapshot_regressions() -> dict:
     ui = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
     check(
         "approval?.customer_commercial_context_snapshot" in ui
+        and "data.quote?.approval_commercial_history" in ui
+        and "Ticari Snapshot Geçmişi" in ui
+        and "Geçmişe dönük veri uydurulmadı" in ui
         and "sonradan değişen öğrenmeler geçmiş kararı yeniden yazmaz" in ui
         and "const commercialContext = data.customer_commercial_context" not in ui,
-        "quote review renders the frozen approval snapshot rather than a live recomputed context",
+        "quote review renders current and historical frozen approval snapshots without live recomputation",
     )
     progression = (root / "src" / "workflow" / "supplier_rfq_progression.py").read_text(encoding="utf-8")
     revision_source = (root / "src" / "core" / "quote_revision_service.py").read_text(encoding="utf-8")
