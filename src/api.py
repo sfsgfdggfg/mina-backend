@@ -836,6 +836,7 @@ class LearningFactCreateRequest(BaseModel):
     subject_id: str = Field(min_length=1, max_length=300)
     subject_label: str = Field(min_length=1, max_length=300)
     fact_key: str = Field(pattern=r"^[a-z0-9][a-z0-9_.-]{1,119}$")
+    context_key: Optional[str] = Field(default=None, max_length=240)
     value: Any
     value_unit: Optional[str] = Field(default=None, max_length=80)
     confidence: float = Field(ge=0, le=1)

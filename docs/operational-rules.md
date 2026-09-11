@@ -4073,3 +4073,13 @@ The evidence timestamp must be the latest underlying historical email observatio
 Outlook backfill must not infer or create historical phone/WhatsApp attempts, escalation success, `araç yok`, usable-quote status, negotiation reductions, secondary-release evidence or other operational events that are not explicitly evidenced. Existing confirmed canonical supplier authority always wins over backfill.
 
 Historical raw message bodies stay transient. Backfill persists only bounded metrics, provenance references/digests and reviewable LearningFacts; unmatched or ambiguous counterparties require master-data review before supplier learning is possible.
+
+## RULE-241 — Contextual Supplier Learning Must Stay Lane-Bound, Human-Reviewed, and Ranking-Only
+
+Context-specific supplier behavior may be learned only from deterministic shipment context and durable supplier RFQ/response evidence. Free-text context keys and context authority on non-supplier LearningFacts must fail closed.
+
+A contextual supplier metric requires at least three supplier responses in that context and remains proposed until a human confirms it. Context evidence uses the actual underlying RFQ/response observation time; stale context history cannot become current behavior by re-derivation.
+
+Runtime selection must prefer the most specific confirmed supported context (mode + lane + equipment) and fall back to mode + lane only when the more specific context has no eligible ranking effect. A contextual fact must never leak into another lane or equipment context.
+
+Contextual learning may only adjust ranking among already eligible suppliers. It must not alter capability eligibility, ADR/equipment safety gates, primary/secondary role, dispatch tier, reminder timing, escalation/contact policy, negotiation authority or secondary-supplier release. Global and contextual learning combined must remain inside the existing ±0.06 ranking cap.

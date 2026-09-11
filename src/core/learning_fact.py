@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Literal
 from uuid import uuid4
 
@@ -37,6 +38,7 @@ class LearningFact(BaseModel):
     subject_id: str = Field(min_length=1, max_length=300)
     subject_label: str = Field(min_length=1, max_length=300)
     fact_key: str = Field(pattern=r"^[a-z0-9][a-z0-9_.-]{1,119}$")
+    context_key: str | None = Field(default=None, max_length=240)
     value: LearningFactValue
     value_unit: str | None = Field(default=None, max_length=80)
     confidence: float = Field(ge=0, le=1)
@@ -55,6 +57,29 @@ class LearningFact(BaseModel):
     reviewed_by: str | None = Field(default=None, max_length=200)
     review_note: str | None = Field(default=None, max_length=1200)
     source: str = "learning_fact"
+
+    @field_validator("context_key")
+    @classmethod
+    def normalize_context_key(cls, value):
+        if value is None:
+            return None
+        normalized = str(value).strip().casefold()
+        if not normalized:
+            return None
+        if any(ch.isspace() for ch in normalized):
+            raise ValueError("Learning fact context_key must not contain whitespace.")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_context_scope(self):
+        if self.context_key is None:
+            return self
+        if self.subject_type != "supplier":
+            raise ValueError("Learning fact context_key is supported only for supplier facts.")
+        pattern = r"^mode=[a-z0-9-]+\|lane=[a-z0-9-]+>[a-z0-9-]+(?:\|equipment=[a-z0-9-]+)?$"
+        if re.fullmatch(pattern, self.context_key) is None:
+            raise ValueError("Supplier learning context_key must use canonical mode/lane[/equipment] format.")
+        return self
 
     @field_validator("created_at", "updated_at", "reviewed_at", "superseded_at")
     @classmethod

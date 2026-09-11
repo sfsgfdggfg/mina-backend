@@ -4,6 +4,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from statistics import median
+from collections import defaultdict
 
 from src.core.learning_fact import LearningEvidence
 from src.core.learning_fact_repository import LearningFactRepository
@@ -11,6 +12,7 @@ from src.core.learning_fact_service import create_learning_fact
 from src.core.master_data_repository import MasterDataRepository
 from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.core.supplier_price_repository import SupplierPriceRepository
+from src.core.supplier_context import shipment_context_keys
 
 
 def _aware(value: datetime) -> datetime:
@@ -53,7 +55,13 @@ def derive_supplier_history_learning(
     observed_times: list[datetime] = []
     negotiation_reductions: list[float] = []
     negotiation_ids: list[str] = []
+    contextual: dict[str, dict] = defaultdict(lambda: {
+        "responded_count": 0, "quoted_count": 0, "response_minutes": [],
+        "rfq_ids": [], "observed_times": [],
+    })
     for draft in drafts:
+        workflow = supplier_repository.get_workflow(draft.workflow_id)
+        context_keys = shipment_context_keys(workflow.shipment) if workflow is not None else []
         if draft.sent_at is not None:
             observed_times.append(_aware(draft.sent_at))
         attempts = supplier_repository.list_contact_attempts(draft.rfq_id)
@@ -81,6 +89,16 @@ def derive_supplier_history_learning(
         elapsed = _minutes(draft.sent_at, latest.received_at)
         if elapsed is not None:
             response_minutes.append(elapsed)
+        for context_key in context_keys:
+            stats = contextual[context_key]
+            stats["responded_count"] += 1
+            stats["quoted_count"] += int(is_usable_quote)
+            stats["rfq_ids"].append(draft.rfq_id)
+            if draft.sent_at is not None:
+                stats["observed_times"].append(_aware(draft.sent_at))
+            stats["observed_times"].extend(_aware(item.received_at) for item in responses)
+            if elapsed is not None:
+                stats["response_minutes"].append(elapsed)
         acknowledgements = supplier_repository.list_acknowledgements(draft.rfq_id)
         observed_times.extend(_aware(item.acknowledged_at) for item in acknowledgements)
         if acknowledgements:
@@ -203,6 +221,68 @@ def derive_supplier_history_learning(
             occurred_at=timestamp, master_repository=master_repository,
         )
         proposals.append(fact)
+
+    contextual_proposals = []
+    for context_key, stats in sorted(contextual.items()):
+        sample_count = int(stats["responded_count"])
+        if sample_count < 3 or not stats["response_minutes"]:
+            continue
+        context_fingerprint = {
+            "supplier_id": supplier.supplier_id, "context_key": context_key,
+            "rfq_ids": sorted(stats["rfq_ids"]),
+            "response_minutes": stats["response_minutes"],
+            "quoted_count": stats["quoted_count"], "responded_count": sample_count,
+        }
+        context_digest = hashlib.sha256(
+            json.dumps(context_fingerprint, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:16]
+        context_evidence = LearningEvidence(
+            source_type="operation_history",
+            source_reference=f"supplier-context:{supplier.supplier_id}:{context_digest}",
+            observed_at=max(stats["observed_times"]),
+            dataset_key=context_key[:120],
+            summary=(
+                f"Derived from {sample_count} supplier responses for context {context_key}; "
+                f"usable quotes={stats['quoted_count']}. Context learning remains human-reviewed."
+            ),
+        )
+        context_metrics = [
+            (
+                "response.median_minutes",
+                round(float(median(stats["response_minutes"])), 2), "minutes",
+                min(0.95, 0.55 + 0.05 * sample_count),
+            ),
+            (
+                "commercial.usable_quote_rate_percent",
+                round(100 * stats["quoted_count"] / sample_count, 2), "percent",
+                min(0.90, 0.50 + 0.05 * sample_count),
+            ),
+        ]
+        for fact_key, value, unit, confidence in context_metrics:
+            confirmed = [
+                item for item in learning_repository.list_all()
+                if item.status == "confirmed" and item.subject_type == "supplier"
+                and item.subject_id == supplier.supplier_id and item.fact_key == fact_key
+                and item.context_key == context_key
+            ]
+            active = max(confirmed, key=lambda item: item.updated_at) if confirmed else None
+            if active is not None and active.value == value and active.value_unit == unit:
+                continue
+            fact = create_learning_fact(
+                repository=learning_repository,
+                entry_id=(
+                    f"supplier-context:{supplier.supplier_id}:{fact_key}:"
+                    f"{context_digest}"
+                ),
+                subject_type="supplier", subject_id=supplier.supplier_id,
+                subject_label=supplier.supplier_name, fact_key=fact_key, context_key=context_key,
+                value=value, value_unit=unit, confidence=confidence,
+                source_type="minai_inference", evidence=[context_evidence], created_by=created_by,
+                supersedes_fact_id=None if active is None else active.fact_id,
+                occurred_at=timestamp, master_repository=master_repository,
+            )
+            contextual_proposals.append(fact)
+
     return {
         "supplier_id": supplier.supplier_id,
         "supplier_name": supplier.supplier_name,
@@ -212,5 +292,7 @@ def derive_supplier_history_learning(
         "negotiation_evidence_count": len(negotiation_reductions),
         "escalation_evidence_count": sum(escalation_attempt_counts.values()),
         "proposed_facts": [item.model_dump() for item in proposals],
+        "contextual_proposed_fact_count": len(contextual_proposals),
+        "contextual_proposed_facts": [item.model_dump() for item in contextual_proposals],
         "note": "Derived observations remain proposed until a human confirms them.",
     }

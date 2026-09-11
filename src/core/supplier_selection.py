@@ -13,7 +13,12 @@ from src.paths import data_path
 from src.core.extraction_confirmation import require_operational_shipment
 from src.core.learning_fact_repository import LearningFactRepository
 from src.core.master_data_repository import MasterDataRepository
-from src.core.supplier_intelligence_policy import resolve_supplier_operational_learning_policy
+from src.core.supplier_intelligence_policy import (
+    MAX_RANKING_ADJUSTMENT,
+    resolve_supplier_contextual_learning_overlay,
+    resolve_supplier_operational_learning_policy,
+)
+from src.core.supplier_context import shipment_context_keys
 from src.core.data_provenance import (
     DataProvenanceError,
     require_pilot_operational_dataset,
@@ -386,7 +391,34 @@ def select_suppliers_for_shipment(
             base_acknowledged_wait_minutes=120,
             as_of=policy_as_of,
         )
-        learning_adjustment = 0.0 if learning_policy is None else learning_policy.ranking_adjustment
+        global_learning_adjustment = (
+            0.0 if learning_policy is None else learning_policy.ranking_adjustment
+        )
+        context_overlay = None
+        context_key = None
+        for candidate_context in shipment_context_keys(shipment, equipment_decision):
+            candidate_overlay = resolve_supplier_contextual_learning_overlay(
+                supplier_name=supplier["supplier_name"], context_key=candidate_context,
+                master_data_repository=master_data_repository,
+                learning_repository=learning_fact_repository, as_of=policy_as_of,
+            )
+            if candidate_overlay is None:
+                continue
+            sufficiently_supported = any(
+                item.runtime_eligible and item.effect == "ranking"
+                for item in candidate_overlay.evaluations
+            )
+            if sufficiently_supported:
+                context_overlay = candidate_overlay
+                context_key = candidate_context
+                break
+        context_learning_adjustment = (
+            0.0 if context_overlay is None else context_overlay.ranking_adjustment
+        )
+        learning_adjustment = max(
+            -MAX_RANKING_ADJUSTMENT,
+            min(MAX_RANKING_ADJUSTMENT, global_learning_adjustment + context_learning_adjustment),
+        )
         total_score = max(0.0, min(1.0, base_score + learning_adjustment))
 
         scored_suppliers.append(
@@ -406,6 +438,13 @@ def select_suppliers_for_shipment(
                 "speed_score": supplier["speed_score"],
                 "base_total_score": round(base_score, 3),
                 "learning_adjustment": round(learning_adjustment, 4),
+                "global_learning_adjustment": round(global_learning_adjustment, 4),
+                "context_learning_adjustment": round(context_learning_adjustment, 4),
+                "learning_context_key": context_key,
+                "context_learning_policy": (
+                    None if context_overlay is None
+                    else context_overlay.model_dump(mode="json")
+                ),
                 "learning_policy": (
                     None if learning_policy is None
                     else learning_policy.model_dump(mode="json")

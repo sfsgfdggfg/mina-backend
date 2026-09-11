@@ -37,7 +37,7 @@ def propose_supplier_operational_backfill(
     confirmed_response_subjects = {
         item.subject_id for item in all_facts
         if item.subject_type == "supplier"
-        and item.fact_key == TARGET_RESPONSE_KEY
+        and item.fact_key == TARGET_RESPONSE_KEY and item.context_key is None
         and item.status == "confirmed"
     }
 
