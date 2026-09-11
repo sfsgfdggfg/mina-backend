@@ -9,6 +9,7 @@ from src.core.relationship_history import (
     RelationshipHistoryAIAnalyzer,
     analyze_relationship_history,
 )
+from src.core.supplier_history_backfill import propose_supplier_operational_backfill
 from src.integrations.microsoft_auth import MicrosoftAuthConfig, acquire_silent_access_token
 from src.integrations.outlook_graph import OutlookGraphReadClient
 
@@ -42,8 +43,13 @@ def run_outlook_relationship_onboarding(
             master_repository=master_repository, learning_repository=learning_repository,
             created_by=created_by, ai_analyzer=ai_analyzer,
         )
+        supplier_backfill = propose_supplier_operational_backfill(
+            analysis=result, learning_repository=learning_repository,
+            master_repository=master_repository, created_by=created_by,
+        )
         payload = result.model_dump()
         payload.update({
+            "supplier_operational_backfill": supplier_backfill,
             "source": "authorized_outlook_history",
             "mailbox_message_rejection_count": len(getattr(client, "last_message_rejections", ())),
             "history_start_at": start_at,

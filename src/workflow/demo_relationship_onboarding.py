@@ -6,6 +6,7 @@ from typing import Iterable
 
 from src.core.learning_fact_repository import LearningFactRepository
 from src.core.master_data_repository import MasterDataRepository
+from src.core.supplier_history_backfill import propose_supplier_operational_backfill
 from src.core.privacy import PrivacySafeText
 from src.core.relationship_history import (
     HistoricalMailMessage,
@@ -257,8 +258,13 @@ def run_demo_relationship_onboarding(
             created_by=created_by,
             ai_analyzer=analyzer,
         )
+        supplier_backfill = propose_supplier_operational_backfill(
+            analysis=result, learning_repository=learning_repository,
+            master_repository=master_repository, created_by=created_by,
+        )
         payload = result.model_dump()
         payload.update({
+            "supplier_operational_backfill": supplier_backfill,
             "source": "synthetic_demo_history",
             "history_start_at": _aware_utc(start_at),
             "history_end_at": _aware_utc(end_at),

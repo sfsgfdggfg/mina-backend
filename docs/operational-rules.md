@@ -4063,3 +4063,13 @@ Only a contact performed when the supplier reminder flow requires human contact 
 Escalation silence, no-response and unreachability never mean `araç yok`, never satisfy a secondary-release gate and never create commercial response authority. A `çalışıyoruz` result is non-commercial acknowledgement evidence and uses the existing grace timer.
 
 Confirmed escalation history may recommend phone, WhatsApp or management/patron contact to the operator. It must not automatically perform that contact, override an explicit supplier-level prohibition, expose customer targets, bypass primary-supplier protection or authorize secondary dispatch. If operator channels and any permitted management escalation fail, the required next step is manual relationship review.
+
+## RULE-240 — Historical Supplier Email May Seed Reviewed Response Timing but Cannot Reconstruct Missing Operational Events
+
+Historical Outlook analysis may create a canonical supplier response-time proposal only from deterministic agency-outbound to supplier-inbound thread pairs matched to an existing Supplier Master record. At least three response samples are required before `response.median_minutes` may be proposed.
+
+The evidence timestamp must be the latest underlying historical email observation, never the date the history was re-analyzed. Existing confidence and recency decay rules remain in force after human confirmation, so stale history cannot become current runtime behavior merely because an operator reruns onboarding.
+
+Outlook backfill must not infer or create historical phone/WhatsApp attempts, escalation success, `araç yok`, usable-quote status, negotiation reductions, secondary-release evidence or other operational events that are not explicitly evidenced. Existing confirmed canonical supplier authority always wins over backfill.
+
+Historical raw message bodies stay transient. Backfill persists only bounded metrics, provenance references/digests and reviewable LearningFacts; unmatched or ambiguous counterparties require master-data review before supplier learning is possible.

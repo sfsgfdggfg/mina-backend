@@ -2615,8 +2615,14 @@ function renderRelationshipOnboardingResult(container, result) {
     summaryItem("AI gözlemi",result.ai_observation_count??0),
     summaryItem("Sınırlı örnek",result.ai_observation_sample_only_count??0),
     summaryItem("Tekrarlayan patern",result.ai_observation_recurring_count??0),
-    summaryItem("AI hard guard eledi",result.ai_observation_hard_rejected_count??result.ai_observation_skipped_count??0)
+    summaryItem("AI hard guard eledi",result.ai_observation_hard_rejected_count??result.ai_observation_skipped_count??0),
+    summaryItem("Tedarikçi operasyon önerisi",result.supplier_operational_backfill?.proposed_fact_count??0),
+    summaryItem("Mevcut authority korundu",result.supplier_operational_backfill?.skipped_existing_authority_count??0)
   ); container.append(summary);
+  const backfill=result.supplier_operational_backfill||{};
+  if(backfill.supplier_subject_count){
+    container.append(node("div",`Tedarikçi backfill: ${backfill.supplier_subject_count} eşleşen tedarikçi · ${backfill.proposed_fact_count??0} yeni response-time önerisi · ${backfill.reused_fact_count??0} tekrar kullanılan · ${backfill.skipped_insufficient_samples_count??0} yetersiz örnek. Runtime authority otomatik oluşturulmadı.`,"notice small"));
+  }
   if (result.raw_messages_persisted === false || result.raw_body_persisted === false) {
     container.append(node("div","Ham geçmiş mail gövdeleri onboarding state’inde saklanmadı.","notice"));
   }
@@ -2630,7 +2636,7 @@ function renderRelationshipOnboardingResult(container, result) {
     const card=node("section","","relationship-subject-card");
     card.append(
       node("h3",subject.subject_label||"-"),
-      node("div",`${subject.subject_type==="supplier"?"Tedarikçi":"Müşteri"} · ${subject.message_count} mail · ${subject.thread_count} konu · karşı taraf cevap örneği ${subject.counterparty_response_sample_count} · ajans cevap örneği ${subject.agency_response_sample_count}`,"muted small")
+      node("div",`${subject.subject_type==="supplier"?"Tedarikçi":"Müşteri"} · ${subject.message_count} mail · ${subject.thread_count} konu · karşı taraf cevap örneği ${subject.counterparty_response_sample_count}${subject.counterparty_response_median_minutes!=null?` · medyan cevap ${Math.round(subject.counterparty_response_median_minutes)} dk`:""} · ajans cevap örneği ${subject.agency_response_sample_count}`,"muted small")
     );
     const facts=node("div","","relationship-subject-facts");
     const toggle=actionButton("Gözlemleri Aç","",async()=>{toggle.disabled=true;await renderRelationshipFactReview(facts,subject);toggle.disabled=false;});

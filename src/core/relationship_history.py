@@ -144,6 +144,10 @@ class RelationshipHistorySubjectSummary(BaseModel):
     thread_count: int
     counterparty_response_sample_count: int
     agency_response_sample_count: int
+    counterparty_response_median_minutes: float | None = None
+    counterparty_response_confidence: float | None = Field(default=None, ge=0, le=1)
+    latest_observed_at: datetime | None = None
+    history_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     proposed_fact_ids: list[str] = Field(default_factory=list)
 
 
@@ -482,9 +486,10 @@ def analyze_relationship_history(
         outbound = [item for item in items if item.direction == "outbound"]
         counterparty_response = _response_minutes(items, "outbound")
         agency_response = _response_minutes(items, "inbound")
+        latest_observed_at = max(item.sent_at for item in items)
         evidence = LearningEvidence(
             source_type="email", source_reference=f"relationship-history:{subject_type}:{subject_id}:{digest[:24]}",
-            observed_at=timestamp,
+            observed_at=latest_observed_at,
             summary=(
                 f"Aggregated {len(items)} historical email events across "
                 f"{len(set(item.subject_key for item in items))} normalized threads; raw message bodies are not persisted."
@@ -547,7 +552,10 @@ def analyze_relationship_history(
                     evidence=LearningEvidence(
                         source_type="email",
                         source_reference=f"relationship-history-ai:{subject_type}:{subject_id}:{ai_digest[:24]}",
-                        observed_at=timestamp,
+                        observed_at=max(
+                            ai_sample[index - 1].sent_at
+                            for index in observation.supporting_counterparty_message_indexes
+                        ),
                         summary=(
                             f"AI relationship observation from {len(ai_sample)} two-way privacy-transformed "
                             f"historical emails; model_scope={observation.scope}; effective_scope={effective_scope}; "
@@ -570,7 +578,15 @@ def analyze_relationship_history(
             subject_type=subject_type, subject_id=subject_id, subject_label=label,
             message_count=len(items), inbound_count=len(inbound), outbound_count=len(outbound),
             thread_count=len(set(item.subject_key for item in items)),
-            counterparty_response_sample_count=len(counterparty_response), agency_response_sample_count=len(agency_response),
+            counterparty_response_sample_count=len(counterparty_response),
+            agency_response_sample_count=len(agency_response),
+            counterparty_response_median_minutes=(
+                round(float(median(counterparty_response)), 2) if counterparty_response else None
+            ),
+            counterparty_response_confidence=(
+                _confidence(len(counterparty_response)) if counterparty_response else None
+            ),
+            latest_observed_at=latest_observed_at, history_digest=digest,
             proposed_fact_ids=proposed_ids,
         ))
 

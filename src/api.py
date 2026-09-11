@@ -1879,6 +1879,8 @@ def get_relationship_onboarding_status():
         "raw_history_persisted": False,
         "max_history_days": 370,
         "max_history_messages": 10000,
+        "supplier_operational_backfill_supported": True,
+        "supplier_backfill_target_fact_key": "response.median_minutes",
     }
 
 
