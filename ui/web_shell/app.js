@@ -2315,6 +2315,97 @@ async function advanceOperationStage(jobId, targetStage, feedback, refresh) {
   } catch (error) { feedback.textContent = error.message || String(error); }
 }
 
+function learningFactValueLabel(value, unit = null) {
+  let text;
+  if (Array.isArray(value)) text = value.join(", ");
+  else if (typeof value === "boolean") text = value ? "Evet" : "Hayır";
+  else text = value == null ? "-" : String(value);
+  return unit ? `${text} ${unit}` : text;
+}
+
+function renderOperationLearningSection(container, data, refresh) {
+  const learning = data.learning || {};
+  const facts = learning.facts || [];
+  if (!facts.length) return;
+
+  const section = sectionBlock(
+    "MINAI Operasyon Öğrenimleri",
+    "Confidence yalnız güven sinyalidir. Öneri, insan tarafından doğrulanana kadar runtime otoritesi değildir."
+  );
+  const counts = node("div", "", "learning-summary-row");
+  counts.append(
+    node("span", `Öneri ${learning.proposed_count || 0}`, "badge"),
+    node("span", `Onaylı ${learning.confirmed_count || 0}`, "badge"),
+    node("span", `Reddedilen ${learning.rejected_count || 0}`, "badge"),
+    node("span", `Geçmiş ${learning.superseded_count || 0}`, "badge")
+  );
+  section.append(counts);
+
+  const statusRank = { proposed: 0, confirmed: 1, rejected: 2, superseded: 3 };
+  const statusLabel = { proposed: "Öneri", confirmed: "Onaylandı", rejected: "Reddedildi", superseded: "Geçmiş / Değiştirildi" };
+  const list = node("div", "", "operation-learning-list");
+  facts.slice().sort((a, b) => {
+    const rank = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
+    if (rank) return rank;
+    return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+  }).forEach(fact => {
+    const card = node("div", "", `operation-learning-card ${fact.status || "proposed"}`);
+    const head = node("div", "", "operation-learning-head");
+    head.append(
+      node("strong", codeLabel(fact.fact_key)),
+      node("span", statusLabel[fact.status] || codeLabel(fact.status), "badge")
+    );
+    card.append(head);
+    card.append(node("div", learningFactValueLabel(fact.value, fact.value_unit), "operation-learning-value"));
+    card.append(node("div", `Confidence: %${Math.round((Number(fact.confidence) || 0) * 100)} · ${fact.status === "confirmed" ? "Runtime authoritative" : "Advisory / yetkisiz"}`, fact.status === "confirmed" ? "small success-text" : "small muted"));
+    card.append(node("div", `Kaynak: ${codeLabel(fact.source_type)} · Oluşturan: ${fact.created_by || "-"} · ${formatDate(fact.created_at)}`, "small muted"));
+
+    const evidence = fact.evidence || [];
+    if (evidence.length) {
+      const evidenceList = node("div", "", "operation-learning-evidence");
+      evidence.forEach(item => {
+        const row = node("div", "", "operation-learning-evidence-row");
+        row.append(node("div", item.summary || "-"));
+        row.append(node("div", `Referans: ${item.source_reference || "-"} · ${formatDate(item.observed_at)}`, "small muted"));
+        evidenceList.append(row);
+      });
+      card.append(evidenceList);
+    }
+
+    if (fact.status === "proposed") {
+      const review = node("div", "", "operation-learning-review");
+      const noteLabel = node("label", "İnceleme notu");
+      const note = document.createElement("textarea"); note.rows = 2; note.maxLength = 1200; noteLabel.append(note);
+      const feedback = node("div", "", "muted settings-feedback");
+      const act = async decision => {
+        const reviewNote = note.value.trim();
+        if (!reviewNote) { feedback.textContent = "Öğrenim kararı için inceleme notu gerekli."; return; }
+        feedback.textContent = decision === "confirm" ? "Öğrenim doğrulanıyor…" : "Öğrenim reddediliyor…";
+        try {
+          await api(`/learning-facts/${encodeURIComponent(fact.fact_id)}/${decision}`, {
+            method: "POST", body: JSON.stringify({ review_note: reviewNote })
+          });
+          await refresh();
+        } catch (error) { feedback.textContent = error.message || String(error); }
+      };
+      const actions = node("div", "", "actions");
+      actions.append(
+        actionButton("Öğrenimi Onayla", "approve", () => act("confirm")),
+        actionButton("Öğrenimi Reddet", "reject", () => act("reject"))
+      );
+      review.append(noteLabel, actions, feedback); card.append(review);
+    } else if (fact.reviewed_at) {
+      card.append(node("div", `İnceleme: ${fact.review_note || "-"} · ${fact.reviewed_by || "-"} · ${formatDate(fact.reviewed_at)}`, "small muted operation-learning-reviewed"));
+    }
+    if (fact.status === "superseded" && fact.superseded_by_fact_id) {
+      card.append(node("div", `Yerine geçen fact: ${fact.superseded_by_fact_id}`, "small muted"));
+    }
+    list.append(card);
+  });
+  section.append(list);
+  container.append(section);
+}
+
 function renderOperationSection(container, data, jobId, refresh) {
   const operation = data.operation || {};
   const snapshot = operation.execution || operation.snapshot || {};
@@ -2780,7 +2871,9 @@ async function renderJob(data, jobId) {
   );
   if (!(data.suppliers || []).length) suppliers.append(emptyState("Henüz tedarikçi çalışması yok")); root.append(suppliers);
   renderOperationStartSection(root, data, jobId, async () => loadJob(jobId));
-  renderOperationSection(root, data, jobId, async () => loadJob(jobId)); timeline(root, data.timeline || []); content.replaceChildren(root);
+  renderOperationSection(root, data, jobId, async () => loadJob(jobId));
+  renderOperationLearningSection(root, data, async () => loadJob(jobId));
+  timeline(root, data.timeline || []); content.replaceChildren(root);
 }
 
 async function loadJob(jobId) {

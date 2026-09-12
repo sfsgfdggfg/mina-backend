@@ -72,6 +72,16 @@ def evaluate_ui_completion_regressions() -> dict:
         "job detail exposes evidence-backed operation and open-exception correction controls without a generic lifecycle editor",
     )
     check(
+        "renderOperationLearningSection" in js_text
+        and "MINAI Operasyon Öğrenimleri" in js_text
+        and "Öğrenim kararı için inceleme notu gerekli." in js_text
+        and "/learning-facts/${encodeURIComponent(fact.fact_id)}/${decision}" in js_text
+        and "Öğrenimi Onayla" in js_text
+        and "Öğrenimi Reddet" in js_text
+        and "Yeni Öğrenim Önerisi Ekle" not in js_text,
+        "job detail reviews existing operation learning while keeping manual fact creation out of the pilot browser",
+    )
+    check(
         "markActiveNavigation" in js_text
         and "nav a.active" in css_text
         and ".jobs-card-list" in css_text
@@ -166,6 +176,20 @@ def evaluate_ui_completion_regressions() -> dict:
                     "/mina-jobs/missing-job/exceptions/missing-exception",
                     headers={"X-CSRF-Token": csrf}, json={"impact_level": "actual_delay"},
                 )
+                learning_confirm_no_csrf = client.post(
+                    "/learning-facts/missing-fact/confirm", json={"review_note": "Reviewed."},
+                )
+                learning_confirm_with_csrf = client.post(
+                    "/learning-facts/missing-fact/confirm",
+                    headers={"X-CSRF-Token": csrf}, json={"review_note": "Reviewed."},
+                )
+                learning_reject_no_csrf = client.post(
+                    "/learning-facts/missing-fact/reject", json={"review_note": "Reviewed."},
+                )
+                learning_reject_with_csrf = client.post(
+                    "/learning-facts/missing-fact/reject",
+                    headers={"X-CSRF-Token": csrf}, json={"review_note": "Reviewed."},
+                )
                 quote_read = client.get("/quote-cases/missing-case")
                 quote_no_csrf = client.post("/quote-approvals/missing-approval/approve", json={})
                 quote_with_csrf = client.post(
@@ -194,10 +218,14 @@ def evaluate_ui_completion_regressions() -> dict:
                     and exception_with_csrf.status_code == 404
                     and exception_edit_no_csrf.status_code == 403
                     and exception_edit_with_csrf.status_code == 404
+                    and learning_confirm_no_csrf.status_code == 403
+                    and learning_confirm_with_csrf.status_code == 404
+                    and learning_reject_no_csrf.status_code == 403
+                    and learning_reject_with_csrf.status_code == 404
                     and quote_read.status_code == 404
                     and quote_no_csrf.status_code == 403
                     and quote_with_csrf.status_code == 404,
-                    "job automation, customer outcome, operation evidence, exception create/edit, and quote APIs remain browser-session allowlisted and CSRF guarded",
+                    "job automation, customer outcome, operation evidence, exception, operation-learning review, and quote APIs remain browser-session allowlisted and CSRF guarded",
                 )
     finally:
         api_module.agency_automation_policy_repository = previous_repository

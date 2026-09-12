@@ -315,6 +315,19 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .success-notice { background: #f0faf5; color: var(--success); }
 .operation-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
 .operation-last-update { margin-top: 8px; }
+.learning-summary-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+.operation-learning-list { display: grid; gap: 10px; }
+.operation-learning-card { border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; display: grid; gap: 7px; }
+.operation-learning-card.proposed { border-left: 4px solid #f79009; }
+.operation-learning-card.confirmed { border-left: 4px solid var(--success); }
+.operation-learning-card.rejected, .operation-learning-card.superseded { opacity: .76; }
+.operation-learning-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.operation-learning-value { font-weight: 700; }
+.operation-learning-evidence { display: grid; gap: 6px; margin-top: 3px; }
+.operation-learning-evidence-row { background: #f8fafc; border-radius: 9px; padding: 9px 10px; }
+.operation-learning-review { display: grid; gap: 8px; border-top: 1px solid #edf0f5; padding-top: 10px; margin-top: 3px; }
+.operation-learning-reviewed { border-top: 1px solid #edf0f5; padding-top: 8px; }
+
 .operation-risk-notice { margin-top: 12px; }
 .operation-control-stack { display: grid; gap: 10px; margin-top: 14px; }
 .operation-control-card { border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; display: grid; gap: 10px; background: #fbfcfe; }
