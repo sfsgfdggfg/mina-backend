@@ -161,6 +161,14 @@ def evaluate_ui_completion_regressions() -> dict:
         "job timeline progressively reveals older durable audit events without bypassing curated summaries",
     )
     check(
+        "handoffVisibleCount=Math.min(5,handoffs.length)" in js_text
+        and "handoffs.slice(0,handoffVisibleCount)" in js_text
+        and '`${Math.min(5,remaining)} daha göster`' in js_text
+        and '`${handoffVisibleCount}/${handoffs.length} devir gösteriliyor' in js_text
+        and "summary.handoff_window_hours ?? 12" in js_text,
+        "shift continuity progressively reveals the backend-bounded recent handoff window instead of silently hiding records after five",
+    )
+    check(
         "markActiveNavigation" in js_text
         and "nav a.active" in css_text
         and ".jobs-card-list" in css_text

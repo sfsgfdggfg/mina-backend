@@ -652,9 +652,21 @@ function renderShiftContinuityPanel(payload, refresh) {
 
   const handoffs = summary.recent_handoffs?.items || [];
   if (handoffs.length) {
-    const wrap=node("div","","shift-handoff-list"); wrap.append(node("h3","Son vardiya devirleri"));
-    handoffs.slice(0,5).forEach(item=>wrap.append(node("div",`${workTypeLabel(item)} · ${codeLabel(item.current_disposition)} · ${formatDate(item.released_at)}`,"small shift-history-row")));
-    section.append(wrap);
+    const wrap=node("div","","shift-handoff-list");
+    wrap.append(node("h3","Son vardiya devirleri"));
+    const list=node("div","","shift-handoff-items");
+    const controls=node("div","","actions shift-handoff-controls");
+    let handoffVisibleCount=Math.min(5,handoffs.length);
+    const renderHandoffs=()=>{
+      list.replaceChildren(); controls.replaceChildren();
+      handoffs.slice(0,handoffVisibleCount).forEach(item=>list.append(node("div",`${workTypeLabel(item)} · ${codeLabel(item.current_disposition)} · ${formatDate(item.released_at)}`,"small shift-history-row")));
+      controls.append(node("span",`${handoffVisibleCount}/${handoffs.length} devir gösteriliyor · son ${summary.handoff_window_hours ?? 12} saat`,"small muted"));
+      if(handoffVisibleCount<handoffs.length){
+        const remaining=handoffs.length-handoffVisibleCount;
+        controls.append(actionButton(`${Math.min(5,remaining)} daha göster`,"",()=>{handoffVisibleCount=Math.min(handoffVisibleCount+5,handoffs.length);renderHandoffs();}));
+      }
+    };
+    renderHandoffs(); wrap.append(list,controls); section.append(wrap);
   }
   const ledgerItems = ledger.items || [];
   const audit = node("div", "", "shift-audit-line");
