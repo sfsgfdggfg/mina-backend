@@ -121,6 +121,13 @@ def evaluate_ui_completion_regressions() -> dict:
         "browser learning policy surfaces explain effect confidence recency eligibility and backend reason without recomputing authority",
     )
     check(
+        '`Fact ID: ${fact.fact_id || "-"}`' in js_text
+        and '`Fact ID: ${item.fact_id || "-"}`' in js_text
+        and "learning-fact-id" in js_text
+        and "learning-fact-id" in css_text,
+        "browser LearningFact cards and policy evaluations expose the same durable fact identity for audit traceability",
+    )
+    check(
         "appendExplicitLearningReview" in js_text
         and "LearningFact kararı için inceleme notu gerekli." in js_text
         and 'JSON.stringify({ review_note: reviewNote })' in js_text
