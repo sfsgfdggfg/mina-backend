@@ -474,8 +474,11 @@ def evaluate_operation_execution_exception_regressions() -> dict:
         and "CMR Alındı — Şimdi" in browser_ui
         and "POD Alındı — Şimdi" in browser_ui
         and "Yeni Operasyon İstisnası" in browser_ui
+        and "İstisnayı Düzenle / Etkiyi Güncelle" in browser_ui
+        and "İstisna Güncelle" in browser_ui
+        and "source_reference" in browser_ui
         and "İstisnayı Çöz" in browser_ui,
-        "browser job detail captures operation evidence and exception resolution through controlled APIs",
+        "browser job detail captures operation evidence and open-exception correction through controlled APIs",
     )
     check(
         'advanceOperationStage(jobId, "vehicle_assigned"' in browser_ui
@@ -485,6 +488,13 @@ def evaluate_operation_execution_exception_regressions() -> dict:
         and 'advanceOperationStage(jobId, "completed"' in browser_ui
         and "allowed_next_stages" in browser_ui,
         "browser operation milestones use fixed semantic actions filtered by backend next-stage authority",
+    )
+    check(
+        'if (editable) {' in browser_ui
+        and 'item.status === "resolved"' in browser_ui
+        and '/exceptions/${encodeURIComponent(item.exception_id)}`' in browser_ui
+        and 'source_reference: sourceReference.input.value.trim() || null' in browser_ui,
+        "browser edits only open active-operation exceptions and preserves bounded source-reference evidence",
     )
 
     check(
