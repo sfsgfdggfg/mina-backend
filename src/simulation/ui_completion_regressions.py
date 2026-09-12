@@ -56,9 +56,17 @@ def evaluate_ui_completion_regressions() -> dict:
         and 'submitClosure("cancelled")' in js_text
         and "Kaybedildi / iptal için kapanış nedeni gerekli." in js_text
         and "/mina-jobs/${encodeURIComponent(jobId)}/stage" in js_text
-        and "/owners" not in js_text
         and "Operasyonu Başlat" in plan_text,
-        "job detail exposes only backend-authorized customer outcome controls without generic stage or directed-owner authority",
+        "job detail exposes only backend-authorized customer outcome controls without generic stage authority",
+    )
+    check(
+        "renderJobResponsibilitySection" in js_text
+        and "/mina-jobs/${encodeURIComponent(jobId)}/owners" in js_text
+        and "İş Kuyruğu claim/lease atamasından ayrıdır" in js_text
+        and "Kapanmış işte kalıcı sorumluluk değiştirilemez." in js_text
+        and "job_sales_owner_changed" in js_text
+        and "job_operations_owner_changed" in js_text,
+        "job detail exposes durable sales and operations responsibility controls without conflating queue leases",
     )
     check(
         "renderOperationSection" in js_text
@@ -138,6 +146,15 @@ def evaluate_ui_completion_regressions() -> dict:
                     headers={"X-CSRF-Token": csrf},
                     json={"disable_supplier_reminders": True},
                 )
+                owners_no_csrf = client.post(
+                    "/mina-jobs/missing-job/owners",
+                    json={"sales_owner": "Sales", "operations_owner": "Ops"},
+                )
+                owners_with_csrf = client.post(
+                    "/mina-jobs/missing-job/owners",
+                    headers={"X-CSRF-Token": csrf},
+                    json={"sales_owner": "Sales", "operations_owner": "Ops"},
+                )
                 stage_no_csrf = client.post(
                     "/mina-jobs/missing-job/stage",
                     json={"target_stage": "accepted"},
@@ -210,6 +227,8 @@ def evaluate_ui_completion_regressions() -> dict:
                 check(
                     job_no_csrf.status_code == 403
                     and job_with_csrf.status_code == 404
+                    and owners_no_csrf.status_code == 403
+                    and owners_with_csrf.status_code == 404
                     and stage_no_csrf.status_code == 403
                     and stage_with_csrf.status_code == 404
                     and operation_no_csrf.status_code == 403
@@ -225,7 +244,7 @@ def evaluate_ui_completion_regressions() -> dict:
                     and quote_read.status_code == 404
                     and quote_no_csrf.status_code == 403
                     and quote_with_csrf.status_code == 404,
-                    "job automation, customer outcome, operation evidence, exception, operation-learning review, and quote APIs remain browser-session allowlisted and CSRF guarded",
+                    "job automation, durable responsibility, customer outcome, operation evidence, exception, operation-learning review, and quote APIs remain browser-session allowlisted and CSRF guarded",
                 )
     finally:
         api_module.agency_automation_policy_repository = previous_repository
