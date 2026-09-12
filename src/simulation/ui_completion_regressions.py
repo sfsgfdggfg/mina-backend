@@ -110,6 +110,17 @@ def evaluate_ui_completion_regressions() -> dict:
         "browser LearningFact reviews expose durable supersession lineage across operation and master-data surfaces",
     )
     check(
+        "appendLearningPolicyEvaluations" in js_text
+        and "learningPolicyEffectLabel" in js_text
+        and "item.raw_confidence" in js_text
+        and "item.effective_confidence" in js_text
+        and "item.evidence_age_days" in js_text
+        and "item.runtime_eligible" in js_text
+        and "codeLabel(item.reason)" in js_text
+        and js_text.count("appendLearningPolicyEvaluations(") >= 5,
+        "browser learning policy surfaces explain effect confidence recency eligibility and backend reason without recomputing authority",
+    )
+    check(
         "appendExplicitLearningReview" in js_text
         and "LearningFact kararı için inceleme notu gerekli." in js_text
         and 'JSON.stringify({ review_note: reviewNote })' in js_text
