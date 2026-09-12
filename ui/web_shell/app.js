@@ -2873,17 +2873,34 @@ function timelineEventSummary(event) {
 }
 
 function timeline(container, events) {
-  const section = sectionBlock("Zaman Çizelgesi", "Son 25 kalıcı iş olayı; yalnız privacy-safe audit özeti gösterilir.");
-  const rows = (events || []).slice().reverse().slice(0, 25);
+  const section = sectionBlock("Zaman Çizelgesi", "En yeni kalıcı iş olaylarından başlanır; ilk 25 gösterilir ve geçmiş kayıtlar yalnız privacy-safe audit özetiyle açılabilir.");
+  const rows = (events || []).slice().reverse();
   if (!rows.length) { section.append(emptyState("Henüz timeline olayı yok")); container.append(section); return; }
-  rows.forEach(event => {
-    const item = node("div", "", "timeline-item");
-    item.append(node("strong", timelineEventLabel(event.event_type)));
-    const summary = timelineEventSummary(event);
-    if (summary) item.append(node("div", summary, "timeline-summary"));
-    item.append(node("div", `${formatDate(event.occurred_at)} · ${event.actor || "sistem"}`, "small muted"));
-    section.append(item);
-  });
+  const list = node("div", "", "timeline-list");
+  const controls = node("div", "", "actions timeline-controls");
+  let visibleCount = Math.min(25, rows.length);
+  const renderRows = () => {
+    list.replaceChildren();
+    rows.slice(0, visibleCount).forEach(event => {
+      const item = node("div", "", "timeline-item");
+      item.append(node("strong", timelineEventLabel(event.event_type)));
+      const summary = timelineEventSummary(event);
+      if (summary) item.append(node("div", summary, "timeline-summary"));
+      item.append(node("div", `${formatDate(event.occurred_at)} · ${event.actor || "sistem"}`, "small muted"));
+      list.append(item);
+    });
+    controls.replaceChildren();
+    if (visibleCount < rows.length) {
+      const remaining = rows.length - visibleCount;
+      controls.append(actionButton(`${Math.min(25, remaining)} daha göster`, "", () => {
+        visibleCount = Math.min(visibleCount + 25, rows.length);
+        renderRows();
+      }));
+    }
+    controls.append(node("span", `${visibleCount}/${rows.length} olay gösteriliyor`, "small muted"));
+  };
+  renderRows();
+  section.append(list, controls);
   container.append(section);
 }
 
