@@ -305,10 +305,11 @@ def evaluate_customer_quote_reason_learning_regressions() -> dict:
         "customer Master Data UI exposes reason-specific learning derivation and consumes advisory policy",
     )
     check(
-        "/learning-facts/${encodeURIComponent(f.fact_id)}/confirm" in panel_source
-        and "/learning-facts/${encodeURIComponent(f.fact_id)}/reject" in panel_source
-        and 'f.status==="proposed"' in panel_source,
-        "reason-specific UI preserves explicit human confirm and reject review lifecycle",
+        "appendExplicitLearningReview(card, f, load)" in panel_source
+        and "appendExplicitLearningReview" in browser_source
+        and "/learning-facts/${encodeURIComponent(fact.fact_id)}/${decision}" in browser_source
+        and "LearningFact kararı için inceleme notu gerekli." in browser_source,
+        "reason-specific UI preserves explicit human confirm and reject review lifecycle with an operator-authored note",
     )
     safety_terms = [
         "nedensel açıklama", "fiyat hassasiyeti", "ödeme isteği", "win probability",

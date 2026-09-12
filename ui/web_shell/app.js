@@ -3352,6 +3352,41 @@ function renderAutomationSettings(policyPayload, customers = []) {
 }
 
 
+function appendExplicitLearningReview(card, fact, refresh) {
+  if (fact.status === "proposed") {
+    const review = node("div", "", "learning-fact-review");
+    const noteLabel = node("label", "İnceleme notu");
+    const note = document.createElement("textarea");
+    note.rows = 2; note.maxLength = 1200;
+    note.placeholder = "Kanıtı neden doğruladığınızı veya reddettiğinizi yazın.";
+    noteLabel.append(note);
+    const feedback = node("div", "", "muted settings-feedback");
+    const actions = node("div", "", "actions");
+    const act = async decision => {
+      const reviewNote = note.value.trim();
+      if (!reviewNote) { feedback.textContent = "LearningFact kararı için inceleme notu gerekli."; return; }
+      const buttons = actions.querySelectorAll("button"); buttons.forEach(button => { button.disabled = true; });
+      feedback.textContent = decision === "confirm" ? "Gözlem doğrulanıyor…" : "Gözlem reddediliyor…";
+      try {
+        await api(`/learning-facts/${encodeURIComponent(fact.fact_id)}/${decision}`, {
+          method: "POST", body: JSON.stringify({ review_note: reviewNote })
+        });
+        await refresh();
+      } catch (error) {
+        feedback.textContent = error.message || String(error);
+        buttons.forEach(button => { button.disabled = false; });
+      }
+    };
+    actions.append(
+      actionButton("Doğrula", "approve", () => act("confirm")),
+      actionButton("Reddet", "reject", () => act("reject"))
+    );
+    review.append(noteLabel, actions, feedback); card.append(review);
+  } else if (fact.reviewed_at) {
+    card.append(node("div", `İnceleme: ${fact.review_note || "-"} · ${fact.reviewed_by || "-"} · ${formatDate(fact.reviewed_at)}`, "small muted learning-fact-reviewed"));
+  }
+}
+
 function renderCustomerPreferenceLearning(container, customer) {
   const labels={
     "preference.default_commodity":"Varsayılan emtia",
@@ -3385,7 +3420,7 @@ function renderCustomerPreferenceLearning(container, customer) {
       const list=node("div","","learning-fact-list");facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",labels[f.fact_key]||f.fact_key),node("div",String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}%`,"muted small"));
         if((f.evidence||[])[0]?.summary)card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
-        if(f.status==="proposed"){const a=node("div","","actions");a.append(actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"Müşteri Master ekranında operatör tarafından doğrulandı."})});await load();}),actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"Müşteri Master ekranında operatör tarafından reddedildi."})});await load();}));card.append(a);}list.append(card);});container.append(list);
+        appendExplicitLearningReview(card, f, load); list.append(card);});container.append(list);
     }catch(e){container.replaceChildren(node("div",e.message||String(e),"error"));}
   } load();
 }
@@ -3422,7 +3457,7 @@ function renderCustomerQuoteAcceptanceLearning(container, customer) {
         card.append(node("strong",labels[f.fact_key]||f.fact_key),node("div",`${String(f.value)} ${f.value_unit||""}`,"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}%`,"muted small"));
         if(f.context_key)card.append(node("div",`Ticari bağlam: ${f.context_key}`,"muted small"));
         if((f.evidence||[])[0]?.summary)card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
-        if(f.status==="proposed"){const a=node("div","","actions");a.append(actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"Quote Acceptance Learning ekranında operatör tarafından gözlemsel ticari hafıza olarak doğrulandı."})});await load();}),actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"Quote Acceptance Learning ekranında operatör tarafından reddedildi."})});await load();}));card.append(a);}list.append(card);});container.append(list);
+        appendExplicitLearningReview(card, f, load); list.append(card);});container.append(list);
     }catch(e){container.replaceChildren(node("div",e.message||String(e),"error"));}
   } load();
 }
@@ -3481,10 +3516,7 @@ function renderCustomerQuoteReasonLearning(container, customer) {
         card.append(node("strong",labels[f.fact_key]||f.fact_key),node("div",factValue(f),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}%`,"muted small"));
         if(f.context_key)card.append(node("div",`Kanonik bağlam: ${f.context_key}`,"muted small"));
         const summary=evidenceSummary(f);if(summary)card.append(node("div",`Sınırlı kanıt özeti: ${summary}`,"muted small"));
-        if(f.status==="proposed"){const actions=node("div","","actions");actions.append(
-          actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"Neden bazlı müşteri ticari öğrenimi ekranında tarihsel, müşteri-beyanlı ve yalnız advisory gözlem olarak doğrulandı."})});await load();}),
-          actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"Neden bazlı müşteri ticari öğrenimi ekranında operatör tarafından reddedildi."})});await load();})
-        );card.append(actions);}
+        appendExplicitLearningReview(card, f, load);
         list.append(card);
       });
       container.append(list);
@@ -3539,7 +3571,7 @@ function renderSupplierLearning(container, supplier) {
       const list=node("div","","learning-fact-list"); facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",f.fact_key),node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small")); if(f.context_key) card.append(node("div",`${String(f.context_key).startsWith("customer=")?"Müşteri bağlamı":"Bağlam"}: ${f.context_key}`,"muted small"));
         if(f.source_type==="minai_inference" && (f.evidence||[])[0]?.summary) card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
-        if(f.status==="proposed"){const a=node("div","","actions"); a.append(actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"Tedarikçi profili ekranında operatör tarafından doğrulandı."})});await load();}),actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"Tedarikçi profili ekranında operatör tarafından reddedildi."})});await load();}));card.append(a);} list.append(card);}); area.append(list);
+        appendExplicitLearningReview(card, f, load); list.append(card);}); area.append(list);
     } catch(e){area.replaceChildren(node("div",e.message||String(e),"error"));}
   } load();
 }
@@ -3596,13 +3628,7 @@ async function renderRelationshipFactReview(container, subject) {
       if(f.source_type==="minai_inference" && (f.evidence||[])[0]?.summary){
         card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
       }
-      if(f.status==="proposed"){
-        const actions=node("div","","actions");
-        actions.append(
-          actionButton("Doğrula","approve",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/confirm`,{method:"POST",body:JSON.stringify({review_note:"İlişki Hafızası ekranında operatör tarafından doğrulandı."})});await renderRelationshipFactReview(container,subject);}),
-          actionButton("Reddet","reject",async()=>{await api(`/learning-facts/${encodeURIComponent(f.fact_id)}/reject`,{method:"POST",body:JSON.stringify({review_note:"İlişki Hafızası ekranında operatör tarafından reddedildi."})});await renderRelationshipFactReview(container,subject);})
-        ); card.append(actions);
-      }
+      appendExplicitLearningReview(card, f, () => renderRelationshipFactReview(container, subject));
       container.append(card);
     });
   } catch (e) { container.replaceChildren(node("div",e.message||String(e),"error")); }

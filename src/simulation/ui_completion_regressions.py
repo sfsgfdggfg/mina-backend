@@ -90,6 +90,17 @@ def evaluate_ui_completion_regressions() -> dict:
         "job detail reviews existing operation learning while keeping manual fact creation out of the pilot browser",
     )
     check(
+        "appendExplicitLearningReview" in js_text
+        and "LearningFact kararı için inceleme notu gerekli." in js_text
+        and 'JSON.stringify({ review_note: reviewNote })' in js_text
+        and "Müşteri Master ekranında operatör tarafından doğrulandı." not in js_text
+        and "Quote Acceptance Learning ekranında operatör tarafından" not in js_text
+        and "Neden bazlı müşteri ticari öğrenimi ekranında" not in js_text
+        and "Tedarikçi profili ekranında operatör tarafından" not in js_text
+        and "İlişki Hafızası ekranında operatör tarafından" not in js_text,
+        "all browser LearningFact review surfaces require an explicit operator note instead of synthetic review text",
+    )
+    check(
         "timelineEventSummary" in js_text
         and "privacy-safe audit özeti" in js_text
         and 'case "stage_changed"' in js_text
