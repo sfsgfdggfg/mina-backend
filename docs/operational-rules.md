@@ -4189,3 +4189,10 @@ Snapshot evaluation must use the same stable Customer Master identity, recency g
 The snapshot is audit evidence only. It must not participate in quote-content equality, send-safety validity, pricing formulas, margin calculation, supplier selection, supplier negotiation, automation, recipient authority or dispatch. Raw evidence and manually maintained price/time sensitivity fields must not be copied into it.
 
 Legacy approvals that predate this rule keep a missing snapshot. Historical absence must never be filled from current LearningFacts. Operator quote-review UI must prefer the approval's frozen commercial snapshot over a live recomputation whenever it explains what commercial advisory was visible for that approval decision.
+## RULE-253 — Observe Air-Service Choice Before Automating Air Pricing or Express Operations
+
+Air tariff registration v1 accepts only commercial-air PDF source identity. The durable record must preserve a SHA-256 fingerprint and authenticated recorder evidence, remain immutable/idempotent by entry identity, and store no parsed price. Raw PDF bytes and extracted tariff text are not persisted in the `AirRateSource` state record.
+
+Express may be observed only as the operator-selected service-mode classification. An `express` observation may name the evidenced provider, while a `commercial_air` observation may name the evidenced airline; the two provider fields must not be conflated. The observation contract must contain no price, rate or surcharge fields.
+
+Neither a registered airline tariff nor a mode observation is runtime authority. They must not generate customer quotes, supplier/airline messages, bookings, capacity assumptions, schedules, chargeable-weight calculations, pivot-weight decisions, pickup charges, door-delivery costs or special-cargo acceptance. Each of those capabilities requires later bounded implementation and, where learning is involved, explicit human review before runtime effect.

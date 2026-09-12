@@ -7147,3 +7147,15 @@ A later confirmed, superseded, stale or newly derived LearningFact must not rewr
 The commercial snapshot contains only the privacy-minimal advisory values and fact identifiers already allowed by the customer commercial context policy. It stores no raw evidence, mail body, manual sensitivity field, causal inference, current customer target, pricing command or supplier-negotiation target. It creates no pricing, margin, supplier-selection, supplier-negotiation, automation, quote-send or dispatch authority.
 
 Legacy approvals without a commercial advisory snapshot remain valid and readable. MINAI must not backfill or reconstruct what an operator supposedly saw in the past. The quote review UI should render the frozen approval snapshot for decision history rather than silently recomputing historical advisory context from current learning state.
+## DEC-236 — Commercial Air Starts as Shadow Evidence; Express Is Classification-Only
+
+**Status:** Accepted
+**Date:** 2026-09-12
+
+MINAI's road Email→Quote MVP remains unchanged. Commercial-air development begins as a separate shadow-learning lane: MINAI may register exact airline tariff-PDF source identities and observe how operators classify and handle air inquiries, but this phase creates no air quote, air sell-price, airline booking, capacity confirmation, schedule request or outbound authority.
+
+The first durable air tariff object is an immutable `AirRateSource` for `commercial_air` only. It records airline, PDF identity/fingerprint, optional validity/origin scope and cargo scope, while deliberately storing no parsed rate or surcharge. Tariff interpretation and human review are separate later steps so a PDF's existence can never become pricing authority by itself.
+
+Express remains intentionally out of pricing scope. `AirModeObservation` may record that an operator handled an inquiry as `commercial_air` or `express`, and may preserve an observed airline or express provider when evidenced, but contains no price/rate/surcharge contract. FedEx/Aramex rate engines, remote-area calculation, ETGB execution and express operational automation are deferred.
+
+Mode observations are descriptive evidence only. They may later support reviewed learning about which shipment contexts are handled as commercial air versus express, but they cannot change transport mode, customer preferences, pricing, regulatory eligibility or workflow authority without a separately approved learning policy.
