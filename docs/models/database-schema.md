@@ -900,3 +900,11 @@ In controlled pilot mode the SQLite file is deployment-owned external state: `MI
 `AirModeObservation` is an immutable evidence record for an operator-observed `commercial_air` versus `express` service-mode choice. It stores a bounded inquiry reference, evidence basis, authenticated observer/time, optional stable customer identity and only the provider field appropriate to the selected mode. It intentionally contains no price/rate/surcharge fields and creates no transport-mode authority.
 
 Persistent namespaces are `air_rate_sources`, `air_rate_source_by_entry`, `air_mode_observations` and `air_mode_observation_by_entry`. Ordinary retention does not purge them. Raw tariff PDF bytes and extracted text are outside these state records; later ingestion/interpretation must retain source linkage without silently converting source existence into quote authority.
+
+## P2-18 Commercial-Air Tariff PDF Artifact Storage and Listing
+
+P2-18 reuses the P2-17 `air_rate_sources` and `air_rate_source_by_entry` namespaces; no raw-document database namespace is added. `AirRateSource` adds optional bounded `size_bytes` so source identity can preserve the verified upload size while remaining backward-compatible with P2-17 records.
+
+The corresponding verified PDF is stored outside state JSON in a protected content-addressed filesystem artifact keyed by `sha256_hex`. In controlled pilot mode its default directory is `<MINAI_PILOT_DB_PATH parent>/air-rate-sources`; an optional `MINAI_AIR_RATE_STORAGE_DIR` override must be absolute and outside the repository. Directory permissions are 0700 and PDF permissions are 0600.
+
+The `/air-rate-sources` projection adds deployment-state `document_stored` plus explicit non-authority flags. These are read-model values rather than mutable business authority. `/air-rate-sources/upload` stores/registers evidence only and does not persist extracted tariff text or parsed prices.

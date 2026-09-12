@@ -7159,3 +7159,14 @@ The first durable air tariff object is an immutable `AirRateSource` for `commerc
 Express remains intentionally out of pricing scope. `AirModeObservation` may record that an operator handled an inquiry as `commercial_air` or `express`, and may preserve an observed airline or express provider when evidenced, but contains no price/rate/surcharge contract. FedEx/Aramex rate engines, remote-area calculation, ETGB execution and express operational automation are deferred.
 
 Mode observations are descriptive evidence only. They may later support reviewed learning about which shipment contexts are handled as commercial air versus express, but they cannot change transport mode, customer preferences, pricing, regulatory eligibility or workflow authority without a separately approved learning policy.
+
+## DEC-237 — Commercial-Air Tariff Upload Retains the Exact PDF Without Creating Pricing Authority
+
+**Status:** Accepted
+**Date:** 2026-09-12
+
+The first commercial-air tariff ingestion surface accepts only an authenticated operator upload of an `application/pdf` document up to the existing controlled 10 MiB attachment limit. The upload is signature/EOF verified with the existing attachment-content verifier before registration. The exact PDF is retained in protected content-addressed storage by SHA-256; the user-supplied document name is metadata only and is never used as a filesystem path.
+
+In controlled pilot mode, air-rate document storage is deployment-owned external state. Unless explicitly configured to another safe external directory, it is placed beside the already-required external pilot SQLite database. Directory/file permissions are hardened to owner-only access. Raw PDF bytes and extracted tariff text are not written to `state_records` or pilot audit-event payloads.
+
+The browser and API expose read-only source listing plus PDF registration only. A registered source remains `registered_not_interpreted`, non-authoritative and unavailable to customer quote calculations. PDF parsing, weight-break/surcharge interpretation, chargeable/pivot-weight calculation, airline availability requests and quote generation require later separately bounded steps. Express tariff upload remains out of scope.

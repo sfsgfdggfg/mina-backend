@@ -1539,3 +1539,9 @@ Add `--agency-alias address@example.com` for each legitimate agency alias that c
 Review the highest-traffic unmatched addresses/domains with the agency operator. Humanly classify the desired initial scope as 2–3 pilot customers and 3–5 road suppliers, confirm the correct operational email contacts, and then enter them through the normal Master Data/data-pack intake. Only after the resulting agency pack is human-reviewed, fingerprint-current and `verified=true` should the controlled shadow-pilot profile be pointed at it.
 
 Once deterministic customer/supplier identities exist, run the existing historical relationship onboarding to derive proposed timing/communication/behavior facts. Counterparty discovery itself never creates those facts and never treats traffic volume as evidence that an address is a customer or supplier.
+
+## Air Freight Shadow — Commercial-Air Tariff PDF Registration
+
+The controlled pilot may register commercial-air tariff PDFs from **Ayarlar → Havayolu Listeleri**. The operator supplies the airline, optional cargo scope/origin-airport/validity metadata and the original PDF. Only PDF files up to 10 MiB are accepted. Registration stores the exact verified artifact in protected deployment-owned storage and displays it as `registered_not_interpreted`.
+
+A successful upload is not an air-pricing readiness signal. Until a later interpretation/review step is implemented, MINAI must not derive rates, surcharges, chargeable weight, pivot weight, capacity, schedules or customer prices from the document. Express/FedEx/Aramex tariffs are intentionally not accepted by this surface.
