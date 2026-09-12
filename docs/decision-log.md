@@ -7170,3 +7170,14 @@ The first commercial-air tariff ingestion surface accepts only an authenticated 
 In controlled pilot mode, air-rate document storage is deployment-owned external state. Unless explicitly configured to another safe external directory, it is placed beside the already-required external pilot SQLite database. Directory/file permissions are hardened to owner-only access. Raw PDF bytes and extracted tariff text are not written to `state_records` or pilot audit-event payloads.
 
 The browser and API expose read-only source listing plus PDF registration only. A registered source remains `registered_not_interpreted`, non-authoritative and unavailable to customer quote calculations. PDF parsing, weight-break/surcharge interpretation, chargeable/pivot-weight calculation, airline availability requests and quote generation require later separately bounded steps. Express tariff upload remains out of scope.
+
+## DEC-238 — Commercial-Air PDF Structure Is Extracted Locally Before Any AI Tariff Interpretation
+
+**Status:** Accepted
+**Date:** 2026-09-12
+
+Registered commercial-air tariff PDFs may be opened from protected content-addressed storage and passed through the existing bounded PDF text extractor. The first interpretation stage is deliberately local and deterministic: it may propose only structural labels such as explicit weight-break markers (`MIN`, `+45`, `+100`, etc.), known surcharge labels, currency tokens, volumetric-divisor hints and cargo-scope hints. It must not parse or persist numeric tariff prices, build rate rows, calculate chargeable/pivot weight, or invoke an OpenAI model.
+
+Each immutable tariff source may have one durable `AirRateStructureReview` for the v1 extractor. The review stores the source fingerprint, extracted-text fingerprint and character count plus bounded structural candidates and their source line numbers. Full extracted tariff text and arbitrary source excerpts are not persisted in state/audit JSON. Re-running the same source is idempotent.
+
+Operators review each candidate individually with a mandatory note. A confirmed candidate means only that the structural label was verified against the source document; confirmation creates no air-pricing, surcharge, routing, availability, booking, quote or automation authority. Full tariff-row interpretation, including use of AI on commercially sensitive source content, requires a later separately approved boundary and the applicable OpenAI data-control approval.
