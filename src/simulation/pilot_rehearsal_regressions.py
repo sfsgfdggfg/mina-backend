@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import io
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
+from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
 from src.paths import data_path
 from src.simulation.pilot_rehearsal import TOKEN, main as rehearsal_main, run_rehearsal
 
@@ -20,15 +22,29 @@ def _data_snapshot() -> dict[str, bytes]:
     }
 
 
+@contextmanager
+def _without_external_rehearsal_authority():
+    keys = ("OPENAI_API_KEY", AGENCY_PRICING_POLICY_ENV)
+    saved = {key: os.environ.pop(key, None) for key in keys}
+    try:
+        yield
+    finally:
+        for key, value in saved.items():
+            if value is not None:
+                os.environ[key] = value
+            else:
+                os.environ.pop(key, None)
+
+
 def evaluate_pilot_rehearsal_regressions() -> dict:
     failures: list[str] = []
     before = _data_snapshot()
-    original_key = os.environ.pop("OPENAI_API_KEY", None)
-    try:
+    with _without_external_rehearsal_authority():
         result = run_rehearsal()
-    finally:
-        if original_key is not None:
-            os.environ["OPENAI_API_KEY"] = original_key
+        output = io.StringIO()
+        success_exit = rehearsal_main(output)
+        failed_output = io.StringIO()
+        failure_exit = rehearsal_main(failed_output, injected_failure="after-confirmation")
     after = _data_snapshot()
 
     expected_checks = {
@@ -70,15 +86,13 @@ def evaluate_pilot_rehearsal_regressions() -> dict:
     if db_path.exists() or db_path == data_path("pilot", "minai_pilot.sqlite3"):
         failures.append("rehearsal database was not temporary and removed")
 
-    output = io.StringIO()
-    if rehearsal_main(output) != 0 or "Synthetic pilot rehearsal: PASS" not in output.getvalue():
+    if success_exit != 0 or "Synthetic pilot rehearsal: PASS" not in output.getvalue():
         failures.append("success CLI contract failed")
     safe_output = output.getvalue()
     if TOKEN in safe_output or "secret" in safe_output.lower() or "Bearer " in safe_output:
         failures.append("success output exposed credential material")
 
-    failed_output = io.StringIO()
-    if rehearsal_main(failed_output, injected_failure="after-confirmation") == 0:
+    if failure_exit == 0:
         failures.append("controlled injected failure exited zero")
     failure_text = failed_output.getvalue()
     if "FAIL injected failure: controlled rehearsal check failed" not in failure_text:

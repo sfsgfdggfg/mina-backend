@@ -83,6 +83,10 @@ def _write_synthetic_sources(root: Path) -> OperationalDataSources:
                 ],
                 "default_commodity": "Tekstil",
                 "default_equipment_type": "Tenteli",
+                "pricing_policy": {
+                    "method": "cost_markup_percentage",
+                    "value": 15,
+                },
             },
             {
                 "customer_name": "Synthetic Backup Customer",
@@ -95,6 +99,10 @@ def _write_synthetic_sources(root: Path) -> OperationalDataSources:
                 ],
                 "default_commodity": "Tekstil",
                 "default_equipment_type": "Tenteli",
+                "pricing_policy": {
+                    "method": "cost_markup_percentage",
+                    "value": 15,
+                },
             },
         ],
         sort_keys=True,
