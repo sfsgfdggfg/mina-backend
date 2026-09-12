@@ -2539,6 +2539,44 @@ function renderOperationSection(container, data, jobId, refresh) {
       if (item.status === "resolved") {
         card.append(node("div", `Çözüm: ${item.resolution_note || "-"} · ${formatDate(item.resolved_at)} · ${item.resolved_by || "-"}`, "small muted"));
       } else if (lifecycleV2) {
+        if (editable) {
+          const edit = document.createElement("details"); edit.className = "exception-edit-panel";
+          const summary = document.createElement("summary"); summary.textContent = "İstisnayı Düzenle / Etkiyi Güncelle"; edit.append(summary);
+          const typeLabel = node("label", "Tür"); const type = document.createElement("select");
+          [["border_congestion","Sınır yoğunluğu"],["breakdown","Arıza"],["documentation","Evrak"],["customs","Gümrük"],["appointment","Randevu"],["route_deviation","Rota sapması"],["weather","Hava"],["loading","Yükleme"],["delivery","Teslimat"],["damage","Hasar"],["other","Diğer"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;type.append(o);}); type.value = item.exception_type; typeLabel.append(type);
+          const impactLabel = node("label", "Etki"); const impact = document.createElement("select");
+          [["deviation","Sapma"],["delivery_risk","Teslim riski"],["actual_delay","Gerçek gecikme"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;impact.append(o);}); impact.value = item.impact_level; impactLabel.append(impact);
+          const sourceLabel = node("label", "Kaynak"); const source = document.createElement("select");
+          [["supplier_email","Tedarikçi e-posta"],["supplier_phone","Tedarikçi telefon"],["whatsapp","WhatsApp"],["gps","GPS"],["operator","Operatör"],["other","Diğer"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;source.append(o);}); source.value = item.source_type; sourceLabel.append(source);
+          const location = inboxField("Konum"); location.input.value = item.location || "";
+          const sourceReference = inboxField("Kaynak referansı"); sourceReference.input.value = item.source_reference || "";
+          const oldEta = operationDateTimeField("Eski ETA", item.old_eta); const newEta = operationDateTimeField("Yeni ETA", item.new_eta);
+          const editGrid = node("div", "", "operation-editor-grid"); editGrid.append(typeLabel, impactLabel, sourceLabel, location.label, sourceReference.label, oldEta.label, newEta.label);
+          const causeLabel = node("label", "Sebep"); const cause = document.createElement("textarea"); cause.rows = 3; cause.maxLength = 1200; cause.value = item.cause || ""; causeLabel.append(cause);
+          const customerImpactLabel = node("label", "Müşteri etkisi"); const customerImpact = document.createElement("textarea"); customerImpact.rows = 2; customerImpact.maxLength = 1200; customerImpact.value = item.customer_impact_summary || ""; customerImpactLabel.append(customerImpact);
+          const nextActionLabel = node("label", "Sonraki aksiyon"); const nextAction = document.createElement("textarea"); nextAction.rows = 2; nextAction.maxLength = 1200; nextAction.value = item.next_action || ""; nextActionLabel.append(nextAction);
+          const editFeedback = node("div", "", "muted settings-feedback");
+          const saveEdit = actionButton("İstisna Güncelle", "primary", async () => {
+            if (!cause.value.trim()) { editFeedback.textContent = "İstisna sebebi boş bırakılamaz."; return; }
+            const payload = {
+              exception_type: type.value, impact_level: impact.value, cause: cause.value.trim(),
+              location: location.input.value.trim() || null, source_type: source.value,
+              source_reference: sourceReference.input.value.trim() || null,
+              customer_impact_summary: customerImpact.value.trim() || null,
+              next_action: nextAction.value.trim() || null,
+            };
+            try {
+              payload.old_eta = oldEta.input.value ? istanbulDateTimeIso(oldEta.input.value) : null;
+              payload.new_eta = newEta.input.value ? istanbulDateTimeIso(newEta.input.value) : null;
+            } catch (error) { editFeedback.textContent = error.message || String(error); return; }
+            saveEdit.disabled = true; editFeedback.textContent = "İstisna güncelleniyor…";
+            try {
+              await api(`/mina-jobs/${encodeURIComponent(jobId)}/exceptions/${encodeURIComponent(item.exception_id)}`, { method: "POST", body: JSON.stringify(payload) });
+              await refresh();
+            } catch (error) { editFeedback.textContent = error.message || String(error); saveEdit.disabled = false; }
+          });
+          edit.append(editGrid, causeLabel, customerImpactLabel, nextActionLabel, saveEdit, editFeedback); card.append(edit);
+        }
         const resolvePanel = node("div", "", "exception-resolution");
         const label = node("label", "Çözüm notu"); const input = document.createElement("textarea"); input.rows = 2; input.maxLength = 1200; label.append(input);
         const feedback = node("div", "", "muted settings-feedback");
@@ -2563,9 +2601,9 @@ function renderOperationSection(container, data, jobId, refresh) {
     [["deviation","Sapma"],["delivery_risk","Teslim riski"],["actual_delay","Gerçek gecikme"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;impact.append(o);}); impactLabel.append(impact);
     const sourceLabel = node("label", "Kaynak"); const source = document.createElement("select");
     [["supplier_email","Tedarikçi e-posta"],["supplier_phone","Tedarikçi telefon"],["whatsapp","WhatsApp"],["gps","GPS"],["operator","Operatör"],["other","Diğer"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;source.append(o);}); sourceLabel.append(source);
-    const location = inboxField("Konum");
+    const location = inboxField("Konum"); const sourceReference = inboxField("Kaynak referansı");
     const oldEta = operationDateTimeField("Eski ETA"); const newEta = operationDateTimeField("Yeni ETA");
-    const top = node("div", "", "operation-editor-grid"); top.append(typeLabel, impactLabel, sourceLabel, location.label, oldEta.label, newEta.label); form.append(top);
+    const top = node("div", "", "operation-editor-grid"); top.append(typeLabel, impactLabel, sourceLabel, location.label, sourceReference.label, oldEta.label, newEta.label); form.append(top);
     const causeLabel = node("label", "Sebep"); const cause = document.createElement("textarea"); cause.rows = 3; cause.maxLength = 1200; causeLabel.append(cause);
     const customerImpactLabel = node("label", "Müşteri etkisi"); const customerImpact = document.createElement("textarea"); customerImpact.rows = 2; customerImpact.maxLength = 1200; customerImpactLabel.append(customerImpact);
     const nextActionLabel = node("label", "Sonraki aksiyon"); const nextAction = document.createElement("textarea"); nextAction.rows = 2; nextAction.maxLength = 1200; nextActionLabel.append(nextAction);
@@ -2576,6 +2614,7 @@ function renderOperationSection(container, data, jobId, refresh) {
         entry_id: freshPriceEntryId("operation-exception"), exception_type: type.value,
         impact_level: impact.value, cause: cause.value.trim(), source_type: source.value,
         reported_at: operationNowIso(), location: location.input.value.trim() || null,
+        source_reference: sourceReference.input.value.trim() || null,
         customer_impact_summary: customerImpact.value.trim() || null,
         next_action: nextAction.value.trim() || null,
       };

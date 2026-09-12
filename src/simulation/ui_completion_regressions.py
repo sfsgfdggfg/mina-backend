@@ -66,8 +66,10 @@ def evaluate_ui_completion_regressions() -> dict:
         and "/exceptions" in js_text
         and "Araç Bilgisini Kaydet" in js_text
         and "Operasyonu Tamamla" in js_text
+        and "İstisnayı Düzenle / Etkiyi Güncelle" in js_text
+        and "İstisna Güncelle" in js_text
         and "allowed_next_stages" in js_text,
-        "job detail exposes evidence-backed operation controls without a generic lifecycle editor",
+        "job detail exposes evidence-backed operation and open-exception correction controls without a generic lifecycle editor",
     )
     check(
         "markActiveNavigation" in js_text
@@ -156,6 +158,14 @@ def evaluate_ui_completion_regressions() -> dict:
                         "impact_level": "deviation", "cause": "Test", "source_type": "operator",
                     },
                 )
+                exception_edit_no_csrf = client.post(
+                    "/mina-jobs/missing-job/exceptions/missing-exception",
+                    json={"impact_level": "actual_delay"},
+                )
+                exception_edit_with_csrf = client.post(
+                    "/mina-jobs/missing-job/exceptions/missing-exception",
+                    headers={"X-CSRF-Token": csrf}, json={"impact_level": "actual_delay"},
+                )
                 quote_read = client.get("/quote-cases/missing-case")
                 quote_no_csrf = client.post("/quote-approvals/missing-approval/approve", json={})
                 quote_with_csrf = client.post(
@@ -182,10 +192,12 @@ def evaluate_ui_completion_regressions() -> dict:
                     and operation_with_csrf.status_code == 404
                     and exception_no_csrf.status_code == 403
                     and exception_with_csrf.status_code == 404
+                    and exception_edit_no_csrf.status_code == 403
+                    and exception_edit_with_csrf.status_code == 404
                     and quote_read.status_code == 404
                     and quote_no_csrf.status_code == 403
                     and quote_with_csrf.status_code == 404,
-                    "job automation, customer outcome, operation evidence, exception, and quote APIs remain browser-session allowlisted and CSRF guarded",
+                    "job automation, customer outcome, operation evidence, exception create/edit, and quote APIs remain browser-session allowlisted and CSRF guarded",
                 )
     finally:
         api_module.agency_automation_policy_repository = previous_repository
