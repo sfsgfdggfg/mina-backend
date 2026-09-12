@@ -1640,6 +1640,46 @@ function renderShipmentSection(container, data) {
   container.append(section);
 }
 
+function renderJobResponsibilitySection(container, data, jobId, refresh) {
+  const summary = data.summary || {};
+  const section = sectionBlock(
+    "İş Sorumlulukları",
+    "Kalıcı sales/operations sorumluluğudur; İş Kuyruğu claim/lease atamasından ayrıdır."
+  );
+  const grid = node("div", "", "job-responsibility-grid");
+  grid.append(
+    summaryItem("Satış sorumlusu", summary.sales_owner || "-"),
+    summaryItem("Operasyon sorumlusu", summary.operations_owner || "-")
+  );
+  section.append(grid);
+  if (summary.is_closed) {
+    section.append(node("div", "Kapanmış işte kalıcı sorumluluk değiştirilemez.", "muted small"));
+    container.append(section);
+    return;
+  }
+  const form = node("div", "", "job-responsibility-editor");
+  const sales = inboxField("Satış sorumlusu"); sales.input.value = summary.sales_owner || ""; sales.input.maxLength = 200;
+  const operations = inboxField("Operasyon sorumlusu"); operations.input.value = summary.operations_owner || ""; operations.input.maxLength = 200;
+  const fields = node("div", "", "settings-two-col"); fields.append(sales.label, operations.label);
+  const feedback = node("div", "", "muted settings-feedback");
+  const save = actionButton("Sorumlulukları Kaydet", "primary", async () => {
+    save.disabled = true; feedback.textContent = "Kaydediliyor…";
+    try {
+      await api(`/mina-jobs/${encodeURIComponent(jobId)}/owners`, {
+        method: "POST",
+        body: JSON.stringify({
+          sales_owner: sales.input.value.trim() || null,
+          operations_owner: operations.input.value.trim() || null
+        })
+      });
+      feedback.textContent = "Kalıcı iş sorumluluğu kaydedildi; değişiklik timeline audit kaydına işlendi.";
+      await refresh();
+    } catch (error) { feedback.textContent = error.message || String(error); save.disabled = false; }
+  });
+  form.append(fields, node("div", "Bu alanlar operasyonel iş sahipliğini gösterir; kuyruk assignment lease'ini devretmez.", "notice small"), save, feedback);
+  section.append(form); container.append(section);
+}
+
 function overrideChoice(mode, disabled) { return disabled && !mode ? "disabled" : (mode || "inherit"); }
 function jobAutomationSelect(labelText, policy, overrideMode, disabled) {
   const wrap = node("div", "", "job-automation-control");
@@ -2725,13 +2765,20 @@ function renderOperationSection(container, data, jobId, refresh) {
   container.append(section);
 }
 
+function timelineEventLabel(eventType) {
+  return ({
+    job_sales_owner_changed: "Satış sorumlusu değiştirildi",
+    job_operations_owner_changed: "Operasyon sorumlusu değiştirildi",
+  })[eventType] || codeLabel(eventType);
+}
+
 function timeline(container, events) {
   const section = sectionBlock("Zaman Çizelgesi", "Son 25 kalıcı iş olayı, en yeni üstte.");
   const rows = (events || []).slice().reverse().slice(0, 25);
   if (!rows.length) { section.append(emptyState("Henüz timeline olayı yok")); container.append(section); return; }
   rows.forEach(event => {
     const item = node("div", "", "timeline-item");
-    item.append(node("strong", codeLabel(event.event_type)));
+    item.append(node("strong", timelineEventLabel(event.event_type)));
     item.append(node("div", `${formatDate(event.occurred_at)} · ${event.actor || "sistem"}`, "small"));
     section.append(item);
   });
@@ -2847,6 +2894,7 @@ async function renderJob(data, jobId) {
   if (next.length) root.append(node("div", `İzin verilen sonraki aşamalar: ${next.map(stageLabel).join(" · ")}`, "small job-next-stages"));
 
   renderShipmentSection(root, data);
+  renderJobResponsibilitySection(root, data, jobId, async () => loadJob(jobId));
   renderJobAutomationSection(root, data, jobId, async () => loadJob(jobId));
 
   const approvals = sectionBlock("MINAI Onayları", "Sadece şu anda karar gerektiren otomasyon mesajları.");

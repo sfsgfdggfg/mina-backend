@@ -281,6 +281,8 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .warning-badge { background: #fff7e8; color: var(--warning); }
 .package-list { display: grid; gap: 6px; margin-top: 10px; }
 .package-row { padding: 9px 11px; border-radius: 9px; background: #f8fafc; font-size: 12px; }
+.job-responsibility-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.job-responsibility-editor { display: grid; gap: 12px; margin-top: 12px; max-width: 820px; }
 .job-automation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .job-automation-control { border: 1px solid var(--line); border-radius: 12px; padding: 13px; background: #fbfcfe; }
 .policy-evidence { margin-top: 7px; }
@@ -363,7 +365,7 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
   header { align-items: flex-start; }
   header h1 { font-size: 24px; }
   .content-card { padding: 15px; border-radius: 13px; }
-  .jobs-metrics, .detail-grid, .operation-grid, .supplier-facts, .job-overview-grid, .job-automation-grid, .quote-metrics { grid-template-columns: 1fr; }
+  .jobs-metrics, .detail-grid, .operation-grid, .supplier-facts, .job-overview-grid, .job-responsibility-grid, .job-automation-grid, .quote-metrics { grid-template-columns: 1fr; }
   .jobs-table { display: none; }
   .jobs-card-list { display: grid; }
   .jobs-toolbar { align-items: stretch; flex-direction: column; }
