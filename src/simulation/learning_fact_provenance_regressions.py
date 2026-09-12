@@ -245,6 +245,19 @@ def evaluate_learning_fact_provenance_regressions() -> dict:
         "MINA job detail exposes operation-specific learning facts without making them authoritative",
     )
 
+    browser_ui = (Path("ui") / "web_shell" / "app.js").read_text(encoding="utf-8")
+    check(
+        "renderOperationLearningSection" in browser_ui
+        and "MINAI Operasyon Öğrenimleri" in browser_ui
+        and "Confidence yalnız güven sinyalidir" in browser_ui
+        and "/learning-facts/${encodeURIComponent(fact.fact_id)}/${decision}" in browser_ui
+        and "Öğrenimi Onayla" in browser_ui
+        and "Öğrenimi Reddet" in browser_ui
+        and "Yeni Öğrenim Önerisi Ekle" not in browser_ui
+        and 'api("/learning-facts", { method: "POST"' not in browser_ui,
+        "pilot browser reviews existing operation learning without exposing manual fact creation authority",
+    )
+
     with tempfile.TemporaryDirectory() as temp_dir:
         store = SQLitePilotStore(Path(temp_dir) / "learning.sqlite3", retention_days=30)
         durable_repo = SQLiteLearningFactRepository(store)
