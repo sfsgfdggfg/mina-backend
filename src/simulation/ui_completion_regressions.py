@@ -125,6 +125,14 @@ def evaluate_ui_completion_regressions() -> dict:
         "job timeline renders curated privacy-safe audit summaries without dumping free-text or raw metadata",
     )
     check(
+        "visibleCount = Math.min(25, rows.length)" in js_text
+        and '`${Math.min(25, remaining)} daha göster`' in js_text
+        and '`${visibleCount}/${rows.length} olay gösteriliyor`' in js_text
+        and "rows.slice(0, visibleCount)" in js_text
+        and "timelineEventSummary(event)" in js_text,
+        "job timeline progressively reveals older durable audit events without bypassing curated summaries",
+    )
+    check(
         "markActiveNavigation" in js_text
         and "nav a.active" in css_text
         and ".jobs-card-list" in css_text
