@@ -27,6 +27,7 @@ class AirRateSource(BaseModel):
     document_name: str = Field(min_length=1, max_length=240)
     mime_type: Literal["application/pdf"] = "application/pdf"
     sha256_hex: str = Field(pattern=r"^[0-9a-f]{64}$")
+    size_bytes: Optional[int] = Field(default=None, ge=1, le=10 * 1024 * 1024)
     cargo_scope: AirCargoScope = "unknown"
     origin_country: str = Field(default="Türkiye", min_length=1, max_length=100)
     origin_airport: Optional[str] = Field(default=None, min_length=3, max_length=3)
@@ -44,6 +45,8 @@ class AirRateSource(BaseModel):
         normalized = value.strip()
         if not normalized.lower().endswith(".pdf"):
             raise ValueError("Commercial-air rate source must be a PDF document.")
+        if "/" in normalized or "\\" in normalized:
+            raise ValueError("Commercial-air rate source document_name must be a file name only.")
         return normalized
 
     @field_validator("airline_name", "origin_country", "recorded_by", "notes", mode="before")

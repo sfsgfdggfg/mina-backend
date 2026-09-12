@@ -4196,3 +4196,11 @@ Air tariff registration v1 accepts only commercial-air PDF source identity. The 
 Express may be observed only as the operator-selected service-mode classification. An `express` observation may name the evidenced provider, while a `commercial_air` observation may name the evidenced airline; the two provider fields must not be conflated. The observation contract must contain no price, rate or surcharge fields.
 
 Neither a registered airline tariff nor a mode observation is runtime authority. They must not generate customer quotes, supplier/airline messages, bookings, capacity assumptions, schedules, chargeable-weight calculations, pivot-weight decisions, pickup charges, door-delivery costs or special-cargo acceptance. Each of those capabilities requires later bounded implementation and, where learning is involved, explicit human review before runtime effect.
+
+## RULE-254 — Store Commercial-Air PDFs as Protected Evidence and Keep Registration Separate From Interpretation
+
+A commercial-air tariff upload must be an authenticated `application/pdf`, must not exceed 10 MiB, and must pass the existing PDF signature/EOF verification before its source identity is registered. Empty, mislabeled, malformed, oversized or path-like uploads fail closed.
+
+The exact verified PDF must be stored by SHA-256 in protected content-addressed storage. The original file name may be retained only as bounded source metadata and must never control a storage path. Pilot storage must remain outside the repository and use owner-only directory/file permissions. Raw tariff bytes and extracted tariff content must never be copied into ordinary state/audit JSON.
+
+Listing registered air-rate sources is read-only evidence visibility. `document_stored=true` means the protected artifact is present; it does not mean the tariff has been interpreted, reviewed, validated for current dates, checked for capacity or authorized for pricing. No air or express customer quote may be generated from registration alone.

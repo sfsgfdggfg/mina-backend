@@ -242,6 +242,20 @@ from src.core.supplier_price_service import (
     set_supplier_fixed_rate_active,
     use_fixed_rate_for_job,
 )
+from src.core.air_shadow_repository import (
+    AirShadowConflictError,
+    SQLiteAirShadowRepository,
+)
+from src.core.air_rate_document_store import (
+    AirRateDocumentStorageError,
+    AirRateDocumentStore,
+)
+from src.core.air_rate_source_service import (
+    AirRateSourceUploadError,
+    build_air_rate_source_view,
+    register_commercial_air_rate_pdf,
+)
+from src.core.attachment_intake_policy import MAX_ATTACHMENT_FILE_BYTES
 from src.core.operation_execution_repository import (
     OperationExecutionConflictError,
     SQLiteOperationExecutionRepository,
@@ -451,6 +465,25 @@ def _authenticated_operator(
     return normalized
 
 
+async def _read_bounded_air_rate_pdf_body(request: Request) -> bytes:
+    declared = (request.headers.get("content-length") or "").strip()
+    if declared:
+        try:
+            declared_size = int(declared)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid_content_length") from exc
+        if declared_size < 0:
+            raise HTTPException(status_code=400, detail="invalid_content_length")
+        if declared_size > MAX_ATTACHMENT_FILE_BYTES:
+            raise HTTPException(status_code=413, detail="air_rate_pdf_size_exceeds_limit")
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_ATTACHMENT_FILE_BYTES:
+            raise HTTPException(status_code=413, detail="air_rate_pdf_size_exceeds_limit")
+    return bytes(body)
+
+
 def _runtime_outbound_delivery_enabled() -> bool:
     return outbound_runtime_policy.delivery_enabled or demo_mode_enabled()
 
@@ -512,6 +545,8 @@ supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
 operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
 operation_start_message_repository = SQLiteOperationStartMessageRepository(pilot_store)
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
+air_shadow_repository = SQLiteAirShadowRepository(pilot_store)
+air_rate_document_store = AirRateDocumentStore()
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
@@ -2214,6 +2249,66 @@ def create_manual_job(request: MinaJobManualCreateRequest, http_request: Request
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return job.model_dump()
+
+
+@app.get("/air-rate-sources")
+def list_air_rate_sources():
+    try:
+        return build_air_rate_source_view(
+            repository=air_shadow_repository,
+            document_store=air_rate_document_store,
+        )
+    except AirRateDocumentStorageError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/air-rate-sources/upload")
+async def upload_air_rate_source(
+    http_request: Request,
+    entry_id: str,
+    airline_name: str,
+    document_name: str,
+    cargo_scope: Literal["general_cargo", "special_cargo", "mixed", "unknown"] = "unknown",
+    origin_airport: Optional[str] = None,
+    valid_from: Optional[date] = None,
+    valid_to: Optional[date] = None,
+    notes: Optional[str] = None,
+):
+    content = await _read_bounded_air_rate_pdf_body(http_request)
+    try:
+        source, created = register_commercial_air_rate_pdf(
+            repository=air_shadow_repository,
+            document_store=air_rate_document_store,
+            entry_id=entry_id,
+            airline_name=airline_name,
+            document_name=document_name,
+            content_type=http_request.headers.get("content-type") or "",
+            content=content,
+            cargo_scope=cargo_scope,
+            origin_airport=origin_airport,
+            valid_from=valid_from,
+            valid_to=valid_to,
+            recorded_by=_authenticated_operator(http_request),
+            notes=notes,
+        )
+    except AirRateSourceUploadError as exc:
+        status = 415 if exc.code == "air_rate_pdf_content_type_required" else 413 if exc.code == "air_rate_pdf_size_exceeds_limit" else 422
+        raise HTTPException(status_code=status, detail=exc.code) from exc
+    except AirShadowConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AirRateDocumentStorageError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "rate_source": {
+            **source.model_dump(mode="json"),
+            "document_stored": air_rate_document_store.is_stored(source.sha256_hex),
+            "runtime_authoritative": False,
+        },
+        "created": created,
+        "shadow_only": True,
+    }
 
 
 @app.post("/supplier-fixed-rates")
