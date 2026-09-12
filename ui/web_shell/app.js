@@ -2400,6 +2400,7 @@ function renderOperationLearningSection(container, data, refresh) {
     card.append(node("div", `Confidence: %${Math.round((Number(fact.confidence) || 0) * 100)} · ${fact.status === "confirmed" ? "Runtime authoritative" : "Advisory / yetkisiz"}`, fact.status === "confirmed" ? "small success-text" : "small muted"));
     card.append(node("div", `Kaynak: ${codeLabel(fact.source_type)} · Oluşturan: ${fact.created_by || "-"} · ${formatDate(fact.created_at)}`, "small muted"));
 
+    card.append(node("div", `Fact ID: ${fact.fact_id || "-"}`, "small muted learning-fact-id"));
     const evidence = fact.evidence || [];
     if (evidence.length) {
       const evidenceList = node("div", "", "operation-learning-evidence");
@@ -3370,6 +3371,7 @@ function renderAutomationSettings(policyPayload, customers = []) {
 function appendLearningFactEvidence(card, fact) {
   const evidence = fact.evidence || [];
   if (!evidence.length) return;
+  card.append(node("div", `Fact ID: ${fact.fact_id || "-"}`, "small muted learning-fact-id"));
   const box = node("div", "", "learning-fact-evidence");
   box.append(node("div", `Kanıt (${evidence.length})`, "small learning-fact-evidence-title"));
   evidence.forEach(item => {
@@ -3407,6 +3409,7 @@ function appendLearningPolicyEvaluations(container, evaluations, labels = {}) {
   items.forEach(item => {
     const row = node("div", "", "learning-policy-evaluation-row");
     row.append(node("div", labels[item.fact_key] || codeLabel(item.fact_key), "small"));
+    row.append(node("div", `Fact ID: ${item.fact_id || "-"}`, "muted small learning-fact-id"));
     const raw = Math.round((Number(item.raw_confidence) || 0) * 100);
     const effective = Math.round((Number(item.effective_confidence) || 0) * 100);
     const bits = [

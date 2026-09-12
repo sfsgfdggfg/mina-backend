@@ -402,6 +402,7 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .learning-fact-reviewed { border-top: 1px solid #edf0f5; padding-top: 7px; margin-top: 4px; }
 .learning-policy-evaluations { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .learning-policy-evaluation-row { background: #f8fafc; border-radius: 9px; padding: 8px 10px; display: grid; gap: 2px; }
+.learning-fact-id { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .performance-setting-row { display: grid; grid-template-columns: minmax(220px,.8fr) minmax(220px,1fr); gap: 14px; align-items: end; max-width: 760px; }
 .direct-assign { display: flex; gap: 7px; margin-top: 10px; }
 .direct-assign select { min-width: 0; }
