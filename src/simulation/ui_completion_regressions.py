@@ -100,6 +100,16 @@ def evaluate_ui_completion_regressions() -> dict:
         "browser LearningFact review surfaces expose all bounded evidence references without raw or hash metadata",
     )
     check(
+        "appendLearningSupersessionAudit" in js_text
+        and 'fact.status !== "superseded"' in js_text
+        and "fact.superseded_by_fact_id" in js_text
+        and "formatDate(fact.superseded_at)" in js_text
+        and 'fact.superseded_by || "-"' in js_text
+        and 'fact.supersession_note || "-"' in js_text
+        and js_text.count("appendLearningSupersessionAudit(card, fact);") >= 2,
+        "browser LearningFact reviews expose durable supersession lineage across operation and master-data surfaces",
+    )
+    check(
         "appendExplicitLearningReview" in js_text
         and "LearningFact kararı için inceleme notu gerekli." in js_text
         and 'JSON.stringify({ review_note: reviewNote })' in js_text

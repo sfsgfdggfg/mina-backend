@@ -2437,9 +2437,7 @@ function renderOperationLearningSection(container, data, refresh) {
     } else if (fact.reviewed_at) {
       card.append(node("div", `İnceleme: ${fact.review_note || "-"} · ${fact.reviewed_by || "-"} · ${formatDate(fact.reviewed_at)}`, "small muted operation-learning-reviewed"));
     }
-    if (fact.status === "superseded" && fact.superseded_by_fact_id) {
-      card.append(node("div", `Yerine geçen fact: ${fact.superseded_by_fact_id}`, "small muted"));
-    }
+    appendLearningSupersessionAudit(card, fact);
     list.append(card);
   });
   section.append(list);
@@ -3383,6 +3381,17 @@ function appendLearningFactEvidence(card, fact) {
   card.append(box);
 }
 
+function appendLearningSupersessionAudit(card, fact) {
+  if (fact.status !== "superseded" || !fact.superseded_by_fact_id) return;
+  const audit = node("div", "", "small muted learning-fact-supersession");
+  audit.append(
+    node("div", `Değiştirildi: ${formatDate(fact.superseded_at)} · ${fact.superseded_by || "-"}`),
+    node("div", `Yerine geçen fact: ${fact.superseded_by_fact_id}`),
+    node("div", `Değiştirme notu: ${fact.supersession_note || "-"}`)
+  );
+  card.append(audit);
+}
+
 function appendExplicitLearningReview(card, fact, refresh) {
   if (fact.status === "proposed") {
     const review = node("div", "", "learning-fact-review");
@@ -3416,6 +3425,7 @@ function appendExplicitLearningReview(card, fact, refresh) {
   } else if (fact.reviewed_at) {
     card.append(node("div", `İnceleme: ${fact.review_note || "-"} · ${fact.reviewed_by || "-"} · ${formatDate(fact.reviewed_at)}`, "small muted learning-fact-reviewed"));
   }
+  appendLearningSupersessionAudit(card, fact);
 }
 
 function renderCustomerPreferenceLearning(container, customer) {
