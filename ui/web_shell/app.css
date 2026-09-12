@@ -540,3 +540,5 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .demo-reset-scope .summary-item { display: grid; gap: 4px; }
 .demo-reset-panel .reject { justify-self: start; }
 @media (max-width: 760px) { .demo-reset-scope { grid-template-columns: 1fr; } }
+
+.timeline-summary { margin-top: 4px; line-height: 1.4; }
