@@ -3352,6 +3352,20 @@ function renderAutomationSettings(policyPayload, customers = []) {
 }
 
 
+function appendLearningFactEvidence(card, fact) {
+  const evidence = fact.evidence || [];
+  if (!evidence.length) return;
+  const box = node("div", "", "learning-fact-evidence");
+  box.append(node("div", `Kanıt (${evidence.length})`, "small learning-fact-evidence-title"));
+  evidence.forEach(item => {
+    const row = node("div", "", "learning-fact-evidence-row");
+    row.append(node("div", item.summary || "-", "small"));
+    row.append(node("div", `${codeLabel(item.source_type)} · Referans: ${item.source_reference || "-"} · ${formatDate(item.observed_at)}`, "muted small"));
+    box.append(row);
+  });
+  card.append(box);
+}
+
 function appendExplicitLearningReview(card, fact, refresh) {
   if (fact.status === "proposed") {
     const review = node("div", "", "learning-fact-review");
@@ -3419,7 +3433,7 @@ function renderCustomerPreferenceLearning(container, customer) {
       if(!facts.length){container.append(emptyState("Henüz müşteri tercih gözlemi yok","En az 5 tekrarlanan talep güçlü bir default adayı oluşturabilir."));return;}
       const list=node("div","","learning-fact-list");facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",labels[f.fact_key]||f.fact_key),node("div",String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}%`,"muted small"));
-        if((f.evidence||[])[0]?.summary)card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
+        appendLearningFactEvidence(card, f);
         appendExplicitLearningReview(card, f, load); list.append(card);});container.append(list);
     }catch(e){container.replaceChildren(node("div",e.message||String(e),"error"));}
   } load();
@@ -3456,7 +3470,7 @@ function renderCustomerQuoteAcceptanceLearning(container, customer) {
       const list=node("div","","learning-fact-list");facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",labels[f.fact_key]||f.fact_key),node("div",`${String(f.value)} ${f.value_unit||""}`,"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}%`,"muted small"));
         if(f.context_key)card.append(node("div",`Ticari bağlam: ${f.context_key}`,"muted small"));
-        if((f.evidence||[])[0]?.summary)card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
+        appendLearningFactEvidence(card, f);
         appendExplicitLearningReview(card, f, load); list.append(card);});container.append(list);
     }catch(e){container.replaceChildren(node("div",e.message||String(e),"error"));}
   } load();
@@ -3470,10 +3484,6 @@ function renderCustomerQuoteReasonLearning(container, customer) {
   };
   const relevantKeys=new Set(Object.keys(labels));
   const factValue=f=>`${String(f.value)}${f.value_unit?` ${f.value_unit}`:""}`;
-  const evidenceSummary=f=>{
-    const summary=String((f.evidence||[])[0]?.summary||"").trim();
-    return summary.length>360?`${summary.slice(0,357)}…`:summary;
-  };
   async function load(){
     container.replaceChildren(node("div","Müşteri teklif nedeni gözlemleri yükleniyor…","muted"));
     try{
@@ -3515,7 +3525,7 @@ function renderCustomerQuoteReasonLearning(container, customer) {
       facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",labels[f.fact_key]||f.fact_key),node("div",factValue(f),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}%`,"muted small"));
         if(f.context_key)card.append(node("div",`Kanonik bağlam: ${f.context_key}`,"muted small"));
-        const summary=evidenceSummary(f);if(summary)card.append(node("div",`Sınırlı kanıt özeti: ${summary}`,"muted small"));
+        appendLearningFactEvidence(card, f);
         appendExplicitLearningReview(card, f, load);
         list.append(card);
       });
@@ -3570,7 +3580,7 @@ function renderSupplierLearning(container, supplier) {
       const facts=data.facts||[]; if(!facts.length){area.append(emptyState("Henüz öğrenilmiş gözlem yok","Geçmiş RFQ/yanıt kanıtı oluştukça MINAI öneriler üretebilir."));return;}
       const list=node("div","","learning-fact-list"); facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",f.fact_key),node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small")); if(f.context_key) card.append(node("div",`${String(f.context_key).startsWith("customer=")?"Müşteri bağlamı":"Bağlam"}: ${f.context_key}`,"muted small"));
-        if(f.source_type==="minai_inference" && (f.evidence||[])[0]?.summary) card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
+        appendLearningFactEvidence(card, f);
         appendExplicitLearningReview(card, f, load); list.append(card);}); area.append(list);
     } catch(e){area.replaceChildren(node("div",e.message||String(e),"error"));}
   } load();
@@ -3625,9 +3635,7 @@ async function renderRelationshipFactReview(container, subject) {
         node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small")
       );
       if(f.context_key) card.append(node("div",`Bağlam: ${f.context_key}`,"muted small"));
-      if(f.source_type==="minai_inference" && (f.evidence||[])[0]?.summary){
-        card.append(node("div",(f.evidence||[])[0].summary,"muted small"));
-      }
+      appendLearningFactEvidence(card, f);
       appendExplicitLearningReview(card, f, () => renderRelationshipFactReview(container, subject));
       container.append(card);
     });
