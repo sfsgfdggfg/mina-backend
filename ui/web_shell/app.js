@@ -3392,6 +3392,37 @@ function appendLearningSupersessionAudit(card, fact) {
   card.append(audit);
 }
 
+function learningPolicyEffectLabel(effect) {
+  return ({
+    runtime_default: "Runtime default", ranking: "Sıralama", timing: "Zamanlama",
+    advisory: "Tavsiye", none: "Etkisiz"
+  })[effect] || codeLabel(effect);
+}
+
+function appendLearningPolicyEvaluations(container, evaluations, labels = {}) {
+  const items = evaluations || [];
+  if (!items.length) return;
+  const box = node("div", "", "learning-policy-evaluations");
+  box.append(node("strong", "Policy değerlendirmesi"));
+  items.forEach(item => {
+    const row = node("div", "", "learning-policy-evaluation-row");
+    row.append(node("div", labels[item.fact_key] || codeLabel(item.fact_key), "small"));
+    const raw = Math.round((Number(item.raw_confidence) || 0) * 100);
+    const effective = Math.round((Number(item.effective_confidence) || 0) * 100);
+    const bits = [
+      `Etki: ${learningPolicyEffectLabel(item.effect)}`,
+      `Güven: %${raw} → efektif %${effective}`,
+      `Kanıt yaşı: ${Number(item.evidence_age_days || 0).toFixed(1)} gün`,
+    ];
+    if (typeof item.runtime_eligible === "boolean") bits.push(`Runtime uygunluğu: ${item.runtime_eligible ? "Evet" : "Hayır"}`);
+    row.append(node("div", bits.join(" · "), "muted small"));
+    if (item.context_key) row.append(node("div", `Bağlam: ${item.context_key}`, "muted small"));
+    row.append(node("div", `Gerekçe: ${codeLabel(item.reason)}`, "muted small"));
+    box.append(row);
+  });
+  container.append(box);
+}
+
 function appendExplicitLearningReview(card, fact, refresh) {
   if (fact.status === "proposed") {
     const review = node("div", "", "learning-fact-review");
@@ -3456,6 +3487,7 @@ function renderCustomerPreferenceLearning(container, customer) {
       policyCard.append(node("div",defaults.length?defaults.map(([k,v])=>`${k}: ${v}`).join(" · "):"Runtime'da kullanılabilecek öğrenilmiş default yok.","small"));
       if(policy.accepted_quote_currency_advisory) policyCard.append(node("div",`Kabul edilmiş teklif para birimi geçmişi: ${policy.accepted_quote_currency_advisory} · yalnız tavsiye, pricing authority değildir.`,"muted small"));
       container.append(policyCard);
+      appendLearningPolicyEvaluations(container, policy.evaluations, labels);
       const facts=(factsPayload.facts||[]).filter(f=>f.fact_key.startsWith("preference.")||f.fact_key==="commercial.accepted_quote_currency");
       if(!facts.length){container.append(emptyState("Henüz müşteri tercih gözlemi yok","En az 5 tekrarlanan talep güçlü bir default adayı oluşturabilir."));return;}
       const list=node("div","","learning-fact-list");facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
@@ -3489,6 +3521,7 @@ function renderCustomerQuoteAcceptanceLearning(container, customer) {
       summary.append(node("div",`Kabul oranı: ${policy.overall_acceptance_rate_percent==null?"-":`%${Number(policy.overall_acceptance_rate_percent).toFixed(1)}`} · Negotiation oranı: ${policy.negotiation_rate_percent==null?"-":`%${Number(policy.negotiation_rate_percent).toFixed(1)}`}`,"small"));
       summary.append(node("div","Bu metrikler yalnız operatöre bağlam sağlar; teklif fiyatını, marjı, supplier seçimini veya müşteri kazanma olasılığını otomatik değiştirmez.","muted small"));
       container.append(summary);
+      appendLearningPolicyEvaluations(container, policy.evaluations, labels);
       const contextual=(policy.contextual_advisories||[]);
       if(contextual.length){const list=node("div","","learning-fact-list");contextual.forEach(x=>{const card=node("div","","learning-fact-card");card.append(node("strong",labels[x.fact_key]||x.fact_key),node("div",`${Number(x.value).toFixed(2)} ${x.value_unit||""}`,"small"),node("div",x.context_key||"","muted small"));list.append(card);});container.append(list);}
       const acceptedKeys=new Set(Object.keys(labels));
@@ -3533,6 +3566,7 @@ function renderCustomerQuoteReasonLearning(container, customer) {
       advisory.append(node("div",`Fiyat itirazı: ${policy.price_objection_rate_percent==null?"-":`%${Number(policy.price_objection_rate_percent).toFixed(1)}`} · Transit süre itirazı: ${policy.transit_time_objection_rate_percent==null?"-":`%${Number(policy.transit_time_objection_rate_percent).toFixed(1)}`}`,"small"));
       advisory.append(node("div","Yalnız advisory-authoritative olan doğrulanmış gözlemler gösterilir; fiyatlandırmayı, supplier sıralamasını/uygunluğunu, otomasyonu, teklif göndermeyi veya dispatch'i değiştirmez.","muted small"));
       container.append(advisory);
+      appendLearningPolicyEvaluations(container, policy.evaluations, labels);
 
       const targetAdvisories=policy.target_price_advisories||[];
       if(targetAdvisories.length){
@@ -3604,6 +3638,7 @@ function renderSupplierLearning(container, supplier) {
       if(policy.preferred_contact_channel_advisory) policyCard.append(node("div",`Temas kanalı tavsiyesi: ${policy.preferred_contact_channel_advisory==="phone"?"Telefon":"WhatsApp"}; yalnız operatör tavsiyesi, otomatik temas yetkisi değildir.`,"muted small"));
       if(!(policy.evaluations||[]).some(x=>x.effect&&x.effect!=="none")) policyCard.append(node("div","Şu anda runtime davranışını değiştiren doğrulanmış öğrenme yok.","muted small"));
       area.append(policyCard);
+      appendLearningPolicyEvaluations(area, policy.evaluations);
       const facts=data.facts||[]; if(!facts.length){area.append(emptyState("Henüz öğrenilmiş gözlem yok","Geçmiş RFQ/yanıt kanıtı oluştukça MINAI öneriler üretebilir."));return;}
       const list=node("div","","learning-fact-list"); facts.slice().reverse().forEach(f=>{const card=node("div","","learning-fact-card");
         card.append(node("strong",f.fact_key),node("div",Array.isArray(f.value)?f.value.join(" · "):String(f.value),"small"),node("div",`${codeLabel(f.status)} · güven ${Math.round((f.confidence||0)*100)}% · ${codeLabel(f.source_type)}`,"muted small")); if(f.context_key) card.append(node("div",`${String(f.context_key).startsWith("customer=")?"Müşteri bağlamı":"Bağlam"}: ${f.context_key}`,"muted small"));
