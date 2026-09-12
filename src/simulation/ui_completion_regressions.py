@@ -90,6 +90,20 @@ def evaluate_ui_completion_regressions() -> dict:
         "job detail reviews existing operation learning while keeping manual fact creation out of the pilot browser",
     )
     check(
+        "timelineEventSummary" in js_text
+        and "privacy-safe audit özeti" in js_text
+        and 'case "stage_changed"' in js_text
+        and 'case "operation_execution_updated"' in js_text
+        and 'case "operation_exception_created"' in js_text
+        and 'case "operation_exception_resolved"' in js_text
+        and "meta.old_value" in js_text
+        and "meta.new_value" in js_text
+        and "meta.reason" not in js_text
+        and "meta.resolution_note" not in js_text
+        and "JSON.stringify(event.metadata)" not in js_text,
+        "job timeline renders curated privacy-safe audit summaries without dumping free-text or raw metadata",
+    )
+    check(
         "markActiveNavigation" in js_text
         and "nav a.active" in css_text
         and ".jobs-card-list" in css_text

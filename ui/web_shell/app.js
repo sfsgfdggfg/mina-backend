@@ -2767,19 +2767,121 @@ function renderOperationSection(container, data, jobId, refresh) {
 
 function timelineEventLabel(eventType) {
   return ({
+    job_created: "İş oluşturuldu",
+    supplier_workflow_linked: "Tedarikçi çalışma akışı bağlandı",
+    quote_case_linked: "Teklif dosyası bağlandı",
+    automation_override_changed: "İş otomasyonu güncellendi",
     job_sales_owner_changed: "Satış sorumlusu değiştirildi",
     job_operations_owner_changed: "Operasyon sorumlusu değiştirildi",
+    stage_changed: "Aşama değişti",
+    customer_quote_sent: "Müşteri teklifi gönderildi",
+    quote_revised: "Teklif revize edildi",
+    operation_start_prepared: "Operasyon başlangıcı hazırlandı",
+    selected_supplier_operation_email_sent: "Seçilen tedarikçiye operasyon maili gönderildi",
+    supplier_closure_email_sent: "Tedarikçi kapanış maili gönderildi",
+    operation_start_message_rejected: "Operasyon başlangıç mesajı reddedildi",
+    operation_execution_updated: "Operasyon kanıtı güncellendi",
+    operation_exception_created: "Operasyon istisnası açıldı",
+    operation_exception_updated: "Operasyon istisnası güncellendi",
+    operation_exception_resolved: "Operasyon istisnası çözüldü",
+    supplier_price_recorded: "Tedarikçi fiyatı kaydedildi",
+    supplier_negotiation_recorded: "Tedarikçi pazarlığı kaydedildi",
+    supplier_fixed_rate_used: "Sabit tedarikçi fiyatı kullanıldı",
+    supplier_decision_outcome_recorded: "Tedarikçi karar sonucu kaydedildi",
   })[eventType] || codeLabel(eventType);
 }
 
+const OPERATION_TIMELINE_FIELD_LABELS = {
+  supplier_confirmed_at: "tedarikçi teyidi", vehicle_plate: "plaka", driver_name: "şoför",
+  driver_phone: "şoför telefonu", vehicle_assigned_at: "araç atama zamanı",
+  loading_appointment_at: "yükleme randevusu", loaded_at: "yükleme zamanı",
+  current_location: "konum", current_eta: "ETA", delivery_appointment_at: "teslim randevusu",
+  delivered_at: "teslim zamanı", pod_received_at: "POD", cmr_received_at: "CMR",
+};
+
+function safeTimelineValue(value) {
+  if (value == null || value === "") return "atanmamış";
+  return String(value).slice(0, 160);
+}
+
+function timelineEventSummary(event) {
+  const meta = event.metadata || {};
+  switch (event.event_type) {
+    case "job_sales_owner_changed":
+    case "job_operations_owner_changed":
+      return `${safeTimelineValue(meta.old_value)} → ${safeTimelineValue(meta.new_value)}`;
+    case "stage_changed":
+      return meta.from_stage && meta.to_stage ? `${stageLabel(meta.from_stage)} → ${stageLabel(meta.to_stage)}` : "";
+    case "job_created": {
+      const bits = [];
+      if (meta.stage) bits.push(stageLabel(meta.stage));
+      if (meta.job_kind) bits.push(codeLabel(meta.job_kind));
+      if (meta.intake_channel) bits.push(codeLabel(meta.intake_channel));
+      return bits.join(" · ");
+    }
+    case "automation_override_changed": {
+      const bits = [];
+      if (meta.supplier_reminder_mode) bits.push(`supplier reminder: ${modeLabel(meta.supplier_reminder_mode)}`);
+      if (meta.customer_deadline_update_mode) bits.push(`deadline update: ${modeLabel(meta.customer_deadline_update_mode)}`);
+      if (meta.disable_supplier_reminders === true) bits.push("supplier reminder kapalı");
+      if (meta.disable_customer_deadline_updates === true) bits.push("deadline update kapalı");
+      return bits.join(" · ");
+    }
+    case "customer_quote_sent":
+      return meta.revision_number ? `Rev.${meta.revision_number}${meta.send_mode ? ` · ${codeLabel(meta.send_mode)}` : ""}` : "";
+    case "quote_revised": {
+      const fields = Array.isArray(meta.changed_fields) ? meta.changed_fields.map(codeLabel).slice(0, 8) : [];
+      return `${meta.revision_number ? `Rev.${meta.revision_number}` : "Revizyon"}${fields.length ? ` · değişen: ${fields.join(", ")}` : ""}`;
+    }
+    case "operation_execution_updated": {
+      const fields = Array.isArray(meta.changed_fields) ? meta.changed_fields.slice(0, 12).map(key => OPERATION_TIMELINE_FIELD_LABELS[key] || codeLabel(key)) : [];
+      return fields.length ? `Güncellenen: ${fields.join(", ")}` : "";
+    }
+    case "operation_exception_created": {
+      const bits = [];
+      if (meta.exception_type) bits.push(`Tür: ${codeLabel(meta.exception_type)}`);
+      if (meta.impact_level) bits.push(`Etki: ${codeLabel(meta.impact_level)}`);
+      if (meta.stage_at_report) bits.push(`Aşama: ${stageLabel(meta.stage_at_report)}`);
+      return bits.join(" · ");
+    }
+    case "operation_exception_updated": {
+      const fields = Array.isArray(meta.changed_fields) ? meta.changed_fields.map(codeLabel).slice(0, 10) : [];
+      const bits = [];
+      if (fields.length) bits.push(`Değişen: ${fields.join(", ")}`);
+      if (meta.impact_level) bits.push(`Etki: ${codeLabel(meta.impact_level)}`);
+      return bits.join(" · ");
+    }
+    case "operation_exception_resolved": {
+      const bits = [];
+      if (meta.exception_type) bits.push(`Tür: ${codeLabel(meta.exception_type)}`);
+      if (meta.impact_level) bits.push(`Etki: ${codeLabel(meta.impact_level)}`);
+      return bits.join(" · ");
+    }
+    case "operation_start_prepared": {
+      const bits = [];
+      if (meta.selected_supplier) bits.push(`Seçilen: ${safeTimelineValue(meta.selected_supplier)}`);
+      if (Number.isInteger(meta.message_count)) bits.push(`${meta.message_count} mesaj`);
+      return bits.join(" · ");
+    }
+    case "selected_supplier_operation_email_sent":
+    case "supplier_closure_email_sent":
+    case "operation_start_message_rejected":
+      return meta.supplier_name ? `Tedarikçi: ${safeTimelineValue(meta.supplier_name)}` : "";
+    default:
+      return "";
+  }
+}
+
 function timeline(container, events) {
-  const section = sectionBlock("Zaman Çizelgesi", "Son 25 kalıcı iş olayı, en yeni üstte.");
+  const section = sectionBlock("Zaman Çizelgesi", "Son 25 kalıcı iş olayı; yalnız privacy-safe audit özeti gösterilir.");
   const rows = (events || []).slice().reverse().slice(0, 25);
   if (!rows.length) { section.append(emptyState("Henüz timeline olayı yok")); container.append(section); return; }
   rows.forEach(event => {
     const item = node("div", "", "timeline-item");
     item.append(node("strong", timelineEventLabel(event.event_type)));
-    item.append(node("div", `${formatDate(event.occurred_at)} · ${event.actor || "sistem"}`, "small"));
+    const summary = timelineEventSummary(event);
+    if (summary) item.append(node("div", summary, "timeline-summary"));
+    item.append(node("div", `${formatDate(event.occurred_at)} · ${event.actor || "sistem"}`, "small muted"));
     section.append(item);
   });
   container.append(section);
