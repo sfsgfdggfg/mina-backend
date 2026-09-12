@@ -2263,29 +2263,267 @@ function renderOperationStartSection(container, data, jobId, refresh) {
   container.append(section);
 }
 
-function renderOperationSection(container, data) {
+function operationNowIso() { return new Date().toISOString(); }
+
+function istanbulDateTimeLocalValue(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    }).formatToParts(parsed).filter(item => item.type !== "literal").map(item => [item.type, item.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+function istanbulDateTimeIso(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const normalized = raw.length === 16 ? `${raw}:00+03:00` : `${raw}+03:00`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) throw new Error("Geçerli bir İstanbul tarih-saat değeri gir.");
+  return parsed.toISOString();
+}
+
+function operationDateTimeField(labelText, value = null) {
+  const label = node("label", labelText);
+  const input = document.createElement("input"); input.type = "datetime-local";
+  input.value = istanbulDateTimeLocalValue(value); label.append(input);
+  return { label, input };
+}
+
+async function saveOperationEvidence(jobId, changes, feedback, refresh, successText) {
+  feedback.textContent = "Operasyon kanıtı kaydediliyor…";
+  try {
+    await api(`/mina-jobs/${encodeURIComponent(jobId)}/operation`, {
+      method: "POST", body: JSON.stringify(changes)
+    });
+    feedback.textContent = successText;
+    await refresh();
+  } catch (error) { feedback.textContent = error.message || String(error); }
+}
+
+async function advanceOperationStage(jobId, targetStage, feedback, refresh) {
+  feedback.textContent = `${stageLabel(targetStage)} aşamasına geçiliyor…`;
+  try {
+    await api(`/mina-jobs/${encodeURIComponent(jobId)}/stage`, {
+      method: "POST", body: JSON.stringify({ target_stage: targetStage })
+    });
+    await refresh();
+  } catch (error) { feedback.textContent = error.message || String(error); }
+}
+
+function renderOperationSection(container, data, jobId, refresh) {
   const operation = data.operation || {};
-  const section = sectionBlock("Operasyon", "Araç, sürücü, ETA, teslim ve istisna kanıtları.");
-  const execution = operation.execution || operation.snapshot || null;
-  if (execution) {
-    const grid = node("div", "", "detail-grid operation-grid");
-    grid.append(
-      summaryItem("Tedarikçi teyidi", formatDate(execution.supplier_confirmed_at)),
-      summaryItem("Araç", execution.vehicle_plate || "-"),
-      summaryItem("Sürücü", execution.driver_name || "-"),
-      summaryItem("Telefon", execution.driver_phone || "-"),
-      summaryItem("Yükleme randevusu", formatDate(execution.loading_appointment_at)),
-      summaryItem("Yüklendi", formatDate(execution.loaded_at)),
-      summaryItem("Konum", execution.current_location || "-"),
-      summaryItem("ETA", formatDate(execution.current_eta)),
-      summaryItem("Teslim randevusu", formatDate(execution.delivery_appointment_at)),
-      summaryItem("Teslim edildi", formatDate(execution.delivered_at)),
-      summaryItem("POD", formatDate(execution.pod_received_at)),
-      summaryItem("CMR", formatDate(execution.cmr_received_at))
-    );
-    section.append(grid);
-  } else section.append(emptyState("Henüz operasyon yürütme kaydı yok", "Operasyon açıldığında araç, sürücü ve ETA kanıtları burada toplanır."));
+  const snapshot = operation.execution || operation.snapshot || {};
+  const stage = data.summary?.stage || operation.stage || "";
+  const lifecycleV2 = Number(data.summary?.lifecycle_version) === 2;
+  const closed = Boolean(data.summary?.is_closed);
+  const allowed = new Set(data.controls?.allowed_next_stages || []);
+  const activeStages = new Set([
+    "operation_opened", "supplier_confirmation_pending", "vehicle_details_pending",
+    "vehicle_assigned", "pre_loading_check", "ready_for_loading", "loaded", "in_transit",
+    "delivery", "delivered", "pod_cmr_pending", "closing_review"
+  ]);
+  const editable = lifecycleV2 && !closed && activeStages.has(stage);
+  const section = sectionBlock("Operasyon", "Gerçek operasyon kanıtlarını kaydet; milestone ilerlemeleri backend geçiş ve kanıt kontrollerinden geçer.");
+
+  const grid = node("div", "", "detail-grid operation-grid");
+  grid.append(
+    summaryItem("Tedarikçi teyidi", formatDate(snapshot.supplier_confirmed_at)),
+    summaryItem("Araç", snapshot.vehicle_plate || "-"),
+    summaryItem("Sürücü", snapshot.driver_name || "-"),
+    summaryItem("Telefon", snapshot.driver_phone || "-"),
+    summaryItem("Yükleme randevusu", formatDate(snapshot.loading_appointment_at)),
+    summaryItem("Yüklendi", formatDate(snapshot.loaded_at)),
+    summaryItem("Konum", snapshot.current_location || "-"),
+    summaryItem("ETA", formatDate(snapshot.current_eta)),
+    summaryItem("Teslim randevusu", formatDate(snapshot.delivery_appointment_at)),
+    summaryItem("Teslim edildi", formatDate(snapshot.delivered_at)),
+    summaryItem("POD", formatDate(snapshot.pod_received_at)),
+    summaryItem("CMR", formatDate(snapshot.cmr_received_at))
+  );
+  section.append(grid);
+  if (snapshot.updated_at) section.append(node("div", `Son operasyon kanıtı: ${formatDate(snapshot.updated_at)} · ${snapshot.updated_by || "-"}`, "muted small operation-last-update"));
+
   const exceptions = operation.exceptions || [];
+  const openExceptions = exceptions.filter(item => item.status === "open");
+  if (openExceptions.length) {
+    const counts = operation.open_impact_counts || {};
+    section.append(node(
+      "div",
+      `Açık operasyon istisnası: ${openExceptions.length} · Sapma ${counts.deviation || 0} · Teslim riski ${counts.delivery_risk || 0} · Gerçek gecikme ${counts.actual_delay || 0}`,
+      operation.customer_attention_recommended ? "notice operation-risk-notice" : "muted small operation-risk-notice"
+    ));
+  }
+
+  if (editable) {
+    const controls = node("div", "", "operation-control-stack");
+    const feedback = node("div", "", "muted approval-feedback operation-feedback");
+
+    if (stage === "operation_opened") {
+      controls.append(node("div", "Seçilen tedarikçiye operasyon başlangıç mesajı gönderildiğinde sistem işi Tedarikçi Teyidi aşamasına ilerletir. Bu geçiş burada elle taklit edilmez.", "notice"));
+    }
+
+    if (stage === "supplier_confirmation_pending") {
+      const card = node("div", "", "operation-control-card");
+      card.append(node("strong", "Tedarikçi teyidi"));
+      if (!snapshot.supplier_confirmed_at) {
+        card.append(actionButton("Tedarikçi Teyidini Şimdi Kaydet", "primary", () => saveOperationEvidence(
+          jobId, { supplier_confirmed_at: operationNowIso() }, feedback, refresh, "Tedarikçi teyidi kaydedildi."
+        )));
+      } else if (allowed.has("vehicle_details_pending")) {
+        card.append(
+          node("div", `Teyit: ${formatDate(snapshot.supplier_confirmed_at)}`, "small success-text"),
+          actionButton("Teyit Tamam — Araç Bilgisine Geç", "approve", () => advanceOperationStage(jobId, "vehicle_details_pending", feedback, refresh))
+        );
+      }
+      controls.append(card);
+    }
+
+    if (stage === "vehicle_details_pending") {
+      const card = node("div", "", "operation-control-card");
+      card.append(node("strong", "Araç ve sürücü"));
+      if (!snapshot.supplier_confirmed_at) {
+        card.append(
+          node("div", "Tedarikçi teyit zamanı eksik. Araç atamasını ilerletmeden önce bu operasyon kanıtını tamamla.", "notice"),
+          actionButton("Tedarikçi Teyidini Şimdi Kaydet", "", () => saveOperationEvidence(
+            jobId, { supplier_confirmed_at: operationNowIso() }, feedback, refresh, "Tedarikçi teyidi kaydedildi."
+          ))
+        );
+      }
+      const plate = inboxField("Plaka"); plate.input.value = snapshot.vehicle_plate || "";
+      const driver = inboxField("Sürücü adı"); driver.input.value = snapshot.driver_name || "";
+      const phone = inboxField("Sürücü telefonu"); phone.input.value = snapshot.driver_phone || "";
+      const formGrid = node("div", "", "operation-editor-grid"); formGrid.append(plate.label, driver.label, phone.label); card.append(formGrid);
+      const actions = node("div", "", "actions");
+      actions.append(actionButton("Araç Bilgisini Kaydet", "primary", async () => {
+        if (!plate.input.value.trim() || !driver.input.value.trim()) { feedback.textContent = "Araç ataması için plaka ve sürücü adı gerekli."; return; }
+        await saveOperationEvidence(jobId, {
+          vehicle_plate: plate.input.value.trim(), driver_name: driver.input.value.trim(),
+          driver_phone: phone.input.value.trim() || null,
+          vehicle_assigned_at: snapshot.vehicle_assigned_at || operationNowIso(),
+        }, feedback, refresh, "Araç ve sürücü kanıtı kaydedildi.");
+      }));
+      if (snapshot.supplier_confirmed_at && snapshot.vehicle_plate && snapshot.driver_name && snapshot.vehicle_assigned_at && allowed.has("vehicle_assigned")) {
+        actions.append(actionButton("Araç Atandı Olarak İlerle", "approve", () => advanceOperationStage(jobId, "vehicle_assigned", feedback, refresh)));
+      }
+      card.append(actions); controls.append(card);
+    }
+
+    const appointmentStages = new Set([
+      "supplier_confirmation_pending", "vehicle_details_pending", "vehicle_assigned",
+      "pre_loading_check", "ready_for_loading", "loaded", "in_transit", "delivery"
+    ]);
+    if (appointmentStages.has(stage)) {
+      const card = node("div", "", "operation-control-card"); card.append(node("strong", "Randevular"));
+      const loading = operationDateTimeField("Yükleme randevusu", snapshot.loading_appointment_at);
+      const delivery = operationDateTimeField("Teslim randevusu", snapshot.delivery_appointment_at);
+      const fields = node("div", "", "operation-editor-grid"); fields.append(loading.label, delivery.label); card.append(fields);
+      card.append(actionButton("Randevuları Güncelle", "", async () => {
+        const changes = {};
+        try {
+          if (loading.input.value) changes.loading_appointment_at = istanbulDateTimeIso(loading.input.value);
+          if (delivery.input.value) changes.delivery_appointment_at = istanbulDateTimeIso(delivery.input.value);
+        } catch (error) { feedback.textContent = error.message || String(error); return; }
+        if (!Object.keys(changes).length) { feedback.textContent = "Kaydetmek için en az bir randevu tarih-saat değeri gir."; return; }
+        await saveOperationEvidence(jobId, changes, feedback, refresh, "Randevu kanıtı güncellendi.");
+      }));
+      controls.append(card);
+    }
+
+    if (stage === "vehicle_assigned" && allowed.has("pre_loading_check")) {
+      const card = node("div", "", "operation-control-card compact");
+      card.append(node("strong", "Yükleme öncesi"), actionButton("Yükleme Öncesi Kontrolü Başlat", "approve", () => advanceOperationStage(jobId, "pre_loading_check", feedback, refresh)));
+      controls.append(card);
+    }
+    if (stage === "pre_loading_check" && allowed.has("ready_for_loading")) {
+      const card = node("div", "", "operation-control-card compact");
+      card.append(node("strong", "Yüklemeye hazırlık"), actionButton("Yüklemeye Hazır Olarak İlerle", "approve", () => advanceOperationStage(jobId, "ready_for_loading", feedback, refresh)));
+      controls.append(card);
+    }
+
+    if (stage === "ready_for_loading") {
+      const card = node("div", "", "operation-control-card"); card.append(node("strong", "Yükleme"));
+      if (!snapshot.loaded_at) {
+        card.append(actionButton("Yükleme Gerçekleşti — Şimdi", "primary", () => saveOperationEvidence(
+          jobId, { loaded_at: operationNowIso() }, feedback, refresh, "Yükleme zamanı kaydedildi."
+        )));
+      } else if (allowed.has("loaded")) {
+        card.append(node("div", `Yükleme kanıtı: ${formatDate(snapshot.loaded_at)}`, "small success-text"), actionButton("Yüklendi Olarak İlerle", "approve", () => advanceOperationStage(jobId, "loaded", feedback, refresh)));
+      }
+      controls.append(card);
+    }
+
+    const transitStages = new Set(["loaded", "in_transit", "delivery"]);
+    if (transitStages.has(stage)) {
+      const card = node("div", "", "operation-control-card"); card.append(node("strong", "Konum ve ETA"));
+      const location = inboxField("Güncel konum"); location.input.value = snapshot.current_location || "";
+      const eta = operationDateTimeField("Güncel ETA", snapshot.current_eta);
+      const fields = node("div", "", "operation-editor-grid"); fields.append(location.label, eta.label); card.append(fields);
+      card.append(actionButton("Konum / ETA Güncelle", "", async () => {
+        const changes = {};
+        if (location.input.value.trim()) changes.current_location = location.input.value.trim();
+        try { if (eta.input.value) changes.current_eta = istanbulDateTimeIso(eta.input.value); }
+        catch (error) { feedback.textContent = error.message || String(error); return; }
+        if (!Object.keys(changes).length) { feedback.textContent = "Konum veya ETA bilgisinden en az birini gir."; return; }
+        await saveOperationEvidence(jobId, changes, feedback, refresh, "Konum / ETA güncellendi.");
+      }));
+      controls.append(card);
+    }
+
+    if (stage === "loaded" && snapshot.loaded_at && allowed.has("in_transit")) {
+      const card = node("div", "", "operation-control-card compact");
+      card.append(node("strong", "Transit"), actionButton("Araç Yola Çıktı", "approve", () => advanceOperationStage(jobId, "in_transit", feedback, refresh)));
+      controls.append(card);
+    }
+    if (stage === "in_transit" && allowed.has("delivery")) {
+      const card = node("div", "", "operation-control-card compact");
+      card.append(node("strong", "Teslimat"), actionButton("Teslimat Aşamasına Geç", "approve", () => advanceOperationStage(jobId, "delivery", feedback, refresh)));
+      controls.append(card);
+    }
+
+    if (stage === "delivery") {
+      const card = node("div", "", "operation-control-card"); card.append(node("strong", "Teslim"));
+      if (!snapshot.delivered_at) {
+        card.append(actionButton("Teslim Gerçekleşti — Şimdi", "primary", () => saveOperationEvidence(
+          jobId, { delivered_at: operationNowIso() }, feedback, refresh, "Teslim zamanı kaydedildi."
+        )));
+      } else if (allowed.has("delivered")) {
+        card.append(node("div", `Teslim kanıtı: ${formatDate(snapshot.delivered_at)}`, "small success-text"), actionButton("Teslim Edildi Olarak İlerle", "approve", () => advanceOperationStage(jobId, "delivered", feedback, refresh)));
+      }
+      controls.append(card);
+    }
+
+    if (stage === "delivered" && allowed.has("pod_cmr_pending")) {
+      const card = node("div", "", "operation-control-card compact");
+      card.append(node("strong", "Teslim evrakı"), actionButton("POD / CMR Takibini Başlat", "approve", () => advanceOperationStage(jobId, "pod_cmr_pending", feedback, refresh)));
+      controls.append(card);
+    }
+
+    if (["delivered", "pod_cmr_pending", "closing_review"].includes(stage)) {
+      const card = node("div", "", "operation-control-card"); card.append(node("strong", "Teslim evrakları"));
+      const actions = node("div", "", "actions");
+      if (!snapshot.cmr_received_at) actions.append(actionButton("CMR Alındı — Şimdi", "", () => saveOperationEvidence(jobId, { cmr_received_at: operationNowIso() }, feedback, refresh, "CMR kanıtı kaydedildi.")));
+      if (!snapshot.pod_received_at) actions.append(actionButton("POD Alındı — Şimdi", "", () => saveOperationEvidence(jobId, { pod_received_at: operationNowIso() }, feedback, refresh, "POD kanıtı kaydedildi.")));
+      if (actions.childElementCount) card.append(actions);
+      if (stage === "pod_cmr_pending" && (snapshot.pod_received_at || snapshot.cmr_received_at) && allowed.has("closing_review")) {
+        card.append(actionButton("Kapanış Kontrolüne Geç", "approve", () => advanceOperationStage(jobId, "closing_review", feedback, refresh)));
+      }
+      if (stage === "closing_review" && allowed.has("completed")) {
+        if (openExceptions.length) card.append(node("div", "Operasyon tamamlanamaz: önce açık istisnaları çöz.", "notice"));
+        else if (snapshot.pod_received_at || snapshot.cmr_received_at) card.append(actionButton("Operasyonu Tamamla", "approve", () => advanceOperationStage(jobId, "completed", feedback, refresh)));
+      }
+      controls.append(card);
+    }
+
+    controls.append(feedback); section.append(controls);
+  } else if (lifecycleV2 && !closed && stage === "accepted") {
+    section.append(node("div", "Operasyon yürütme alanı, Operasyonu Başlat aksiyonundan sonra açılır.", "muted small"));
+  }
+
   if (exceptions.length) {
     const list = node("div", "", "exception-list");
     exceptions.slice().sort((a,b) => (a.status === "open" ? -1 : 1) - (b.status === "open" ? -1 : 1)).forEach(item => {
@@ -2293,10 +2531,67 @@ function renderOperationSection(container, data) {
       const head = node("div", "", "exception-head"); head.append(node("strong", codeLabel(item.exception_type)), node("span", item.status === "open" ? "Açık" : "Çözüldü", "badge"));
       card.append(head, node("div", item.cause || "-"));
       const meta = node("div", "", "small exception-meta");
-      if (item.location) meta.append(node("span", item.location)); if (item.new_eta) meta.append(node("span", `Yeni ETA ${formatDate(item.new_eta)}`));
-      if (item.next_action) meta.append(node("span", `Sonraki: ${item.next_action}`)); card.append(meta); list.append(card);
+      meta.append(node("span", `Etki: ${codeLabel(item.impact_level)}`), node("span", `Kaynak: ${codeLabel(item.source_type)}`));
+      if (item.location) meta.append(node("span", item.location));
+      if (item.old_eta || item.new_eta) meta.append(node("span", `ETA ${formatDate(item.old_eta)} → ${formatDate(item.new_eta)}`));
+      if (item.next_action) meta.append(node("span", `Sonraki: ${item.next_action}`)); card.append(meta);
+      if (item.customer_impact_summary) card.append(node("div", `Müşteri etkisi: ${item.customer_impact_summary}`, "small muted"));
+      if (item.status === "resolved") {
+        card.append(node("div", `Çözüm: ${item.resolution_note || "-"} · ${formatDate(item.resolved_at)} · ${item.resolved_by || "-"}`, "small muted"));
+      } else if (lifecycleV2) {
+        const resolvePanel = node("div", "", "exception-resolution");
+        const label = node("label", "Çözüm notu"); const input = document.createElement("textarea"); input.rows = 2; input.maxLength = 1200; label.append(input);
+        const feedback = node("div", "", "muted settings-feedback");
+        resolvePanel.append(label, actionButton("İstisnayı Çöz", "", async () => {
+          const value = input.value.trim(); if (!value) { feedback.textContent = "İstisna çözümü için not gerekli."; return; }
+          try {
+            await api(`/mina-jobs/${encodeURIComponent(jobId)}/exceptions/${encodeURIComponent(item.exception_id)}/resolve`, { method: "POST", body: JSON.stringify({ resolution_note: value }) });
+            await refresh();
+          } catch (error) { feedback.textContent = error.message || String(error); }
+        }), feedback); card.append(resolvePanel);
+      }
+      list.append(card);
     }); section.append(list);
   }
+
+  if (editable) {
+    const form = node("div", "", "operation-exception-form operation-control-card");
+    form.append(node("strong", "Yeni Operasyon İstisnası"));
+    const typeLabel = node("label", "Tür"); const type = document.createElement("select");
+    [["border_congestion","Sınır yoğunluğu"],["breakdown","Arıza"],["documentation","Evrak"],["customs","Gümrük"],["appointment","Randevu"],["route_deviation","Rota sapması"],["weather","Hava"],["loading","Yükleme"],["delivery","Teslimat"],["damage","Hasar"],["other","Diğer"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;type.append(o);}); typeLabel.append(type);
+    const impactLabel = node("label", "Etki"); const impact = document.createElement("select");
+    [["deviation","Sapma"],["delivery_risk","Teslim riski"],["actual_delay","Gerçek gecikme"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;impact.append(o);}); impactLabel.append(impact);
+    const sourceLabel = node("label", "Kaynak"); const source = document.createElement("select");
+    [["supplier_email","Tedarikçi e-posta"],["supplier_phone","Tedarikçi telefon"],["whatsapp","WhatsApp"],["gps","GPS"],["operator","Operatör"],["other","Diğer"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;source.append(o);}); sourceLabel.append(source);
+    const location = inboxField("Konum");
+    const oldEta = operationDateTimeField("Eski ETA"); const newEta = operationDateTimeField("Yeni ETA");
+    const top = node("div", "", "operation-editor-grid"); top.append(typeLabel, impactLabel, sourceLabel, location.label, oldEta.label, newEta.label); form.append(top);
+    const causeLabel = node("label", "Sebep"); const cause = document.createElement("textarea"); cause.rows = 3; cause.maxLength = 1200; causeLabel.append(cause);
+    const customerImpactLabel = node("label", "Müşteri etkisi"); const customerImpact = document.createElement("textarea"); customerImpact.rows = 2; customerImpact.maxLength = 1200; customerImpactLabel.append(customerImpact);
+    const nextActionLabel = node("label", "Sonraki aksiyon"); const nextAction = document.createElement("textarea"); nextAction.rows = 2; nextAction.maxLength = 1200; nextActionLabel.append(nextAction);
+    const feedback = node("div", "", "muted settings-feedback");
+    const create = actionButton("İstisna Aç", "reject", async () => {
+      if (!cause.value.trim()) { feedback.textContent = "İstisna için gerçek sebep gerekli."; return; }
+      const payload = {
+        entry_id: freshPriceEntryId("operation-exception"), exception_type: type.value,
+        impact_level: impact.value, cause: cause.value.trim(), source_type: source.value,
+        reported_at: operationNowIso(), location: location.input.value.trim() || null,
+        customer_impact_summary: customerImpact.value.trim() || null,
+        next_action: nextAction.value.trim() || null,
+      };
+      try {
+        if (oldEta.input.value) payload.old_eta = istanbulDateTimeIso(oldEta.input.value);
+        if (newEta.input.value) payload.new_eta = istanbulDateTimeIso(newEta.input.value);
+      } catch (error) { feedback.textContent = error.message || String(error); return; }
+      create.disabled = true;
+      try {
+        await api(`/mina-jobs/${encodeURIComponent(jobId)}/exceptions`, { method: "POST", body: JSON.stringify(payload) });
+        await refresh();
+      } catch (error) { feedback.textContent = error.message || String(error); create.disabled = false; }
+    });
+    form.append(causeLabel, customerImpactLabel, nextActionLabel, create, feedback); section.append(form);
+  }
+
   container.append(section);
 }
 
@@ -2446,7 +2741,7 @@ async function renderJob(data, jobId) {
   );
   if (!(data.suppliers || []).length) suppliers.append(emptyState("Henüz tedarikçi çalışması yok")); root.append(suppliers);
   renderOperationStartSection(root, data, jobId, async () => loadJob(jobId));
-  renderOperationSection(root, data); timeline(root, data.timeline || []); content.replaceChildren(root);
+  renderOperationSection(root, data, jobId, async () => loadJob(jobId)); timeline(root, data.timeline || []); content.replaceChildren(root);
 }
 
 async function loadJob(jobId) {

@@ -61,6 +61,15 @@ def evaluate_ui_completion_regressions() -> dict:
         "job detail exposes only backend-authorized customer outcome controls without generic stage or directed-owner authority",
     )
     check(
+        "renderOperationSection" in js_text
+        and "/mina-jobs/${encodeURIComponent(jobId)}/operation" in js_text
+        and "/exceptions" in js_text
+        and "Araç Bilgisini Kaydet" in js_text
+        and "Operasyonu Tamamla" in js_text
+        and "allowed_next_stages" in js_text,
+        "job detail exposes evidence-backed operation controls without a generic lifecycle editor",
+    )
+    check(
         "markActiveNavigation" in js_text
         and "nav a.active" in css_text
         and ".jobs-card-list" in css_text
@@ -126,6 +135,27 @@ def evaluate_ui_completion_regressions() -> dict:
                     headers={"X-CSRF-Token": csrf},
                     json={"target_stage": "accepted"},
                 )
+                operation_no_csrf = client.post(
+                    "/mina-jobs/missing-job/operation", json={"current_location": "Test"},
+                )
+                operation_with_csrf = client.post(
+                    "/mina-jobs/missing-job/operation",
+                    headers={"X-CSRF-Token": csrf}, json={"current_location": "Test"},
+                )
+                exception_no_csrf = client.post(
+                    "/mina-jobs/missing-job/exceptions",
+                    json={
+                        "entry_id": "ui-completion-exception", "exception_type": "other",
+                        "impact_level": "deviation", "cause": "Test", "source_type": "operator",
+                    },
+                )
+                exception_with_csrf = client.post(
+                    "/mina-jobs/missing-job/exceptions", headers={"X-CSRF-Token": csrf},
+                    json={
+                        "entry_id": "ui-completion-exception", "exception_type": "other",
+                        "impact_level": "deviation", "cause": "Test", "source_type": "operator",
+                    },
+                )
                 quote_read = client.get("/quote-cases/missing-case")
                 quote_no_csrf = client.post("/quote-approvals/missing-approval/approve", json={})
                 quote_with_csrf = client.post(
@@ -148,10 +178,14 @@ def evaluate_ui_completion_regressions() -> dict:
                     and job_with_csrf.status_code == 404
                     and stage_no_csrf.status_code == 403
                     and stage_with_csrf.status_code == 404
+                    and operation_no_csrf.status_code == 403
+                    and operation_with_csrf.status_code == 404
+                    and exception_no_csrf.status_code == 403
+                    and exception_with_csrf.status_code == 404
                     and quote_read.status_code == 404
                     and quote_no_csrf.status_code == 403
                     and quote_with_csrf.status_code == 404,
-                    "job automation, customer outcome stage, and quote decision APIs remain browser-session allowlisted and CSRF guarded",
+                    "job automation, customer outcome, operation evidence, exception, and quote APIs remain browser-session allowlisted and CSRF guarded",
                 )
     finally:
         api_module.agency_automation_policy_repository = previous_repository

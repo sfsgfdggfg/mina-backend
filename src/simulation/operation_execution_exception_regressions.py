@@ -463,6 +463,30 @@ def evaluate_operation_execution_exception_regressions() -> dict:
         "lifecycle v1 delivery remains backward compatible without v2 execution evidence",
     )
 
+    browser_ui = Path("ui/web_shell/app.js").read_text(encoding="utf-8")
+    check(
+        "renderOperationSection" in browser_ui
+        and "Tedarikçi Teyidini Şimdi Kaydet" in browser_ui
+        and "Araç Bilgisini Kaydet" in browser_ui
+        and "Yükleme Gerçekleşti — Şimdi" in browser_ui
+        and "Konum / ETA Güncelle" in browser_ui
+        and "Teslim Gerçekleşti — Şimdi" in browser_ui
+        and "CMR Alındı — Şimdi" in browser_ui
+        and "POD Alındı — Şimdi" in browser_ui
+        and "Yeni Operasyon İstisnası" in browser_ui
+        and "İstisnayı Çöz" in browser_ui,
+        "browser job detail captures operation evidence and exception resolution through controlled APIs",
+    )
+    check(
+        'advanceOperationStage(jobId, "vehicle_assigned"' in browser_ui
+        and 'advanceOperationStage(jobId, "loaded"' in browser_ui
+        and 'advanceOperationStage(jobId, "delivered"' in browser_ui
+        and 'advanceOperationStage(jobId, "closing_review"' in browser_ui
+        and 'advanceOperationStage(jobId, "completed"' in browser_ui
+        and "allowed_next_stages" in browser_ui,
+        "browser operation milestones use fixed semantic actions filtered by backend next-stage authority",
+    )
+
     check(
         route_allowed("GET", "/mina-jobs/job-1/operation")
         and route_allowed("POST", "/mina-jobs/job-1/operation")

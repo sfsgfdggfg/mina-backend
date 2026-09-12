@@ -314,6 +314,15 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .quote-final-price { margin-top: 12px; font-size: 18px; font-weight: 800; }
 .success-notice { background: #f0faf5; color: var(--success); }
 .operation-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.operation-last-update { margin-top: 8px; }
+.operation-risk-notice { margin-top: 12px; }
+.operation-control-stack { display: grid; gap: 10px; margin-top: 14px; }
+.operation-control-card { border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; display: grid; gap: 10px; background: #fbfcfe; }
+.operation-control-card.compact { grid-template-columns: minmax(180px,1fr) auto; align-items: center; }
+.operation-editor-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.operation-feedback { margin-top: 0; }
+.operation-exception-form { margin-top: 14px; }
+.exception-resolution { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #edf0f5; }
 .exception-list { display: grid; gap: 9px; margin-top: 12px; }
 .exception-card { border: 1px solid var(--line); border-left: 4px solid #98a2b3; border-radius: 11px; padding: 12px; }
 .exception-card.delivery_risk { border-left-color: #f79009; }
@@ -373,9 +382,10 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .operation-start-message, .operation-start-launch { border: 1px solid var(--line); border-radius: 13px; padding: 15px; margin-top: 11px; }
 .operation-start-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 8px; }
 @media (max-width: 720px) {
-  .settings-two-col, .performance-setting-row, .supplier-profile-summary { grid-template-columns: 1fr; }
+  .settings-two-col, .performance-setting-row, .supplier-profile-summary, .operation-editor-grid { grid-template-columns: 1fr; }
   .direct-assign { flex-direction: column; }
   .operation-start-head { align-items: flex-start; flex-direction: column; }
+  .operation-control-card.compact { grid-template-columns: 1fr; }
 }
 
 .relationship-onboarding-form {
