@@ -395,6 +395,8 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .learning-fact-list { display: grid; gap: 8px; }
 .learning-fact-card { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; display: grid; gap: 5px; }
 .learning-fact-card .actions { margin-top: 5px; }
+.learning-fact-review { display: grid; gap: 8px; border-top: 1px solid #edf0f5; padding-top: 9px; margin-top: 5px; }
+.learning-fact-reviewed { border-top: 1px solid #edf0f5; padding-top: 7px; margin-top: 4px; }
 .performance-setting-row { display: grid; grid-template-columns: minmax(220px,.8fr) minmax(220px,1fr); gap: 14px; align-items: end; max-width: 760px; }
 .direct-assign { display: flex; gap: 7px; margin-top: 10px; }
 .direct-assign select { min-width: 0; }
