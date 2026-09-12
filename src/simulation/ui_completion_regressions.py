@@ -90,6 +90,16 @@ def evaluate_ui_completion_regressions() -> dict:
         "job detail reviews existing operation learning while keeping manual fact creation out of the pilot browser",
     )
     check(
+        "appendLearningFactEvidence" in js_text
+        and '`Kanıt (${evidence.length})`' in js_text
+        and 'item.summary || "-"' in js_text
+        and 'item.source_reference || "-"' in js_text
+        and 'formatDate(item.observed_at)' in js_text
+        and "source_sha256" not in js_text
+        and "dataset_key" not in js_text,
+        "browser LearningFact review surfaces expose all bounded evidence references without raw or hash metadata",
+    )
+    check(
         "appendExplicitLearningReview" in js_text
         and "LearningFact kararı için inceleme notu gerekli." in js_text
         and 'JSON.stringify({ review_note: reviewNote })' in js_text
