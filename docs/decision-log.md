@@ -7231,3 +7231,14 @@ A confirmed commercial-air surcharge amount/unit record does not by itself estab
 For `per_kg` candidates the only v1 reviewable application bases are `actual_weight`, `chargeable_weight` and `pivot_billed_weight`. For a flat candidate the only v1 application basis is `flat`. The operator must author a non-empty evidence note and the authenticated operator/time must be retained. The decision is one-time review evidence and cannot be silently replaced by a later selection.
 
 Application-basis review remains non-authoritative. It does not make the surcharge calculation-consumable, does not decide whether a flat charge is per shipment versus per AWB, does not establish route/destination/cargo applicability, and does not create customer-pricing, margin, availability, booking, quote or outbound authority. A later separately bounded step must define those missing applicability rules before any surcharge may enter a freight-cost preview.
+
+## DEC-243 — Air Surcharge Applicability Must Be Reviewed Before Any Cost Preview May Consume It
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+A confirmed surcharge amount/unit plus a reviewed application basis still does not establish where that surcharge applies. Sharing the same tariff PDF is not enough to assume that a surcharge applies to every destination, routing or cargo condition represented by the source. MINAI must therefore preserve a separate human-reviewed applicability scope before any later cost preview may consume the surcharge.
+
+The first bounded scope choices are `source_wide` and `destination_specific`. `source_wide` means only the destinations covered by that exact immutable tariff source; it must never be generalized to other tariff versions, airline products or unrelated cargo scopes. `destination_specific` requires a three-letter destination code that already exists as a human-confirmed tariff row under the same source.
+
+Applicability review requires a previously confirmed surcharge and reviewed application basis, an authenticated operator, aware timestamp and authored note. The decision is one-time evidence and cannot be silently replaced. It remains non-authoritative and does not yet make the surcharge calculation-consumable. Routing restrictions, special-cargo conditions, flat `/shipment` versus `/AWB` quantity semantics, currency conversion and customer-pricing authority remain separate unresolved gates.

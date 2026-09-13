@@ -8,6 +8,7 @@ from typing import Literal
 
 from src.core.air_rate_document_store import AirRateDocumentStore
 from src.core.air_rate_structure_review_repository import AirRateStructureReviewRepository
+from src.core.air_rate_table_review_repository import AirRateTableReviewRepository
 from src.core.air_rate_surcharge_review import AirRateSurchargeCandidate, AirRateSurchargeReview
 from src.core.air_rate_surcharge_review_repository import AirRateSurchargeReviewRepository
 from src.core.air_shadow_repository import AirShadowRepository
@@ -274,6 +275,69 @@ def decide_air_rate_surcharge_application_basis(
     return repository.save(AirRateSurchargeReview.model_validate(changed.model_dump()))
 
 
+
+def decide_air_rate_surcharge_applicability_scope(
+    *,
+    review_id: str,
+    candidate_id: str,
+    applicability_scope: Literal["source_wide", "destination_specific"],
+    destination_code: str | None,
+    review_note: str,
+    reviewed_by: str,
+    repository: AirRateSurchargeReviewRepository,
+    table_repository: AirRateTableReviewRepository,
+    reviewed_at: datetime | None = None,
+) -> AirRateSurchargeReview:
+    review = repository.get(review_id)
+    if review is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air surcharge review not found: {review_id}")
+    note = " ".join(str(review_note or "").strip().split())
+    if not note:
+        raise AirRateSurchargeReviewTransitionError("Air surcharge applicability review note is required.")
+    index = next((i for i, item in enumerate(review.candidates) if item.candidate_id == candidate_id), None)
+    if index is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air surcharge candidate not found: {candidate_id}")
+    candidate = review.candidates[index]
+    if candidate.status != "confirmed":
+        raise AirRateSurchargeReviewTransitionError("Air surcharge candidate must be confirmed before applicability review.")
+    if candidate.application_basis is None:
+        raise AirRateSurchargeReviewTransitionError("Air surcharge application basis must be reviewed before applicability review.")
+    if candidate.applicability_scope is not None:
+        raise AirRateSurchargeReviewTransitionError("Air surcharge applicability scope is already reviewed.")
+
+    normalized_destination = None if destination_code is None else str(destination_code).strip().upper()
+    if applicability_scope == "source_wide":
+        if normalized_destination:
+            raise AirRateSurchargeReviewTransitionError("Source-wide surcharge applicability cannot include a destination code.")
+    elif applicability_scope == "destination_specific":
+        if not normalized_destination or not re.fullmatch(r"[A-Z]{3}", normalized_destination):
+            raise AirRateSurchargeReviewTransitionError("Destination-specific surcharge applicability requires a three-letter destination code.")
+        table_review = table_repository.find_by_source(review.source_id)
+        if table_review is None:
+            raise AirRateSurchargeReviewTransitionError("air_rate_table_review_required_for_destination_scope")
+        confirmed_codes = {
+            item.destination_code
+            for item in table_review.candidates
+            if item.status == "confirmed" and item.destination_code
+        }
+        if normalized_destination not in confirmed_codes:
+            raise AirRateSurchargeReviewTransitionError("destination_scope_requires_confirmed_tariff_row")
+    else:
+        raise AirRateSurchargeReviewTransitionError("Unsupported air surcharge applicability scope.")
+
+    timestamp = reviewed_at or datetime.now(timezone.utc)
+    updated = candidate.model_copy(update={
+        "applicability_scope": applicability_scope,
+        "applicability_destination_code": normalized_destination,
+        "applicability_reviewed_by": reviewed_by,
+        "applicability_reviewed_at": timestamp,
+        "applicability_review_note": note,
+    })
+    candidates = [item.model_copy(deep=True) for item in review.candidates]
+    candidates[index] = updated
+    changed = review.model_copy(update={"candidates": candidates})
+    return repository.save(AirRateSurchargeReview.model_validate(changed.model_dump()))
+
 def build_air_rate_surcharge_review_view(
     *,
     repository: AirRateSurchargeReviewRepository,
@@ -293,6 +357,7 @@ def build_air_rate_surcharge_review_view(
         "reviews": rows,
         "ai_interpretation_enabled": False,
         "application_basis_review_enabled": True,
+        "applicability_scope_review_enabled": True,
         "application_weight_authority_enabled": False,
         "calculation_consumption_enabled": False,
         "pricing_authority_enabled": False,

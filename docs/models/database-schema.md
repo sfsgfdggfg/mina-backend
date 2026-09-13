@@ -948,3 +948,11 @@ P2-23 adds no new persistence namespace. It extends each existing `AirRateSurcha
 Application basis may be recorded only after the surcharge candidate itself is `confirmed`. `per_kg` candidates accept only `actual_weight`, `chargeable_weight` or `pivot_billed_weight`; flat candidates accept only `flat`. Partial basis evidence and basis evidence on proposed/rejected candidates are invalid.
 
 The existing `air_rate_surcharge_reviews` durable record remains the source of truth for this evidence. P2-23 creates no surcharge-calculation record and no pricing projection. The commercial-air freight preview remains independent of surcharge review state.
+
+## P2-24 Commercial-Air Surcharge Applicability-Scope Review
+
+P2-24 extends each `AirRateSurchargeCandidate` with optional applicability evidence: `applicability_scope`, optional `applicability_destination_code`, reviewer identity/time and authored note. Existing candidates remain backward-compatible with all applicability fields absent.
+
+A scope record may be created only after the surcharge itself is confirmed and its application basis has been reviewed. `source_wide` carries no destination code and is bounded to the exact immutable tariff source. `destination_specific` requires a three-letter code matching a confirmed `AirRateTableRowCandidate` under the same source.
+
+No new persistence namespace is introduced; the evidence remains inside the existing durable `air_rate_surcharge_reviews` record. P2-24 creates no surcharge-calculation, FX, pricing, quote, capacity, booking or outbound authority.

@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 AirRateSurchargeBasis = Literal["flat", "per_kg"]
 AirRateSurchargeApplicationBasis = Literal["actual_weight", "chargeable_weight", "pivot_billed_weight", "flat"]
+AirRateSurchargeApplicabilityScope = Literal["source_wide", "destination_specific"]
 AirRateSurchargeCandidateStatus = Literal["proposed", "confirmed", "rejected"]
 AirRateSurchargeReviewStatus = Literal["pending", "partially_reviewed", "completed", "no_candidates"]
 
@@ -33,11 +34,19 @@ class AirRateSurchargeCandidate(BaseModel):
     application_basis_reviewed_by: Optional[str] = Field(default=None, max_length=200)
     application_basis_reviewed_at: Optional[datetime] = None
     application_basis_review_note: Optional[str] = Field(default=None, max_length=800)
+    applicability_scope: Optional[AirRateSurchargeApplicabilityScope] = None
+    applicability_destination_code: Optional[str] = Field(default=None, pattern=r"^[A-Z]{3}$")
+    applicability_reviewed_by: Optional[str] = Field(default=None, max_length=200)
+    applicability_reviewed_at: Optional[datetime] = None
+    applicability_review_note: Optional[str] = Field(default=None, max_length=800)
 
-    @field_validator("surcharge_code", "currency", mode="before")
+    @field_validator("surcharge_code", "currency", "applicability_destination_code", mode="before")
     @classmethod
     def normalize_code(cls, value):
-        return str(value or "").strip().upper()
+        if value is None:
+            return None
+        normalized = str(value).strip().upper()
+        return normalized or None
 
     @field_validator("amount")
     @classmethod
@@ -46,7 +55,7 @@ class AirRateSurchargeCandidate(BaseModel):
             raise ValueError("Air surcharge amount must be finite, positive and bounded.")
         return value
 
-    @field_validator("reviewed_by", "review_note", "application_basis_reviewed_by", "application_basis_review_note", mode="before")
+    @field_validator("reviewed_by", "review_note", "application_basis_reviewed_by", "application_basis_review_note", "applicability_reviewed_by", "applicability_review_note", mode="before")
     @classmethod
     def normalize_text(cls, value):
         if value is None:
@@ -54,7 +63,7 @@ class AirRateSurchargeCandidate(BaseModel):
         normalized = " ".join(str(value).strip().split())
         return normalized or None
 
-    @field_validator("reviewed_at", "application_basis_reviewed_at")
+    @field_validator("reviewed_at", "application_basis_reviewed_at", "applicability_reviewed_at")
     @classmethod
     def require_aware_review_time(cls, value: Optional[datetime]) -> Optional[datetime]:
         if value is not None and value.tzinfo is None:
@@ -83,6 +92,21 @@ class AirRateSurchargeCandidate(BaseModel):
                 raise ValueError("Flat air surcharge may only use flat application basis.")
             if self.basis == "per_kg" and self.application_basis not in {"actual_weight", "chargeable_weight", "pivot_billed_weight"}:
                 raise ValueError("Per-kg air surcharge requires an explicit weight application basis.")
+        scope_evidence = (
+            self.applicability_scope,
+            self.applicability_reviewed_by,
+            self.applicability_reviewed_at,
+            self.applicability_review_note,
+        )
+        if any(item is not None for item in scope_evidence) or self.applicability_destination_code is not None:
+            if self.status != "confirmed" or self.application_basis is None:
+                raise ValueError("Air surcharge applicability requires confirmed surcharge and application-basis evidence.")
+            if not all(item is not None for item in scope_evidence):
+                raise ValueError("Air surcharge applicability requires scope, actor, time and note.")
+            if self.applicability_scope == "source_wide" and self.applicability_destination_code is not None:
+                raise ValueError("Source-wide surcharge applicability cannot carry a destination code.")
+            if self.applicability_scope == "destination_specific" and self.applicability_destination_code is None:
+                raise ValueError("Destination-specific surcharge applicability requires a destination code.")
         return self
 
     @property
