@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 AirRateSurchargeBasis = Literal["flat", "per_kg"]
 AirRateSurchargeApplicationBasis = Literal["actual_weight", "chargeable_weight", "pivot_billed_weight", "flat"]
 AirRateSurchargeApplicabilityScope = Literal["source_wide", "destination_specific"]
+AirRateSurchargeCargoApplicability = Literal["source_scope", "general_cargo", "special_cargo"]
+AirRateSurchargeRoutingApplicability = Literal["all_source_routings", "direct_only", "connecting_only", "via_airport"]
 AirRateSurchargeCandidateStatus = Literal["proposed", "confirmed", "rejected"]
 AirRateSurchargeReviewStatus = Literal["pending", "partially_reviewed", "completed", "no_candidates"]
 
@@ -39,8 +41,14 @@ class AirRateSurchargeCandidate(BaseModel):
     applicability_reviewed_by: Optional[str] = Field(default=None, max_length=200)
     applicability_reviewed_at: Optional[datetime] = None
     applicability_review_note: Optional[str] = Field(default=None, max_length=800)
+    cargo_applicability: Optional[AirRateSurchargeCargoApplicability] = None
+    routing_applicability: Optional[AirRateSurchargeRoutingApplicability] = None
+    routing_via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Z]{3}$")
+    operational_conditions_reviewed_by: Optional[str] = Field(default=None, max_length=200)
+    operational_conditions_reviewed_at: Optional[datetime] = None
+    operational_conditions_review_note: Optional[str] = Field(default=None, max_length=800)
 
-    @field_validator("surcharge_code", "currency", "applicability_destination_code", mode="before")
+    @field_validator("surcharge_code", "currency", "applicability_destination_code", "routing_via_airport", mode="before")
     @classmethod
     def normalize_code(cls, value):
         if value is None:
@@ -55,7 +63,7 @@ class AirRateSurchargeCandidate(BaseModel):
             raise ValueError("Air surcharge amount must be finite, positive and bounded.")
         return value
 
-    @field_validator("reviewed_by", "review_note", "application_basis_reviewed_by", "application_basis_review_note", "applicability_reviewed_by", "applicability_review_note", mode="before")
+    @field_validator("reviewed_by", "review_note", "application_basis_reviewed_by", "application_basis_review_note", "applicability_reviewed_by", "applicability_review_note", "operational_conditions_reviewed_by", "operational_conditions_review_note", mode="before")
     @classmethod
     def normalize_text(cls, value):
         if value is None:
@@ -63,7 +71,7 @@ class AirRateSurchargeCandidate(BaseModel):
         normalized = " ".join(str(value).strip().split())
         return normalized or None
 
-    @field_validator("reviewed_at", "application_basis_reviewed_at", "applicability_reviewed_at")
+    @field_validator("reviewed_at", "application_basis_reviewed_at", "applicability_reviewed_at", "operational_conditions_reviewed_at")
     @classmethod
     def require_aware_review_time(cls, value: Optional[datetime]) -> Optional[datetime]:
         if value is not None and value.tzinfo is None:
@@ -107,6 +115,22 @@ class AirRateSurchargeCandidate(BaseModel):
                 raise ValueError("Source-wide surcharge applicability cannot carry a destination code.")
             if self.applicability_scope == "destination_specific" and self.applicability_destination_code is None:
                 raise ValueError("Destination-specific surcharge applicability requires a destination code.")
+        condition_evidence = (
+            self.cargo_applicability,
+            self.routing_applicability,
+            self.operational_conditions_reviewed_by,
+            self.operational_conditions_reviewed_at,
+            self.operational_conditions_review_note,
+        )
+        if any(item is not None for item in condition_evidence) or self.routing_via_airport is not None:
+            if self.status != "confirmed" or self.application_basis is None or self.applicability_scope is None:
+                raise ValueError("Air surcharge operational conditions require all prior surcharge reviews.")
+            if not all(item is not None for item in condition_evidence):
+                raise ValueError("Air surcharge operational conditions require cargo, routing, actor, time and note.")
+            if self.routing_applicability == "via_airport" and self.routing_via_airport is None:
+                raise ValueError("Via-airport surcharge routing applicability requires an airport code.")
+            if self.routing_applicability != "via_airport" and self.routing_via_airport is not None:
+                raise ValueError("Only via-airport surcharge routing applicability may carry an airport code.")
         return self
 
     @property

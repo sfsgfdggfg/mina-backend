@@ -1591,3 +1591,9 @@ This step does not add the surcharge to **Navlun Önizleme** and does not author
 After surcharge amount/unit and application-basis review, an operator may separately confirm whether the surcharge applies across the exact tariff source or only to one confirmed destination row. Destination-specific scope must resolve to a human-confirmed three-letter destination code in that same source.
 
 This review is evidence only. Do not interpret `source_wide` as airline-wide policy, and do not consume the surcharge in freight/pivot preview yet. Routing restrictions, special-cargo conditions, flat-charge quantity semantics and FX remain unresolved until later bounded steps.
+
+## Commercial-Air Surcharge Operational Conditions (P2-25)
+
+After amount/unit, application-basis and applicability-scope review, confirm cargo and routing conditions separately in **Ayarlar → Havayolu Listeleri**. Use **Exact source cargo scope** only when the source cargo scope is known. For routing, choose exact-source all-routing, direct-only, connecting-only or an explicitly evidenced via airport.
+
+Do not infer cargo class or routing from common airline practice. This review still does not add the surcharge to **Navlun Önizleme** and does not authorize FX, customer pricing, capacity/schedule assumptions, booking or outbound communication.

@@ -289,6 +289,7 @@ from src.core.air_rate_surcharge_review_service import (
     decide_air_rate_surcharge_candidate,
     decide_air_rate_surcharge_application_basis,
     decide_air_rate_surcharge_applicability_scope,
+    decide_air_rate_surcharge_operational_conditions,
 )
 from src.core.air_freight_calculation_preview import (
     AirFreightCalculationPreviewError,
@@ -995,6 +996,13 @@ class AirRateSurchargeApplicationBasisRequest(BaseModel):
 class AirRateSurchargeApplicabilityScopeRequest(BaseModel):
     applicability_scope: Literal["source_wide", "destination_specific"]
     destination_code: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    review_note: str = Field(min_length=1, max_length=800)
+
+
+class AirRateSurchargeOperationalConditionsRequest(BaseModel):
+    cargo_applicability: Literal["source_scope", "general_cargo", "special_cargo"]
+    routing_applicability: Literal["all_source_routings", "direct_only", "connecting_only", "via_airport"]
+    via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
     review_note: str = Field(min_length=1, max_length=800)
 
 
@@ -2631,6 +2639,25 @@ def decide_air_rate_surcharge_applicability_scope_endpoint(
         "pricing_authority_enabled": False,
         "calculation_consumption_enabled": False,
     }
+
+
+@app.post("/air-rate-surcharge-reviews/{review_id}/candidates/{candidate_id}/operational-conditions")
+def decide_air_rate_surcharge_operational_conditions_endpoint(
+    review_id: str, candidate_id: str, request: AirRateSurchargeOperationalConditionsRequest, http_request: Request,
+):
+    try:
+        review = decide_air_rate_surcharge_operational_conditions(
+            review_id=review_id, candidate_id=candidate_id,
+            cargo_applicability=request.cargo_applicability,
+            routing_applicability=request.routing_applicability, via_airport=request.via_airport,
+            review_note=request.review_note, reviewed_by=_authenticated_operator(http_request),
+            repository=air_rate_surcharge_review_repository, source_repository=air_shadow_repository,
+        )
+    except AirRateSurchargeReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirRateSurchargeReviewTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"review": review.model_dump(mode="json"), "runtime_authoritative": False, "pricing_authority_enabled": False, "calculation_consumption_enabled": False}
 
 
 @app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/calculation-preview")

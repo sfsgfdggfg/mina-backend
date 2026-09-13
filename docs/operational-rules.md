@@ -4254,3 +4254,11 @@ A confirmed surcharge amount/unit and reviewed application basis must not be app
 `source_wide` may refer only to the destinations covered by the same immutable `AirRateSource`. `destination_specific` requires a three-letter destination code that resolves to a human-confirmed tariff row in the same source. Source-wide scope must not carry a destination code, and destination-specific scope must fail closed if the corresponding reviewed tariff row is missing.
 
 Applicability review requires authenticated actor/time evidence and a non-empty note and cannot be silently re-decided. Reviewed scope remains reference-only. Current freight/pivot preview must not consume surcharge evidence yet, and routing, special-cargo conditions, flat-charge quantity scope, FX, customer pricing, margin, availability, booking and outbound authority remain outside this rule.
+
+## RULE-261 — Do Not Consume an Air Surcharge Until Cargo and Routing Applicability Are Explicitly Reviewed
+
+A surcharge with confirmed amount/unit, application basis and destination/source scope is still incomplete for calculation if cargo or routing applicability is unknown. Before later cost-preview consumption, an authenticated operator must separately review both dimensions from source or operational evidence.
+
+`source_scope` cargo applicability is allowed only when the immutable tariff source has a known cargo scope. Explicit general/special selection must not contradict a source already classified as the other scope. Routing may be source-local all-routing, direct-only, connecting-only or a specific via-airport; a via airport requires a three-letter code and must never be inferred from common routing practice.
+
+Operational-condition review requires actor/time/note evidence and is one-time. It remains non-authoritative: the current freight/pivot preview must not import surcharge state, and no FX, flat-charge quantity interpretation, customer pricing, margin, capacity/schedule, booking or outbound authority is created.

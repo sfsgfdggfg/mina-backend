@@ -7242,3 +7242,14 @@ A confirmed surcharge amount/unit plus a reviewed application basis still does n
 The first bounded scope choices are `source_wide` and `destination_specific`. `source_wide` means only the destinations covered by that exact immutable tariff source; it must never be generalized to other tariff versions, airline products or unrelated cargo scopes. `destination_specific` requires a three-letter destination code that already exists as a human-confirmed tariff row under the same source.
 
 Applicability review requires a previously confirmed surcharge and reviewed application basis, an authenticated operator, aware timestamp and authored note. The decision is one-time evidence and cannot be silently replaced. It remains non-authoritative and does not yet make the surcharge calculation-consumable. Routing restrictions, special-cargo conditions, flat `/shipment` versus `/AWB` quantity semantics, currency conversion and customer-pricing authority remain separate unresolved gates.
+
+## DEC-244 — Reviewed Air Surcharges Need Explicit Cargo and Routing Conditions Before Calculation Consumption
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+Destination applicability alone does not prove that a surcharge applies to every cargo class or routing represented by a tariff source. A confirmed surcharge may therefore receive a separate human-reviewed operational-condition record only after amount/unit, application-basis and destination/source applicability reviews are complete.
+
+Cargo applicability is bounded to `source_scope`, `general_cargo` or `special_cargo`. `source_scope` means the exact immutable `AirRateSource.cargo_scope` and is invalid when that source is `unknown`; an explicit general/special choice must not contradict a source already classified as the opposite scope. Routing applicability is bounded to `all_source_routings`, `direct_only`, `connecting_only` or `via_airport`; `via_airport` requires an explicit three-letter airport code and other routing choices must not carry one.
+
+The decision requires authenticated operator identity, aware timestamp and an authored note and cannot be silently re-decided. `all_source_routings` is source-local evidence only, not an airline-wide rule. These conditions remain reference-only and do not yet authorize surcharge calculation, FX, customer pricing, margin, capacity, booking or outbound execution.
