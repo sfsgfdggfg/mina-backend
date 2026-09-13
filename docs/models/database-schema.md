@@ -991,3 +991,7 @@ P2-28 adds no persistent namespace or durable count field. `shipment_count`, `aw
 `air_rate_validity_reviews` stores one durable review per immutable `AirRateSource.source_id`. The record contains `review_id`, `source_id`, `source_sha256`, inclusive `valid_from` / `valid_to`, `reviewed_by`, timezone-aware `reviewed_at`, and `review_note`. It does not modify `air_rate_sources` and carries no runtime pricing, capacity, schedule, booking or customer-quote authority.
 
 The reviewed surcharge cost preview adds only ephemeral `reference_date` evaluation output (`tariff_validity_confirmed`, `validity_review_id`, reviewed date boundaries). The preview date is never persisted and is never defaulted to the current date.
+
+### P2-30 Commercial-Air Service Availability Evidence
+
+Durable namespaces: `air_service_availability_confirmations` and `air_service_availability_by_entry`. Each immutable confirmation is keyed by idempotent `entry_id` and preserves inquiry/date/routing-scoped capacity and schedule evidence plus exact air-rate source id/SHA, evidence channel/reference and authenticated operator/time. The record is operational evidence, not tariff authority or booking state, and is protected from ordinary pilot retention purge.

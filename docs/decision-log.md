@@ -7302,3 +7302,14 @@ If immutable source metadata already contains a start or end date, the reviewed 
 The reviewed surcharge cost preview may validate tariff date validity only when the operator supplies an explicit `reference_date`. No current date or today-default is permitted. A reference-dated preview requires a validity review for the same source SHA and fails closed when the date lies outside the inclusive reviewed range. Only then may the result expose `tariff_validity_confirmed=true`.
 
 Tariff date validity is not capacity, schedule, space, booking, routing availability, FX, customer sell price or margin authority. The preview remains partial reference cost and is still not an all-in customer quote.
+
+## DEC-249 — Airline Capacity and Schedule Confirmations Are Inquiry-Bound Operational Evidence, Not Tariff Properties
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+Commercial-air tariff validity does not prove that space exists or that a particular flight schedule is available. MINAI may therefore store explicit airline capacity/schedule confirmation evidence only for one inquiry, service date, destination and routing context. The record is bound to the exact commercial-air source id/SHA used as commercial context, but it must never turn availability into a reusable property of that tariff source.
+
+Each confirmation records an idempotent entry id, inquiry reference, destination, direct/connecting routing and optional via airport, service date, capacity status (`available` or `unavailable`), schedule status (`confirmed` or `not_confirmed`), optional flight reference when schedule is confirmed, evidence channel/reference, authenticated operator, aware timestamp and authored note. Direct routing cannot carry a via airport; an unconfirmed schedule cannot carry a flight reference.
+
+Availability evidence is durable operational evidence only. It does not alter tariff prices, does not enter the reviewed cost preview automatically, does not create customer-pricing or margin authority, and does not mean a booking has been made or space has been reserved. A later bounded workflow must explicitly bind a matching confirmation to a shipment decision before any runtime availability effect is allowed.

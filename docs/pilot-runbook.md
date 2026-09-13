@@ -1629,3 +1629,11 @@ In **Ayarlar → Havayolu Listeleri**, review the exact tariff source validity r
 In **Reviewed Surcharge Cost Preview**, enter **Tarife referans tarihi** only when you want the preview to confirm that the reviewed tariff covers that specific date. Leaving it blank must not imply today. A supplied date without a review, or a date outside the reviewed range, fails closed.
 
 `Tarife geçerliliği DOĞRULANDI` means only that the exact reviewed tariff date range includes the entered reference date. It does not confirm flight capacity, schedule, booking space, FX, customer sell price, margin or outbound authority.
+
+## Commercial-Air Capacity / Schedule Evidence (P2-30)
+
+In **Ayarlar → Havayolu Listeleri**, record airline availability only when there is explicit evidence for the current inquiry and service date. Capture the inquiry reference, destination, routing/via, service date, capacity result, schedule status, flight reference when actually confirmed, evidence channel/reference and a short operator-authored note.
+
+Do not reuse another shipment's confirmation and do not treat a tariff's validity period as space availability. `Available` means only that the cited evidence reported capacity for that inquiry/date; it is not a booking or reservation. `Schedule confirmed` likewise records the cited schedule evidence but creates no booking authority.
+
+P2-30 does not feed the reviewed surcharge cost preview and does not authorize customer pricing, margin, quote sending, airline booking or outbound communication.

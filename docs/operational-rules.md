@@ -4295,3 +4295,11 @@ Do not treat `AirRateSource.valid_from` / `valid_to`, file age, upload date, tod
 If the immutable source already declares either validity boundary, the review must match that boundary exactly. A preview must never default its reference date to today. When a reference date is supplied, missing review evidence, source-SHA mismatch or an out-of-range date must fail closed.
 
 A successful date check confirms only that the reviewed tariff range covers the supplied reference date. It must not be interpreted as airline capacity, flight schedule, booking availability, FX, customer pricing, margin, quote approval or outbound authority.
+
+## RULE-266 — Never Reuse Airline Availability Evidence Across Inquiries or Treat Confirmation as Booking
+
+Capacity and schedule must be evidenced separately from tariff validity. A confirmation belongs only to its recorded inquiry reference, service date, destination and routing context. Do not infer current capacity from the same airline, tariff source, prior shipment, historical pattern or a previously confirmed flight.
+
+Capacity `available`/`unavailable` and schedule `confirmed`/`not_confirmed` are separate facts. Schedule-not-confirmed evidence cannot carry a flight reference. Direct routing cannot carry a via airport. Evidence must retain source id/SHA, channel/reference, authenticated operator, timestamp and authored note and must remain idempotent by entry identity.
+
+A stored confirmation is not a reservation or booking. It must not automatically enter cost preview, customer pricing, margin, quote approval, airline selection, booking or outbound execution. Explicit later shipment binding is required before any availability evidence can affect runtime decisions.
