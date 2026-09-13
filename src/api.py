@@ -284,6 +284,15 @@ from src.core.air_rate_surcharge_review_repository import (
 from src.core.air_rate_validity_review_repository import (
     SQLiteAirRateValidityReviewRepository,
 )
+from src.core.air_service_availability_repository import (
+    SQLiteAirServiceAvailabilityRepository,
+)
+from src.core.air_service_availability_service import (
+    AirServiceAvailabilityNotFoundError,
+    AirServiceAvailabilityTransitionError,
+    build_air_service_availability_view,
+    record_air_service_availability_confirmation,
+)
 from src.core.air_rate_validity_review_service import (
     AirRateValidityReviewNotFoundError,
     AirRateValidityReviewTransitionError,
@@ -605,6 +614,7 @@ air_rate_structure_review_repository = SQLiteAirRateStructureReviewRepository(pi
 air_rate_table_review_repository = SQLiteAirRateTableReviewRepository(pilot_store)
 air_rate_surcharge_review_repository = SQLiteAirRateSurchargeReviewRepository(pilot_store)
 air_rate_validity_review_repository = SQLiteAirRateValidityReviewRepository(pilot_store)
+air_service_availability_repository = SQLiteAirServiceAvailabilityRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
@@ -1030,6 +1040,21 @@ class AirRateValidityReviewRequest(BaseModel):
     valid_from: date
     valid_to: date
     review_note: str = Field(min_length=1, max_length=800)
+
+
+class AirServiceAvailabilityRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    inquiry_reference: str = Field(min_length=1, max_length=300)
+    destination_code: str = Field(pattern=r"^[A-Za-z]{3}$")
+    routing_context: Literal["direct", "connecting"]
+    via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    service_date: date
+    capacity_status: Literal["available", "unavailable"]
+    schedule_status: Literal["confirmed", "not_confirmed"]
+    flight_reference: Optional[str] = Field(default=None, max_length=120)
+    evidence_channel: Literal["email", "phone", "whatsapp", "portal", "other"]
+    evidence_reference: str = Field(min_length=1, max_length=300)
+    evidence_note: str = Field(min_length=1, max_length=1200)
 
 
 class AirFreightCalculationPreviewRequest(BaseModel):
@@ -2460,6 +2485,37 @@ def review_air_rate_source_validity(source_id: str, request: AirRateValidityRevi
         "pricing_authority_enabled": False,
         "capacity_confirmed": False,
         "schedule_confirmed": False,
+    }
+
+
+@app.get("/air-service-availability-confirmations")
+def list_air_service_availability_confirmations():
+    return build_air_service_availability_view(repository=air_service_availability_repository)
+
+
+@app.post("/air-rate-sources/{source_id}/availability-confirmations")
+def create_air_service_availability_confirmation(
+    source_id: str, request: AirServiceAvailabilityRequest, http_request: Request,
+):
+    try:
+        item, created = record_air_service_availability_confirmation(
+            source_id=source_id,
+            confirmed_by=_authenticated_operator(http_request),
+            source_repository=air_shadow_repository,
+            repository=air_service_availability_repository,
+            **request.model_dump(),
+        )
+    except AirServiceAvailabilityNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirServiceAvailabilityTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "confirmation": item.model_dump(mode="json"),
+        "created": created,
+        "runtime_authoritative": False,
+        "pricing_authority_enabled": False,
+        "booking_authority_enabled": False,
+        "cost_preview_consumption_enabled": False,
     }
 
 
