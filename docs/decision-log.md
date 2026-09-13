@@ -7220,3 +7220,14 @@ Unitless amounts, percentage charges, lines containing multiple amount/currency 
 Human confirmation verifies only that the amount, currency and unit were transcribed correctly from the source. It does not decide whether a per-kilogram surcharge applies to physical weight, tariff chargeable weight, pivot/booked weight or another airline-specific basis. Therefore confirmed surcharge records remain reference-only and are not consumed by freight preview, customer pricing, margin, capacity/schedule, booking or outbound communication in this phase.
 
 Extraction remains deterministic and local with no OpenAI call. Express/FedEx/Aramex surcharge engines remain outside this scope.
+
+## DEC-242 — Air Surcharge Application Weight Must Be Human-Reviewed Separately From Amount and Unit
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+A confirmed commercial-air surcharge amount/unit record does not by itself establish the weight or quantity against which the charge is applied. In particular, `/kg` must not be silently mapped to actual weight, chargeable weight or a pivot/booked billed weight. MINAI may therefore store a second, explicit human-reviewed application-basis decision for a confirmed surcharge candidate.
+
+For `per_kg` candidates the only v1 reviewable application bases are `actual_weight`, `chargeable_weight` and `pivot_billed_weight`. For a flat candidate the only v1 application basis is `flat`. The operator must author a non-empty evidence note and the authenticated operator/time must be retained. The decision is one-time review evidence and cannot be silently replaced by a later selection.
+
+Application-basis review remains non-authoritative. It does not make the surcharge calculation-consumable, does not decide whether a flat charge is per shipment versus per AWB, does not establish route/destination/cargo applicability, and does not create customer-pricing, margin, availability, booking, quote or outbound authority. A later separately bounded step must define those missing applicability rules before any surcharge may enter a freight-cost preview.
