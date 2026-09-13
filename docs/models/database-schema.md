@@ -972,3 +972,11 @@ P2-26 introduces no persistence namespace. It adds an ephemeral read model that 
 Each included surcharge component exposes candidate identity, surcharge code, currency, reviewed per-kilogram rate, reviewed application basis, applied weight and computed surcharge cost. Excluded reviewed candidates expose a bounded reason such as unresolved flat quantity scope, currency mismatch/no FX, destination mismatch, cargo mismatch or routing mismatch.
 
 The preview exposes `reviewed_per_kg_surcharge_total` and `base_plus_reviewed_per_kg_surcharges`, but explicitly keeps `all_in_cost=false`, `flat_surcharges_included=false`, `fx_applied=false`, `surcharge_rounding_applied=false`, `capacity_confirmed=false`, `tariff_validity_confirmed=false`, `runtime_authoritative=false` and `customer_quote_eligible=false`.
+
+## P2-27 Commercial-Air Flat Surcharge Quantity-Basis Review
+
+P2-27 adds no new persistence namespace. It extends each existing `AirRateSurchargeCandidate` with optional `flat_quantity_basis`, authenticated reviewer/time and bounded review-note fields. Legacy flat surcharge candidates deserialize with these fields absent.
+
+The supported reviewed quantity bases are `per_shipment`, `per_awb`, `per_hawb` and `per_mawb`. Evidence may exist only on a confirmed `flat` surcharge whose application basis, applicability scope and operational cargo/routing conditions are already reviewed. Per-kilogram candidates reject these fields.
+
+The existing `air_rate_surcharge_reviews` durable record remains the source of truth. P2-27 stores quantity semantics only; it stores no shipment-document count, no calculated flat surcharge amount, no FX result and no customer-pricing projection.

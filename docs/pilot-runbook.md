@@ -1605,3 +1605,10 @@ Use the separate **Reviewed Per-Kg Surcharge Cost Preview** only after the surch
 Read the result as a partial reference cost only. Included per-kg surcharge lines show the reviewed weight basis and applied kilograms. Flat charges, cross-currency charges and context-mismatched charges stay in the excluded list with a reason. `Base + reviewed per-kg` is not an all-in cost and must not be copied into a customer quote as an authoritative sell price.
 
 Do not use this preview as capacity, schedule, booking or outbound authority. The existing base **Navlun Önizleme** remains surcharge-free by design.
+
+
+## Commercial-Air Flat Surcharge Quantity-Basis Review (P2-27)
+
+After a flat surcharge has completed amount/unit, application-basis, destination-scope and cargo/routing review, use **Ayarlar → Havayolu Listeleri** to review its quantity basis separately. Choose only the unit supported by the tariff or operational evidence: shipment, AWB, HAWB or MAWB. Every choice requires an operator note.
+
+Do not assume one AWB or one shipment merely because a flat fee exists. P2-27 does not add flat fees to the current reviewed surcharge cost preview; it only records the quantity semantics needed for a later bounded calculation step. If the evidence does not establish the unit, leave it unreviewed rather than guessing.
