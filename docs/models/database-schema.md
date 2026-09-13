@@ -924,3 +924,11 @@ Persistent namespaces are `air_rate_structure_reviews` and `air_rate_structure_r
 `AirRateTableRowCandidate` stores a deterministic candidate identifier, bounded destination label, optional three-letter destination code, optional explicit/unambiguous currency, two to twenty positive bounded decimal rate values keyed by confirmed `MIN`/`+N` breaks, extracted-text line number, SHA-256 line fingerprint, detector marker and proposed/confirmed/rejected human-review evidence. It intentionally stores no full source line or free-form extracted tariff text.
 
 Persistent namespaces are `air_rate_table_reviews` and `air_rate_table_review_by_source`. Ordinary retention does not purge them. These records are confidential tariff-reference evidence only; no pricing or quote engine reads them in P2-20.
+
+## P2-21 Commercial-Air Freight Calculation Preview
+
+P2-21 adds no persistent database namespace. `AirFreightCalculationPreview` is an ephemeral read model built from one human-confirmed `AirRateTableRowCandidate` plus operator-supplied actual/volumetric evidence. It stores nothing back to pilot state.
+
+The preview exposes actual weight, volumetric weight and its source, raw chargeable weight, optional confirmed volumetric divisor, row currency/MIN, a bounded list of per-break options, recommended break/billed weight/base freight, and explicit non-authority flags (`rounding_applied=false`, `surcharges_included=false`, `capacity_confirmed=false`, `runtime_authoritative=false`, `customer_quote_eligible=false`).
+
+When `total_volume_cm3` is used, the volumetric divisor is read only from exactly one confirmed `volumetric_divisor` candidate in the completed source structure review. Operator-supplied volumetric weight remains an explicit alternate input and is never silently combined with total volume.
