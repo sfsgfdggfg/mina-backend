@@ -63,6 +63,7 @@ from src.simulation.supplier_price_source_regressions import evaluate_supplier_p
 from src.simulation.air_shadow_foundation_regressions import evaluate_air_shadow_foundation_regressions
 from src.simulation.air_rate_pdf_upload_regressions import evaluate_air_rate_pdf_upload_regressions
 from src.simulation.air_rate_structure_review_regressions import evaluate_air_rate_structure_review_regressions
+from src.simulation.air_rate_table_review_regressions import evaluate_air_rate_table_review_regressions
 from src.simulation.runtime_authority_cutover_regressions import evaluate_runtime_authority_cutover_regressions
 from src.simulation.human_operational_flow_regressions import evaluate_human_operational_flow_regressions
 from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
@@ -321,6 +322,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Air freight shadow learning foundation", evaluate_air_shadow_foundation_regressions),
     Suite("Commercial-air tariff PDF upload", evaluate_air_rate_pdf_upload_regressions),
     Suite("Commercial-air tariff structure review", evaluate_air_rate_structure_review_regressions),
+    Suite("Commercial-air tariff table review", evaluate_air_rate_table_review_regressions),
     Suite("Runtime authority cutover and source-neutral quote journey", evaluate_runtime_authority_cutover_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),
     Suite("Pricing policy resolution", evaluate_pricing_policy_regressions),

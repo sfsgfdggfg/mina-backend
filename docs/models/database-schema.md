@@ -916,3 +916,11 @@ The `/air-rate-sources` projection adds deployment-state `document_stored` plus 
 `AirRateStructureCandidate` stores a deterministic candidate identifier, candidate kind (`weight_break`, `surcharge_label`, `currency`, `volumetric_divisor`, `cargo_scope_hint`), bounded normalized label/value, occurrence count, up to 20 extracted-text line numbers, deterministic detector marker and proposed/confirmed/rejected review evidence. Confirmed candidates remain non-authoritative reference metadata.
 
 Persistent namespaces are `air_rate_structure_reviews` and `air_rate_structure_review_by_source`. Ordinary retention does not purge them. The source-to-review index makes v1 extraction idempotent per immutable tariff source; a different source fingerprint cannot replace the existing review under the same source identity.
+
+## P2-20 Commercial-Air Tariff Table Review
+
+`AirRateTableReview` is durable reference evidence linked one-to-one to an immutable `AirRateSource` and its completed `AirRateStructureReview`. It stores source and extracted-text fingerprints, structure-review identity, extractor version, fixed `ai_parser_called=false`, the confirmed weight-break keys used for deterministic alignment, authenticated request actor/time, review status and up to 250 `AirRateTableRowCandidate` records.
+
+`AirRateTableRowCandidate` stores a deterministic candidate identifier, bounded destination label, optional three-letter destination code, optional explicit/unambiguous currency, two to twenty positive bounded decimal rate values keyed by confirmed `MIN`/`+N` breaks, extracted-text line number, SHA-256 line fingerprint, detector marker and proposed/confirmed/rejected human-review evidence. It intentionally stores no full source line or free-form extracted tariff text.
+
+Persistent namespaces are `air_rate_table_reviews` and `air_rate_table_review_by_source`. Ordinary retention does not purge them. These records are confidential tariff-reference evidence only; no pricing or quote engine reads them in P2-20.

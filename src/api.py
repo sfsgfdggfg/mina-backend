@@ -266,6 +266,17 @@ from src.core.air_rate_structure_review_service import (
     create_air_rate_structure_review,
     decide_air_rate_structure_candidate,
 )
+from src.core.air_rate_table_review_repository import (
+    AirRateTableReviewConflictError,
+    SQLiteAirRateTableReviewRepository,
+)
+from src.core.air_rate_table_review_service import (
+    AirRateTableReviewNotFoundError,
+    AirRateTableReviewTransitionError,
+    build_air_rate_table_review_view,
+    create_air_rate_table_review,
+    decide_air_rate_table_row,
+)
 from src.core.attachment_intake_policy import MAX_ATTACHMENT_FILE_BYTES
 from src.core.operation_execution_repository import (
     OperationExecutionConflictError,
@@ -559,6 +570,7 @@ learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
 air_shadow_repository = SQLiteAirShadowRepository(pilot_store)
 air_rate_document_store = AirRateDocumentStore()
 air_rate_structure_review_repository = SQLiteAirRateStructureReviewRepository(pilot_store)
+air_rate_table_review_repository = SQLiteAirRateTableReviewRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
@@ -943,6 +955,11 @@ class LearningFactReviewRequest(BaseModel):
 
 
 class AirRateStructureCandidateDecisionRequest(BaseModel):
+    decision: Literal["confirm", "reject"]
+    review_note: str = Field(min_length=1, max_length=800)
+
+
+class AirRateTableRowDecisionRequest(BaseModel):
     decision: Literal["confirm", "reject"]
     review_note: str = Field(min_length=1, max_length=800)
 
@@ -2386,6 +2403,70 @@ def decide_air_rate_structure_candidate_endpoint(
         "review": review.model_dump(mode="json"),
         "runtime_authoritative": False,
         "pricing_authority_enabled": False,
+    }
+
+
+@app.get("/air-rate-table-reviews")
+def list_air_rate_table_reviews():
+    return build_air_rate_table_review_view(
+        repository=air_rate_table_review_repository,
+        source_repository=air_shadow_repository,
+    )
+
+
+@app.post("/air-rate-sources/{source_id}/extract-table")
+def extract_air_rate_table(source_id: str, http_request: Request):
+    try:
+        review, created = create_air_rate_table_review(
+            source_id=source_id,
+            source_repository=air_shadow_repository,
+            structure_repository=air_rate_structure_review_repository,
+            review_repository=air_rate_table_review_repository,
+            document_store=air_rate_document_store,
+            requested_by=_authenticated_operator(http_request),
+        )
+    except AirRateTableReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirRateTableReviewTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except AirRateTableReviewConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AirRateDocumentStorageError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "review": review.model_dump(mode="json"),
+        "created": created,
+        "ai_parser_called": False,
+        "runtime_authoritative": False,
+        "pricing_authority_enabled": False,
+    }
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/decision")
+def decide_air_rate_table_row_endpoint(
+    review_id: str,
+    candidate_id: str,
+    request: AirRateTableRowDecisionRequest,
+    http_request: Request,
+):
+    try:
+        review = decide_air_rate_table_row(
+            review_id=review_id,
+            candidate_id=candidate_id,
+            decision=request.decision,
+            review_note=request.review_note,
+            reviewed_by=_authenticated_operator(http_request),
+            repository=air_rate_table_review_repository,
+        )
+    except AirRateTableReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirRateTableReviewTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "review": review.model_dump(mode="json"),
+        "runtime_authoritative": False,
+        "pricing_authority_enabled": False,
+        "quote_calculation_enabled": False,
     }
 
 
