@@ -7253,3 +7253,16 @@ Destination applicability alone does not prove that a surcharge applies to every
 Cargo applicability is bounded to `source_scope`, `general_cargo` or `special_cargo`. `source_scope` means the exact immutable `AirRateSource.cargo_scope` and is invalid when that source is `unknown`; an explicit general/special choice must not contradict a source already classified as the opposite scope. Routing applicability is bounded to `all_source_routings`, `direct_only`, `connecting_only` or `via_airport`; `via_airport` requires an explicit three-letter airport code and other routing choices must not carry one.
 
 The decision requires authenticated operator identity, aware timestamp and an authored note and cannot be silently re-decided. `all_source_routings` is source-local evidence only, not an airline-wide rule. These conditions remain reference-only and do not yet authorize surcharge calculation, FX, customer pricing, margin, capacity, booking or outbound execution.
+
+## DEC-245 — Reviewed Per-Kg Air Surcharges May Enter a Separate Partial Cost Preview Without Becoming All-In Pricing
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+After a surcharge amount/unit, application basis, destination applicability and cargo/routing conditions have all been explicitly human-reviewed, MINAI may consume an applicable `per_kg` surcharge in a separate ephemeral commercial-air cost preview. The existing base-freight calculation preview remains unchanged and continues to report `surcharges_included=false`.
+
+The reviewed-surcharge preview may include only confirmed `per_kg` candidates from the same immutable tariff source, in the same currency as the confirmed tariff row, whose reviewed destination, cargo and routing conditions match the operator-supplied preview context. The reviewed application basis determines whether the surcharge uses actual weight, chargeable weight or the selected pivot billed weight. Missing review evidence for a potentially applicable same-currency per-kg surcharge fails closed.
+
+Flat charges are excluded until their quantity semantics are separately resolved, and cross-currency charges are excluded because this phase performs no FX conversion. Destination, cargo or routing mismatches are excluded with an explicit reason rather than silently ignored. The result must expose included components and excluded candidates and must never be labelled `all_in`.
+
+The result remains ephemeral reference evidence. It creates no persistence record, customer sell price, margin, quote approval, capacity/schedule confirmation, booking, airline selection or outbound authority. Airline rounding remains unapplied unless separately evidenced.

@@ -295,6 +295,10 @@ from src.core.air_freight_calculation_preview import (
     AirFreightCalculationPreviewError,
     build_air_freight_calculation_preview,
 )
+from src.core.air_reviewed_surcharge_cost_preview import (
+    AirReviewedSurchargeCostPreviewError,
+    build_air_reviewed_surcharge_cost_preview,
+)
 from src.core.attachment_intake_policy import MAX_ATTACHMENT_FILE_BYTES
 from src.core.operation_execution_repository import (
     OperationExecutionConflictError,
@@ -1010,6 +1014,15 @@ class AirFreightCalculationPreviewRequest(BaseModel):
     actual_weight_kg: float = Field(gt=0, le=1_000_000)
     volumetric_weight_kg: Optional[float] = Field(default=None, gt=0, le=1_000_000)
     total_volume_cm3: Optional[float] = Field(default=None, gt=0, le=1_000_000_000)
+
+
+class AirReviewedSurchargeCostPreviewRequest(BaseModel):
+    actual_weight_kg: float = Field(gt=0, le=1_000_000)
+    volumetric_weight_kg: Optional[float] = Field(default=None, gt=0, le=1_000_000)
+    total_volume_cm3: Optional[float] = Field(default=None, gt=0, le=1_000_000_000)
+    cargo_context: Literal["general_cargo", "special_cargo"]
+    routing_context: Literal["direct", "connecting"]
+    via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
 
 
 class PreviewAttachmentReviewRequest(BaseModel):
@@ -2677,6 +2690,32 @@ def preview_air_freight_calculation(
             structure_repository=air_rate_structure_review_repository,
         )
     except AirFreightCalculationPreviewError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return preview.model_dump(mode="json")
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/reviewed-surcharge-cost-preview")
+def preview_air_reviewed_surcharge_cost(
+    review_id: str,
+    candidate_id: str,
+    request: AirReviewedSurchargeCostPreviewRequest,
+):
+    try:
+        preview = build_air_reviewed_surcharge_cost_preview(
+            review_id=review_id,
+            candidate_id=candidate_id,
+            actual_weight_kg=request.actual_weight_kg,
+            volumetric_weight_kg=request.volumetric_weight_kg,
+            total_volume_cm3=request.total_volume_cm3,
+            cargo_context=request.cargo_context,
+            routing_context=request.routing_context,
+            via_airport=request.via_airport,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+            surcharge_repository=air_rate_surcharge_review_repository,
+            source_repository=air_shadow_repository,
+        )
+    except AirReviewedSurchargeCostPreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return preview.model_dump(mode="json")
 

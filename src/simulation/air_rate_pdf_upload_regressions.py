@@ -173,7 +173,7 @@ def evaluate_air_rate_pdf_upload_regressions() -> dict:
     js = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
     check("Havayolu Listeleri" in js and "/air-rate-sources/upload?" in js
           and 'file.accept="application/pdf,.pdf"' in js
-          and "Bu ekran fiyat üretmez" in js
+          and "Bu ekran müşteri satış fiyatı üretmez" in js
           and "10*1024*1024" in js,
           "browser settings exposes PDF-only commercial-air shadow upload with visible authority boundary")
 

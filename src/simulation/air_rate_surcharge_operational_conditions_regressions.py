@@ -48,7 +48,7 @@ def evaluate_air_rate_surcharge_operational_conditions_regressions():
     check(response["calculation_consumption_enabled"] is False and response["pricing_authority_enabled"] is False,"controlled API stores operational-condition evidence without calculation authority")
     check(route_allowed("POST","/air-rate-surcharge-reviews/r/candidates/c/operational-conditions"),"pilot access admits bounded surcharge operational-condition review")
     root=Path(__file__).resolve().parents[2]; js=(root/"ui/web_shell/app.js").read_text(); preview=(root/"src/core/air_freight_calculation_preview.py").read_text()
-    check("Operasyon Koşullarını Doğrula" in js and "Bu review de surcharge hesap tüketimini açmaz" in js,"browser exposes explicit cargo and routing review with authority boundary")
+    check("Operasyon Koşullarını Doğrula" in js and "Bu karar tek başına surcharge hesap tüketimini açmaz" in js,"browser exposes explicit cargo and routing review with authority boundary")
     check("air_rate_surcharge" not in preview and "AirRateSurcharge" not in preview,"freight preview still does not consume operational-condition evidence")
     return {"passed":not failures,"passes":passes,"failures":failures}
 
