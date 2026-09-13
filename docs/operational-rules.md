@@ -4262,3 +4262,11 @@ A surcharge with confirmed amount/unit, application basis and destination/source
 `source_scope` cargo applicability is allowed only when the immutable tariff source has a known cargo scope. Explicit general/special selection must not contradict a source already classified as the other scope. Routing may be source-local all-routing, direct-only, connecting-only or a specific via-airport; a via airport requires a three-letter code and must never be inferred from common routing practice.
 
 Operational-condition review requires actor/time/note evidence and is one-time. It remains non-authoritative: the current freight/pivot preview must not import surcharge state, and no FX, flat-charge quantity interpretation, customer pricing, margin, capacity/schedule, booking or outbound authority is created.
+
+## RULE-262 — Add Only Fully Reviewed Same-Currency Per-Kg Surcharges to the Partial Air Cost Preview
+
+The reviewed-surcharge cost preview may consume only a confirmed commercial-air surcharge whose amount/unit, application basis, applicability scope and cargo/routing conditions have all been reviewed. The candidate must belong to the same immutable tariff source as the confirmed tariff row and must match the preview destination, cargo and routing context.
+
+For an applicable same-currency `per_kg` surcharge, apply the reviewed basis exactly: `actual_weight` uses actual kilograms, `chargeable_weight` uses raw chargeable kilograms and `pivot_billed_weight` uses the selected pivot billed kilograms. Do not substitute one basis for another and do not apply airline rounding that has not been separately evidenced.
+
+Flat charges remain excluded until `/shipment`, `/AWB` or other quantity semantics are explicitly resolved. Different-currency charges remain excluded because FX is not part of this phase. Exclusions must be visible by reason. The preview is partial, ephemeral and never all-in; it must not create customer pricing, margin, quote, capacity, schedule, booking or outbound authority.

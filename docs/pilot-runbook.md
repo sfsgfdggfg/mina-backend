@@ -1597,3 +1597,11 @@ This review is evidence only. Do not interpret `source_wide` as airline-wide pol
 After amount/unit, application-basis and applicability-scope review, confirm cargo and routing conditions separately in **Ayarlar → Havayolu Listeleri**. Use **Exact source cargo scope** only when the source cargo scope is known. For routing, choose exact-source all-routing, direct-only, connecting-only or an explicitly evidenced via airport.
 
 Do not infer cargo class or routing from common airline practice. This review still does not add the surcharge to **Navlun Önizleme** and does not authorize FX, customer pricing, capacity/schedule assumptions, booking or outbound communication.
+
+## Reviewed Per-Kg Surcharge Cost Preview (P2-26)
+
+Use the separate **Reviewed Per-Kg Surcharge Cost Preview** only after the surcharge review chain is complete. Supply actual/volumetric weight plus the shipment cargo and routing context. If a reviewed surcharge is via-specific, provide the connecting via airport so the condition can be matched exactly.
+
+Read the result as a partial reference cost only. Included per-kg surcharge lines show the reviewed weight basis and applied kilograms. Flat charges, cross-currency charges and context-mismatched charges stay in the excluded list with a reason. `Base + reviewed per-kg` is not an all-in cost and must not be copied into a customer quote as an authoritative sell price.
+
+Do not use this preview as capacity, schedule, booking or outbound authority. The existing base **Navlun Önizleme** remains surcharge-free by design.

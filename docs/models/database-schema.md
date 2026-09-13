@@ -964,3 +964,11 @@ P2-25 adds no persistence namespace. It extends the durable `AirRateSurchargeCan
 Operational conditions may be recorded only after surcharge confirmation, application-basis review and applicability-scope review. Cargo choices are `source_scope`, `general_cargo`, or `special_cargo`; routing choices are `all_source_routings`, `direct_only`, `connecting_only`, or `via_airport`. `via_airport` requires a three-letter airport code.
 
 The existing `air_rate_surcharge_reviews` record remains the source of truth. P2-25 creates no surcharge calculation record, customer pricing projection, booking state or outbound authority.
+
+## P2-26 Commercial-Air Reviewed Per-Kg Surcharge Cost Preview
+
+P2-26 introduces no persistence namespace. It adds an ephemeral read model that composes the existing confirmed base-freight preview with fully reviewed, applicable, same-currency `per_kg` surcharge evidence from the same immutable `AirRateSource`.
+
+Each included surcharge component exposes candidate identity, surcharge code, currency, reviewed per-kilogram rate, reviewed application basis, applied weight and computed surcharge cost. Excluded reviewed candidates expose a bounded reason such as unresolved flat quantity scope, currency mismatch/no FX, destination mismatch, cargo mismatch or routing mismatch.
+
+The preview exposes `reviewed_per_kg_surcharge_total` and `base_plus_reviewed_per_kg_surcharges`, but explicitly keeps `all_in_cost=false`, `flat_surcharges_included=false`, `fx_applied=false`, `surcharge_rounding_applied=false`, `capacity_confirmed=false`, `tariff_validity_confirmed=false`, `runtime_authoritative=false` and `customer_quote_eligible=false`.
