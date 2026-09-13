@@ -1561,3 +1561,11 @@ After every structural candidate for a tariff PDF has been explicitly reviewed, 
 Review every proposed destination row against the original PDF. **Satırı Doğrula** and **Satırı Reddet** both require an operator-authored note. If any destination, currency, column alignment or numeric value is uncertain, reject the row; do not repair it by assumption. The v1 detector deliberately prefers missing rows to guessed rows.
 
 A confirmed row is only a checked transcription/reference record. It is not used for chargeable-weight or pivot-weight calculations, surcharge computation, customer pricing, airline selection, space/schedule requests, booking or outbound messages. Those capabilities remain disabled until a separately approved air-pricing phase. Express tariffs remain out of scope.
+
+## Commercial-Air Freight Calculation Preview (P2-21)
+
+After a tariff row is explicitly confirmed under **Ayarlar → Havayolu Listeleri**, use **Navlun Önizleme** only as a shadow/reference calculation. Enter actual weight and volumetric weight; MINAI displays raw chargeable weight, every available `+N` alternative and whether a higher booked weight is the cheapest base-freight pivot.
+
+The preview deliberately excludes all surcharges/local charges, airline capacity, schedule/routing, customer margin and customer quote generation. It also applies no airline kg rounding because that rule has not yet been evidenced. A displayed pivot therefore remains a calculation aid, not a bookable or customer-facing offer.
+
+The backend can also derive volumetric weight from explicit total volume when the tariff's structure review contains exactly one confirmed divisor. Never bypass a missing/conflicting divisor by assuming `/6000`; confirm the source evidence first.

@@ -7194,3 +7194,16 @@ The first `AirRateTableReview` stores source/structure fingerprints, the confirm
 Every proposed row requires explicit operator confirmation or rejection with an authored note. A confirmed row means only that the operator verified the destination and all extracted weight-break values against the source PDF. Confirmed rows remain reference-only and cannot feed chargeable-weight calculation, pivot-weight calculation, surcharge calculation, airline selection, customer quote pricing, availability requests, booking or outbound communication until a later separately approved pricing-engine decision.
 
 This step remains local/deterministic and does not call OpenAI. Express/FedEx/Aramex tariff parsing remains outside scope.
+
+## DEC-240 — Chargeable and Pivot Weight May Be Previewed From Reviewed Air Tariff Rows Without Creating Quote Authority
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+After a commercial-air tariff row has been explicitly human-confirmed, MINAI may provide an ephemeral freight-calculation preview for that row. The preview may compare actual and volumetric weight, calculate raw chargeable weight, evaluate each confirmed `+N` weight break, apply the row's `MIN` value as a base-freight floor, and show when booking at a higher break produces the lowest base freight (pivot weight).
+
+Volumetric weight may be supplied explicitly by the operator, or derived from an explicit total volume only when the source has exactly one human-confirmed volumetric divisor in a completed structure review. Missing, conflicting or unreviewed divisor evidence fails closed. The preview does not guess airline rounding rules; raw decimal chargeable weight is retained and `rounding_applied=false` is explicit.
+
+The calculation is base-freight comparison only. Fuel, security, AWB, handling, screening, war-risk, pickup, destination delivery, customs and other surcharges/local charges are excluded. Airline space/capacity, schedule, routing, validity and customer selling price are also excluded.
+
+Preview results are not persisted as pricing authority, do not create a customer quote, and cannot be consumed by road pricing, quote approval, outbound mail, booking or airline-selection logic. Express pricing remains outside scope.

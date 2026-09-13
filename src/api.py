@@ -277,6 +277,10 @@ from src.core.air_rate_table_review_service import (
     create_air_rate_table_review,
     decide_air_rate_table_row,
 )
+from src.core.air_freight_calculation_preview import (
+    AirFreightCalculationPreviewError,
+    build_air_freight_calculation_preview,
+)
 from src.core.attachment_intake_policy import MAX_ATTACHMENT_FILE_BYTES
 from src.core.operation_execution_repository import (
     OperationExecutionConflictError,
@@ -962,6 +966,12 @@ class AirRateStructureCandidateDecisionRequest(BaseModel):
 class AirRateTableRowDecisionRequest(BaseModel):
     decision: Literal["confirm", "reject"]
     review_note: str = Field(min_length=1, max_length=800)
+
+
+class AirFreightCalculationPreviewRequest(BaseModel):
+    actual_weight_kg: float = Field(gt=0, le=1_000_000)
+    volumetric_weight_kg: Optional[float] = Field(default=None, gt=0, le=1_000_000)
+    total_volume_cm3: Optional[float] = Field(default=None, gt=0, le=1_000_000_000)
 
 
 class PreviewAttachmentReviewRequest(BaseModel):
@@ -2468,6 +2478,27 @@ def decide_air_rate_table_row_endpoint(
         "pricing_authority_enabled": False,
         "quote_calculation_enabled": False,
     }
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/calculation-preview")
+def preview_air_freight_calculation(
+    review_id: str,
+    candidate_id: str,
+    request: AirFreightCalculationPreviewRequest,
+):
+    try:
+        preview = build_air_freight_calculation_preview(
+            review_id=review_id,
+            candidate_id=candidate_id,
+            actual_weight_kg=request.actual_weight_kg,
+            volumetric_weight_kg=request.volumetric_weight_kg,
+            total_volume_cm3=request.total_volume_cm3,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+        )
+    except AirFreightCalculationPreviewError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return preview.model_dump(mode="json")
 
 
 @app.post("/supplier-fixed-rates")

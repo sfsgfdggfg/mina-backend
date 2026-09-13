@@ -4220,3 +4220,13 @@ Numeric commercial-air row extraction may start only after the corresponding `Ai
 Structured row evidence may preserve bounded destination/currency/rate fields plus source fingerprints, but must not preserve the full extracted tariff text or arbitrary raw source lines in ordinary state/audit JSON. Decimal values must stay currency-separated; missing or ambiguous currency remains missing rather than inferred.
 
 Every row decision requires authenticated operator identity and a non-empty note. Confirmation verifies source transcription only. A confirmed tariff row has no runtime authority and must not be imported into customer pricing, pivot-weight logic, margin calculation, schedule/capacity assumptions, airline messaging, booking, or quote generation without a later explicit product decision and regression boundary.
+
+## RULE-257 — Use Confirmed Air Rows for Freight Preview Only; Pivot Comparison Is Not a Customer Quote
+
+Air freight calculation preview may read only an `AirRateTableRowCandidate` whose human-review status is `confirmed`. The row must have an unambiguous currency and at least one `+N` per-kg break. A proposed or rejected row, missing currency, or rate row without a usable weight break fails closed.
+
+Chargeable weight is the greater of actual and volumetric weight. For each `+N` rate, preview billed weight is `max(chargeable_weight, N)`, so a higher break may be compared as a pivot option. Base freight is `billed_weight × rate`, floored by the row's `MIN` amount when present. The lowest base-freight option may be displayed as the recommended break, but this recommendation is reference-only.
+
+When volumetric weight is derived from total volume, exactly one confirmed volumetric divisor from the completed tariff-structure review is required. Do not infer `/6000` merely because it is common. No automatic 0.5 kg / 1 kg airline rounding may be applied until an airline/source-specific rule is evidenced and separately approved.
+
+The preview must visibly state that surcharges are excluded, capacity is not confirmed, airline rounding is not applied and the result is not a customer quote. The result is ephemeral and must not mutate customer pricing, margin, quote approvals, supplier/airline messaging, booking, road pricing or outbound authority.
