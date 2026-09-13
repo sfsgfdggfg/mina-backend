@@ -985,3 +985,9 @@ The existing `air_rate_surcharge_reviews` durable record remains the source of t
 ### P2-28 Reviewed Flat Surcharge Counts Are Ephemeral
 
 P2-28 adds no persistent namespace or durable count field. `shipment_count`, `awb_count`, `hawb_count` and `mawb_count` exist only on the reviewed surcharge cost-preview request. They are validated as explicit bounded positive integers, used for that calculation response, and discarded. Reviewed flat quantity-basis evidence remains durable on the surcharge candidate from P2-27; preview counts must never be written back into that tariff evidence.
+
+### P2-29 Commercial-Air Tariff Validity Review
+
+`air_rate_validity_reviews` stores one durable review per immutable `AirRateSource.source_id`. The record contains `review_id`, `source_id`, `source_sha256`, inclusive `valid_from` / `valid_to`, `reviewed_by`, timezone-aware `reviewed_at`, and `review_note`. It does not modify `air_rate_sources` and carries no runtime pricing, capacity, schedule, booking or customer-quote authority.
+
+The reviewed surcharge cost preview adds only ephemeral `reference_date` evaluation output (`tariff_validity_confirmed`, `validity_review_id`, reviewed date boundaries). The preview date is never persisted and is never defaulted to the current date.

@@ -4287,3 +4287,11 @@ A flat commercial-air surcharge may enter the reviewed partial cost preview only
 For a same-currency flat surcharge whose reviewed destination, cargo and routing conditions match the preview context, absence of the required count is a fail-closed error. If the flat surcharge is outside the preview destination/cargo/routing context, or uses a different currency, exclude it with an explicit reason and do not demand an irrelevant count. Legacy flat surcharge evidence without reviewed quantity basis remains visible but excluded rather than guessed.
 
 Flat count inputs are ephemeral calculation inputs, not learned tariff facts or durable shipment state. The resulting subtotal is still partial and non-authoritative: no FX, tariff-validity or capacity confirmation, airline rounding, customer price, margin, quote/send, booking or outbound authority is created.
+
+## RULE-265 — Never Treat Tariff Dates as Current Without Human Review and an Explicit Reference Date
+
+Do not treat `AirRateSource.valid_from` / `valid_to`, file age, upload date, today's date or common airline practice as proof that a commercial-air tariff is valid for a calculation. Before a dated reviewed-surcharge cost preview can confirm tariff validity, an authenticated operator must create one source-bound validity review with an explicit inclusive date range and authored evidence note.
+
+If the immutable source already declares either validity boundary, the review must match that boundary exactly. A preview must never default its reference date to today. When a reference date is supplied, missing review evidence, source-SHA mismatch or an out-of-range date must fail closed.
+
+A successful date check confirms only that the reviewed tariff range covers the supplied reference date. It must not be interpreted as airline capacity, flight schedule, booking availability, FX, customer pricing, margin, quote approval or outbound authority.

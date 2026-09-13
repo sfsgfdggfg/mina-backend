@@ -281,6 +281,15 @@ from src.core.air_rate_surcharge_review_repository import (
     AirRateSurchargeReviewConflictError,
     SQLiteAirRateSurchargeReviewRepository,
 )
+from src.core.air_rate_validity_review_repository import (
+    SQLiteAirRateValidityReviewRepository,
+)
+from src.core.air_rate_validity_review_service import (
+    AirRateValidityReviewNotFoundError,
+    AirRateValidityReviewTransitionError,
+    build_air_rate_validity_review_view,
+    review_air_rate_validity,
+)
 from src.core.air_rate_surcharge_review_service import (
     AirRateSurchargeReviewNotFoundError,
     AirRateSurchargeReviewTransitionError,
@@ -595,6 +604,7 @@ air_rate_document_store = AirRateDocumentStore()
 air_rate_structure_review_repository = SQLiteAirRateStructureReviewRepository(pilot_store)
 air_rate_table_review_repository = SQLiteAirRateTableReviewRepository(pilot_store)
 air_rate_surcharge_review_repository = SQLiteAirRateSurchargeReviewRepository(pilot_store)
+air_rate_validity_review_repository = SQLiteAirRateValidityReviewRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
@@ -1016,6 +1026,12 @@ class AirRateSurchargeFlatQuantityBasisRequest(BaseModel):
     review_note: str = Field(min_length=1, max_length=800)
 
 
+class AirRateValidityReviewRequest(BaseModel):
+    valid_from: date
+    valid_to: date
+    review_note: str = Field(min_length=1, max_length=800)
+
+
 class AirFreightCalculationPreviewRequest(BaseModel):
     actual_weight_kg: float = Field(gt=0, le=1_000_000)
     volumetric_weight_kg: Optional[float] = Field(default=None, gt=0, le=1_000_000)
@@ -1029,6 +1045,7 @@ class AirReviewedSurchargeCostPreviewRequest(BaseModel):
     cargo_context: Literal["general_cargo", "special_cargo"]
     routing_context: Literal["direct", "connecting"]
     via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    reference_date: Optional[date] = None
     shipment_count: Optional[int] = Field(default=None, ge=1, le=1000)
     awb_count: Optional[int] = Field(default=None, ge=1, le=1000)
     hawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
@@ -2416,6 +2433,36 @@ async def upload_air_rate_source(
     }
 
 
+@app.get("/air-rate-validity-reviews")
+def list_air_rate_validity_reviews():
+    return build_air_rate_validity_review_view(repository=air_rate_validity_review_repository)
+
+
+@app.post("/air-rate-sources/{source_id}/validity-review")
+def review_air_rate_source_validity(source_id: str, request: AirRateValidityReviewRequest, http_request: Request):
+    try:
+        review = review_air_rate_validity(
+            source_id=source_id,
+            valid_from=request.valid_from,
+            valid_to=request.valid_to,
+            review_note=request.review_note,
+            reviewed_by=_authenticated_operator(http_request),
+            source_repository=air_shadow_repository,
+            repository=air_rate_validity_review_repository,
+        )
+    except AirRateValidityReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirRateValidityReviewTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "review": review.model_dump(mode="json"),
+        "runtime_authoritative": False,
+        "pricing_authority_enabled": False,
+        "capacity_confirmed": False,
+        "schedule_confirmed": False,
+    }
+
+
 @app.get("/air-rate-structure-reviews")
 def list_air_rate_structure_reviews():
     return build_air_rate_structure_review_view(
@@ -2737,6 +2784,7 @@ def preview_air_reviewed_surcharge_cost(
             cargo_context=request.cargo_context,
             routing_context=request.routing_context,
             via_airport=request.via_airport,
+            reference_date=request.reference_date,
             shipment_count=request.shipment_count,
             awb_count=request.awb_count,
             hawb_count=request.hawb_count,
@@ -2745,6 +2793,7 @@ def preview_air_reviewed_surcharge_cost(
             structure_repository=air_rate_structure_review_repository,
             surcharge_repository=air_rate_surcharge_review_repository,
             source_repository=air_shadow_repository,
+            validity_repository=air_rate_validity_review_repository,
         )
     except AirReviewedSurchargeCostPreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

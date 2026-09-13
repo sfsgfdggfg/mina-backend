@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import Literal, Optional
 
@@ -13,6 +14,7 @@ from src.core.air_freight_calculation_preview import (
 from src.core.air_rate_structure_review_repository import AirRateStructureReviewRepository
 from src.core.air_rate_surcharge_review_repository import AirRateSurchargeReviewRepository
 from src.core.air_rate_table_review_repository import AirRateTableReviewRepository
+from src.core.air_rate_validity_review_repository import AirRateValidityReviewRepository
 from src.core.air_shadow_repository import AirShadowRepository
 
 
@@ -63,6 +65,10 @@ class AirReviewedSurchargeCostPreview(BaseModel):
     cargo_context: Literal["general_cargo", "special_cargo"]
     routing_context: Literal["direct", "connecting"]
     via_airport: Optional[str] = None
+    reference_date: Optional[date] = None
+    validity_review_id: Optional[str] = None
+    reviewed_valid_from: Optional[date] = None
+    reviewed_valid_to: Optional[date] = None
     included_surcharges: list[AirReviewedSurchargeComponent] = Field(default_factory=list, max_length=100)
     included_flat_surcharges: list[AirReviewedFlatSurchargeComponent] = Field(default_factory=list, max_length=100)
     excluded_surcharges: list[AirReviewedSurchargeExclusion] = Field(default_factory=list, max_length=100)
@@ -124,6 +130,7 @@ def build_air_reviewed_surcharge_cost_preview(
     structure_repository: AirRateStructureReviewRepository,
     surcharge_repository: AirRateSurchargeReviewRepository,
     source_repository: AirShadowRepository,
+    validity_repository: AirRateValidityReviewRepository | None = None,
     volumetric_weight_kg=None,
     total_volume_cm3=None,
     via_airport: Optional[str] = None,
@@ -131,6 +138,7 @@ def build_air_reviewed_surcharge_cost_preview(
     awb_count: Optional[int] = None,
     hawb_count: Optional[int] = None,
     mawb_count: Optional[int] = None,
+    reference_date: Optional[date] = None,
 ) -> AirReviewedSurchargeCostPreview:
     try:
         freight = build_air_freight_calculation_preview(
@@ -169,6 +177,20 @@ def build_air_reviewed_surcharge_cost_preview(
     source = source_repository.get_rate_source(freight.source_id)
     if source is None:
         raise AirReviewedSurchargeCostPreviewError("air_rate_source_not_found")
+
+    validity_review = None
+    tariff_validity_confirmed = False
+    if reference_date is not None:
+        if validity_repository is None:
+            raise AirReviewedSurchargeCostPreviewError("air_rate_validity_repository_required")
+        validity_review = validity_repository.get_by_source(freight.source_id)
+        if validity_review is None:
+            raise AirReviewedSurchargeCostPreviewError("air_rate_validity_review_required")
+        if validity_review.source_sha256 != source.sha256_hex:
+            raise AirReviewedSurchargeCostPreviewError("air_rate_validity_source_mismatch")
+        if reference_date < validity_review.valid_from or reference_date > validity_review.valid_to:
+            raise AirReviewedSurchargeCostPreviewError("air_rate_tariff_not_valid_for_reference_date")
+        tariff_validity_confirmed = True
 
     included: list[AirReviewedSurchargeComponent] = []
     included_flat: list[AirReviewedFlatSurchargeComponent] = []
@@ -273,6 +295,10 @@ def build_air_reviewed_surcharge_cost_preview(
         cargo_context=cargo_context,
         routing_context=routing_context,
         via_airport=normalized_via,
+        reference_date=reference_date,
+        validity_review_id=None if validity_review is None else validity_review.review_id,
+        reviewed_valid_from=None if validity_review is None else validity_review.valid_from,
+        reviewed_valid_to=None if validity_review is None else validity_review.valid_to,
         included_surcharges=included,
         included_flat_surcharges=included_flat,
         excluded_surcharges=excluded,
@@ -281,4 +307,5 @@ def build_air_reviewed_surcharge_cost_preview(
         base_plus_reviewed_per_kg_surcharges=freight.recommended_base_freight + per_kg_total,
         base_plus_reviewed_surcharges=freight.recommended_base_freight + per_kg_total + flat_total,
         flat_surcharges_included=bool(included_flat),
+        tariff_validity_confirmed=tariff_validity_confirmed,
     )
