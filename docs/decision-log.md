@@ -7289,3 +7289,16 @@ After a flat surcharge has confirmed amount/currency/unit, flat application basi
 Counts are ephemeral request evidence only. MINAI must not persist them as tariff knowledge, infer a default count of one, substitute a shipment count for an AWB/HAWB/MAWB count, or reuse a count from another preview or job. Counts must be bounded positive integers. A same-currency, context-applicable, fully reviewed flat surcharge fails closed when its required count is absent; a destination/cargo/routing-inapplicable or cross-currency flat surcharge remains explicitly excluded without demanding an irrelevant count.
 
 The preview may expose the flat component, amount-per-unit, reviewed quantity basis, applied count and calculated flat cost, plus a combined `base + reviewed surcharges` subtotal. This remains a partial reference cost, not an all-in cost or customer sell price. FX, tariff-validity confirmation, capacity/schedule confirmation, airline rounding, margin, quote authority, booking and outbound execution remain outside this phase.
+
+## DEC-248 — Air Tariff Date Validity Requires Source-Bound Human Review and an Explicit Preview Reference Date
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+Commercial-air tariff source metadata may contain `valid_from` and `valid_to`, but upload metadata alone must not become executable validity authority. MINAI therefore stores a separate one-time human-reviewed tariff-validity record bound to the exact immutable source id and source SHA-256. The review records an explicit inclusive `valid_from` / `valid_to` range, authenticated reviewer, aware timestamp and authored note.
+
+If immutable source metadata already contains a start or end date, the reviewed date for that boundary must match it; review must fail closed rather than silently contradict the source identity. Missing source metadata may be completed by explicit human review without mutating the original source. A reviewed validity range cannot be silently re-decided.
+
+The reviewed surcharge cost preview may validate tariff date validity only when the operator supplies an explicit `reference_date`. No current date or today-default is permitted. A reference-dated preview requires a validity review for the same source SHA and fails closed when the date lies outside the inclusive reviewed range. Only then may the result expose `tariff_validity_confirmed=true`.
+
+Tariff date validity is not capacity, schedule, space, booking, routing availability, FX, customer sell price or margin authority. The preview remains partial reference cost and is still not an all-in customer quote.

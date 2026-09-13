@@ -1621,3 +1621,11 @@ In **Reviewed Surcharge Cost Preview**, supply a flat count only when an applica
 No count field has a default. If a fully reviewed same-currency flat surcharge applies to the selected destination/cargo/routing context and its matching count is missing, the preview must stop rather than silently omit or assume the charge. Context-inapplicable and cross-currency flat charges remain visibly excluded.
 
 Read `Base + reviewed surcharge` as a partial reference subtotal only. It is not all-in and does not confirm tariff validity, capacity, schedule, FX, airline rounding, customer selling price, margin, booking or outbound communication. Count inputs are ephemeral and are not persisted as tariff knowledge.
+
+## Commercial-Air Tariff Validity Review (P2-29)
+
+In **Ayarlar → Havayolu Listeleri**, review the exact tariff source validity range separately from upload metadata. Enter the start and end dates supported by the tariff evidence and add an operator note. If the source was uploaded with validity dates, the reviewed boundaries must match those immutable metadata values; otherwise stop and register corrected source evidence rather than overriding it silently.
+
+In **Reviewed Surcharge Cost Preview**, enter **Tarife referans tarihi** only when you want the preview to confirm that the reviewed tariff covers that specific date. Leaving it blank must not imply today. A supplied date without a review, or a date outside the reviewed range, fails closed.
+
+`Tarife geçerliliği DOĞRULANDI` means only that the exact reviewed tariff date range includes the entered reference date. It does not confirm flight capacity, schedule, booking space, FX, customer sell price, margin or outbound authority.
