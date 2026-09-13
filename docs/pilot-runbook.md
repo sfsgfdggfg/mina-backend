@@ -1545,3 +1545,11 @@ Once deterministic customer/supplier identities exist, run the existing historic
 The controlled pilot may register commercial-air tariff PDFs from **Ayarlar → Havayolu Listeleri**. The operator supplies the airline, optional cargo scope/origin-airport/validity metadata and the original PDF. Only PDF files up to 10 MiB are accepted. Registration stores the exact verified artifact in protected deployment-owned storage and displays it as `registered_not_interpreted`.
 
 A successful upload is not an air-pricing readiness signal. Until a later interpretation/review step is implemented, MINAI must not derive rates, surcharges, chargeable weight, pivot weight, capacity, schedules or customer prices from the document. Express/FedEx/Aramex tariffs are intentionally not accepted by this surface.
+
+## Commercial-Air Tariff Structure Review (P2-19)
+
+After a commercial-air PDF is registered under **Ayarlar → Havayolu Listeleri**, an authenticated operator may choose **Yapıyı Çıkar**. MINAI reads the protected PDF locally, applies the existing bounded PDF text extractor and proposes only structural labels such as weight breaks, surcharge names, currency, volumetric divisor and cargo-scope hints. No OpenAI parser is called in this phase and the full extracted text is not persisted in the pilot database/audit payload.
+
+Review each proposed label individually. **Doğrula** and **Reddet** both require an operator note. A confirmed label means only “this label exists/is correctly recognized in this tariff source”; it does not authorize a rate, surcharge amount, chargeable-weight formula, pivot-weight choice, airline quote, capacity assumption, booking or customer quote. Numeric tariff-row interpretation remains outside the controlled pilot boundary until a later separately approved implementation and applicable OpenAI data-control approval.
+
+If extraction returns an encrypted/no-text/malformed/oversized-page or character-limit error, treat the document as manual-review-only; do not bypass the extractor and do not paste commercial tariff contents into another AI surface as a workaround.

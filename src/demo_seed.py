@@ -98,7 +98,10 @@ def _utc_now() -> datetime:
 
 def _today_istanbul(now: datetime) -> datetime:
     local = now.astimezone(ISTANBUL)
-    return local.replace(hour=9, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    anchor = local.replace(hour=9, minute=0, second=0, microsecond=0)
+    if anchor > local:
+        anchor -= timedelta(days=1)
+    return anchor.astimezone(timezone.utc)
 
 
 def _shipment(

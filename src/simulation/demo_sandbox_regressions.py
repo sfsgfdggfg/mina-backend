@@ -6,6 +6,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from src.core.demo_runtime import DemoOutboundMailSender, validate_demo_runtime
 from src.core.attachment_interpretation_review_service import (
@@ -47,7 +48,7 @@ from src.core.operational_shift_continuity_ledger import build_operational_shift
 from src.core.operational_shift_open_reconciliation import build_operational_shift_open_reconciliation
 from src.demo_launcher import _configure_environment
 from src.core.web_session import list_active_web_operators
-from src.demo_seed import seed_demo_customer_memory, seed_demo_database
+from src.demo_seed import _today_istanbul, seed_demo_customer_memory, seed_demo_database
 from src.workflow.demo_relationship_onboarding import run_demo_relationship_onboarding
 from src.workflow.demo_inbound import parse_demo_customer_email
 from src.workflow.demo_reset import DemoResetUnavailableError, reset_demo_sandbox
@@ -91,6 +92,16 @@ def evaluate_demo_sandbox_regressions() -> dict:
         else:
             print(f"FAIL {label}")
             failures.append(label)
+
+    overnight_now = datetime(2026, 9, 12, 21, 30, tzinfo=timezone.utc)
+    overnight_anchor = _today_istanbul(overnight_now)
+    overnight_local = overnight_anchor.astimezone(ZoneInfo("Europe/Istanbul"))
+    check(
+        overnight_anchor <= overnight_now
+        and overnight_local.hour == 9
+        and overnight_local.date().isoformat() == "2026-09-12",
+        "demo daily anchor never points into the future during Istanbul overnight hours",
+    )
 
     with tempfile.TemporaryDirectory(prefix="minai-demo-regression-") as directory:
         root = Path(directory)

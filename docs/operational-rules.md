@@ -4204,3 +4204,11 @@ A commercial-air tariff upload must be an authenticated `application/pdf`, must 
 The exact verified PDF must be stored by SHA-256 in protected content-addressed storage. The original file name may be retained only as bounded source metadata and must never control a storage path. Pilot storage must remain outside the repository and use owner-only directory/file permissions. Raw tariff bytes and extracted tariff content must never be copied into ordinary state/audit JSON.
 
 Listing registered air-rate sources is read-only evidence visibility. `document_stored=true` means the protected artifact is present; it does not mean the tariff has been interpreted, reviewed, validated for current dates, checked for capacity or authorized for pricing. No air or express customer quote may be generated from registration alone.
+
+## RULE-255 — Keep Air-Tariff Structure Review Reference-Only and Do Not Send Commercial PDF Text to AI Without a Separate Gate
+
+Air-rate structure extraction may read only a previously verified/stored commercial-air PDF and must reuse the bounded PDF extractor: encrypted, non-text-extractable, malformed, over-page-limit or over-character-limit documents fail closed. The v1 structure detector may recognize labels and units but must never persist a numeric tariff price or construct a usable price table.
+
+An `AirRateStructureReview` must retain only source/extraction fingerprints, bounded extraction counts and deterministic structural candidates. Full extracted text and arbitrary source excerpts must not enter ordinary state or audit-event payloads. Candidate detection must remain deterministic and local; v1 must not import or call OpenAI.
+
+Every confirm/reject action requires authenticated operator identity and a non-empty review note. A reviewed candidate cannot be silently re-decided. Confirmed weight breaks, surcharge names, currencies, volumetric divisors or cargo-scope hints are reference evidence only and must not participate in customer pricing, pivot-weight logic, airline selection, availability requests, booking, quote generation or outbound communication.

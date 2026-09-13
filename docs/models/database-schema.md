@@ -908,3 +908,11 @@ P2-18 reuses the P2-17 `air_rate_sources` and `air_rate_source_by_entry` namespa
 The corresponding verified PDF is stored outside state JSON in a protected content-addressed filesystem artifact keyed by `sha256_hex`. In controlled pilot mode its default directory is `<MINAI_PILOT_DB_PATH parent>/air-rate-sources`; an optional `MINAI_AIR_RATE_STORAGE_DIR` override must be absolute and outside the repository. Directory permissions are 0700 and PDF permissions are 0600.
 
 The `/air-rate-sources` projection adds deployment-state `document_stored` plus explicit non-authority flags. These are read-model values rather than mutable business authority. `/air-rate-sources/upload` stores/registers evidence only and does not persist extracted tariff text or parsed prices.
+
+## P2-19 Commercial-Air Tariff Structure Review
+
+`AirRateStructureReview` is durable review evidence keyed by `review_id` and one immutable `AirRateSource.source_id`. It stores the source PDF SHA-256, a SHA-256 fingerprint of the bounded extracted text, extracted character count, extractor version, fixed `ai_parser_called=false`, authenticated request actor/time, review status and up to 100 `AirRateStructureCandidate` records. It never stores the full extracted text or a parsed tariff-price row.
+
+`AirRateStructureCandidate` stores a deterministic candidate identifier, candidate kind (`weight_break`, `surcharge_label`, `currency`, `volumetric_divisor`, `cargo_scope_hint`), bounded normalized label/value, occurrence count, up to 20 extracted-text line numbers, deterministic detector marker and proposed/confirmed/rejected review evidence. Confirmed candidates remain non-authoritative reference metadata.
+
+Persistent namespaces are `air_rate_structure_reviews` and `air_rate_structure_review_by_source`. Ordinary retention does not purge them. The source-to-review index makes v1 extraction idempotent per immutable tariff source; a different source fingerprint cannot replace the existing review under the same source identity.

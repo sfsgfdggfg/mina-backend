@@ -68,6 +68,8 @@ PERSISTENT_STATE_NAMESPACES = (
     "air_rate_source_by_entry",
     "air_mode_observations",
     "air_mode_observation_by_entry",
+    "air_rate_structure_reviews",
+    "air_rate_structure_review_by_source",
     "operational_work_assignments",
     "operational_shift_close_receipts",
     "operational_shift_open_acceptance_receipts",
