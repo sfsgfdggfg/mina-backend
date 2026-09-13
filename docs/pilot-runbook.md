@@ -1569,3 +1569,11 @@ After a tariff row is explicitly confirmed under **Ayarlar → Havayolu Listeler
 The preview deliberately excludes all surcharges/local charges, airline capacity, schedule/routing, customer margin and customer quote generation. It also applies no airline kg rounding because that rule has not yet been evidenced. A displayed pivot therefore remains a calculation aid, not a bookable or customer-facing offer.
 
 The backend can also derive volumetric weight from explicit total volume when the tariff's structure review contains exactly one confirmed divisor. Never bypass a missing/conflicting divisor by assuming `/6000`; confirm the source evidence first.
+
+## Commercial-Air Surcharge Amount Review (P2-22)
+
+After the tariff structure review is fully completed, **Ayarlar → Havayolu Listeleri** may show **Surcharge Tutarlarını Çıkar** when at least one surcharge label was human-confirmed. MINAI reuses the protected PDF and the already verified extracted-text fingerprint; it only inspects the line numbers attached to those confirmed surcharge labels.
+
+V1 creates a proposal only when the line contains an explicit amount, currency and supported unit such as `USD 0.50 / KG` or `EUR 25 / SHIPMENT`. Unitless entries, percentage charges, multiple amounts on one line and unsupported formulas remain manual-review-only. Do not convert a skipped line manually into a calculated rule merely to make the preview complete.
+
+**Surcharge Doğrula** confirms transcription only. In particular, `/kg` does not yet tell MINAI whether the airline applies the charge to physical, chargeable or pivot/booked weight. Confirmed surcharge records are therefore not included in the current **Navlun Önizleme**. Do not treat them as customer-pricing readiness, capacity/schedule evidence or booking authority.

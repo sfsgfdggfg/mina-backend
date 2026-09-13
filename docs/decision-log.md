@@ -7207,3 +7207,16 @@ Volumetric weight may be supplied explicitly by the operator, or derived from an
 The calculation is base-freight comparison only. Fuel, security, AWB, handling, screening, war-risk, pickup, destination delivery, customs and other surcharges/local charges are excluded. Airline space/capacity, schedule, routing, validity and customer selling price are also excluded.
 
 Preview results are not persisted as pricing authority, do not create a customer quote, and cannot be consumed by road pricing, quote approval, outbound mail, booking or airline-selection logic. Express pricing remains outside scope.
+
+## DEC-241 — Commercial-Air Surcharge Amounts Require Explicit Currency and Unit Before Review
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+After a commercial-air tariff structure review is completed, MINAI may locally propose surcharge amount records only for surcharge labels that an operator explicitly confirmed in that same source. V1 reads only the extracted-text line numbers already attached to those confirmed labels and requires one unambiguous positive amount, an explicit three-letter currency and an explicit supported unit. The first supported units are per-kilogram and flat per AWB/HAWB/MAWB/shipment.
+
+Unitless amounts, percentage charges, lines containing multiple amount/currency pairs, unsupported surcharge labels and otherwise ambiguous expressions are skipped rather than interpreted. The review stores normalized surcharge code, decimal amount, currency, normalized unit basis, source line number and source-line fingerprint; it does not store the raw line or full extracted tariff text.
+
+Human confirmation verifies only that the amount, currency and unit were transcribed correctly from the source. It does not decide whether a per-kilogram surcharge applies to physical weight, tariff chargeable weight, pivot/booked weight or another airline-specific basis. Therefore confirmed surcharge records remain reference-only and are not consumed by freight preview, customer pricing, margin, capacity/schedule, booking or outbound communication in this phase.
+
+Extraction remains deterministic and local with no OpenAI call. Express/FedEx/Aramex surcharge engines remain outside this scope.
