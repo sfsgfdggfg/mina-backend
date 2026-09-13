@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 AirRateSurchargeBasis = Literal["flat", "per_kg"]
+AirRateSurchargeApplicationBasis = Literal["actual_weight", "chargeable_weight", "pivot_billed_weight", "flat"]
 AirRateSurchargeCandidateStatus = Literal["proposed", "confirmed", "rejected"]
 AirRateSurchargeReviewStatus = Literal["pending", "partially_reviewed", "completed", "no_candidates"]
 
@@ -28,6 +29,10 @@ class AirRateSurchargeCandidate(BaseModel):
     reviewed_by: Optional[str] = Field(default=None, max_length=200)
     reviewed_at: Optional[datetime] = None
     review_note: Optional[str] = Field(default=None, max_length=800)
+    application_basis: Optional[AirRateSurchargeApplicationBasis] = None
+    application_basis_reviewed_by: Optional[str] = Field(default=None, max_length=200)
+    application_basis_reviewed_at: Optional[datetime] = None
+    application_basis_review_note: Optional[str] = Field(default=None, max_length=800)
 
     @field_validator("surcharge_code", "currency", mode="before")
     @classmethod
@@ -41,7 +46,7 @@ class AirRateSurchargeCandidate(BaseModel):
             raise ValueError("Air surcharge amount must be finite, positive and bounded.")
         return value
 
-    @field_validator("reviewed_by", "review_note", mode="before")
+    @field_validator("reviewed_by", "review_note", "application_basis_reviewed_by", "application_basis_review_note", mode="before")
     @classmethod
     def normalize_text(cls, value):
         if value is None:
@@ -49,7 +54,7 @@ class AirRateSurchargeCandidate(BaseModel):
         normalized = " ".join(str(value).strip().split())
         return normalized or None
 
-    @field_validator("reviewed_at")
+    @field_validator("reviewed_at", "application_basis_reviewed_at")
     @classmethod
     def require_aware_review_time(cls, value: Optional[datetime]) -> Optional[datetime]:
         if value is not None and value.tzinfo is None:
@@ -63,6 +68,21 @@ class AirRateSurchargeCandidate(BaseModel):
                 raise ValueError("Proposed air surcharge candidate cannot carry review evidence.")
         elif not self.reviewed_by or self.reviewed_at is None or not self.review_note:
             raise ValueError("Reviewed air surcharge candidate requires actor, time and note.")
+        basis_evidence = (
+            self.application_basis,
+            self.application_basis_reviewed_by,
+            self.application_basis_reviewed_at,
+            self.application_basis_review_note,
+        )
+        if any(item is not None for item in basis_evidence):
+            if self.status != "confirmed":
+                raise ValueError("Only confirmed air surcharge candidates may carry application-basis review evidence.")
+            if not all(item is not None for item in basis_evidence):
+                raise ValueError("Air surcharge application basis requires basis, actor, time and note.")
+            if self.basis == "flat" and self.application_basis != "flat":
+                raise ValueError("Flat air surcharge may only use flat application basis.")
+            if self.basis == "per_kg" and self.application_basis not in {"actual_weight", "chargeable_weight", "pivot_billed_weight"}:
+                raise ValueError("Per-kg air surcharge requires an explicit weight application basis.")
         return self
 
     @property

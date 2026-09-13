@@ -287,6 +287,7 @@ from src.core.air_rate_surcharge_review_service import (
     build_air_rate_surcharge_review_view,
     create_air_rate_surcharge_review,
     decide_air_rate_surcharge_candidate,
+    decide_air_rate_surcharge_application_basis,
 )
 from src.core.air_freight_calculation_preview import (
     AirFreightCalculationPreviewError,
@@ -982,6 +983,11 @@ class AirRateTableRowDecisionRequest(BaseModel):
 
 class AirRateSurchargeCandidateDecisionRequest(BaseModel):
     decision: Literal["confirm", "reject"]
+    review_note: str = Field(min_length=1, max_length=800)
+
+
+class AirRateSurchargeApplicationBasisRequest(BaseModel):
+    application_basis: Literal["actual_weight", "chargeable_weight", "pivot_billed_weight", "flat"]
     review_note: str = Field(min_length=1, max_length=800)
 
 
@@ -2546,6 +2552,34 @@ def decide_air_rate_surcharge_candidate_endpoint(
             review_id=review_id,
             candidate_id=candidate_id,
             decision=request.decision,
+            review_note=request.review_note,
+            reviewed_by=_authenticated_operator(http_request),
+            repository=air_rate_surcharge_review_repository,
+        )
+    except AirRateSurchargeReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirRateSurchargeReviewTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "review": review.model_dump(mode="json"),
+        "runtime_authoritative": False,
+        "pricing_authority_enabled": False,
+        "calculation_consumption_enabled": False,
+    }
+
+
+@app.post("/air-rate-surcharge-reviews/{review_id}/candidates/{candidate_id}/application-basis")
+def decide_air_rate_surcharge_application_basis_endpoint(
+    review_id: str,
+    candidate_id: str,
+    request: AirRateSurchargeApplicationBasisRequest,
+    http_request: Request,
+):
+    try:
+        review = decide_air_rate_surcharge_application_basis(
+            review_id=review_id,
+            candidate_id=candidate_id,
+            application_basis=request.application_basis,
             review_note=request.review_note,
             reviewed_by=_authenticated_operator(http_request),
             repository=air_rate_surcharge_review_repository,

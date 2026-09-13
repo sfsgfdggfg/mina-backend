@@ -940,3 +940,11 @@ When `total_volume_cm3` is used, the volumetric divisor is read only from exactl
 `AirRateSurchargeCandidate` stores deterministic candidate identity, normalized confirmed surcharge code, positive bounded decimal amount, explicit three-letter currency, normalized basis (`per_kg` or `flat`), source line number and SHA-256 line fingerprint plus proposed/confirmed/rejected human-review evidence. It intentionally stores no raw source line, full tariff text, percentage formula, minimum formula or application-weight policy.
 
 Persistent namespaces are `air_rate_surcharge_reviews` and `air_rate_surcharge_review_by_source`. Ordinary retention does not purge them. These records are confidential tariff-reference evidence only; P2-22 creates no consumer in freight calculation, customer pricing, quote approval, booking or outbound execution.
+
+## P2-23 Commercial-Air Surcharge Application-Basis Review
+
+P2-23 adds no new persistence namespace. It extends each existing `AirRateSurchargeCandidate` with optional `application_basis`, authenticated reviewer/time and bounded review note fields. Legacy confirmed surcharge records deserialize with these fields absent.
+
+Application basis may be recorded only after the surcharge candidate itself is `confirmed`. `per_kg` candidates accept only `actual_weight`, `chargeable_weight` or `pivot_billed_weight`; flat candidates accept only `flat`. Partial basis evidence and basis evidence on proposed/rejected candidates are invalid.
+
+The existing `air_rate_surcharge_reviews` durable record remains the source of truth for this evidence. P2-23 creates no surcharge-calculation record and no pricing projection. The commercial-air freight preview remains independent of surcharge review state.

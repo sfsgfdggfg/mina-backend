@@ -3859,7 +3859,36 @@ function renderAirRateSourceSettings(payload = {}, reviewsPayload = {}, tablePay
 
   const surchargeSection=node("div","","approval-focused supplier-price-entry");surchargeSection.append(node("h3","Surcharge Tutar İncelemeleri"),node("div","Yalnız açık para birimi + tutar + /kg veya /shipment gibi unit içeren satırlar adaylaştırılır. Unit belirsiz ve yüzde bazlı satırlar tahmin edilmez. Doğrulanan surcharge bile henüz navlun/pivot hesabına eklenmez.","small muted"));
   const surchargeBasis={per_kg:"kg başına",flat:"sabit / shipment-AWB"};
-  surchargeReviews.forEach(review=>{const box=node("div","","supplier-commercial supplier-price-card");box.append(node("strong",`${review.airline_name||"Havayolu"} · ${review.document_name||review.source_id}`),node("span",reviewLabel[review.status]||review.status,"badge"),node("span","AI parser: hayır · hesap tüketimi: kapalı","small muted"));(review.candidates||[]).forEach(candidate=>{const row=node("div","","supplier-commercial");row.append(node("strong",`${candidate.surcharge_code} · ${candidate.amount} ${candidate.currency}`),node("span",surchargeBasis[candidate.basis]||candidate.basis,"small"),node("span",`Kaynak satır ${candidate.source_line_number} · ${candidate.status}`,"small muted"));if(candidate.status==="proposed"){const noteLabel=node("label","Surcharge inceleme notu");const note=document.createElement("input");note.placeholder="Tutar, para birimi ve unit doğru mu?";noteLabel.append(note);const fb=node("div","","muted settings-feedback");const decide=async(decision,button)=>{if(!note.value.trim()){fb.textContent="İnceleme notu gerekli.";return;}button.disabled=true;try{await api(`/air-rate-surcharge-reviews/${encodeURIComponent(review.review_id)}/candidates/${encodeURIComponent(candidate.candidate_id)}/decision`,{method:"POST",body:JSON.stringify({decision,review_note:note.value.trim()})});await loadSettings();}catch(e){fb.textContent=e.message||String(e);button.disabled=false;}};const actions=node("div","","actions");const confirm=actionButton("Surcharge Doğrula","approve",()=>decide("confirm",confirm));const reject=actionButton("Surcharge Reddet","reject",()=>decide("reject",reject));actions.append(confirm,reject);row.append(noteLabel,actions,fb);}else{row.append(node("span",`${candidate.reviewed_by||"-"} · ${candidate.review_note||"-"}`,"small muted"));}box.append(row);});if(!(review.candidates||[]).length)box.append(node("div","Açık tutar + para birimi + unit içeren güvenli surcharge adayı bulunamadı; tahmin yapılmadı.","small muted"));surchargeSection.append(box);});
+  const applicationBasisLabel={actual_weight:"Gerçek ağırlık",chargeable_weight:"Chargeable weight",pivot_billed_weight:"Pivot sonucu billed weight",flat:"Sabit / shipment-AWB"};
+  surchargeReviews.forEach(review=>{
+    const box=node("div","","supplier-commercial supplier-price-card");
+    box.append(node("strong",`${review.airline_name||"Havayolu"} · ${review.document_name||review.source_id}`),node("span",reviewLabel[review.status]||review.status,"badge"),node("span","AI parser: hayır · hesap tüketimi: kapalı","small muted"));
+    (review.candidates||[]).forEach(candidate=>{
+      const row=node("div","","supplier-commercial");
+      row.append(node("strong",`${candidate.surcharge_code} · ${candidate.amount} ${candidate.currency}`),node("span",surchargeBasis[candidate.basis]||candidate.basis,"small"),node("span",`Kaynak satır ${candidate.source_line_number} · ${candidate.status}`,"small muted"));
+      if(candidate.status==="proposed"){
+        const noteLabel=node("label","Surcharge inceleme notu");const note=document.createElement("input");note.placeholder="Tutar, para birimi ve unit doğru mu?";noteLabel.append(note);const fb=node("div","","muted settings-feedback");
+        const decide=async(decision,button)=>{if(!note.value.trim()){fb.textContent="İnceleme notu gerekli.";return;}button.disabled=true;try{await api(`/air-rate-surcharge-reviews/${encodeURIComponent(review.review_id)}/candidates/${encodeURIComponent(candidate.candidate_id)}/decision`,{method:"POST",body:JSON.stringify({decision,review_note:note.value.trim()})});await loadSettings();}catch(e){fb.textContent=e.message||String(e);button.disabled=false;}};
+        const actions=node("div","","actions");const confirm=actionButton("Surcharge Doğrula","approve",()=>decide("confirm",confirm));const reject=actionButton("Surcharge Reddet","reject",()=>decide("reject",reject));actions.append(confirm,reject);row.append(noteLabel,actions,fb);
+      }else{
+        row.append(node("span",`${candidate.reviewed_by||"-"} · ${candidate.review_note||"-"}`,"small muted"));
+        if(candidate.status==="confirmed"){
+          if(candidate.application_basis){
+            row.append(node("span",`Uygulama tabanı: ${applicationBasisLabel[candidate.application_basis]||candidate.application_basis} · ${candidate.application_basis_reviewed_by||"-"} · ${candidate.application_basis_review_note||"-"}`,"small muted"));
+          }else{
+            const basisLabel=node("label","Surcharge uygulama tabanı");const basis=document.createElement("select");
+            const choices=candidate.basis==="flat"?[["flat","Sabit / shipment-AWB"]]:[["actual_weight","Gerçek ağırlık"],["chargeable_weight","Chargeable weight"],["pivot_billed_weight","Pivot sonucu billed weight"]];
+            choices.forEach(([v,t])=>{const option=document.createElement("option");option.value=v;option.textContent=t;basis.append(option);});basisLabel.append(basis);
+            const basisNoteLabel=node("label","Uygulama tabanı inceleme notu");const basisNote=document.createElement("input");basisNote.placeholder="Kaynak/operasyon bilgisinde bu tabanı neden doğruluyorsun?";basisNoteLabel.append(basisNote);
+            const fb=node("div","","muted settings-feedback");const saveBasis=actionButton("Uygulama Tabanını Doğrula","",async()=>{if(!basisNote.value.trim()){fb.textContent="İnceleme notu gerekli.";return;}saveBasis.disabled=true;try{await api(`/air-rate-surcharge-reviews/${encodeURIComponent(review.review_id)}/candidates/${encodeURIComponent(candidate.candidate_id)}/application-basis`,{method:"POST",body:JSON.stringify({application_basis:basis.value,review_note:basisNote.value.trim()})});await loadSettings();}catch(e){fb.textContent=e.message||String(e);saveBasis.disabled=false;}});row.append(node("span","Bu seçim surcharge'ı hesaba katmaz; yalnız uygulama tabanı evidence'ıdır.","small muted"),basisLabel,basisNoteLabel,saveBasis,fb);
+          }
+        }
+      }
+      box.append(row);
+    });
+    if(!(review.candidates||[]).length)box.append(node("div","Açık tutar + para birimi + unit içeren güvenli surcharge adayı bulunamadı; tahmin yapılmadı.","small muted"));
+    surchargeSection.append(box);
+  });
   if(!surchargeReviews.length)surchargeSection.append(emptyState("Henüz surcharge tutar incelemesi yok"));panel.append(surchargeSection);
 
   const form=node("div","","approval-focused supplier-price-entry");form.append(node("h3","Ticari havayolu PDF'si ekle"));

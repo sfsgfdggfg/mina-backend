@@ -1577,3 +1577,11 @@ After the tariff structure review is fully completed, **Ayarlar → Havayolu Lis
 V1 creates a proposal only when the line contains an explicit amount, currency and supported unit such as `USD 0.50 / KG` or `EUR 25 / SHIPMENT`. Unitless entries, percentage charges, multiple amounts on one line and unsupported formulas remain manual-review-only. Do not convert a skipped line manually into a calculated rule merely to make the preview complete.
 
 **Surcharge Doğrula** confirms transcription only. In particular, `/kg` does not yet tell MINAI whether the airline applies the charge to physical, chargeable or pivot/booked weight. Confirmed surcharge records are therefore not included in the current **Navlun Önizleme**. Do not treat them as customer-pricing readiness, capacity/schedule evidence or booking authority.
+
+## Commercial-Air Surcharge Application-Basis Review (P2-23)
+
+After a surcharge amount/currency/unit candidate is confirmed under **Ayarlar → Havayolu Listeleri**, review its application basis separately. For a `/kg` candidate choose only the basis directly supported by the source or known operational evidence: **Gerçek ağırlık**, **Chargeable weight**, or **Pivot sonucu billed weight**. For a flat candidate confirm only **Sabit / shipment-AWB**. Every choice requires an operator note.
+
+Do not choose chargeable weight merely because the surcharge says `/kg`, and do not infer shipment versus AWB quantity scope from the flat selector. The UI explicitly keeps calculation consumption off. If the source does not support the basis, leave the basis unreviewed rather than guessing.
+
+This step does not add the surcharge to **Navlun Önizleme** and does not authorize a customer quote, airline booking, capacity/schedule assumption or outbound message.

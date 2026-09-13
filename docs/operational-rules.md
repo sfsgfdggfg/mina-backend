@@ -4238,3 +4238,11 @@ Surcharge amount extraction may run only from a completed commercial-air structu
 Every surcharge candidate requires explicit operator confirm/reject with a non-empty note. Confirmation means the source transcription is correct; it must not manufacture an airline rule about which weight a per-kilogram surcharge uses. No default from chargeable weight, pivot/booked weight or physical weight may be inferred.
 
 Confirmed surcharge evidence must remain outside freight/pivot preview, customer quote pricing, margin, airline selection, schedule/capacity, booking and outbound flows until a later rule explicitly defines calculation basis from evidence. Raw tariff text and arbitrary source lines must not be persisted in ordinary state/audit JSON, and no AI service may receive the commercial tariff content through this workflow.
+
+## RULE-259 — Never Convert `/kg` Into Chargeable Weight Without Explicit Application-Basis Evidence
+
+A confirmed surcharge amount/unit is only transcription evidence. Before any future calculation may consume a `per_kg` surcharge, an authenticated operator must separately review whether the source/operational evidence means actual weight, chargeable weight or pivot/billed weight. `/kg`, common practice, repeated history or MINAI inference alone is insufficient.
+
+Flat surcharge candidates likewise require an explicit `flat` application-basis review before later use, but that review must not be treated as proof that `/shipment` and `/AWB` are interchangeable. Quantity scope, route/destination applicability, special-cargo applicability and other conditions remain unresolved unless separately evidenced.
+
+Application-basis review requires an authored note, is stored with actor/time evidence and cannot be silently re-decided. Reviewed basis remains reference-only: current freight/pivot preview must not import or consume surcharge review state, and no customer pricing, margin, capacity, schedule, booking or outbound authority is created.

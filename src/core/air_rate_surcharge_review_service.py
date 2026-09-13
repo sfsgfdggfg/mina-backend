@@ -233,6 +233,47 @@ def decide_air_rate_surcharge_candidate(
     return repository.save(AirRateSurchargeReview.model_validate(changed.model_dump()))
 
 
+def decide_air_rate_surcharge_application_basis(
+    *,
+    review_id: str,
+    candidate_id: str,
+    application_basis: Literal["actual_weight", "chargeable_weight", "pivot_billed_weight", "flat"],
+    review_note: str,
+    reviewed_by: str,
+    repository: AirRateSurchargeReviewRepository,
+    reviewed_at: datetime | None = None,
+) -> AirRateSurchargeReview:
+    review = repository.get(review_id)
+    if review is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air surcharge review not found: {review_id}")
+    note = " ".join(str(review_note or "").strip().split())
+    if not note:
+        raise AirRateSurchargeReviewTransitionError("Air surcharge application-basis review note is required.")
+    index = next((i for i, item in enumerate(review.candidates) if item.candidate_id == candidate_id), None)
+    if index is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air surcharge candidate not found: {candidate_id}")
+    candidate = review.candidates[index]
+    if candidate.status != "confirmed":
+        raise AirRateSurchargeReviewTransitionError("Air surcharge candidate must be confirmed before application-basis review.")
+    if candidate.application_basis is not None:
+        raise AirRateSurchargeReviewTransitionError("Air surcharge application basis is already reviewed.")
+    if candidate.basis == "flat" and application_basis != "flat":
+        raise AirRateSurchargeReviewTransitionError("Flat surcharge requires flat application basis.")
+    if candidate.basis == "per_kg" and application_basis not in {"actual_weight", "chargeable_weight", "pivot_billed_weight"}:
+        raise AirRateSurchargeReviewTransitionError("Per-kg surcharge requires an explicit weight application basis.")
+    timestamp = reviewed_at or datetime.now(timezone.utc)
+    updated = candidate.model_copy(update={
+        "application_basis": application_basis,
+        "application_basis_reviewed_by": reviewed_by,
+        "application_basis_reviewed_at": timestamp,
+        "application_basis_review_note": note,
+    })
+    candidates = [item.model_copy(deep=True) for item in review.candidates]
+    candidates[index] = updated
+    changed = review.model_copy(update={"candidates": candidates})
+    return repository.save(AirRateSurchargeReview.model_validate(changed.model_dump()))
+
+
 def build_air_rate_surcharge_review_view(
     *,
     repository: AirRateSurchargeReviewRepository,
@@ -251,6 +292,7 @@ def build_air_rate_surcharge_review_view(
     return {
         "reviews": rows,
         "ai_interpretation_enabled": False,
+        "application_basis_review_enabled": True,
         "application_weight_authority_enabled": False,
         "calculation_consumption_enabled": False,
         "pricing_authority_enabled": False,
