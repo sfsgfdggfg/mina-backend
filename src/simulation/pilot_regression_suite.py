@@ -67,6 +67,7 @@ from src.simulation.air_rate_table_review_regressions import evaluate_air_rate_t
 from src.simulation.air_rate_surcharge_review_regressions import evaluate_air_rate_surcharge_review_regressions
 from src.simulation.air_rate_surcharge_application_basis_regressions import evaluate_air_rate_surcharge_application_basis_regressions
 from src.simulation.air_rate_surcharge_applicability_scope_regressions import evaluate_air_rate_surcharge_applicability_scope_regressions
+from src.simulation.air_rate_surcharge_operational_conditions_regressions import evaluate_air_rate_surcharge_operational_conditions_regressions
 from src.simulation.air_freight_calculation_preview_regressions import evaluate_air_freight_calculation_preview_regressions
 from src.simulation.runtime_authority_cutover_regressions import evaluate_runtime_authority_cutover_regressions
 from src.simulation.human_operational_flow_regressions import evaluate_human_operational_flow_regressions
@@ -330,6 +331,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Commercial-air surcharge amount review", evaluate_air_rate_surcharge_review_regressions),
     Suite("Commercial-air surcharge application-basis review", evaluate_air_rate_surcharge_application_basis_regressions),
     Suite("Commercial-air surcharge applicability-scope review", evaluate_air_rate_surcharge_applicability_scope_regressions),
+    Suite("Commercial-air surcharge operational-condition review", evaluate_air_rate_surcharge_operational_conditions_regressions),
     Suite("Commercial-air freight calculation preview", evaluate_air_freight_calculation_preview_regressions),
     Suite("Runtime authority cutover and source-neutral quote journey", evaluate_runtime_authority_cutover_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),

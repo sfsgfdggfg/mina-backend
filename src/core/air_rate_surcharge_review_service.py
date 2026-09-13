@@ -338,6 +338,62 @@ def decide_air_rate_surcharge_applicability_scope(
     changed = review.model_copy(update={"candidates": candidates})
     return repository.save(AirRateSurchargeReview.model_validate(changed.model_dump()))
 
+
+def decide_air_rate_surcharge_operational_conditions(
+    *,
+    review_id: str,
+    candidate_id: str,
+    cargo_applicability: Literal["source_scope", "general_cargo", "special_cargo"],
+    routing_applicability: Literal["all_source_routings", "direct_only", "connecting_only", "via_airport"],
+    via_airport: str | None,
+    review_note: str,
+    reviewed_by: str,
+    repository: AirRateSurchargeReviewRepository,
+    source_repository: AirShadowRepository,
+    reviewed_at: datetime | None = None,
+) -> AirRateSurchargeReview:
+    review = repository.get(review_id)
+    if review is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air surcharge review not found: {review_id}")
+    note = " ".join(str(review_note or "").strip().split())
+    if not note:
+        raise AirRateSurchargeReviewTransitionError("Air surcharge operational-conditions review note is required.")
+    index = next((i for i, item in enumerate(review.candidates) if item.candidate_id == candidate_id), None)
+    if index is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air surcharge candidate not found: {candidate_id}")
+    candidate = review.candidates[index]
+    if candidate.status != "confirmed" or candidate.application_basis is None or candidate.applicability_scope is None:
+        raise AirRateSurchargeReviewTransitionError("Air surcharge prior reviews must be completed before operational conditions.")
+    if candidate.cargo_applicability is not None or candidate.routing_applicability is not None:
+        raise AirRateSurchargeReviewTransitionError("Air surcharge operational conditions are already reviewed.")
+    source = source_repository.get_rate_source(review.source_id)
+    if source is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air rate source not found: {review.source_id}")
+    if cargo_applicability == "source_scope":
+        if source.cargo_scope == "unknown":
+            raise AirRateSurchargeReviewTransitionError("Unknown source cargo scope cannot be accepted as source-scope evidence.")
+    elif source.cargo_scope in {"general_cargo", "special_cargo"} and cargo_applicability != source.cargo_scope:
+        raise AirRateSurchargeReviewTransitionError("Surcharge cargo applicability conflicts with immutable source cargo scope.")
+    normalized_via = None if via_airport is None else str(via_airport).strip().upper()
+    if routing_applicability == "via_airport":
+        if not normalized_via or not re.fullmatch(r"[A-Z]{3}", normalized_via):
+            raise AirRateSurchargeReviewTransitionError("Via-airport routing applicability requires a three-letter airport code.")
+    elif normalized_via:
+        raise AirRateSurchargeReviewTransitionError("Only via-airport routing applicability may carry an airport code.")
+    timestamp = reviewed_at or datetime.now(timezone.utc)
+    updated = candidate.model_copy(update={
+        "cargo_applicability": cargo_applicability,
+        "routing_applicability": routing_applicability,
+        "routing_via_airport": normalized_via,
+        "operational_conditions_reviewed_by": reviewed_by,
+        "operational_conditions_reviewed_at": timestamp,
+        "operational_conditions_review_note": note,
+    })
+    candidates = [item.model_copy(deep=True) for item in review.candidates]
+    candidates[index] = updated
+    changed = review.model_copy(update={"candidates": candidates})
+    return repository.save(AirRateSurchargeReview.model_validate(changed.model_dump()))
+
 def build_air_rate_surcharge_review_view(
     *,
     repository: AirRateSurchargeReviewRepository,
@@ -358,6 +414,7 @@ def build_air_rate_surcharge_review_view(
         "ai_interpretation_enabled": False,
         "application_basis_review_enabled": True,
         "applicability_scope_review_enabled": True,
+        "operational_conditions_review_enabled": True,
         "application_weight_authority_enabled": False,
         "calculation_consumption_enabled": False,
         "pricing_authority_enabled": False,

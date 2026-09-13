@@ -956,3 +956,11 @@ P2-24 extends each `AirRateSurchargeCandidate` with optional applicability evide
 A scope record may be created only after the surcharge itself is confirmed and its application basis has been reviewed. `source_wide` carries no destination code and is bounded to the exact immutable tariff source. `destination_specific` requires a three-letter code matching a confirmed `AirRateTableRowCandidate` under the same source.
 
 No new persistence namespace is introduced; the evidence remains inside the existing durable `air_rate_surcharge_reviews` record. P2-24 creates no surcharge-calculation, FX, pricing, quote, capacity, booking or outbound authority.
+
+## P2-25 Commercial-Air Surcharge Operational-Condition Review
+
+P2-25 adds no persistence namespace. It extends the durable `AirRateSurchargeCandidate` with optional `cargo_applicability`, `routing_applicability`, optional `routing_via_airport`, authenticated reviewer/time and authored note fields. Legacy surcharge records remain valid with these fields absent.
+
+Operational conditions may be recorded only after surcharge confirmation, application-basis review and applicability-scope review. Cargo choices are `source_scope`, `general_cargo`, or `special_cargo`; routing choices are `all_source_routings`, `direct_only`, `connecting_only`, or `via_airport`. `via_airport` requires a three-letter airport code.
+
+The existing `air_rate_surcharge_reviews` record remains the source of truth. P2-25 creates no surcharge calculation record, customer pricing projection, booking state or outbound authority.
