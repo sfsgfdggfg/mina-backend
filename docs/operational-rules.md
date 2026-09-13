@@ -4270,3 +4270,11 @@ The reviewed-surcharge cost preview may consume only a confirmed commercial-air 
 For an applicable same-currency `per_kg` surcharge, apply the reviewed basis exactly: `actual_weight` uses actual kilograms, `chargeable_weight` uses raw chargeable kilograms and `pivot_billed_weight` uses the selected pivot billed kilograms. Do not substitute one basis for another and do not apply airline rounding that has not been separately evidenced.
 
 Flat charges remain excluded until `/shipment`, `/AWB` or other quantity semantics are explicitly resolved. Different-currency charges remain excluded because FX is not part of this phase. Exclusions must be visible by reason. The preview is partial, ephemeral and never all-in; it must not create customer pricing, margin, quote, capacity, schedule, booking or outbound authority.
+
+## RULE-263 — Never Multiply a Flat Air Surcharge Without Explicit Quantity-Basis and Count Evidence
+
+A confirmed flat surcharge with reviewed destination, cargo and routing scope is still not executable until an operator explicitly reviews whether it is `per_shipment`, `per_awb`, `per_hawb` or `per_mawb`. Do not infer this from the generic `flat` classification, common practice, a surcharge code, or another airline/source.
+
+Flat quantity-basis review must be one-time authenticated evidence with an authored note. Per-kilogram surcharge candidates must reject flat quantity-basis fields. Legacy flat candidates without this evidence remain readable but not calculation-consumable.
+
+Even after quantity basis is reviewed, the current partial air cost preview must continue excluding flat surcharges until a later bounded step supplies and validates the relevant shipment/AWB/HAWB/MAWB count. No implicit count of one is allowed. The review creates no FX, all-in cost, customer-price, margin, capacity, schedule, booking or outbound authority.

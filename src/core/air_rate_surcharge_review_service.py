@@ -394,6 +394,51 @@ def decide_air_rate_surcharge_operational_conditions(
     changed = review.model_copy(update={"candidates": candidates})
     return repository.save(AirRateSurchargeReview.model_validate(changed.model_dump()))
 
+
+def decide_air_rate_surcharge_flat_quantity_basis(
+    *,
+    review_id: str,
+    candidate_id: str,
+    flat_quantity_basis: Literal["per_shipment", "per_awb", "per_hawb", "per_mawb"],
+    review_note: str,
+    reviewed_by: str,
+    repository: AirRateSurchargeReviewRepository,
+    reviewed_at: datetime | None = None,
+) -> AirRateSurchargeReview:
+    review = repository.get(review_id)
+    if review is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air surcharge review not found: {review_id}")
+    note = " ".join(str(review_note or "").strip().split())
+    if not note:
+        raise AirRateSurchargeReviewTransitionError("Flat surcharge quantity-basis review note is required.")
+    index = next((i for i, item in enumerate(review.candidates) if item.candidate_id == candidate_id), None)
+    if index is None:
+        raise AirRateSurchargeReviewNotFoundError(f"Air surcharge candidate not found: {candidate_id}")
+    candidate = review.candidates[index]
+    if candidate.basis != "flat":
+        raise AirRateSurchargeReviewTransitionError("Only flat surcharge candidates may receive flat quantity-basis evidence.")
+    if (
+        candidate.status != "confirmed"
+        or candidate.application_basis != "flat"
+        or candidate.applicability_scope is None
+        or candidate.cargo_applicability is None
+        or candidate.routing_applicability is None
+    ):
+        raise AirRateSurchargeReviewTransitionError("All prior flat surcharge reviews must be completed before quantity-basis review.")
+    if candidate.flat_quantity_basis is not None:
+        raise AirRateSurchargeReviewTransitionError("Flat surcharge quantity basis is already reviewed.")
+    timestamp = reviewed_at or datetime.now(timezone.utc)
+    updated = candidate.model_copy(update={
+        "flat_quantity_basis": flat_quantity_basis,
+        "flat_quantity_basis_reviewed_by": reviewed_by,
+        "flat_quantity_basis_reviewed_at": timestamp,
+        "flat_quantity_basis_review_note": note,
+    })
+    candidates = [item.model_copy(deep=True) for item in review.candidates]
+    candidates[index] = updated
+    changed = review.model_copy(update={"candidates": candidates})
+    return repository.save(AirRateSurchargeReview.model_validate(changed.model_dump()))
+
 def build_air_rate_surcharge_review_view(
     *,
     repository: AirRateSurchargeReviewRepository,
@@ -415,6 +460,7 @@ def build_air_rate_surcharge_review_view(
         "application_basis_review_enabled": True,
         "applicability_scope_review_enabled": True,
         "operational_conditions_review_enabled": True,
+        "flat_quantity_basis_review_enabled": True,
         "application_weight_authority_enabled": False,
         "calculation_consumption_enabled": False,
         "pricing_authority_enabled": False,

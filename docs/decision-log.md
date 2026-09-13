@@ -7266,3 +7266,14 @@ The reviewed-surcharge preview may include only confirmed `per_kg` candidates fr
 Flat charges are excluded until their quantity semantics are separately resolved, and cross-currency charges are excluded because this phase performs no FX conversion. Destination, cargo or routing mismatches are excluded with an explicit reason rather than silently ignored. The result must expose included components and excluded candidates and must never be labelled `all_in`.
 
 The result remains ephemeral reference evidence. It creates no persistence record, customer sell price, margin, quote approval, capacity/schedule confirmation, booking, airline selection or outbound authority. Airline rounding remains unapplied unless separately evidenced.
+
+## DEC-246 — Flat Air Surcharge Quantity Semantics Require Separate Human Review Before Any Cost Consumption
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+A reviewed flat commercial-air surcharge still does not establish how many times that amount applies. `flat`, `/shipment`, `/AWB`, `/HAWB` and `/MAWB` must not be collapsed into one executable quantity rule. MINAI may therefore store one explicit human-reviewed flat quantity basis: `per_shipment`, `per_awb`, `per_hawb` or `per_mawb`.
+
+Quantity-basis review is allowed only for a confirmed flat surcharge after application basis, destination applicability, cargo applicability and routing applicability have all been reviewed. It requires authenticated operator identity, aware timestamp and authored evidence note, and cannot be silently re-decided. Per-kilogram surcharges cannot carry this evidence.
+
+The review remains reference-only. P2-27 does not infer AWB/HAWB/MAWB counts, does not assume one document per shipment, and does not add flat charges to the reviewed surcharge cost preview. A later bounded calculation step must define and validate the required quantity/count inputs before flat charges may enter any cost preview. FX, tariff validity, capacity, schedule, booking, customer pricing, margin and outbound authority remain separate unresolved gates.

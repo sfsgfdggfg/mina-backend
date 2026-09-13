@@ -3894,6 +3894,16 @@ function renderAirRateSourceSettings(payload = {}, reviewsPayload = {}, tablePay
               row.append(node("span",`Uygulanabilirlik: ${scopeText}${candidate.applicability_destination_code?` · ${candidate.applicability_destination_code}`:""} · ${candidate.applicability_reviewed_by||"-"} · ${candidate.applicability_review_note||"-"}`,"small muted"));
               if(candidate.cargo_applicability){
                 row.append(node("span",`Operasyon koşulları: ${candidate.cargo_applicability} · ${candidate.routing_applicability}${candidate.routing_via_airport?` ${candidate.routing_via_airport}`:""} · ${candidate.operational_conditions_review_note||"-"}`,"small muted"));
+                if(candidate.basis==="flat"){
+                  if(candidate.flat_quantity_basis){
+                    row.append(node("span",`Flat quantity basis: ${candidate.flat_quantity_basis} · ${candidate.flat_quantity_basis_reviewed_by||"-"} · ${candidate.flat_quantity_basis_review_note||"-"}`,"small muted"));
+                  }else{
+                    const qLabel=node("label","Flat quantity basis");const q=document.createElement("select");[["per_shipment","Shipment başına"],["per_awb","AWB başına"],["per_hawb","HAWB başına"],["per_mawb","MAWB başına"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;q.append(o);});qLabel.append(q);
+                    const qNoteLabel=node("label","Quantity basis inceleme notu");const qNote=document.createElement("input");qNote.placeholder="Flat ücretin hangi belge/shipment birimine uygulandığını hangi kanıtla doğruluyorsun?";qNoteLabel.append(qNote);
+                    const qFb=node("div","","muted settings-feedback");const qSave=actionButton("Flat Quantity Basis Doğrula","",async()=>{if(!qNote.value.trim()){qFb.textContent="İnceleme notu gerekli.";return;}qSave.disabled=true;try{await api(`/air-rate-surcharge-reviews/${encodeURIComponent(review.review_id)}/candidates/${encodeURIComponent(candidate.candidate_id)}/flat-quantity-basis`,{method:"POST",body:JSON.stringify({flat_quantity_basis:q.value,review_note:qNote.value.trim()})});await loadSettings();}catch(e){qFb.textContent=e.message||String(e);qSave.disabled=false;}});
+                    row.append(node("span","Bu review yalnız quantity semantics evidence'ıdır; AWB/shipment adedi bilinmeden flat ücret cost preview'a eklenmez.","small muted"),qLabel,qNoteLabel,qSave,qFb);
+                  }
+                }
               }else{
                 const cargoLabel=node("label","Cargo applicability");const cargo=document.createElement("select");[["source_scope","Exact source cargo scope"],["general_cargo","General cargo"],["special_cargo","Special cargo"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;cargo.append(o);});cargoLabel.append(cargo);
                 const routingLabel=node("label","Routing applicability");const routing=document.createElement("select");[["all_source_routings","Exact source içindeki tüm routingler"],["direct_only","Direct only"],["connecting_only","Connecting only"],["via_airport","Belirli via airport"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;routing.append(o);});routingLabel.append(routing);
