@@ -4230,3 +4230,11 @@ Chargeable weight is the greater of actual and volumetric weight. For each `+N` 
 When volumetric weight is derived from total volume, exactly one confirmed volumetric divisor from the completed tariff-structure review is required. Do not infer `/6000` merely because it is common. No automatic 0.5 kg / 1 kg airline rounding may be applied until an airline/source-specific rule is evidenced and separately approved.
 
 The preview must visibly state that surcharges are excluded, capacity is not confirmed, airline rounding is not applied and the result is not a customer quote. The result is ephemeral and must not mutate customer pricing, margin, quote approvals, supplier/airline messaging, booking, road pricing or outbound authority.
+
+## RULE-258 — Review Air Surcharge Amount and Unit Without Inventing the Weight Basis
+
+Surcharge amount extraction may run only from a completed commercial-air structure review and only for surcharge labels explicitly confirmed by an operator. The detector must stay on the source lines associated with those labels and accept only one explicit positive amount + currency paired with a supported unit (`/kg`, `per kg`, `/AWB`, `/shipment` or equivalent normalized forms). Unitless, percentage, multi-amount or otherwise ambiguous lines must remain unparsed.
+
+Every surcharge candidate requires explicit operator confirm/reject with a non-empty note. Confirmation means the source transcription is correct; it must not manufacture an airline rule about which weight a per-kilogram surcharge uses. No default from chargeable weight, pivot/booked weight or physical weight may be inferred.
+
+Confirmed surcharge evidence must remain outside freight/pivot preview, customer quote pricing, margin, airline selection, schedule/capacity, booking and outbound flows until a later rule explicitly defines calculation basis from evidence. Raw tariff text and arbitrary source lines must not be persisted in ordinary state/audit JSON, and no AI service may receive the commercial tariff content through this workflow.

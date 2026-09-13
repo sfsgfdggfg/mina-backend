@@ -932,3 +932,11 @@ P2-21 adds no persistent database namespace. `AirFreightCalculationPreview` is a
 The preview exposes actual weight, volumetric weight and its source, raw chargeable weight, optional confirmed volumetric divisor, row currency/MIN, a bounded list of per-break options, recommended break/billed weight/base freight, and explicit non-authority flags (`rounding_applied=false`, `surcharges_included=false`, `capacity_confirmed=false`, `runtime_authoritative=false`, `customer_quote_eligible=false`).
 
 When `total_volume_cm3` is used, the volumetric divisor is read only from exactly one confirmed `volumetric_divisor` candidate in the completed source structure review. Operator-supplied volumetric weight remains an explicit alternate input and is never silently combined with total volume.
+
+## P2-22 Commercial-Air Surcharge Amount Review
+
+`AirRateSurchargeReview` is durable reference evidence linked one-to-one to an immutable `AirRateSource` and its completed `AirRateStructureReview`. It stores source/structure/extracted-text fingerprints, extractor version, fixed `ai_parser_called=false`, authenticated request actor/time, review status and up to 100 `AirRateSurchargeCandidate` records.
+
+`AirRateSurchargeCandidate` stores deterministic candidate identity, normalized confirmed surcharge code, positive bounded decimal amount, explicit three-letter currency, normalized basis (`per_kg` or `flat`), source line number and SHA-256 line fingerprint plus proposed/confirmed/rejected human-review evidence. It intentionally stores no raw source line, full tariff text, percentage formula, minimum formula or application-weight policy.
+
+Persistent namespaces are `air_rate_surcharge_reviews` and `air_rate_surcharge_review_by_source`. Ordinary retention does not purge them. These records are confidential tariff-reference evidence only; P2-22 creates no consumer in freight calculation, customer pricing, quote approval, booking or outbound execution.
