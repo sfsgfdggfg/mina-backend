@@ -295,7 +295,7 @@ def evaluate_air_rate_surcharge_review_regressions() -> dict:
     check(
         "Surcharge Tutarlarını Çıkar" in js
         and "Surcharge Tutar İncelemeleri" in js
-        and "Reviewed Per-Kg Surcharge Cost Preview" in js
+        and "Reviewed Surcharge Cost Preview" in js
         and "Base Navlun Önizleme surcharge içermez" in js
         and "openai" not in service.casefold(),
         "browser exposes human surcharge review while keeping calculation and AI boundaries explicit",

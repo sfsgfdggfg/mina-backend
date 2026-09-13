@@ -4278,3 +4278,12 @@ A confirmed flat surcharge with reviewed destination, cargo and routing scope is
 Flat quantity-basis review must be one-time authenticated evidence with an authored note. Per-kilogram surcharge candidates must reject flat quantity-basis fields. Legacy flat candidates without this evidence remain readable but not calculation-consumable.
 
 Even after quantity basis is reviewed, the current partial air cost preview must continue excluding flat surcharges until a later bounded step supplies and validates the relevant shipment/AWB/HAWB/MAWB count. No implicit count of one is allowed. The review creates no FX, all-in cost, customer-price, margin, capacity, schedule, booking or outbound authority.
+
+
+## RULE-264 — Consume a Flat Air Surcharge Only With a Matching Explicit Count; Never Default the Count
+
+A flat commercial-air surcharge may enter the reviewed partial cost preview only after its full human-review chain is complete, including `per_shipment`, `per_awb`, `per_hawb` or `per_mawb` quantity-basis evidence. The preview request must then carry the corresponding positive integer count explicitly. Do not default any count to one and do not substitute another count type.
+
+For a same-currency flat surcharge whose reviewed destination, cargo and routing conditions match the preview context, absence of the required count is a fail-closed error. If the flat surcharge is outside the preview destination/cargo/routing context, or uses a different currency, exclude it with an explicit reason and do not demand an irrelevant count. Legacy flat surcharge evidence without reviewed quantity basis remains visible but excluded rather than guessed.
+
+Flat count inputs are ephemeral calculation inputs, not learned tariff facts or durable shipment state. The resulting subtotal is still partial and non-authoritative: no FX, tariff-validity or capacity confirmation, airline rounding, customer price, margin, quote/send, booking or outbound authority is created.

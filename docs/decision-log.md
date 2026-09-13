@@ -7277,3 +7277,15 @@ A reviewed flat commercial-air surcharge still does not establish how many times
 Quantity-basis review is allowed only for a confirmed flat surcharge after application basis, destination applicability, cargo applicability and routing applicability have all been reviewed. It requires authenticated operator identity, aware timestamp and authored evidence note, and cannot be silently re-decided. Per-kilogram surcharges cannot carry this evidence.
 
 The review remains reference-only. P2-27 does not infer AWB/HAWB/MAWB counts, does not assume one document per shipment, and does not add flat charges to the reviewed surcharge cost preview. A later bounded calculation step must define and validate the required quantity/count inputs before flat charges may enter any cost preview. FX, tariff validity, capacity, schedule, booking, customer pricing, margin and outbound authority remain separate unresolved gates.
+
+
+## DEC-247 — Fully Reviewed Flat Air Surcharges May Enter the Partial Cost Preview Only With Explicit Ephemeral Counts
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+After a flat surcharge has confirmed amount/currency/unit, flat application basis, destination applicability, cargo/routing conditions and a human-reviewed quantity basis, MINAI may consume it in the separate reviewed surcharge cost preview only when the operator explicitly supplies the matching quantity count for that preview. Supported count inputs are `shipment_count`, `awb_count`, `hawb_count` and `mawb_count`, corresponding exactly to `per_shipment`, `per_awb`, `per_hawb` and `per_mawb`.
+
+Counts are ephemeral request evidence only. MINAI must not persist them as tariff knowledge, infer a default count of one, substitute a shipment count for an AWB/HAWB/MAWB count, or reuse a count from another preview or job. Counts must be bounded positive integers. A same-currency, context-applicable, fully reviewed flat surcharge fails closed when its required count is absent; a destination/cargo/routing-inapplicable or cross-currency flat surcharge remains explicitly excluded without demanding an irrelevant count.
+
+The preview may expose the flat component, amount-per-unit, reviewed quantity basis, applied count and calculated flat cost, plus a combined `base + reviewed surcharges` subtotal. This remains a partial reference cost, not an all-in cost or customer sell price. FX, tariff-validity confirmation, capacity/schedule confirmation, airline rounding, margin, quote authority, booking and outbound execution remain outside this phase.

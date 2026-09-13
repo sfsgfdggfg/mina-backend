@@ -48,6 +48,7 @@ def _candidate(
     cargo_applicability: str | None = "general_cargo",
     routing_applicability: str | None = "direct_only",
     routing_via_airport: str | None = None,
+    flat_quantity_basis: str | None = None,
 ) -> AirRateSurchargeCandidate:
     kwargs = {
         "application_basis": application_basis,
@@ -68,6 +69,13 @@ def _candidate(
             "operational_conditions_reviewed_by": "Senior Air Operator",
             "operational_conditions_reviewed_at": NOW,
             "operational_conditions_review_note": "Cargo and routing conditions verified.",
+        })
+    if flat_quantity_basis is not None:
+        kwargs.update({
+            "flat_quantity_basis": flat_quantity_basis,
+            "flat_quantity_basis_reviewed_by": "Senior Air Operator",
+            "flat_quantity_basis_reviewed_at": NOW,
+            "flat_quantity_basis_review_note": "Flat quantity basis verified.",
         })
     return AirRateSurchargeCandidate(
         candidate_id=candidate_id,
@@ -148,11 +156,11 @@ def evaluate_air_reviewed_surcharge_cost_preview_regressions() -> dict:
         "reviewed per-kg surcharge preview applies chargeable and pivot bases independently",
     )
     check(
-        ("HANDLING", "flat_quantity_scope_unresolved") in reasons
+        ("HANDLING", "flat_quantity_basis_unreviewed") in reasons
         and ("SSC", "currency_mismatch_no_fx") in reasons
         and ("AWB", "destination_not_applicable") in reasons
         and ("SCREENING", "routing_not_applicable") in reasons,
-        "flat cross-currency destination and routing exclusions stay explicit instead of being guessed",
+        "unreviewed flat cross-currency destination and routing exclusions stay explicit instead of being guessed",
     )
     check(
         preview.all_in_cost is False
@@ -244,9 +252,9 @@ def evaluate_air_reviewed_surcharge_cost_preview_regressions() -> dict:
     js = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
     service = (root / "src" / "core" / "air_reviewed_surcharge_cost_preview.py").read_text(encoding="utf-8")
     check(
-        "Reviewed Per-Kg Surcharge Cost Preview" in js
+        "Reviewed Surcharge Cost Preview" in js
         and "ALL-IN DEĞİL" in js
-        and "Flat ve FX hariç" in js
+        and "FX hariç" in js
         and "openai" not in service.casefold(),
         "browser labels reviewed surcharge preview as partial non-quote cost and service has no OpenAI dependency",
     )

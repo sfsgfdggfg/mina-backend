@@ -980,3 +980,8 @@ P2-27 adds no new persistence namespace. It extends each existing `AirRateSurcha
 The supported reviewed quantity bases are `per_shipment`, `per_awb`, `per_hawb` and `per_mawb`. Evidence may exist only on a confirmed `flat` surcharge whose application basis, applicability scope and operational cargo/routing conditions are already reviewed. Per-kilogram candidates reject these fields.
 
 The existing `air_rate_surcharge_reviews` durable record remains the source of truth. P2-27 stores quantity semantics only; it stores no shipment-document count, no calculated flat surcharge amount, no FX result and no customer-pricing projection.
+
+
+### P2-28 Reviewed Flat Surcharge Counts Are Ephemeral
+
+P2-28 adds no persistent namespace or durable count field. `shipment_count`, `awb_count`, `hawb_count` and `mawb_count` exist only on the reviewed surcharge cost-preview request. They are validated as explicit bounded positive integers, used for that calculation response, and discarded. Reviewed flat quantity-basis evidence remains durable on the surcharge candidate from P2-27; preview counts must never be written back into that tariff evidence.
