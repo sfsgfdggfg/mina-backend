@@ -31,13 +31,25 @@ class AirReviewedSurchargeComponent(BaseModel):
     surcharge_cost: Decimal
 
 
+class AirReviewedFlatSurchargeComponent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    candidate_id: str
+    surcharge_code: str
+    currency: str
+    amount_per_unit: Decimal
+    quantity_basis: Literal["per_shipment", "per_awb", "per_hawb", "per_mawb"]
+    applied_count: int = Field(ge=1, le=1000)
+    surcharge_cost: Decimal
+
+
 class AirReviewedSurchargeExclusion(BaseModel):
     model_config = ConfigDict(extra="forbid")
     candidate_id: str
     surcharge_code: str
     currency: str
     reason: Literal[
-        "flat_quantity_scope_unresolved",
+        "flat_review_incomplete",
+        "flat_quantity_basis_unreviewed",
         "currency_mismatch_no_fx",
         "destination_not_applicable",
         "cargo_not_applicable",
@@ -52,9 +64,12 @@ class AirReviewedSurchargeCostPreview(BaseModel):
     routing_context: Literal["direct", "connecting"]
     via_airport: Optional[str] = None
     included_surcharges: list[AirReviewedSurchargeComponent] = Field(default_factory=list, max_length=100)
+    included_flat_surcharges: list[AirReviewedFlatSurchargeComponent] = Field(default_factory=list, max_length=100)
     excluded_surcharges: list[AirReviewedSurchargeExclusion] = Field(default_factory=list, max_length=100)
     reviewed_per_kg_surcharge_total: Decimal
+    reviewed_flat_surcharge_total: Decimal
     base_plus_reviewed_per_kg_surcharges: Decimal
+    base_plus_reviewed_surcharges: Decimal
     all_in_cost: bool = False
     flat_surcharges_included: bool = False
     fx_applied: bool = False
@@ -112,6 +127,10 @@ def build_air_reviewed_surcharge_cost_preview(
     volumetric_weight_kg=None,
     total_volume_cm3=None,
     via_airport: Optional[str] = None,
+    shipment_count: Optional[int] = None,
+    awb_count: Optional[int] = None,
+    hawb_count: Optional[int] = None,
+    mawb_count: Optional[int] = None,
 ) -> AirReviewedSurchargeCostPreview:
     try:
         freight = build_air_freight_calculation_preview(
@@ -130,6 +149,18 @@ def build_air_reviewed_surcharge_cost_preview(
     if routing_context == "direct" and normalized_via is not None:
         raise AirReviewedSurchargeCostPreviewError("direct_routing_cannot_have_via_airport")
 
+    flat_counts = {
+        "per_shipment": shipment_count,
+        "per_awb": awb_count,
+        "per_hawb": hawb_count,
+        "per_mawb": mawb_count,
+    }
+    for basis, count in flat_counts.items():
+        if count is None:
+            continue
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1 or count > 1000:
+            raise AirReviewedSurchargeCostPreviewError(f"invalid_flat_surcharge_count:{basis}")
+
     surcharge_review = surcharge_repository.find_by_source(freight.source_id)
     if surcharge_review is None:
         raise AirReviewedSurchargeCostPreviewError("air_rate_surcharge_review_required")
@@ -140,62 +171,80 @@ def build_air_reviewed_surcharge_cost_preview(
         raise AirReviewedSurchargeCostPreviewError("air_rate_source_not_found")
 
     included: list[AirReviewedSurchargeComponent] = []
+    included_flat: list[AirReviewedFlatSurchargeComponent] = []
     excluded: list[AirReviewedSurchargeExclusion] = []
-    total = Decimal("0")
+    per_kg_total = Decimal("0")
+    flat_total = Decimal("0")
 
-    for candidate in surcharge_review.candidates:
-        if candidate.status != "confirmed":
-            continue
-        if candidate.basis == "flat":
-            excluded.append(AirReviewedSurchargeExclusion(
-                candidate_id=candidate.candidate_id,
-                surcharge_code=candidate.surcharge_code,
-                currency=candidate.currency,
-                reason="flat_quantity_scope_unresolved",
-            ))
-            continue
-        if candidate.currency != freight.currency:
-            excluded.append(AirReviewedSurchargeExclusion(
-                candidate_id=candidate.candidate_id,
-                surcharge_code=candidate.surcharge_code,
-                currency=candidate.currency,
-                reason="currency_mismatch_no_fx",
-            ))
-            continue
-        if candidate.application_basis is None or candidate.applicability_scope is None:
-            raise AirReviewedSurchargeCostPreviewError("applicable_per_kg_surcharge_review_incomplete")
+    def exclude(candidate, reason: str) -> None:
+        excluded.append(AirReviewedSurchargeExclusion(
+            candidate_id=candidate.candidate_id,
+            surcharge_code=candidate.surcharge_code,
+            currency=candidate.currency,
+            reason=reason,
+        ))
 
+    def context_matches(candidate) -> bool:
         if candidate.applicability_scope == "destination_specific":
             if not freight.destination_code:
                 raise AirReviewedSurchargeCostPreviewError("destination_code_required_for_specific_surcharge")
             if candidate.applicability_destination_code != freight.destination_code:
-                excluded.append(AirReviewedSurchargeExclusion(
-                    candidate_id=candidate.candidate_id,
-                    surcharge_code=candidate.surcharge_code,
-                    currency=candidate.currency,
-                    reason="destination_not_applicable",
-                ))
-                continue
-
-        if candidate.cargo_applicability is None or candidate.routing_applicability is None:
-            raise AirReviewedSurchargeCostPreviewError("applicable_per_kg_surcharge_operational_conditions_incomplete")
+                exclude(candidate, "destination_not_applicable")
+                return False
         if not _cargo_matches(candidate, source_cargo_scope=source.cargo_scope, cargo_context=cargo_context):
-            excluded.append(AirReviewedSurchargeExclusion(
-                candidate_id=candidate.candidate_id,
-                surcharge_code=candidate.surcharge_code,
-                currency=candidate.currency,
-                reason="cargo_not_applicable",
-            ))
-            continue
+            exclude(candidate, "cargo_not_applicable")
+            return False
         if candidate.routing_applicability == "via_airport" and routing_context == "connecting" and normalized_via is None:
             raise AirReviewedSurchargeCostPreviewError("via_airport_context_required_for_reviewed_surcharge")
         if not _routing_matches(candidate, routing_context=routing_context, via_airport=normalized_via):
-            excluded.append(AirReviewedSurchargeExclusion(
+            exclude(candidate, "routing_not_applicable")
+            return False
+        return True
+
+    for candidate in surcharge_review.candidates:
+        if candidate.status != "confirmed":
+            continue
+        if candidate.currency != freight.currency:
+            exclude(candidate, "currency_mismatch_no_fx")
+            continue
+
+        if candidate.basis == "flat":
+            if (
+                candidate.application_basis != "flat"
+                or candidate.applicability_scope is None
+                or candidate.cargo_applicability is None
+                or candidate.routing_applicability is None
+            ):
+                exclude(candidate, "flat_review_incomplete")
+                continue
+            if not context_matches(candidate):
+                continue
+            if candidate.flat_quantity_basis is None:
+                exclude(candidate, "flat_quantity_basis_unreviewed")
+                continue
+            count = flat_counts[candidate.flat_quantity_basis]
+            if count is None:
+                raise AirReviewedSurchargeCostPreviewError(
+                    f"flat_surcharge_count_required:{candidate.flat_quantity_basis}"
+                )
+            cost = candidate.amount * count
+            included_flat.append(AirReviewedFlatSurchargeComponent(
                 candidate_id=candidate.candidate_id,
                 surcharge_code=candidate.surcharge_code,
                 currency=candidate.currency,
-                reason="routing_not_applicable",
+                amount_per_unit=candidate.amount,
+                quantity_basis=candidate.flat_quantity_basis,
+                applied_count=count,
+                surcharge_cost=cost,
             ))
+            flat_total += cost
+            continue
+
+        if candidate.application_basis is None or candidate.applicability_scope is None:
+            raise AirReviewedSurchargeCostPreviewError("applicable_per_kg_surcharge_review_incomplete")
+        if candidate.cargo_applicability is None or candidate.routing_applicability is None:
+            raise AirReviewedSurchargeCostPreviewError("applicable_per_kg_surcharge_operational_conditions_incomplete")
+        if not context_matches(candidate):
             continue
 
         if candidate.application_basis == "actual_weight":
@@ -217,7 +266,7 @@ def build_air_reviewed_surcharge_cost_preview(
             applied_weight_kg=applied_weight,
             surcharge_cost=cost,
         ))
-        total += cost
+        per_kg_total += cost
 
     return AirReviewedSurchargeCostPreview(
         freight=freight,
@@ -225,7 +274,11 @@ def build_air_reviewed_surcharge_cost_preview(
         routing_context=routing_context,
         via_airport=normalized_via,
         included_surcharges=included,
+        included_flat_surcharges=included_flat,
         excluded_surcharges=excluded,
-        reviewed_per_kg_surcharge_total=total,
-        base_plus_reviewed_per_kg_surcharges=freight.recommended_base_freight + total,
+        reviewed_per_kg_surcharge_total=per_kg_total,
+        reviewed_flat_surcharge_total=flat_total,
+        base_plus_reviewed_per_kg_surcharges=freight.recommended_base_freight + per_kg_total,
+        base_plus_reviewed_surcharges=freight.recommended_base_freight + per_kg_total + flat_total,
+        flat_surcharges_included=bool(included_flat),
     )

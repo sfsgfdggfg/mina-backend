@@ -1029,6 +1029,10 @@ class AirReviewedSurchargeCostPreviewRequest(BaseModel):
     cargo_context: Literal["general_cargo", "special_cargo"]
     routing_context: Literal["direct", "connecting"]
     via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    shipment_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    awb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    hawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    mawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
 
 
 class PreviewAttachmentReviewRequest(BaseModel):
@@ -2733,6 +2737,10 @@ def preview_air_reviewed_surcharge_cost(
             cargo_context=request.cargo_context,
             routing_context=request.routing_context,
             via_airport=request.via_airport,
+            shipment_count=request.shipment_count,
+            awb_count=request.awb_count,
+            hawb_count=request.hawb_count,
+            mawb_count=request.mawb_count,
             table_repository=air_rate_table_review_repository,
             structure_repository=air_rate_structure_review_repository,
             surcharge_repository=air_rate_surcharge_review_repository,

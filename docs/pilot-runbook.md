@@ -1612,3 +1612,12 @@ Do not use this preview as capacity, schedule, booking or outbound authority. Th
 After a flat surcharge has completed amount/unit, application-basis, destination-scope and cargo/routing review, use **Ayarlar → Havayolu Listeleri** to review its quantity basis separately. Choose only the unit supported by the tariff or operational evidence: shipment, AWB, HAWB or MAWB. Every choice requires an operator note.
 
 Do not assume one AWB or one shipment merely because a flat fee exists. P2-27 does not add flat fees to the current reviewed surcharge cost preview; it only records the quantity semantics needed for a later bounded calculation step. If the evidence does not establish the unit, leave it unreviewed rather than guessing.
+
+
+## Commercial-Air Reviewed Flat Surcharge Count Preview (P2-28)
+
+In **Reviewed Surcharge Cost Preview**, supply a flat count only when an applicable flat surcharge has a completed quantity-basis review and the current shipment evidence establishes the corresponding count. Enter shipment count for `per_shipment`, AWB count for `per_awb`, HAWB count for `per_hawb`, or MAWB count for `per_mawb`. Leave unrelated count fields blank.
+
+No count field has a default. If a fully reviewed same-currency flat surcharge applies to the selected destination/cargo/routing context and its matching count is missing, the preview must stop rather than silently omit or assume the charge. Context-inapplicable and cross-currency flat charges remain visibly excluded.
+
+Read `Base + reviewed surcharge` as a partial reference subtotal only. It is not all-in and does not confirm tariff validity, capacity, schedule, FX, airline rounding, customer selling price, margin, booking or outbound communication. Count inputs are ephemeral and are not persisted as tariff knowledge.

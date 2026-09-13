@@ -23,7 +23,10 @@ from src.simulation.air_reviewed_surcharge_cost_preview_regressions import (
     _table_repo,
 )
 from src.core.air_rate_surcharge_review import AirRateSurchargeReview
-from src.core.air_reviewed_surcharge_cost_preview import build_air_reviewed_surcharge_cost_preview
+from src.core.air_reviewed_surcharge_cost_preview import (
+    AirReviewedSurchargeCostPreviewError,
+    build_air_reviewed_surcharge_cost_preview,
+)
 
 
 NOW = datetime(2026, 9, 13, 10, 10, tzinfo=timezone.utc)
@@ -226,23 +229,25 @@ def evaluate_air_rate_surcharge_flat_quantity_basis_regressions() -> dict:
         repository=preview_repo,
         reviewed_at=NOW,
     )
-    preview = build_air_reviewed_surcharge_cost_preview(
-        review_id="table-review-0001",
-        candidate_id="table-row-fra-0001",
-        actual_weight_kg=287,
-        volumetric_weight_kg=250,
-        cargo_context="general_cargo",
-        routing_context="direct",
-        table_repository=_table_repo(),
-        structure_repository=_structure_repo(),
-        surcharge_repository=preview_repo,
-        source_repository=_source_repo(),
-    )
+    missing_count_blocked = False
+    try:
+        build_air_reviewed_surcharge_cost_preview(
+            review_id="table-review-0001",
+            candidate_id="table-row-fra-0001",
+            actual_weight_kg=287,
+            volumetric_weight_kg=250,
+            cargo_context="general_cargo",
+            routing_context="direct",
+            table_repository=_table_repo(),
+            structure_repository=_structure_repo(),
+            surcharge_repository=preview_repo,
+            source_repository=_source_repo(),
+        )
+    except AirReviewedSurchargeCostPreviewError as exc:
+        missing_count_blocked = str(exc) == "flat_surcharge_count_required:per_shipment"
     check(
-        preview.flat_surcharges_included is False
-        and len(preview.included_surcharges) == 0
-        and any(item.surcharge_code == "HANDLING" and item.reason == "flat_quantity_scope_unresolved" for item in preview.excluded_surcharges),
-        "reviewed flat quantity semantics still do not enter cost preview without explicit quantity/count consumption design",
+        missing_count_blocked,
+        "reviewed flat quantity evidence still requires an explicit matching preview count",
     )
 
     root = Path(__file__).resolve().parents[2]
@@ -252,12 +257,14 @@ def evaluate_air_rate_surcharge_flat_quantity_basis_regressions() -> dict:
         "Flat Quantity Basis Doğrula" in js
         and "Shipment başına" in js
         and "AWB başına" in js
-        and "AWB/shipment adedi bilinmeden flat ücret cost preview'a eklenmez" in js,
+        and "matching explicit count verilmeden flat ücret cost preview'a eklenmez" in js,
         "browser exposes explicit flat quantity review while keeping count-dependent calculation closed",
     )
     check(
-        "flat_quantity_basis" not in preview_service,
-        "current reviewed surcharge cost preview has no hidden consumer for flat quantity-basis evidence",
+        "flat_quantity_basis" in preview_service
+        and "flat_surcharge_count_required" in preview_service
+        and "shipment_count" in preview_service,
+        "reviewed surcharge cost preview consumes flat quantity basis only behind explicit count input",
     )
 
     return {"passed": not failures, "passes": passes, "failures": failures}
