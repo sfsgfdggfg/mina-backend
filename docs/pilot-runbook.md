@@ -1561,3 +1561,12 @@ After every structural candidate for a tariff PDF has been explicitly reviewed, 
 Review every proposed destination row against the original PDF. **Satırı Doğrula** and **Satırı Reddet** both require an operator-authored note. If any destination, currency, column alignment or numeric value is uncertain, reject the row; do not repair it by assumption. The v1 detector deliberately prefers missing rows to guessed rows.
 
 A confirmed row is only a checked transcription/reference record. It is not used for chargeable-weight or pivot-weight calculations, surcharge computation, customer pricing, airline selection, space/schedule requests, booking or outbound messages. Those capabilities remain disabled until a separately approved air-pricing phase. Express tariffs remain out of scope.
+
+
+## Commercial-Air Shadow Calculation Preview (P2-21)
+
+After a tariff numeric row is explicitly confirmed, **Ayarlar → Havayolu Listeleri** may show **Shadow Hesap** for that row. Enter actual gross weight and package rows as `quantity,length_cm,width_cm,height_cm`. MINAI uses only the single confirmed volumetric divisor from the same tariff source. If the tariff structure has no confirmed divisor or more than one confirmed divisor, the preview stops for domain review.
+
+The result shows actual weight, volumetric weight, unrounded chargeable weight, the ordinary applicable break, higher-break pivot comparisons, and the lowest mathematical base-freight option. Treat this as arithmetic validation only. v1 intentionally applies no kg rounding rule and includes no FSC/SSC/security/AWB/handling, pickup, door delivery, margin, capacity, schedule, routing or booking evidence.
+
+Do not copy the shadow result into a customer quote as an authoritative price. A later product decision must define airline rounding, surcharge composition, local charges, capacity/schedule confirmation and customer commercial logic before any air quote workflow can consume this calculation.

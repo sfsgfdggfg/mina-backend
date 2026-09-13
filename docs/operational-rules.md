@@ -4220,3 +4220,14 @@ Numeric commercial-air row extraction may start only after the corresponding `Ai
 Structured row evidence may preserve bounded destination/currency/rate fields plus source fingerprints, but must not preserve the full extracted tariff text or arbitrary raw source lines in ordinary state/audit JSON. Decimal values must stay currency-separated; missing or ambiguous currency remains missing rather than inferred.
 
 Every row decision requires authenticated operator identity and a non-empty note. Confirmation verifies source transcription only. A confirmed tariff row has no runtime authority and must not be imported into customer pricing, pivot-weight logic, margin calculation, schedule/capacity assumptions, airline messaging, booking, or quote generation without a later explicit product decision and regression boundary.
+
+
+## RULE-257 — Use Confirmed Air Rows for Shadow Math Only; Never Fill Missing Rounding, Surcharge or Capacity Facts
+
+Air shadow calculation may consume only a `confirmed` numeric row from `AirRateTableReview` and exactly one confirmed volumetric divisor from the corresponding tariff structure review. Proposed/rejected rows, missing currency, missing `MIN`, missing weight breaks, missing packages, invalid weight, or zero/multiple confirmed divisors fail closed.
+
+Chargeable weight is the greater of actual and volumetric weight computed from the entered package quantities and centimetre dimensions using the confirmed divisor. v1 must not silently round chargeable weight to whole, half or other billing increments. The result must explicitly state that no weight-rounding rule was applied.
+
+For base-freight comparison, the ordinary option uses the highest available `+weight` break not exceeding the unrounded chargeable weight, with the row `MIN` as a floor. Higher breaks may be compared as pivot alternatives by billing at the higher threshold. This arithmetic may identify the lowest mathematical base-freight option, but must not be represented as a final airline cost or customer price.
+
+The preview excludes surcharge amounts, pickup, destination/door charges, commercial margin, capacity, schedule, routing and booking evidence. It creates no durable pricing authority, quote authority, outbound authority or express-cargo capability.

@@ -7194,3 +7194,17 @@ The first `AirRateTableReview` stores source/structure fingerprints, the confirm
 Every proposed row requires explicit operator confirmation or rejection with an authored note. A confirmed row means only that the operator verified the destination and all extracted weight-break values against the source PDF. Confirmed rows remain reference-only and cannot feed chargeable-weight calculation, pivot-weight calculation, surcharge calculation, airline selection, customer quote pricing, availability requests, booking or outbound communication until a later separately approved pricing-engine decision.
 
 This step remains local/deterministic and does not call OpenAI. Express/FedEx/Aramex tariff parsing remains outside scope.
+
+
+## DEC-240 — Commercial-Air Chargeable and Pivot Math May Run as an Ephemeral Shadow Worksheet
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+After a numeric tariff row has been explicitly confirmed by an operator, MINAI may perform an ephemeral commercial-air base-freight worksheet using that reviewed row, the operator-entered shipment weight/dimensions, and exactly one human-confirmed volumetric divisor from the same tariff structure review. The worksheet calculates volumetric weight, compares it with actual weight, and exposes the resulting unrounded chargeable weight.
+
+The worksheet may compare the ordinary applicable weight break with higher weight breaks to surface pivot-weight mathematics. `MIN` is treated as the minimum freight floor; higher-break alternatives use their threshold as billed weight for the comparison. The lowest mathematical base-freight option may be highlighted, but it is not a booking instruction, airline quote, customer sell price or pricing authority.
+
+No chargeable-weight rounding convention is assumed in v1 because airline rounding rules have not yet been evidenced. The preview therefore marks weight rounding as not applied. It also excludes fuel/other surcharges, pickup, door delivery, customer margin, airline space, schedule and route availability.
+
+The preview is not persisted as commercial authority and cannot feed customer quote generation, outbound communication, booking or supplier/airline automation. Express remains outside this calculation scope.
