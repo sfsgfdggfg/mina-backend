@@ -7326,3 +7326,16 @@ Each record requires two different ISO currency codes, a positive decimal rate, 
 P2-31 is evidence capture only. Existing reviewed-surcharge cost preview behavior remains unchanged: cross-currency surcharge candidates continue to be excluded as `currency_mismatch_no_fx`, and `fx_applied` remains false. A later bounded calculation step must explicitly match inquiry, source SHA, currency direction and effective-time policy before any conversion may occur.
 
 FX evidence creates no customer selling price, margin, quote approval, booking, capacity/schedule, airline selection or outbound authority. It must not become a general road-pricing or reporting FX source without a separate product decision.
+
+## DEC-251 — Cross-Currency Air Surcharges May Use Only Explicitly Selected Matching FX Evidence
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+The reviewed commercial-air surcharge preview may convert a cross-currency surcharge only when the operator explicitly supplies the FX evidence id to use together with the matching `inquiry_reference` and a timezone-aware `fx_reference_at`. Merely having FX evidence in the repository must never cause automatic conversion.
+
+The selected evidence must belong to the exact same air-rate source id/SHA and inquiry, and its stored `effective_at` must equal the explicit preview reference timestamp. Its direction must be exactly `candidate currency -> freight currency`; MINAI must not invert a reverse pair, choose a nearest/latest rate, or substitute another inquiry/source observation.
+
+The preview preserves source currency/rate/cost alongside the converted freight-currency values and applies no hidden surcharge rounding. Selected evidence that is missing, mismatched, duplicated, unused or directionally irrelevant fails closed rather than being ignored.
+
+P2-32 remains a partial reference-cost calculation only. FX conversion in this preview creates no customer selling-price, margin, quote approval, capacity/schedule, booking, airline-selection or outbound authority, and it does not establish a general FX policy for road pricing or reporting.

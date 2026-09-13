@@ -1001,3 +1001,9 @@ Durable namespaces: `air_service_availability_confirmations` and `air_service_av
 Durable namespaces: `air_fx_rate_evidence` and `air_fx_rate_evidence_by_entry`. Each immutable record preserves idempotent `entry_id`, `inquiry_reference`, exact air-rate `source_id` / `source_sha256`, directional `base_currency` / `quote_currency`, positive decimal `rate`, timezone-aware `effective_at`, evidence source/reference, authenticated operator/time and authored note.
 
 The semantic contract is always `1 base_currency = rate quote_currency`. No inverse rate, converted surcharge amount, current-market lookup or customer-price projection is persisted. P2-31 is evidence-only and is protected from ordinary pilot retention purge.
+
+### P2-32 Commercial-Air Explicit FX Consumption Preview
+
+P2-32 adds no persistence namespace. `inquiry_reference`, `fx_evidence_ids` and timezone-aware `fx_reference_at` are ephemeral reviewed-surcharge preview inputs only. The preview may read existing durable `air_fx_rate_evidence` records but never mutates them or writes converted values back to persistence.
+
+For every converted surcharge component, the response preserves source currency/rate-or-unit amount/source cost plus the selected FX evidence id, rate and effective timestamp. The converted value is expressed only in the freight currency for that preview. No inverse FX record, nearest/latest selection, derived reciprocal, customer selling price or general pricing FX state is persisted.
