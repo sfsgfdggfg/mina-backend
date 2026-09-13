@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 import json
 import os
@@ -283,6 +284,15 @@ from src.core.air_rate_surcharge_review_repository import (
 )
 from src.core.air_rate_validity_review_repository import (
     SQLiteAirRateValidityReviewRepository,
+)
+from src.core.air_fx_rate_evidence_repository import (
+    SQLiteAirFxRateEvidenceRepository,
+)
+from src.core.air_fx_rate_evidence_service import (
+    AirFxRateEvidenceNotFoundError,
+    AirFxRateEvidenceTransitionError,
+    build_air_fx_rate_evidence_view,
+    record_air_fx_rate_evidence,
 )
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
@@ -614,6 +624,7 @@ air_rate_structure_review_repository = SQLiteAirRateStructureReviewRepository(pi
 air_rate_table_review_repository = SQLiteAirRateTableReviewRepository(pilot_store)
 air_rate_surcharge_review_repository = SQLiteAirRateSurchargeReviewRepository(pilot_store)
 air_rate_validity_review_repository = SQLiteAirRateValidityReviewRepository(pilot_store)
+air_fx_rate_evidence_repository = SQLiteAirFxRateEvidenceRepository(pilot_store)
 air_service_availability_repository = SQLiteAirServiceAvailabilityRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
@@ -1040,6 +1051,18 @@ class AirRateValidityReviewRequest(BaseModel):
     valid_from: date
     valid_to: date
     review_note: str = Field(min_length=1, max_length=800)
+
+
+class AirFxRateEvidenceRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    inquiry_reference: str = Field(min_length=1, max_length=300)
+    base_currency: str = Field(pattern=r"^[A-Za-z]{3}$")
+    quote_currency: str = Field(pattern=r"^[A-Za-z]{3}$")
+    rate: float = Field(gt=0, le=1_000_000)
+    effective_at: datetime
+    evidence_source: Literal["bank", "central_bank", "airline", "manual_document", "other"]
+    evidence_reference: str = Field(min_length=1, max_length=500)
+    evidence_note: str = Field(min_length=1, max_length=800)
 
 
 class AirServiceAvailabilityRequest(BaseModel):
@@ -2485,6 +2508,36 @@ def review_air_rate_source_validity(source_id: str, request: AirRateValidityRevi
         "pricing_authority_enabled": False,
         "capacity_confirmed": False,
         "schedule_confirmed": False,
+    }
+
+
+@app.get("/air-fx-rate-evidence")
+def list_air_fx_rate_evidence():
+    return build_air_fx_rate_evidence_view(repository=air_fx_rate_evidence_repository)
+
+
+@app.post("/air-rate-sources/{source_id}/fx-rate-evidence")
+def create_air_fx_rate_evidence(source_id: str, request: AirFxRateEvidenceRequest, http_request: Request):
+    try:
+        item, created = record_air_fx_rate_evidence(
+            source_id=source_id,
+            rate=Decimal(str(request.rate)),
+            recorded_by=_authenticated_operator(http_request),
+            source_repository=air_shadow_repository,
+            repository=air_fx_rate_evidence_repository,
+            **request.model_dump(exclude={"rate"}),
+        )
+    except AirFxRateEvidenceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirFxRateEvidenceTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "evidence": item.model_dump(mode="json"),
+        "created": created,
+        "runtime_authoritative": False,
+        "pricing_authority_enabled": False,
+        "cost_preview_consumption_enabled": False,
+        "automatic_fx_enabled": False,
     }
 
 

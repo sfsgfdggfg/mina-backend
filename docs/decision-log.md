@@ -7313,3 +7313,16 @@ Commercial-air tariff validity does not prove that space exists or that a partic
 Each confirmation records an idempotent entry id, inquiry reference, destination, direct/connecting routing and optional via airport, service date, capacity status (`available` or `unavailable`), schedule status (`confirmed` or `not_confirmed`), optional flight reference when schedule is confirmed, evidence channel/reference, authenticated operator, aware timestamp and authored note. Direct routing cannot carry a via airport; an unconfirmed schedule cannot carry a flight reference.
 
 Availability evidence is durable operational evidence only. It does not alter tariff prices, does not enter the reviewed cost preview automatically, does not create customer-pricing or margin authority, and does not mean a booking has been made or space has been reserved. A later bounded workflow must explicitly bind a matching confirmation to a shipment decision before any runtime availability effect is allowed.
+
+## DEC-250 — Commercial-Air FX Rates Are Directional, Timestamped Inquiry Evidence Before Any Conversion Authority
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+Cross-currency commercial-air surcharge evidence must not be converted from an unstated market rate, today's date, a browser clock, an inverse-pair guess or a rate observed for another shipment. MINAI may therefore store explicit FX evidence only as `1 base_currency = rate quote_currency`, bound to one inquiry reference and the exact commercial-air source id/SHA used as context.
+
+Each record requires two different ISO currency codes, a positive decimal rate, an explicit timezone-aware `effective_at`, evidence source/reference, authenticated operator/time and an authored note. The stored direction is authoritative only as evidence: MINAI must not automatically derive or persist the inverse rate, silently swap the pair or infer a current rate from age or common market practice.
+
+P2-31 is evidence capture only. Existing reviewed-surcharge cost preview behavior remains unchanged: cross-currency surcharge candidates continue to be excluded as `currency_mismatch_no_fx`, and `fx_applied` remains false. A later bounded calculation step must explicitly match inquiry, source SHA, currency direction and effective-time policy before any conversion may occur.
+
+FX evidence creates no customer selling price, margin, quote approval, booking, capacity/schedule, airline selection or outbound authority. It must not become a general road-pricing or reporting FX source without a separate product decision.

@@ -1637,3 +1637,11 @@ In **Ayarlar → Havayolu Listeleri**, record airline availability only when the
 Do not reuse another shipment's confirmation and do not treat a tariff's validity period as space availability. `Available` means only that the cited evidence reported capacity for that inquiry/date; it is not a booking or reservation. `Schedule confirmed` likewise records the cited schedule evidence but creates no booking authority.
 
 P2-30 does not feed the reviewed surcharge cost preview and does not authorize customer pricing, margin, quote sending, airline booking or outbound communication.
+
+## Commercial-Air FX Rate Evidence (P2-31)
+
+In **Ayarlar → Havayolu Listeleri**, record an FX rate only when the current inquiry has explicit evidence. Enter the pair in the displayed direction: `1 BASE = rate QUOTE`. Capture an explicit ISO-8601 effective timestamp with timezone offset plus the evidence source/reference and a short operator-authored note.
+
+Do not reverse the pair mentally or assume the inverse rate, do not use today's rate unless that exact timestamped rate is the cited evidence, and do not reuse another shipment's FX observation. If the pair or timestamp is uncertain, leave the evidence unrecorded rather than guessing.
+
+P2-31 does **not** convert cross-currency surcharges. Reviewed Surcharge Cost Preview continues to show those items as `currency_mismatch_no_fx` and keeps `fx_applied=false`. Customer selling price, margin, quote/send, booking and outbound authority remain outside this step.

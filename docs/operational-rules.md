@@ -4303,3 +4303,11 @@ Capacity and schedule must be evidenced separately from tariff validity. A confi
 Capacity `available`/`unavailable` and schedule `confirmed`/`not_confirmed` are separate facts. Schedule-not-confirmed evidence cannot carry a flight reference. Direct routing cannot carry a via airport. Evidence must retain source id/SHA, channel/reference, authenticated operator, timestamp and authored note and must remain idempotent by entry identity.
 
 A stored confirmation is not a reservation or booking. It must not automatically enter cost preview, customer pricing, margin, quote approval, airline selection, booking or outbound execution. Explicit later shipment binding is required before any availability evidence can affect runtime decisions.
+
+## RULE-267 — Never Convert Commercial-Air Currency Without Explicit Direction, Timestamp and Matching Evidence Scope
+
+Do not infer an FX rate from today's market, file age, browser time, a previously used shipment, the reverse currency pair or a generic reporting rate. Commercial-air FX evidence must state `1 BASE = rate QUOTE`, retain an explicit timezone-aware effective timestamp and remain bound to its recorded inquiry and exact tariff source SHA.
+
+The base and quote currencies must differ. Do not automatically invert the recorded pair, substitute `QUOTE→BASE` for `BASE→QUOTE`, or treat the existence of evidence as permission to convert. Reused `entry_id` with different evidence fails closed.
+
+P2-31 does not change calculation behavior. Cross-currency surcharge candidates remain excluded with `currency_mismatch_no_fx`, and `fx_applied=false` until a separately bounded conversion-consumption rule validates evidence scope, direction and time. FX evidence creates no customer price, margin, quote, booking, availability or outbound authority and must not leak into road pricing.
