@@ -4246,3 +4246,11 @@ A confirmed surcharge amount/unit is only transcription evidence. Before any fut
 Flat surcharge candidates likewise require an explicit `flat` application-basis review before later use, but that review must not be treated as proof that `/shipment` and `/AWB` are interchangeable. Quantity scope, route/destination applicability, special-cargo applicability and other conditions remain unresolved unless separately evidenced.
 
 Application-basis review requires an authored note, is stored with actor/time evidence and cannot be silently re-decided. Reviewed basis remains reference-only: current freight/pivot preview must not import or consume surcharge review state, and no customer pricing, margin, capacity, schedule, booking or outbound authority is created.
+
+## RULE-260 — Never Apply a Reviewed Air Surcharge Across Destinations Without Explicit Applicability Evidence
+
+A confirmed surcharge amount/unit and reviewed application basis must not be applied to a tariff row until its applicability scope is separately reviewed. Same PDF, same airline, common practice or repeated history alone is insufficient to establish destination applicability.
+
+`source_wide` may refer only to the destinations covered by the same immutable `AirRateSource`. `destination_specific` requires a three-letter destination code that resolves to a human-confirmed tariff row in the same source. Source-wide scope must not carry a destination code, and destination-specific scope must fail closed if the corresponding reviewed tariff row is missing.
+
+Applicability review requires authenticated actor/time evidence and a non-empty note and cannot be silently re-decided. Reviewed scope remains reference-only. Current freight/pivot preview must not consume surcharge evidence yet, and routing, special-cargo conditions, flat-charge quantity scope, FX, customer pricing, margin, availability, booking and outbound authority remain outside this rule.

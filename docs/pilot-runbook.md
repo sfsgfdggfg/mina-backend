@@ -1585,3 +1585,9 @@ After a surcharge amount/currency/unit candidate is confirmed under **Ayarlar â†
 Do not choose chargeable weight merely because the surcharge says `/kg`, and do not infer shipment versus AWB quantity scope from the flat selector. The UI explicitly keeps calculation consumption off. If the source does not support the basis, leave the basis unreviewed rather than guessing.
 
 This step does not add the surcharge to **Navlun Ã–nizleme** and does not authorize a customer quote, airline booking, capacity/schedule assumption or outbound message.
+
+## Commercial-Air Surcharge Applicability Review (P2-24)
+
+After surcharge amount/unit and application-basis review, an operator may separately confirm whether the surcharge applies across the exact tariff source or only to one confirmed destination row. Destination-specific scope must resolve to a human-confirmed three-letter destination code in that same source.
+
+This review is evidence only. Do not interpret `source_wide` as airline-wide policy, and do not consume the surcharge in freight/pivot preview yet. Routing restrictions, special-cargo conditions, flat-charge quantity semantics and FX remain unresolved until later bounded steps.
