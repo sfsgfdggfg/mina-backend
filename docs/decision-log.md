@@ -7181,3 +7181,16 @@ Registered commercial-air tariff PDFs may be opened from protected content-addre
 Each immutable tariff source may have one durable `AirRateStructureReview` for the v1 extractor. The review stores the source fingerprint, extracted-text fingerprint and character count plus bounded structural candidates and their source line numbers. Full extracted tariff text and arbitrary source excerpts are not persisted in state/audit JSON. Re-running the same source is idempotent.
 
 Operators review each candidate individually with a mandatory note. A confirmed candidate means only that the structural label was verified against the source document; confirmation creates no air-pricing, surcharge, routing, availability, booking, quote or automation authority. Full tariff-row interpretation, including use of AI on commercially sensitive source content, requires a later separately approved boundary and the applicable OpenAI data-control approval.
+
+## DEC-239 — Reviewed Commercial-Air Tariff Rows Are Structured Reference Evidence, Not Pricing Authority
+
+**Status:** Accepted
+**Date:** 2026-09-13
+
+After the P2-19 structure review is fully completed, MINAI may locally and deterministically propose numeric commercial-air tariff rows only when a visible tariff header contains at least two human-confirmed weight-break labels and a following row has an exact matching numeric column count. Ambiguous width, mixed currency without an explicit row/header currency, incomplete rows, surcharge-style prefixes and unaligned numeric content must be skipped rather than guessed.
+
+The first `AirRateTableReview` stores source/structure fingerprints, the confirmed weight-break keys used for alignment, and bounded `AirRateTableRowCandidate` records containing destination label/code when deterministically visible, currency when unambiguous, structured decimal rate values, source line number and a SHA-256 line fingerprint. Full extracted tariff text and raw source lines are not persisted in ordinary state/audit payloads.
+
+Every proposed row requires explicit operator confirmation or rejection with an authored note. A confirmed row means only that the operator verified the destination and all extracted weight-break values against the source PDF. Confirmed rows remain reference-only and cannot feed chargeable-weight calculation, pivot-weight calculation, surcharge calculation, airline selection, customer quote pricing, availability requests, booking or outbound communication until a later separately approved pricing-engine decision.
+
+This step remains local/deterministic and does not call OpenAI. Express/FedEx/Aramex tariff parsing remains outside scope.

@@ -1553,3 +1553,11 @@ After a commercial-air PDF is registered under **Ayarlar → Havayolu Listeleri*
 Review each proposed label individually. **Doğrula** and **Reddet** both require an operator note. A confirmed label means only “this label exists/is correctly recognized in this tariff source”; it does not authorize a rate, surcharge amount, chargeable-weight formula, pivot-weight choice, airline quote, capacity assumption, booking or customer quote. Numeric tariff-row interpretation remains outside the controlled pilot boundary until a later separately approved implementation and applicable OpenAI data-control approval.
 
 If extraction returns an encrypted/no-text/malformed/oversized-page or character-limit error, treat the document as manual-review-only; do not bypass the extractor and do not paste commercial tariff contents into another AI surface as a workaround.
+
+## Commercial-Air Tariff Row Review (P2-20)
+
+After every structural candidate for a tariff PDF has been explicitly reviewed, **Ayarlar → Havayolu Listeleri** may show **Tarife Satırlarını Çıkar**. MINAI locally re-extracts the protected PDF, verifies that the extracted-text fingerprint is unchanged, and looks only for exact-width numeric rows beneath human-confirmed weight-break headers. It does not call OpenAI.
+
+Review every proposed destination row against the original PDF. **Satırı Doğrula** and **Satırı Reddet** both require an operator-authored note. If any destination, currency, column alignment or numeric value is uncertain, reject the row; do not repair it by assumption. The v1 detector deliberately prefers missing rows to guessed rows.
+
+A confirmed row is only a checked transcription/reference record. It is not used for chargeable-weight or pivot-weight calculations, surcharge computation, customer pricing, airline selection, space/schedule requests, booking or outbound messages. Those capabilities remain disabled until a separately approved air-pricing phase. Express tariffs remain out of scope.

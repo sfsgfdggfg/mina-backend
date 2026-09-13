@@ -4212,3 +4212,11 @@ Air-rate structure extraction may read only a previously verified/stored commerc
 An `AirRateStructureReview` must retain only source/extraction fingerprints, bounded extraction counts and deterministic structural candidates. Full extracted text and arbitrary source excerpts must not enter ordinary state or audit-event payloads. Candidate detection must remain deterministic and local; v1 must not import or call OpenAI.
 
 Every confirm/reject action requires authenticated operator identity and a non-empty review note. A reviewed candidate cannot be silently re-decided. Confirmed weight breaks, surcharge names, currencies, volumetric divisors or cargo-scope hints are reference evidence only and must not participate in customer pricing, pivot-weight logic, airline selection, availability requests, booking, quote generation or outbound communication.
+
+## RULE-256 — Parse Air Tariff Numbers Only Under Confirmed Headers and Never Treat Reviewed Rows as Executable Prices
+
+Numeric commercial-air row extraction may start only after the corresponding `AirRateStructureReview` is completed. The detector may use only human-confirmed weight-break labels as table columns. It must require an exact numeric tail matching those columns and must skip ambiguous, incomplete, surcharge-like, multi-currency-without-context or otherwise misaligned lines.
+
+Structured row evidence may preserve bounded destination/currency/rate fields plus source fingerprints, but must not preserve the full extracted tariff text or arbitrary raw source lines in ordinary state/audit JSON. Decimal values must stay currency-separated; missing or ambiguous currency remains missing rather than inferred.
+
+Every row decision requires authenticated operator identity and a non-empty note. Confirmation verifies source transcription only. A confirmed tariff row has no runtime authority and must not be imported into customer pricing, pivot-weight logic, margin calculation, schedule/capacity assumptions, airline messaging, booking, or quote generation without a later explicit product decision and regression boundary.
