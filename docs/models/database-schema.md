@@ -924,3 +924,12 @@ Persistent namespaces are `air_rate_structure_reviews` and `air_rate_structure_r
 `AirRateTableRowCandidate` stores a deterministic candidate identifier, bounded destination label, optional three-letter destination code, optional explicit/unambiguous currency, two to twenty positive bounded decimal rate values keyed by confirmed `MIN`/`+N` breaks, extracted-text line number, SHA-256 line fingerprint, detector marker and proposed/confirmed/rejected human-review evidence. It intentionally stores no full source line or free-form extracted tariff text.
 
 Persistent namespaces are `air_rate_table_reviews` and `air_rate_table_review_by_source`. Ordinary retention does not purge them. These records are confidential tariff-reference evidence only; no pricing or quote engine reads them in P2-20.
+
+
+## P2-21 Commercial-Air Shadow Calculation Preview
+
+P2-21 adds no persistent database namespace. `AirShadowCalculationPreview` is an ephemeral read/compute model over one operator-confirmed `AirRateTableRowCandidate`, the linked completed tariff-structure evidence, and operator-entered actual weight/package dimensions.
+
+The preview contains the confirmed volumetric divisor, actual/volumetric/unrounded chargeable weights, the ordinary base-freight option, higher-break pivot alternatives and the lowest mathematical option. Money values remain in the tariff row currency and are never mixed across currencies. The preview carries explicit false flags for runtime authority, quote authority, surcharges, pickup, door delivery, capacity, schedule and weight rounding.
+
+No preview record is written to `state_records` or a pricing repository. Repeating the same preview is a fresh calculation over the current reviewed evidence; it does not become historical commercial truth or a customer quote snapshot.

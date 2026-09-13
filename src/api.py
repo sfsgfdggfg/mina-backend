@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 import json
 import os
@@ -276,6 +277,11 @@ from src.core.air_rate_table_review_service import (
     build_air_rate_table_review_view,
     create_air_rate_table_review,
     decide_air_rate_table_row,
+)
+from src.core.air_shadow_calculation import (
+    AirShadowCalculationError,
+    AirShadowPackage,
+    build_air_shadow_calculation_preview,
 )
 from src.core.attachment_intake_policy import MAX_ATTACHMENT_FILE_BYTES
 from src.core.operation_execution_repository import (
@@ -962,6 +968,11 @@ class AirRateStructureCandidateDecisionRequest(BaseModel):
 class AirRateTableRowDecisionRequest(BaseModel):
     decision: Literal["confirm", "reject"]
     review_note: str = Field(min_length=1, max_length=800)
+
+
+class AirShadowCalculationPreviewRequest(BaseModel):
+    actual_weight_kg: Decimal = Field(gt=0, le=Decimal("1000000"))
+    packages: list[AirShadowPackage] = Field(min_length=1, max_length=100)
 
 
 class PreviewAttachmentReviewRequest(BaseModel):
@@ -2467,6 +2478,34 @@ def decide_air_rate_table_row_endpoint(
         "runtime_authoritative": False,
         "pricing_authority_enabled": False,
         "quote_calculation_enabled": False,
+    }
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/shadow-preview")
+def preview_air_shadow_calculation(
+    review_id: str,
+    candidate_id: str,
+    request: AirShadowCalculationPreviewRequest,
+):
+    try:
+        preview = build_air_shadow_calculation_preview(
+            review_id=review_id,
+            candidate_id=candidate_id,
+            actual_weight_kg=request.actual_weight_kg,
+            packages=request.packages,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+        )
+    except AirShadowCalculationError as exc:
+        code = str(exc)
+        status = 404 if code in {"air_shadow_table_review_not_found", "air_shadow_rate_row_not_found", "air_shadow_structure_review_not_found"} else 422
+        raise HTTPException(status_code=status, detail=code) from exc
+    return {
+        "preview": preview.model_dump(mode="json"),
+        "shadow_only": True,
+        "persisted": False,
+        "customer_quote_enabled": False,
+        "outbound_enabled": False,
     }
 
 
