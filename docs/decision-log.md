@@ -7545,3 +7545,14 @@ A customer identity established by the controlled Outlook trusted-sender gate is
 Master-Data-backed email workflows also recheck sender/customer identity before supplier RFQ authority and again during supplier-response/quote progression. When an email sender no longer matches the confirmed Customer Master identity, the workflow returns `customer_identity_verification_required` and creates no new supplier RFQ or customer QuoteCase. Existing RFQ evidence may remain visible, but trust drift does not become implicit commercial authority.
 
 The manual `/process-email` fallback remains `source=manual` and does not claim Microsoft Graph provenance. In controlled pilot mode it now requires an explicit sender and exactly one active Customer Master trusted-sender match before AI parsing. Missing, untrusted or ambiguous sender identity fails closed before the parser. Non-email manual intake continues through the separate manual-intake workflow and is not converted into an email identity claim.
+
+## DEC-271 — The 2.85 m Tenteli Height Limit Is Also a Controlled-Pilot Scope Boundary
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+Road Freight v1 already defines height above 2.85 m as incompatible with the standard Tenteli profile: 2.85–3.00 m requires Mega evaluation and height above 3.00 m requires project/lowbed evaluation. The controlled road pilot is the simple standard-trailer flow, so a package above 2.85 m cannot remain pilot-eligible merely because it is still at or below the project-cargo 3.00 m threshold.
+
+Equipment semantics remain unchanged: `height_cm > 285` and `<= 300` selects Mega Trailer, while `height_cm > 300` selects Lowbed / Project Cargo. Pilot scope and operational risk now share the same non-standard-height boundary. Exactly `285 cm` is not excluded or reviewed solely because of height.
+
+This closes a fail-open where 286–300 cm cargo selected special equipment but still appeared green and eligible for the simple controlled road pilot.

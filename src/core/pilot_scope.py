@@ -17,6 +17,7 @@ from src.core.road_dimensions import (
     is_overlength,
     is_overwidth,
     is_project_height,
+    requires_nonstandard_height_equipment,
 )
 
 
@@ -155,6 +156,11 @@ def evaluate_pilot_scope(
             _append_reason(reasons, "Oversize cargo length exceeds the standard 13.60 m trailer profile.")
         if is_overwidth(package):
             _append_reason(reasons, "Oversize cargo width exceeds 250 cm.")
+        if requires_nonstandard_height_equipment(package):
+            _append_reason(
+                reasons,
+                "Cargo height exceeds the 2.85 m standard-trailer profile and requires non-standard height equipment.",
+            )
         if is_project_height(package):
             _append_reason(reasons, "Oversize cargo height exceeds 300 cm.")
 
