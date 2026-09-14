@@ -12,6 +12,7 @@ from src.core.commodity_profile import (
     normalize_commodity_value,
 )
 from src.core.gtip import has_gtip_commodity_conflict
+from src.core.equipment import is_standard_road_equipment_request
 from src.core.models import Shipment
 from src.core.pilot_access import pilot_mode_enabled
 from src.core.road_dimensions import (
@@ -129,6 +130,12 @@ def evaluate_pilot_scope(
         _append_reason(
             reasons,
             f"Transport mode '{shipment.transport_mode}' is outside road-only pilot scope.",
+        )
+
+    if not is_standard_road_equipment_request(shipment.equipment_type):
+        _append_reason(
+            reasons,
+            "Explicit special or non-standard equipment is outside the simple standard-trailer pilot scope.",
         )
 
     if has_gtip_commodity_conflict(shipment):

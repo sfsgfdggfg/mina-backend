@@ -1810,3 +1810,9 @@ Boundary cases should remain exact: 13.60 m length, 2.50 m width and 2.85 m heig
 During controlled-pilot extraction review, inspect any `[GTIP CONSISTENCY WARNING]`. The warning means the customer-provided GTIP / HS interpretation and explicit product description disagree. Do not treat the code as authoritative and do not allow that unresolved case into the simple road pilot; obtain customer/customs verification or reprocess corrected evidence first.
 
 A GTIP-bearing shipment with no conflict remains subject to the ordinary pilot gates and is not excluded solely because a GTIP / HS code is present.
+
+## Explicit Equipment Scope Check
+
+During extraction confirmation, inspect any explicit `equipment_type` independently from ADR, temperature and package dimensions. The simple controlled road pilot accepts the default/unspecified equipment path and recognized Tenteli/Curtainsider requests only. Explicit Reefer/Frigo, Mega, ADR-capable, box/closed-body, lowbed/project or unknown equipment requests must return pilot-scope exclusion even when the remaining shipment facts look ordinary.
+
+Do not clear a special-equipment request to make the case fit the pilot. Preserve the requested equipment for operator review and handle that job outside the simple standard-trailer pilot.

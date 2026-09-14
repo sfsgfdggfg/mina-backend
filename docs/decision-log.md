@@ -7578,3 +7578,14 @@ Customer-provided GTIP / HS evidence remains interpretive rather than legally au
 For the controlled road pilot, that warning is now also a scope boundary. A shipment carrying the system-generated GTIP commodity-conflict marker cannot proceed as simple pilot cargo until the contradiction is independently verified or the intake is reprocessed with corrected evidence. This does not convert MINAI into a customs-classification authority and does not make every GTIP-bearing shipment exceptional.
 
 Compatible customer-provided GTIP evidence remains pilot-eligible subject to the normal road, safety, dimension, commodity, identity and commercial gates. Outside controlled pilot mode, the existing warning-only behavior remains unchanged.
+
+## DEC-274 — Explicit Non-Standard Equipment Requests Stay Outside the Simple Road Pilot
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+The controlled road pilot is the ordinary standard Tenteli/Curtainsider flow. An explicit customer or trusted-memory equipment request is operational authority even when separate safety booleans or package dimensions look ordinary. Therefore an explicit Reefer/Frigo, Mega, ADR-capable, box/closed-body, lowbed/project or otherwise non-standard/unknown equipment request must not remain pilot-eligible merely because `is_temperature_controlled`, `is_adr` or dimension checks do not independently trigger.
+
+Pilot eligibility now accepts no explicit equipment request or a recognized Tenteli/Curtainsider standard-family request. Any other explicit equipment value fails closed from the simple pilot. Equipment selection itself is unchanged and continues to preserve the requested equipment so the operator can see the real requirement outside pilot scope.
+
+This closes a fail-open where explicit Reefer, Mega, ADR-capable and box-trailer requests could remain green and pilot-eligible while the equipment engine correctly selected the special equipment.
