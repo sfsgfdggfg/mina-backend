@@ -1792,3 +1792,9 @@ Treat `false` as valid only when it is explicitly established. An AI-only negati
 For controlled Outlook intake, the extraction proposal now carries the canonical trusted Customer Master name that was established before AI use. Treat this as immutable email identity authority: correct shipment facts during confirmation, but do not change the bound customer to another Master Data record. If the customer association itself is wrong, reject/reprocess the intake rather than overriding the identity in place.
 
 The manual `process-email` fallback in pilot mode must include the real sender address of the approved customer. MINAI verifies that sender against active Customer Master trust rules before parsing. A missing/untrusted/ambiguous sender is a stop condition. If Customer Master sender trust changes after an RFQ workflow was created, later quote progression must return `customer_identity_verification_required` until current identity evidence is safe again; do not bypass this with agency-default pricing.
+
+## Road Pilot Standard-Height Guard
+
+During extraction review, treat package height above **2.85 m (285 cm)** as outside the simple standard-trailer pilot even when it does not exceed the 3.00 m project-cargo threshold. A 286–300 cm package should produce Mega Trailer guidance, human-review risk and pilot-scope exclusion; above 300 cm the existing Lowbed / Project Cargo behavior remains in force.
+
+A package exactly 285 cm high is not excluded solely by this height rule. Continue evaluating length, width, weight, commodity, ADR, temperature, equipment and all other readiness gates independently.

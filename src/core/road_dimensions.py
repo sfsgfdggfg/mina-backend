@@ -29,6 +29,13 @@ def is_overwidth(package: PackageDimensions) -> bool:
     )
 
 
+def requires_nonstandard_height_equipment(package: PackageDimensions) -> bool:
+    return (
+        package.height_cm is not None
+        and package.height_cm > MEGA_TRAILER_HEIGHT_TRIGGER_CM
+    )
+
+
 def is_project_height(package: PackageDimensions) -> bool:
     return (
         package.height_cm is not None

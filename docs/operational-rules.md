@@ -4452,3 +4452,9 @@ When controlled inbound processing resolves exactly one trusted Customer Master 
 For Master-Data-backed email workflows, a present sender address must still match the confirmed shipment customer before supplier selection/RFQ creation and before later quote progression. `sender_verification_required`, unmatched identity or later trust drift is a commercial blocker, not advisory metadata. Do not fall back to an agency pricing policy or supplier workflow merely because customer-specific memory was not applied.
 
 Controlled-pilot manual email fallback requires a sender address and one active trusted Customer Master match before AI use. Missing, unknown or ambiguous manual-email sender identity fails closed. Phone, WhatsApp, portal, face-to-face and other non-email manual intake remain separate and do not fabricate email trust evidence.
+
+## RULE-286 — Height Above 2.85 m Is Not Standard-Trailer Pilot Cargo
+
+The shared Road Freight v1 height rule must be applied consistently across equipment, risk and controlled-pilot scope. Any package with `height_cm > 285` requires non-standard height equipment and must not enter the simple standard-trailer pilot as ordinary Tenteli cargo.
+
+For `285 < height_cm <= 300`, select Mega Trailer and require human operational review; for `height_cm > 300`, preserve the existing Lowbed / Project Cargo treatment. The exact `height_cm = 285` boundary must remain eligible from height alone, subject to all other pilot gates.

@@ -332,6 +332,51 @@ def evaluate_pilot_scope_regressions() -> dict:
     ):
         failures.append("overlength cargo did not trigger operational human review")
 
+    nonstandard_height_shipment = _road_shipment(
+        packages=[
+            Package(
+                package_type="machine", quantity=1, length_cm=500,
+                width_cm=200, height_cm=286, weight_kg=5000,
+            )
+        ]
+    )
+    nonstandard_height_scope = evaluate_pilot_scope(
+        nonstandard_height_shipment,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if nonstandard_height_scope.eligible or not any(
+        "2.85" in reason for reason in nonstandard_height_scope.reasons
+    ):
+        failures.append("height above 2.85m did not fail closed from the standard-trailer pilot")
+    if decide_equipment(nonstandard_height_shipment).selected_equipment != "Mega Trailer":
+        failures.append("height above 2.85m and at/below 3.00m did not select Mega Trailer")
+    nonstandard_height_risk = assess_risk(nonstandard_height_shipment)
+    if (
+        nonstandard_height_risk.risk_level != "yellow"
+        or not nonstandard_height_risk.requires_human_review
+        or not any("2.85" in reason for reason in nonstandard_height_risk.risk_reasons)
+    ):
+        failures.append("height above 2.85m did not trigger non-standard equipment review")
+
+    standard_height_boundary = _road_shipment(
+        packages=[
+            Package(
+                package_type="machine", quantity=1, length_cm=500,
+                width_cm=200, height_cm=285, weight_kg=5000,
+            )
+        ]
+    )
+    standard_height_scope = evaluate_pilot_scope(
+        standard_height_boundary,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if not standard_height_scope.eligible:
+        failures.append("exact 2.85m cargo was incorrectly excluded by height alone")
+    if decide_equipment(standard_height_boundary).selected_equipment != "Tenteli / Curtainsider":
+        failures.append("exact 2.85m cargo was incorrectly forced into non-standard equipment")
+    if assess_risk(standard_height_boundary).risk_level != "green":
+        failures.append("exact 2.85m cargo was incorrectly marked risky from height alone")
+
     length_boundary_shipment = _road_shipment(
         packages=[
             Package(

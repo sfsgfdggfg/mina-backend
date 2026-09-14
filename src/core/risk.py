@@ -5,6 +5,7 @@ from src.core.road_dimensions import (
     is_overlength,
     is_overwidth,
     is_project_height,
+    requires_nonstandard_height_equipment,
 )
 from src.core.extraction_confirmation import require_operational_shipment
 
@@ -119,6 +120,11 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
 
         if is_project_height(package):
             risk_reasons.append("Gabari dışı yük yüksekliği.")
+            requires_human_review = True
+        elif requires_nonstandard_height_equipment(package):
+            risk_reasons.append(
+                "Yük yüksekliği standart 2.85m tenteli profilini aşıyor; Mega ekipman değerlendirmesi gerekir."
+            )
             requires_human_review = True
 
         if is_overwidth(package):
