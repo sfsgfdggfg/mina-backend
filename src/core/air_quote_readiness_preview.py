@@ -32,6 +32,7 @@ from src.core.master_data import normalize_master_text
 from src.core.master_data_repository import MasterDataRepository
 from src.core.models import Shipment
 from src.core.pricing_policy import PricingFormula
+from src.core.regulatory_compliance import RegulatoryComplianceAssessment, assess_regulatory_compliance
 
 
 class AirQuoteReadinessPreviewError(ValueError):
@@ -43,6 +44,7 @@ class AirQuoteReadinessPreview(BaseModel):
 
     pricing_preview: AirCustomerPricingPreview
     operational_readiness: AirOperationalReadinessPreview
+    regulatory_compliance: RegulatoryComplianceAssessment
     shipment: Shipment
     service_date: date
     cargo_ready_date: Optional[date] = None
@@ -58,6 +60,7 @@ class AirQuoteReadinessPreview(BaseModel):
     shipment_inputs_complete: bool = False
     pricing_complete: bool = False
     operational_evidence_complete: bool = False
+    regulatory_compliance_clear: bool = False
     quote_ready: bool = False
     quote_creation_authority: bool = False
     quote_created: bool = False
@@ -323,7 +326,17 @@ def build_air_quote_readiness_preview(
         expected_delivery_date=operational.expected_delivery_date,
     )
 
+    regulatory = assess_regulatory_compliance(shipment)
     blockers = list(shipment_blockers)
+    if not regulatory.can_continue_to_quote:
+        if regulatory.blocking_requirements:
+            blockers.extend(f"regulatory:blocked:{item}" for item in regulatory.blocking_requirements)
+        if regulatory.pending_review_requirements:
+            blockers.extend(f"regulatory:review_pending:{item}" for item in regulatory.pending_review_requirements)
+        if regulatory.unknown_requirements:
+            blockers.extend(f"regulatory:clarification_required:{item}" for item in regulatory.unknown_requirements)
+        if not (regulatory.blocking_requirements or regulatory.pending_review_requirements or regulatory.unknown_requirements):
+            blockers.append(f"regulatory:{regulatory.status}")
     if pricing.pricing_status != "priced_preview" or not pricing.customer_price_preview_available:
         blockers.extend(f"pricing:{item}" for item in pricing.blockers or [pricing.pricing_status])
     if not operational.operational_evidence_complete:
@@ -346,11 +359,13 @@ def build_air_quote_readiness_preview(
     shipment_complete = not shipment_blockers
     pricing_complete = pricing.pricing_status == "priced_preview" and pricing.customer_price_preview_available
     operational_complete = operational.operational_evidence_complete
-    quote_ready = shipment_complete and pricing_complete and operational_complete and not blockers
+    regulatory_clear = regulatory.can_continue_to_quote
+    quote_ready = shipment_complete and pricing_complete and operational_complete and regulatory_clear and not blockers
 
     return AirQuoteReadinessPreview(
         pricing_preview=pricing,
         operational_readiness=operational,
+        regulatory_compliance=regulatory,
         shipment=shipment,
         service_date=service_date,
         cargo_ready_date=cargo_ready,
@@ -364,5 +379,6 @@ def build_air_quote_readiness_preview(
         shipment_inputs_complete=shipment_complete,
         pricing_complete=pricing_complete,
         operational_evidence_complete=operational_complete,
+        regulatory_compliance_clear=regulatory_clear,
         quote_ready=quote_ready,
     )

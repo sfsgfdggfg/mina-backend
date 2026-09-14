@@ -397,6 +397,7 @@ def revise_quote_case(
                 quote_draft=revised_quote_draft,
             ),
             customer_commercial_context_snapshot=commercial_context_snapshot,
+            air_quote_context_snapshot=quote_case.air_quote_context,
         )
 
         new_approval = approval_repository.save(

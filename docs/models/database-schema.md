@@ -1062,3 +1062,11 @@ No QuoteCase, approval, outbound message, booking state or learning fact is writ
 P2-41 adds no quote-readiness persistence namespace. The ephemeral read model consumes P2-39 cost completeness, P2-40 customer pricing, the existing air operational-readiness evidence, an explicit Customer Master identity and a shipment snapshot. It returns shipment blockers, computed package piece count/volume, delivery-deadline status and `quote_ready`; quote creation/send/booking/outbound/runtime flags remain false.
 
 `air_service_availability_confirmations` gains optional `expected_delivery_date`. Historical records without this value remain valid. When present it cannot precede `service_date`, and unconfirmed schedules cannot carry flight or expected-delivery evidence. The field becomes mandatory for P2-41 only when the customer shipment includes a required-delivery date.
+
+### P2-42 Commercial-Air Durable Quote Preparation and Frozen Approval Provenance
+
+P2-42 adds no new persistence namespace. Existing `quote_cases`, `quote_approvals` and `mina_jobs` are reused. `QuoteCase` gains optional `air_quote_context`; `QuoteApproval` gains optional `air_quote_context_snapshot`. Both are backward-compatible for legacy/road records where the fields are absent.
+
+`air_quote_context_v1` freezes the preparation key; inquiry/customer identity; immutable tariff source ID/SHA; airline/origin/destination; table review and row; cost-scope and unsupported-cost review IDs; validity, rounding and availability evidence IDs; service/expected-delivery/routing/flight evidence; confirmed cost basis and customer price/currency; pricing-policy source; selected FX/local-cost evidence IDs; and authenticated preparer/time. Quote revisions copy the QuoteCase air context into the new approval snapshot rather than recomputing it from current repositories.
+
+No separate `air_quote_cases` or `air_quote_approvals` table is introduced. The MINA job's existing `quote_case_id` remains the single durable linkage and prevents silent parallel quote cases for one job.

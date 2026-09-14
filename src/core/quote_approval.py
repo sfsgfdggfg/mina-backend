@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.core.air_quote_context import AirQuoteContextSnapshot
 from src.core.customer_commercial_context import CustomerCommercialContext
 from src.core.pricing_policy import PricingPolicyResolution
 from src.core.models import (
@@ -97,6 +98,7 @@ class QuoteApproval(BaseModel):
 
     quote_snapshot: QuoteApprovalSnapshot
     customer_commercial_context_snapshot: Optional[CustomerCommercialContext] = None
+    air_quote_context_snapshot: Optional[AirQuoteContextSnapshot] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     source: str = "quote_approval_engine"

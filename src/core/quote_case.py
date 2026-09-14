@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.core.air_quote_context import AirQuoteContextSnapshot
 from src.core.models import (
     CustomerQuote,
     QuoteDraft,
@@ -134,6 +135,7 @@ class QuoteCase(BaseModel):
     quote_draft: Optional[QuoteDraft] = None
 
     quote_approval: Optional[QuoteApproval] = None
+    air_quote_context: Optional[AirQuoteContextSnapshot] = None
     quote_send_safety: Optional[QuoteSendSafetyDecision] = None
     regulatory_compliance: Optional[
         RegulatoryComplianceAssessment
