@@ -82,6 +82,8 @@ PERSISTENT_STATE_NAMESPACES = (
     "air_additional_cost_evidence_by_entry",
     "air_cost_scope_reviews",
     "air_cost_scope_review_by_entry",
+    "air_unsupported_cost_semantics_reviews",
+    "air_unsupported_cost_semantics_review_by_entry",
     "air_service_availability_confirmations",
     "air_service_availability_by_entry",
     "operational_work_assignments",

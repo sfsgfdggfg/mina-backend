@@ -1701,3 +1701,11 @@ After a P2-37 cost-scope review exists, use **Required Flat Local-Cost Coverage*
 Read `Required flat-cost coverage COMPLETE` narrowly: every P2-37 category marked `required` is represented by a local-cost record that P2-36 successfully consumed, no scope category remains unresolved, and no selected cost contradicts a `not_applicable` classification. Missing required categories and not-applicable conflicts are shown as blockers. Stored but unselected evidence has no coverage effect.
 
 Do not label the subtotal all-in and do not apply customer margin solely because this gate is complete. P2-38 does not model or prove `/kg`, percentage, minimum/tiered, customs duty/tax or unknown future cost semantics, and it creates no quote/send, booking or outbound authority.
+
+## Commercial-Air Cost Completeness Confirmation (P2-39)
+
+In **Settings → Havayolu Listeleri**, first complete the normal tariff/surcharge review, airline weight-rounding review, Cost Scope Requirements Review and required local-cost evidence selection. Then complete **Unsupported Cost Semantics Review** for the same inquiry/source. All five rows start `Unresolved`; choose `Not applicable` only when explicit operational/source evidence supports that conclusion. If an unsupported semantic actually applies but is not priced, choose `Applicable / unresolved`.
+
+In the reviewed-cost panel select the exact Cost Scope Review and Unsupported Cost Semantics Review, then choose only the additional-cost and FX evidence intended for this calculation and enter required shipment/AWB/HAWB/MAWB counts. **Cost Completeness Kontrol Et** confirms only when flat coverage is complete, unsupported semantics are cleared, weight rounding is reviewed and no cost-relevant surcharge exclusion remains. Destination/cargo/routing non-applicable surcharge lines may remain excluded.
+
+`Cost completeness CONFIRMED` is not a customer quote and is not an all-in label. Do not apply/send a customer price from P2-39 alone. Tariff validity, capacity/schedule, customer pricing policy, quote approval and outbound execution remain separate controlled gates.

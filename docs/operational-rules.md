@@ -4367,3 +4367,11 @@ To evaluate inquiry-level commercial-air local-cost coverage, explicitly select 
 A `required` category is covered only if its explicitly selected evidence survives the full P2-36 consumption rules, including exact inquiry/source matching, matching shipment/AWB/HAWB/MAWB count and exact directional/timestamped FX where needed. If the scope still contains `unresolved`, coverage remains incomplete. If selected evidence belongs to a category marked `not_applicable`, surface the contradiction and keep coverage incomplete.
 
 Even a successful `required_flat_cost_coverage_complete` result is not an all-in cost statement. Preserve `all_in_cost=false` and no customer-pricing, margin, quote/send, booking, runtime or outbound authority because unsupported weight-based, percentage, minimum/tiered, duty/tax and unknown cost semantics may still exist.
+
+## RULE-275 — Confirm Air Cost Completeness Only After Unsupported Semantics, Surcharge Blockers and Weight Rounding Are Explicitly Cleared
+
+Do not promote P2-38 flat coverage to a complete air cost basis by itself. Before `cost_completeness_confirmed` may become true, explicitly select one exact-source/inquiry unsupported-cost semantic review and require all five unsupported semantic classes to be classified. `unresolved` or `applicable_unresolved` blocks completeness; missing evidence must never mean not applicable.
+
+The same preview must retain the P2-38 requirement that every required flat local-cost category has consumable selected evidence. It must also inspect reviewed surcharge exclusions. Destination/cargo/routing exclusions proven not applicable are allowed; missing FX, incomplete surcharge review or unreviewed flat quantity semantics are unresolved cost and must block. Exact-source airline weight rounding must be reviewed; common practice or raw fallback is insufficient for completeness.
+
+A successful result confirms only the inquiry/source cost basis used by the preview. Preserve provenance and the confirmed amount/currency, but keep customer-price eligibility, margin/pricing authority, quote-send, booking, outbound, runtime authority and `all_in_cost` false until later separately controlled gates.
