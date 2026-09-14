@@ -7339,3 +7339,14 @@ The selected evidence must belong to the exact same air-rate source id/SHA and i
 The preview preserves source currency/rate/cost alongside the converted freight-currency values and applies no hidden surcharge rounding. Selected evidence that is missing, mismatched, duplicated, unused or directionally irrelevant fails closed rather than being ignored.
 
 P2-32 remains a partial reference-cost calculation only. FX conversion in this preview creates no customer selling-price, margin, quote approval, capacity/schedule, booking, airline-selection or outbound authority, and it does not establish a general FX policy for road pricing or reporting.
+
+## DEC-252 — Commercial-Air Operational Readiness Is an Evidence Aggregation, Not Quote or Booking Authority
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-33 adds an ephemeral operational-readiness preview that combines the exact reviewed tariff row/cost context with reviewed tariff validity and inquiry/date/source-bound airline capacity and schedule evidence. When explicit P2-32 FX evidence is supplied, the preview preserves the same exact FX selection and provenance; it does not choose, refresh, invert or substitute FX records.
+
+`operational_evidence_complete=true` means only that the selected tariff is reviewed and valid for the explicit service date and that exactly matching capacity and schedule evidence is positive for the same source SHA, inquiry, destination, routing/via context and service date. Multiple exact-context availability confirmations are ambiguous and fail closed rather than using latest/nearest semantics.
+
+Operational evidence completeness does not make the partial reviewed cost all-in or customer-ready. P2-33 never sets customer quote readiness, booking readiness, outbound authority or runtime authority. Customer selling price, margin policy, final quote approval and booking execution remain separately controlled future gates.

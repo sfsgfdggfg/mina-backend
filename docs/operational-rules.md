@@ -4319,3 +4319,11 @@ Cross-currency air surcharge conversion is permitted only when the preview reque
 The evidence direction must exactly match surcharge currency to freight currency. Never invert a reverse pair or derive an unstated reciprocal. The evidence must match the exact air-rate source id/SHA, inquiry and effective timestamp. Missing, duplicate, mismatched or unused selected evidence fails closed.
 
 When conversion is allowed, preserve the original surcharge currency/rate/cost in the response and expose the FX evidence id/rate/effective timestamp used. Do not apply hidden rounding. The resulting subtotal remains non-authoritative partial reference cost with no customer price, margin, quote/send, booking, availability or outbound authority.
+
+## RULE-269 — Operational Readiness Must Match Exact Air Inquiry, Service Date, Source and Routing Evidence
+
+The commercial-air operational-readiness preview must use an explicit inquiry reference and service date. Tariff validity is checked against that service date, and capacity/schedule evidence must match the exact tariff source id/SHA, inquiry, destination, routing context, via airport and service date. Missing evidence is a visible blocker; multiple exact-context confirmations fail closed instead of selecting the newest record.
+
+If explicit FX evidence is supplied, reuse P2-32 rules unchanged: exact selected evidence only, matching source/inquiry/direction/timestamp, no automatic latest/nearest choice and no reciprocal inference. Availability evidence must never supply or change FX, and FX evidence must never imply capacity or schedule.
+
+`operational_evidence_complete` is an evidence-status flag only. It must not authorize a customer price, margin, quote/send action, booking, airline selection or outbound execution. The preview remains ephemeral and partial-cost-only.

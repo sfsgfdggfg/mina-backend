@@ -328,6 +328,10 @@ from src.core.air_reviewed_surcharge_cost_preview import (
     AirReviewedSurchargeCostPreviewError,
     build_air_reviewed_surcharge_cost_preview,
 )
+from src.core.air_operational_readiness_preview import (
+    AirOperationalReadinessPreviewError,
+    build_air_operational_readiness_preview,
+)
 from src.core.attachment_intake_policy import MAX_ATTACHMENT_FILE_BYTES
 from src.core.operation_execution_repository import (
     OperationExecutionConflictError,
@@ -1095,6 +1099,23 @@ class AirReviewedSurchargeCostPreviewRequest(BaseModel):
     via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
     reference_date: Optional[date] = None
     inquiry_reference: Optional[str] = Field(default=None, max_length=300)
+    fx_evidence_ids: list[str] = Field(default_factory=list, max_length=20)
+    fx_reference_at: Optional[datetime] = None
+    shipment_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    awb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    hawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    mawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+
+
+class AirOperationalReadinessPreviewRequest(BaseModel):
+    inquiry_reference: str = Field(min_length=1, max_length=300)
+    service_date: date
+    actual_weight_kg: float = Field(gt=0, le=1_000_000)
+    volumetric_weight_kg: Optional[float] = Field(default=None, gt=0, le=1_000_000)
+    total_volume_cm3: Optional[float] = Field(default=None, gt=0, le=1_000_000_000)
+    cargo_context: Literal["general_cargo", "special_cargo"]
+    routing_context: Literal["direct", "connecting"]
+    via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
     fx_evidence_ids: list[str] = Field(default_factory=list, max_length=20)
     fx_reference_at: Optional[datetime] = None
     shipment_count: Optional[int] = Field(default=None, ge=1, le=1000)
@@ -2912,6 +2933,43 @@ def preview_air_reviewed_surcharge_cost(
             fx_repository=air_fx_rate_evidence_repository,
         )
     except AirReviewedSurchargeCostPreviewError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return preview.model_dump(mode="json")
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/operational-readiness-preview")
+def preview_air_operational_readiness(
+    review_id: str,
+    candidate_id: str,
+    request: AirOperationalReadinessPreviewRequest,
+):
+    try:
+        preview = build_air_operational_readiness_preview(
+            review_id=review_id,
+            candidate_id=candidate_id,
+            inquiry_reference=request.inquiry_reference,
+            service_date=request.service_date,
+            actual_weight_kg=request.actual_weight_kg,
+            volumetric_weight_kg=request.volumetric_weight_kg,
+            total_volume_cm3=request.total_volume_cm3,
+            cargo_context=request.cargo_context,
+            routing_context=request.routing_context,
+            via_airport=request.via_airport,
+            fx_evidence_ids=request.fx_evidence_ids,
+            fx_reference_at=request.fx_reference_at,
+            shipment_count=request.shipment_count,
+            awb_count=request.awb_count,
+            hawb_count=request.hawb_count,
+            mawb_count=request.mawb_count,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+            surcharge_repository=air_rate_surcharge_review_repository,
+            source_repository=air_shadow_repository,
+            validity_repository=air_rate_validity_review_repository,
+            availability_repository=air_service_availability_repository,
+            fx_repository=air_fx_rate_evidence_repository,
+        )
+    except AirOperationalReadinessPreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return preview.model_dump(mode="json")
 

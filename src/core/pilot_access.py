@@ -111,6 +111,7 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("POST", re.compile(r"^/air-rate-surcharge-reviews/[^/]+/candidates/[^/]+/flat-quantity-basis$")),
     ("POST", re.compile(r"^/air-rate-table-reviews/[^/]+/rows/[^/]+/calculation-preview$")),
     ("POST", re.compile(r"^/air-rate-table-reviews/[^/]+/rows/[^/]+/reviewed-surcharge-cost-preview$")),
+    ("POST", re.compile(r"^/air-rate-table-reviews/[^/]+/rows/[^/]+/operational-readiness-preview$")),
     ("GET", re.compile(r"^/supplier-fixed-rates$")),
     ("POST", re.compile(r"^/supplier-fixed-rates$")),
     ("POST", re.compile(r"^/supplier-fixed-rates/[^/]+/status$")),
