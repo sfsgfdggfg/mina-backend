@@ -7501,3 +7501,14 @@ The existing Road Freight v1 standard trailer profile defines a 13.60 m trailer 
 Road equipment selection, operational risk, controlled-pilot scope eligibility and authorized sanitized-replay oversize truth must use the same shared dimension rule. `length_cm > 1360` requires project/lowbed handling, creates a human-review risk signal and is excluded from the simple controlled road pilot. Exactly `1360 cm` is not overlength by this rule and must not be excluded solely because of length.
 
 This change does not claim that every load at or below 13.60 m is automatically operationally feasible; other dimensions, weight, equipment, commodity and regulatory rules still apply independently. The purpose is to prevent a known fail-open where a clearly overlength single piece could be classified as ordinary pilot cargo.
+
+## DEC-267 — Pilot Regression Scenarios Must Declare Commercial Configuration Locally
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+A regression scenario that expects quote progression may not rely solely on ambient configuration injected by the canonical suite runner. Required commercial authority such as a synthetic agency pricing policy must be declared inside that regression's own deterministic fixture when pricing behavior is not the subject under test.
+
+`human_operational_flow` therefore carries its explicit development-only synthetic pricing configuration together with `MINAI_PILOT_MODE=0`. The suite must produce the same result when run standalone with no agency pricing environment and when the surrounding process contains an unrelated or invalid agency-pricing value. The canonical runner's synthetic pricing environment remains a broad offline test fixture, but it is no longer the hidden prerequisite that makes this operational-flow regression pass.
+
+This is a test-authority boundary only. It does not add a runtime pricing default, customer pricing policy, quote authority or pilot configuration.

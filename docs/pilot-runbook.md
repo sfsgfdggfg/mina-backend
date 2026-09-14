@@ -1770,3 +1770,7 @@ Because v4 changes what content is preserved, any authorized replay receipt or r
 During controlled-pilot extraction review, inspect any explicit package length together with width, height and weight. A package longer than **13.60 m (1360 cm)** is outside the simple standard-trailer pilot: do not approve it as an ordinary Tenteli load. The backend should return project/oversize scope exclusion and project/lowbed equipment guidance.
 
 A package exactly 13.60 m long is not excluded from the pilot solely on the length check; all other readiness, dimension, weight, equipment and commodity gates still apply. If authorized sanitized replay contains an overlength case, its expected truth must classify that case as oversize/project using the same shared dimension rule as runtime.
+
+## Regression Isolation Check
+
+Pilot gate regressions that expect commercial progression must carry their own explicit synthetic commercial fixtures rather than passing only because the canonical runner injected an ambient value. `human_operational_flow` is expected to pass both with `MINAI_AGENCY_PRICING_POLICY_JSON` absent and with an unrelated invalid ambient value, because the regression supplies its own deterministic development-only pricing fixture. Do not interpret that fixture as a runtime agency pricing default.
