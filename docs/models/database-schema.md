@@ -1086,3 +1086,9 @@ P2-44 adds durable `air_learning_feedback` plus idempotency index `air_learning_
 `air_quote_context_v1` gains backward-compatible optional `quoted_chargeable_weight_kg`. New P2-42 preparations freeze the recommended billed/chargeable weight so later P2-44 outcome evidence can measure actual-vs-quoted weight variance; historical quote contexts without the field remain readable and are excluded from that metric rather than backfilled.
 
 Aggregated route observations reuse existing `learning_facts` / `learning_fact_by_entry` with `subject_type=route`, canonical exact air route subject identity and `air.*` fact keys. Proposed facts retain normal human confirm/reject/supersession history, but P2-44 explicitly overrides generic confirmed-fact runtime semantics: confirmed `air.*` route facts expose `runtime_authoritative=false` and are absent from `runtime_only` learning queries. No pricing, tariff, routing, booking or outbound authority namespace is added.
+
+### P2-45 Commercial-Air End-to-End Hardening — No Schema Expansion
+
+P2-45 adds no persistence namespace. It hardens consumption invariants over the existing air-rate source/review, inquiry evidence, quote/approval, handoff, feedback and LearningFact records. A reviewed cost chain is valid only when table, structure and surcharge review lineage agrees on the immutable source and extracted-text provenance required by the current tariff source.
+
+Exact semantic duplicate detection is performed at calculation time and does not create a deduplication table. Separate local-cost evidence IDs are rejected when their selected commercial semantics are exact duplicates; separate surcharge candidate IDs are rejected when their applicable commercial semantics are exact duplicates. Existing immutable evidence remains preserved for audit even when duplicate consumption is rejected.

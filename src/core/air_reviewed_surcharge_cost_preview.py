@@ -226,6 +226,17 @@ def build_air_reviewed_surcharge_cost_preview(
     source = source_repository.get_rate_source(freight.source_id)
     if source is None:
         raise AirReviewedSurchargeCostPreviewError("air_rate_source_not_found")
+    table_review = table_repository.get(review_id)
+    if table_review is None:
+        raise AirReviewedSurchargeCostPreviewError("air_rate_table_review_not_found")
+    if table_review.source_id != source.source_id or table_review.source_sha256 != source.sha256_hex:
+        raise AirReviewedSurchargeCostPreviewError("air_rate_table_review_source_mismatch")
+    if surcharge_review.source_id != source.source_id or surcharge_review.source_sha256 != source.sha256_hex:
+        raise AirReviewedSurchargeCostPreviewError("air_rate_surcharge_review_source_mismatch")
+    if surcharge_review.structure_review_id != table_review.structure_review_id:
+        raise AirReviewedSurchargeCostPreviewError("air_rate_surcharge_structure_review_mismatch")
+    if surcharge_review.extracted_text_sha256 != table_review.extracted_text_sha256:
+        raise AirReviewedSurchargeCostPreviewError("air_rate_surcharge_text_mismatch")
 
     normalized_inquiry = " ".join(str(inquiry_reference or "").strip().split()) or None
     selected_fx_ids = list(fx_evidence_ids or [])
@@ -300,6 +311,8 @@ def build_air_reviewed_surcharge_cost_preview(
     flat_total = Decimal("0")
     additional_total = Decimal("0")
     used_additional_ids: set[str] = set()
+    consumed_surcharge_semantics: dict[tuple, str] = {}
+    consumed_additional_semantics: dict[tuple, str] = {}
 
     def exclude(candidate, reason: str) -> None:
         excluded.append(AirReviewedSurchargeExclusion(
@@ -326,6 +339,21 @@ def build_air_reviewed_surcharge_cost_preview(
             return False
         return True
 
+    def assert_unique_surcharge_semantic(candidate) -> None:
+        key = (
+            candidate.surcharge_code, candidate.amount, candidate.currency, candidate.basis,
+            candidate.application_basis, candidate.applicability_scope,
+            candidate.applicability_destination_code, candidate.cargo_applicability,
+            candidate.routing_applicability, candidate.routing_via_airport,
+            candidate.flat_quantity_basis,
+        )
+        prior = consumed_surcharge_semantics.get(key)
+        if prior is not None:
+            raise AirReviewedSurchargeCostPreviewError(
+                f"duplicate_applicable_surcharge_semantic:{prior}:{candidate.candidate_id}"
+            )
+        consumed_surcharge_semantics[key] = candidate.candidate_id
+
     for candidate in surcharge_review.candidates:
         if candidate.status != "confirmed":
             continue
@@ -347,6 +375,7 @@ def build_air_reviewed_surcharge_cost_preview(
                 continue
             if not context_matches(candidate):
                 continue
+            assert_unique_surcharge_semantic(candidate)
             if candidate.flat_quantity_basis is None:
                 exclude(candidate, "flat_quantity_basis_unreviewed")
                 continue
@@ -384,6 +413,7 @@ def build_air_reviewed_surcharge_cost_preview(
             raise AirReviewedSurchargeCostPreviewError("applicable_per_kg_surcharge_operational_conditions_incomplete")
         if not context_matches(candidate):
             continue
+        assert_unique_surcharge_semantic(candidate)
 
         if candidate.application_basis == "actual_weight":
             applied_weight = freight.actual_weight_kg
@@ -430,6 +460,16 @@ def build_air_reviewed_surcharge_cost_preview(
             raise AirReviewedSurchargeCostPreviewError(
                 f"air_additional_cost_evidence_inquiry_mismatch:{evidence_id}"
             )
+        semantic_key = (
+            evidence.cost_category, evidence.provider_name.casefold(), evidence.amount,
+            evidence.currency, evidence.quantity_basis, evidence.evidence_reference.casefold(),
+        )
+        prior = consumed_additional_semantics.get(semantic_key)
+        if prior is not None:
+            raise AirReviewedSurchargeCostPreviewError(
+                f"duplicate_additional_cost_semantic_evidence:{prior}:{evidence.evidence_id}"
+            )
+        consumed_additional_semantics[semantic_key] = evidence.evidence_id
         count = flat_counts[evidence.quantity_basis]
         if count is None:
             raise AirReviewedSurchargeCostPreviewError(

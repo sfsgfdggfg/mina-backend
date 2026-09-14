@@ -7466,3 +7466,16 @@ P2-44 closes the commercial-air learning feedback loop without turning observati
 Route learning is grouped only by exact origin airport, destination airport, quoted airline and quoted routing context, including via airport for connecting service. A single shipment cannot become a learned rule. Cost-basis and chargeable-weight variance require at least three eligible current outcomes; route/tariff-use and delivery-rate observations require at least five. Actual costs in a currency different from the frozen confirmed cost basis are excluded from cost-variance aggregation unless a later explicit normalization contract exists; P2-44 never auto-selects, inverts or approximates FX.
 
 Derived route facts use the existing LearningFact review lifecycle and begin as `proposed`. Human confirmation makes them reviewed historical evidence but does not make `air.*` route facts runtime-authoritative. Confirmed air route facts remain advisory-only and are not consumed by customer pricing, tariff-row selection, routing, booking, outbound delivery or execution. Generic customer quote acceptance learning remains the authority for observational accepted/lost quote metrics; P2-44 does not duplicate those customer facts.
+
+## DEC-264 — Commercial-Air Learning Core Completes Only After End-to-End Provenance and Double-Count Hardening
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-45 defines completion of the commercial-air learning core as an end-to-end controlled-pilot rehearsal from one immutable stored tariff PDF through deterministic structure/table/surcharge review, inquiry-bound cost evidence, cost completeness, customer pricing, quote readiness, durable QuoteCase/human approval, customer send evidence, explicit acceptance, air-operation handoff and realized-outcome learning. The rehearsal must reach the P2-44 route-learning thresholds using separate inquiry/job evidence chains rather than reusing one inquiry's commercial evidence across shipments.
+
+All commercial tariff calculation evidence must remain on one immutable artifact lineage. The current `AirRateSource.sha256_hex`, table review `source_sha256`, structure review identity/SHA/extracted-text digest and surcharge review identity/SHA/extracted-text digest must agree before reviewed cost may be consumed. A stale or drifted review is a hard error, not a candidate for latest/nearest recovery.
+
+P2-45 also closes exact semantic double-count risk. Different IDs do not authorize charging the same exact applicable surcharge semantic or the same exact local-cost evidence semantic twice. Exact duplicates fail closed; distinct commercial charges remain separately consumable when their evidence semantics actually differ.
+
+The hardening gate additionally requires customer identity isolation, tariff-validity enforcement, inquiry isolation, frozen approval-context integrity and preserved no-booking/no-outbound authority. Passing this gate completes the bounded air-learning and quote-preparation core; automated airline booking, airline portal/API execution and live schedule integration remain separate future scope.

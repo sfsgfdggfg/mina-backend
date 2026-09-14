@@ -70,10 +70,16 @@ def _positive_decimal(value, *, label: str) -> Decimal:
     return decimal
 
 
-def _confirmed_divisor(source_id: str, repository: AirRateStructureReviewRepository) -> Decimal:
-    review = repository.find_by_source(source_id)
+def _confirmed_divisor(table_review, repository: AirRateStructureReviewRepository) -> Decimal:
+    review = repository.find_by_source(table_review.source_id)
     if review is None or review.status != "completed":
         raise AirFreightCalculationPreviewError("air_rate_structure_review_must_be_completed")
+    if review.review_id != table_review.structure_review_id:
+        raise AirFreightCalculationPreviewError("air_rate_structure_review_identity_mismatch")
+    if review.source_sha256 != table_review.source_sha256:
+        raise AirFreightCalculationPreviewError("air_rate_structure_review_source_mismatch")
+    if review.extracted_text_sha256 != table_review.extracted_text_sha256:
+        raise AirFreightCalculationPreviewError("air_rate_structure_review_text_mismatch")
     values = {
         item.value for item in review.candidates
         if item.kind == "volumetric_divisor" and item.status == "confirmed"
@@ -111,7 +117,7 @@ def build_air_freight_calculation_preview(
     divisor = None
     if total_volume_cm3 is not None:
         volume = _positive_decimal(total_volume_cm3, label="total volume")
-        divisor = _confirmed_divisor(review.source_id, structure_repository)
+        divisor = _confirmed_divisor(review, structure_repository)
         volumetric = volume / divisor
         volumetric_source = "confirmed_divisor_from_total_volume"
     else:

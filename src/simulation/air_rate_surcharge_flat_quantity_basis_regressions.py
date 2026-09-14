@@ -43,7 +43,7 @@ def _flat_review(*, review_id: str = "flat-quantity-review-001", candidate_id: s
     return AirRateSurchargeReview(
         review_id=review_id,
         source_id="source-0001",
-        source_sha256="9" * 64,
+        source_sha256="a" * 64,
         structure_review_id="structure-review-0001",
         extracted_text_sha256="b" * 64,
         candidates=[candidate],
@@ -105,7 +105,7 @@ def evaluate_air_rate_surcharge_flat_quantity_basis_regressions() -> dict:
     perkg_review = AirRateSurchargeReview(
         review_id="flat-quantity-perkg-review",
         source_id="source-0001",
-        source_sha256="9" * 64,
+        source_sha256="a" * 64,
         structure_review_id="structure-review-0001",
         extracted_text_sha256="b" * 64,
         candidates=[_candidate("flat-quantity-perkg", "FSC", "0.50")],
@@ -141,7 +141,7 @@ def evaluate_air_rate_surcharge_flat_quantity_basis_regressions() -> dict:
     incomplete_review = AirRateSurchargeReview(
         review_id="flat-quantity-incomplete-review",
         source_id="source-0001",
-        source_sha256="9" * 64,
+        source_sha256="a" * 64,
         structure_review_id="structure-review-0001",
         extracted_text_sha256="b" * 64,
         candidates=[incomplete_candidate],

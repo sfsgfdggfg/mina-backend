@@ -75,7 +75,7 @@ def evaluate_air_rate_validity_review_regressions() -> dict:
     check(
         review.valid_from == date(2026, 9, 1)
         and review.valid_to == date(2026, 9, 30)
-        and review.source_sha256 == "9" * 64
+        and review.source_sha256 == "a" * 64
         and review.runtime_authoritative is False,
         "human tariff-validity review stores source-bound date evidence without runtime authority",
     )
