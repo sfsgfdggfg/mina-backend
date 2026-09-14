@@ -21,6 +21,7 @@ from src.core.attachment_interpretation_review_service import (
 from src.core.attachment_safe_interpretation import AttachmentInterpretationResult
 from src.core.extraction_confirmation_repository import InMemoryExtractionProposalRepository
 from src.core.pilot_store import SQLitePilotStore
+from src.core.privacy import PRIVACY_TRANSFORM_VERSION
 from src.core.sqlite_repositories import SQLiteAttachmentInterpretationReviewRepository
 from src.core.supplier_response_ingestion import SupplierResponseExtraction
 from src.simulation.outlook_inbound_router_regressions import (
@@ -47,7 +48,7 @@ def _customer_interpretation():
         status="interpreted", reason_code="attachment_customer_interpretation_proposed",
         route="customer", parser_called=True, source_attachment_count=1,
         source_character_count=250, source_table_count=0,
-        privacy_transform_version="p1.28-v3", source_profiles=["pdf"],
+        privacy_transform_version=PRIVACY_TRANSFORM_VERSION, source_profiles=["pdf"],
         customer_proposal=_shipment(),
     )
 
@@ -57,7 +58,7 @@ def _supplier_interpretation(cost=2200.0):
         status="interpreted", reason_code="attachment_supplier_interpretation_proposed",
         route="supplier", parser_called=True, source_attachment_count=1,
         source_character_count=120, source_table_count=0,
-        privacy_transform_version="p1.28-v3", source_profiles=["pdf"],
+        privacy_transform_version=PRIVACY_TRANSFORM_VERSION, source_profiles=["pdf"],
         supplier_extraction=SupplierResponseExtraction(
             status="quoted", cost=cost, currency="EUR", transit_time="4 days"
         ),

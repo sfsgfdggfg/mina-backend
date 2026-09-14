@@ -7,6 +7,7 @@ from src.core.attachment_interpretation_review_repository import (
 )
 from src.core.attachment_safe_interpretation import AttachmentInterpretationResult
 from src.core.extraction_confirmation_repository import InMemoryExtractionProposalRepository
+from src.core.privacy import PRIVACY_TRANSFORM_VERSION
 from src.core.supplier_response_ingestion import SupplierResponseExtraction
 from src.simulation.outlook_attachment_route_extraction_regressions import _ExtractingRetriever, _manifest
 from src.simulation.outlook_inbound_router_regressions import (
@@ -40,14 +41,14 @@ def evaluate_outlook_attachment_review_gate_regressions():
             return AttachmentInterpretationResult(
                 status="interpreted",reason_code="attachment_customer_interpretation_proposed",
                 route="customer",parser_called=True,source_attachment_count=1,
-                source_character_count=55,source_table_count=0,privacy_transform_version="p1.28-v3",
+                source_character_count=55,source_table_count=0,privacy_transform_version=PRIVACY_TRANSFORM_VERSION,
                 source_profiles=["pdf"],customer_proposal=proposal,
             )
         extraction=kwargs["supplier_parser"].parse("safe")
         return AttachmentInterpretationResult(
             status="interpreted",reason_code="attachment_supplier_interpretation_proposed",
             route="supplier",parser_called=True,source_attachment_count=1,
-            source_character_count=55,source_table_count=0,privacy_transform_version="p1.28-v3",
+            source_character_count=55,source_table_count=0,privacy_transform_version=PRIVACY_TRANSFORM_VERSION,
             source_profiles=["pdf"],supplier_extraction=extraction,
         )
 

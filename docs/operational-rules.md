@@ -4422,3 +4422,11 @@ Before consuming a commercial-air tariff calculation, require the confirmed tabl
 Treat identifiers as provenance, not permission to charge twice. If two selected local-cost evidence records have the same category, provider, amount, currency, quantity basis and evidence reference, reject the calculation as an exact semantic duplicate even when their evidence IDs differ. If two applicable surcharge candidates have the same code, amount, currency, unit/application basis and applicability/cargo/routing/flat-quantity semantics, reject them as an exact semantic duplicate even when candidate IDs differ.
 
 The end-to-end air pilot gate must also prove that stale tariff dates, customer-master mismatch, cross-inquiry commercial evidence and post-approval air-context tampering fail closed without creating or handing off an invalid QuoteCase. Only separate inquiry-bound outcomes may contribute independent samples to air route learning. Passing P2-45 does not authorize airline booking, airline outbound contact, portal execution or autonomous use of confirmed `air.*` advisory facts.
+
+## RULE-282 — Do Not Lose Current Freight Facts at Forward or Signature Boundaries
+
+When the first meaningful line of an inbound message is a recognized forwarded/original-message boundary, treat that block as the current payload rather than deleting it as quoted history. Remove forwarding transport headers and personal contact material, retain the minimized subject when present, and preserve the freight-operational body. Continue stripping any nested quoted history inside that payload.
+
+A sign-off marker may truncate a normal personal signature tail, but it must not erase a later high-confidence freight addendum. If structured operational evidence such as weight, package count/dimensions, ISO operational date, explicitly labelled pickup/loading/delivery/commodity/equipment/ADR/temperature data, or controlled freight-equipment terminology restarts after the sign-off, discard only the sign-off and intervening personal signature lines and retain that operational suffix.
+
+Any privacy-transform semantic change requires a new transform version. Replay receipts and readiness evidence bound to an older privacy version are stale and must not be reused for controlled-pilot GO.

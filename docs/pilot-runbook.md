@@ -1756,3 +1756,11 @@ Run the P2-45 gate after P2-39 through P2-44 are green. The rehearsal starts fro
 The gate must fail closed for stale tariff validity, Customer Master mismatch, cross-inquiry local-cost reuse, immutable source/review SHA drift, exact semantic duplicate local costs, exact semantic duplicate applicable surcharges and frozen air-context divergence after approval. A failed scenario must not be repaired by implicit latest/nearest evidence selection and must not create a durable quote or operation handoff when the corresponding authority gate has not passed.
 
 The successful rehearsal uses separate inquiry/job evidence until the air route-learning minimum sample counts are reached and confirms that the resulting `air.*` facts remain advisory and non-runtime-authoritative. This P2-45 gate validates the bounded commercial-air learning/quote-preparation core only. It is not evidence of live airline booking, portal/API integration, airline outbound execution or real-time schedule connectivity.
+
+## Pilot Privacy Forward / Signature Hardening (`p1.28-v4`)
+
+Before generating the next authorized sanitized replay receipt, confirm the runtime reports privacy transform `p1.28-v4`. Forward-only customer or supplier messages may legitimately contain the active shipment request inside a leading **Forwarded/Original Message** block; MINAI now removes the forwarding headers and personal contact data while preserving the freight payload. A normal current-message body followed by a forwarded historical thread continues to drop the historical thread.
+
+If a sender signs off and then adds freight information, the transform preserves the later high-confidence operational addendum while removing the sign-off and intervening personal signature block. Treat any unexpected loss of weight, package/dimension, operational date, ADR/temperature, equipment or labelled pickup/loading/delivery facts as a privacy-boundary regression and stop the replay.
+
+Because v4 changes what content is preserved, any authorized replay receipt or readiness evidence produced under `p1.28-v3` or earlier is stale for this build. Run the authorized sanitized replay again on the approved external dataset, then build fresh readiness evidence before evaluating REAL SHADOW PILOT GO. Do not manually edit an older receipt/evidence file to change its privacy-transform version.
