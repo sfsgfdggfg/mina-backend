@@ -1007,3 +1007,9 @@ The semantic contract is always `1 base_currency = rate quote_currency`. No inve
 P2-32 adds no persistence namespace. `inquiry_reference`, `fx_evidence_ids` and timezone-aware `fx_reference_at` are ephemeral reviewed-surcharge preview inputs only. The preview may read existing durable `air_fx_rate_evidence` records but never mutates them or writes converted values back to persistence.
 
 For every converted surcharge component, the response preserves source currency/rate-or-unit amount/source cost plus the selected FX evidence id, rate and effective timestamp. The converted value is expressed only in the freight currency for that preview. No inverse FX record, nearest/latest selection, derived reciprocal, customer selling price or general pricing FX state is persisted.
+
+### P2-33 Commercial-Air Operational Readiness Preview
+
+P2-33 adds no persistence namespace. The preview reads existing reviewed tariff/cost evidence, tariff-validity evidence, optional explicitly selected FX evidence and durable `air_service_availability_confirmations`, then returns an ephemeral readiness projection.
+
+The projection stores nothing back to persistence. `operational_evidence_complete` is computed only from the explicit service-date tariff validity plus exact-context capacity and schedule evidence. Customer quote readiness, booking readiness, outbound authority and runtime authority remain false and are not persisted or inferred.

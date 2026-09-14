@@ -1653,3 +1653,11 @@ In **Reviewed Surcharge Cost Preview**, leave FX evidence unselected unless the 
 If no FX evidence is selected, cross-currency surcharges remain excluded as `currency_mismatch_no_fx`. Do not expect MINAI to choose the latest/nearest rate or invert a reverse pair. A selected evidence record that does not match source SHA, inquiry, direction or timestamp must stop the preview.
 
 Read converted values as partial reference cost only. The UI also preserves source-currency amounts and identifies the FX evidence used. P2-32 does not create customer selling price, margin, quote/send, booking, capacity/schedule or outbound authority.
+
+## Commercial-Air Operational Readiness Preview (P2-33)
+
+After tariff row, surcharge, validity and shipment-specific capacity/schedule evidence have been reviewed, use **Operational Readiness Preview** on the confirmed tariff row. Enter the same inquiry reference used for the availability confirmation and the intended service date. Routing/via context must match the stored availability evidence exactly. If the cost requires cross-currency conversion, explicitly select the matching P2-32 FX evidence and its exact reference timestamp.
+
+Read `Operational evidence COMPLETE` only as confirmation that the tariff is valid for the service date and matching capacity/schedule evidence is positive. Missing availability appears as `availability_evidence_missing`; negative capacity and unconfirmed schedule remain visible blockers. Conflicting exact-context confirmations stop the preview instead of choosing the latest record.
+
+The displayed cost is still a partial reviewed reference cost. P2-33 does not make the customer quote ready, does not add margin, does not approve/send a quote and does not create booking authority or outbound execution authority.
