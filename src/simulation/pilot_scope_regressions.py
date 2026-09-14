@@ -282,6 +282,18 @@ def evaluate_pilot_scope_regressions() -> dict:
                 ).model_dump()
             ]
         ),
+        "overlength": _road_shipment(
+            packages=[
+                Package(
+                    package_type="machine",
+                    quantity=1,
+                    length_cm=1361,
+                    width_cm=80,
+                    height_cm=150,
+                    weight_kg=5000,
+                ).model_dump()
+            ]
+        ),
         "project": _road_shipment(
             special_notes="Project cargo / lowbed operation",
         ),
@@ -290,6 +302,54 @@ def evaluate_pilot_scope_regressions() -> dict:
     }
     for name, shipment in excluded_cases.items():
         _assert_excluded(failures, name, shipment)
+
+    overlength_shipment = _road_shipment(
+        packages=[
+            Package(
+                package_type="machine", quantity=1, length_cm=1361,
+                width_cm=80, height_cm=150, weight_kg=5000,
+            )
+        ]
+    )
+    overlength_scope = evaluate_pilot_scope(
+        overlength_shipment,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if overlength_scope.eligible or not any(
+        "13.60" in reason for reason in overlength_scope.reasons
+    ):
+        failures.append("overlength cargo did not fail closed at the 13.60m pilot boundary")
+
+    overlength_equipment = decide_equipment(overlength_shipment)
+    if overlength_equipment.selected_equipment != "Lowbed / Project Cargo":
+        failures.append("overlength cargo did not trigger project-cargo equipment")
+
+    overlength_risk = assess_risk(overlength_shipment)
+    if (
+        overlength_risk.risk_level != "yellow"
+        or not overlength_risk.requires_human_review
+        or not any("13.60" in reason for reason in overlength_risk.risk_reasons)
+    ):
+        failures.append("overlength cargo did not trigger operational human review")
+
+    length_boundary_shipment = _road_shipment(
+        packages=[
+            Package(
+                package_type="machine", quantity=1, length_cm=1360,
+                width_cm=80, height_cm=150, weight_kg=5000,
+            )
+        ]
+    )
+    length_boundary_scope = evaluate_pilot_scope(
+        length_boundary_shipment,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if not length_boundary_scope.eligible:
+        failures.append("exact 13.60m cargo was incorrectly treated as overlength")
+    if decide_equipment(length_boundary_shipment).selected_equipment != "Tenteli / Curtainsider":
+        failures.append("exact 13.60m cargo was incorrectly forced into project equipment")
+    if assess_risk(length_boundary_shipment).risk_level != "green":
+        failures.append("exact 13.60m cargo was incorrectly marked risky from length alone")
 
     eligible = evaluate_pilot_scope(
         _road_shipment(),

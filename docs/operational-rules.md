@@ -4430,3 +4430,11 @@ When the first meaningful line of an inbound message is a recognized forwarded/o
 A sign-off marker may truncate a normal personal signature tail, but it must not erase a later high-confidence freight addendum. If structured operational evidence such as weight, package count/dimensions, ISO operational date, explicitly labelled pickup/loading/delivery/commodity/equipment/ADR/temperature data, or controlled freight-equipment terminology restarts after the sign-off, discard only the sign-off and intervening personal signature lines and retain that operational suffix.
 
 Any privacy-transform semantic change requires a new transform version. Replay receipts and readiness evidence bound to an older privacy version are stale and must not be reused for controlled-pilot GO.
+
+## RULE-283 — A Package Longer Than 13.60 m Is Not Standard-Trailer Pilot Cargo
+
+Use the shared Road Freight v1 standard trailer length of 13.60 m as an explicit dimension guard. Any package with `length_cm > 1360` must be treated as overlength/project cargo for equipment selection and risk assessment and must fail closed from the simple controlled road pilot. Do not require width or height to also exceed their limits before applying the overlength rule.
+
+The exact boundary `length_cm = 1360` is not overlength by itself. Existing width, height, heavy-piece, special-equipment, commodity, ADR, temperature and other operational rules remain separate and may still block or redirect the shipment.
+
+Authorized sanitized replay must derive `is_oversize_or_project=true` from the same shared road-dimension rule so replay evidence cannot disagree with live pilot-scope behavior.

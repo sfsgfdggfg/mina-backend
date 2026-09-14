@@ -13,6 +13,11 @@ from src.core.commodity_profile import (
 )
 from src.core.models import Shipment
 from src.core.pilot_access import pilot_mode_enabled
+from src.core.road_dimensions import (
+    is_overlength,
+    is_overwidth,
+    is_project_height,
+)
 
 
 PILOT_SCOPE_EXCLUDED = "pilot_scope_excluded"
@@ -146,9 +151,11 @@ def evaluate_pilot_scope(
         _append_reason(reasons, "Chemical cargo is excluded from the shadow pilot.")
 
     for package in shipment.packages:
-        if package.width_cm is not None and package.width_cm > 250:
+        if is_overlength(package):
+            _append_reason(reasons, "Oversize cargo length exceeds the standard 13.60 m trailer profile.")
+        if is_overwidth(package):
             _append_reason(reasons, "Oversize cargo width exceeds 250 cm.")
-        if package.height_cm is not None and package.height_cm > 300:
+        if is_project_height(package):
             _append_reason(reasons, "Oversize cargo height exceeds 300 cm.")
 
     cargo_weight = assess_cargo_weight(shipment)

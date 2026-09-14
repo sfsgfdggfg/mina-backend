@@ -7490,3 +7490,14 @@ The controlled-pilot privacy transform must distinguish quoted historical mail f
 A recognized sign-off marker must not silently discard a later freight-operational addendum. If high-confidence structured freight evidence restarts after the sign-off, MINAI removes the sign-off and intervening personal signature lines but preserves the operational suffix. Normal signatures without a later operational suffix continue to be truncated.
 
 This behavior changes the privacy transform contract from `p1.28-v3` to `p1.28-v4`. Authorized replay receipts and readiness evidence generated under an earlier privacy transform cannot authorize the new pilot build; the sanitized historical replay and readiness-evidence chain must be regenerated against v4.
+
+## DEC-266 — Standard Road Trailer Length Is a Pilot-Scope Safety Boundary, Not Mere Reference Metadata
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+The existing Road Freight v1 standard trailer profile defines a 13.60 m trailer length. That dimension is now an executable safety boundary wherever MINAI decides whether a road shipment is ordinary standard-trailer work. A package with explicit length greater than 13.60 m cannot silently remain a Tenteli/Curtainsider candidate merely because its width and height are within normal limits.
+
+Road equipment selection, operational risk, controlled-pilot scope eligibility and authorized sanitized-replay oversize truth must use the same shared dimension rule. `length_cm > 1360` requires project/lowbed handling, creates a human-review risk signal and is excluded from the simple controlled road pilot. Exactly `1360 cm` is not overlength by this rule and must not be excluded solely because of length.
+
+This change does not claim that every load at or below 13.60 m is automatically operationally feasible; other dimensions, weight, equipment, commodity and regulatory rules still apply independently. The purpose is to prevent a known fail-open where a clearly overlength single piece could be classified as ordinary pilot cargo.
