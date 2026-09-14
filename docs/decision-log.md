@@ -7455,3 +7455,14 @@ P2-43 introduces a bounded durable handoff between the accepted commercial-air q
 The handoff freezes the full P2-42 air quote context together with all current-revision sent evidence and the customer-acceptance actor/time. It then moves the MINA job from `accepted` to `operation_opened` in the same transaction and writes a dedicated timeline event. Repeating the handoff for the same job is idempotent; a second parallel handoff is not created.
 
 Air handoff is not airline booking. It does not call the road `operation_start` supplier-message flow, does not contact an airline, does not create a booking reference and grants no booking/outbound/runtime authority. Generic stage mutation may not bypass this gate: an air price-request job can enter `operation_opened` only when durable air-handoff evidence exists.
+
+## DEC-263 — Air Learning Must Come from Explicit Outcome/Correction Evidence and Remain Advisory After Human Review
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-44 closes the commercial-air learning feedback loop without turning observations into autonomous commercial authority. Air-specific learning starts only after the P2-43 accepted-quote operation handoff and records explicit immutable outcome/correction evidence: whether the quoted tariff was used, actual airline/routing, actual service/delivery dates, actual chargeable weight, actual cost/currency and bounded correction categories. Revisions never overwrite the old record; a new `entry_id` must explicitly supersede the current feedback, and aggregation uses only the one current unsuperseded record per MINA job.
+
+Route learning is grouped only by exact origin airport, destination airport, quoted airline and quoted routing context, including via airport for connecting service. A single shipment cannot become a learned rule. Cost-basis and chargeable-weight variance require at least three eligible current outcomes; route/tariff-use and delivery-rate observations require at least five. Actual costs in a currency different from the frozen confirmed cost basis are excluded from cost-variance aggregation unless a later explicit normalization contract exists; P2-44 never auto-selects, inverts or approximates FX.
+
+Derived route facts use the existing LearningFact review lifecycle and begin as `proposed`. Human confirmation makes them reviewed historical evidence but does not make `air.*` route facts runtime-authoritative. Confirmed air route facts remain advisory-only and are not consumed by customer pricing, tariff-row selection, routing, booking, outbound delivery or execution. Generic customer quote acceptance learning remains the authority for observational accepted/lost quote metrics; P2-44 does not duplicate those customer facts.

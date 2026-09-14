@@ -9,6 +9,8 @@ from src.core.automation_policy_service import resolve_effective_automation_poli
 from src.core.master_data_repository import MasterDataRepository
 from src.core.operation_execution_repository import OperationExecutionRepository
 from src.core.air_operation_handoff_repository import AirOperationHandoffRepository
+from src.core.air_learning_feedback_repository import AirLearningFeedbackRepository
+from src.core.air_learning_service import build_air_learning_feedback_view
 from src.core.operation_start_repository import OperationStartMessageRepository
 from src.core.operation_start_service import build_operation_start_view
 from src.core.operation_execution_service import build_operation_execution_view
@@ -70,6 +72,7 @@ def build_mina_job_detail(
     operation_execution_repository: OperationExecutionRepository | None = None,
     operation_start_message_repository: OperationStartMessageRepository | None = None,
     air_operation_handoff_repository: AirOperationHandoffRepository | None = None,
+    air_learning_feedback_repository: AirLearningFeedbackRepository | None = None,
     learning_fact_repository: LearningFactRepository | None = None,
     job_id: str,
     now: datetime | None = None,
@@ -263,6 +266,21 @@ def build_mina_job_detail(
         air_operation_handoff_repository.find_by_job(job.job_id)
         if air_operation_handoff_repository is not None else None
     )
+    air_learning = (
+        build_air_learning_feedback_view(
+            job_id=job.job_id,
+            feedback_repository=air_learning_feedback_repository,
+            learning_repository=learning_fact_repository,
+            handoff_repository=air_operation_handoff_repository,
+        )
+        if (
+            job.shipment.transport_mode == "air"
+            and air_learning_feedback_repository is not None
+            and learning_fact_repository is not None
+            and air_operation_handoff_repository is not None
+        )
+        else None
+    )
     learning = (
         build_learning_fact_view(
             repository=learning_fact_repository, subject_type="operation", subject_id=job.job_id,
@@ -309,6 +327,7 @@ def build_mina_job_detail(
             None if air_operation_handoff is None
             else air_operation_handoff.model_dump(mode="json")
         ),
+        "air_learning": air_learning,
         "learning": learning,
         "loss_feedback": loss_feedback,
         "customer_commercial_context": (

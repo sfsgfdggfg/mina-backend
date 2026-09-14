@@ -160,4 +160,9 @@ class LearningFact(BaseModel):
     @computed_field
     @property
     def runtime_authoritative(self) -> bool:
+        # P2-44 air-route facts remain advisory even after human confirmation.
+        # They may be surfaced as historical evidence but are not consumed as
+        # autonomous pricing/tariff/routing/booking authority.
+        if self.subject_type == "route" and self.fact_key.startswith("air."):
+            return False
         return self.status == "confirmed"
