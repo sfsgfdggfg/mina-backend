@@ -1685,3 +1685,11 @@ In **Reviewed Surcharge Cost Preview**, select an **Additional / Local Cost Evid
 For a local cost in another currency, also select the exact P2-32 FX evidence in the direction `local-cost currency -> freight currency` and enter that evidence's exact timezone-aware reference timestamp. Do not invert a reverse pair and do not use latest/nearest FX. Missing count, inquiry mismatch, source mismatch or missing matching FX must stop the preview.
 
 Read **Extended partial subtotal** as `base freight + reviewed airline surcharges + explicitly selected local costs`. It is not proof that all local costs were discovered. Unsupported `/kg`, percentage, minimum/tiered, customs duty/tax and other unmodelled costs may still exist, so the UI must continue to show **ALL-IN DEĞİL**. The same selected subtotal may be displayed inside Operational Readiness, but operational completeness still does not authorize a customer quote or airline booking.
+
+## Commercial-Air Cost Scope Requirements Review (P2-37)
+
+In **Ayarlar → Havayolu Listeleri**, use **Air Cost Scope Requirements Review** for the current inquiry before attempting any later all-in/completeness decision. Review all nine displayed local-cost areas one by one. Leave a category as **Unresolved** when responsibility or applicability is not evidenced; choose **Required** only when that cost area must be resolved for the quoted service, and **Not applicable** only when the current inquiry/service evidence supports that conclusion. Add a rationale for every category plus an overall review note.
+
+The form intentionally starts every category as Unresolved. A saved review may show `Scope classification COMPLETE` once every category is either required or not applicable, but that wording does **not** mean the cost is complete. Required categories still need separately captured and explicitly selected cost evidence where applicable, and unsupported variable/weight-based/percentage/tiered/duty/tax semantics remain outside P2-37.
+
+P2-37 does not change Reviewed Cost Preview or Operational Readiness totals. Do not treat a scope review as all-in confirmation, do not apply customer margin from it, and do not use it as quote/send, booking or outbound authority. Cost-evidence matching remains a later gate.

@@ -312,6 +312,15 @@ from src.core.air_additional_cost_evidence_service import (
     build_air_additional_cost_evidence_view,
     record_air_additional_cost_evidence,
 )
+from src.core.air_cost_scope_review_repository import (
+    SQLiteAirCostScopeReviewRepository,
+)
+from src.core.air_cost_scope_review_service import (
+    AirCostScopeReviewNotFoundError,
+    AirCostScopeReviewTransitionError,
+    build_air_cost_scope_review_view,
+    record_air_cost_scope_review,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -649,6 +658,7 @@ air_rate_validity_review_repository = SQLiteAirRateValidityReviewRepository(pilo
 air_rate_weight_rounding_review_repository = SQLiteAirRateWeightRoundingReviewRepository(pilot_store)
 air_fx_rate_evidence_repository = SQLiteAirFxRateEvidenceRepository(pilot_store)
 air_additional_cost_evidence_repository = SQLiteAirAdditionalCostEvidenceRepository(pilot_store)
+air_cost_scope_review_repository = SQLiteAirCostScopeReviewRepository(pilot_store)
 air_service_availability_repository = SQLiteAirServiceAvailabilityRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
@@ -1110,6 +1120,23 @@ class AirAdditionalCostEvidenceRequest(BaseModel):
     evidence_source: Literal["email", "phone", "whatsapp", "portal", "manual_document", "other"]
     evidence_reference: str = Field(min_length=1, max_length=500)
     evidence_note: str = Field(min_length=1, max_length=1200)
+
+
+class AirCostScopeRequirementRequest(BaseModel):
+    category: Literal[
+        "pickup", "origin_handling", "origin_terminal", "documentation",
+        "customs_service_fee", "destination_handling", "destination_terminal",
+        "delivery", "other",
+    ]
+    status: Literal["required", "not_applicable", "unresolved"]
+    rationale: str = Field(min_length=1, max_length=800)
+
+
+class AirCostScopeReviewRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    inquiry_reference: str = Field(min_length=1, max_length=300)
+    requirements: list[AirCostScopeRequirementRequest] = Field(min_length=9, max_length=9)
+    review_note: str = Field(min_length=1, max_length=1200)
 
 
 class AirServiceAvailabilityRequest(BaseModel):
@@ -2678,6 +2705,43 @@ def create_air_additional_cost_evidence(
         "cost_preview_consumption_enabled": False,
         "customer_quote_eligible": False,
         "duties_and_taxes_supported": False,
+    }
+
+
+@app.get("/air-cost-scope-reviews")
+def list_air_cost_scope_reviews():
+    return build_air_cost_scope_review_view(repository=air_cost_scope_review_repository)
+
+
+@app.post("/air-rate-sources/{source_id}/cost-scope-reviews")
+def create_air_cost_scope_review(
+    source_id: str, request: AirCostScopeReviewRequest, http_request: Request,
+):
+    try:
+        item, created = record_air_cost_scope_review(
+            source_id=source_id,
+            reviewed_by=_authenticated_operator(http_request),
+            source_repository=air_shadow_repository,
+            repository=air_cost_scope_review_repository,
+            requirements=[item.model_dump() for item in request.requirements],
+            **request.model_dump(exclude={"requirements"}),
+        )
+    except AirCostScopeReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirCostScopeReviewTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "review": item.model_dump(mode="json"),
+        "created": created,
+        "scope_classification_complete": item.scope_classification_complete,
+        "required_categories": item.required_categories,
+        "not_applicable_categories": item.not_applicable_categories,
+        "unresolved_categories": item.unresolved_categories,
+        "runtime_authoritative": False,
+        "pricing_authority_enabled": False,
+        "cost_completeness_authority_enabled": False,
+        "cost_preview_consumption_enabled": False,
+        "customer_quote_eligible": False,
     }
 
 
