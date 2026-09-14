@@ -7,7 +7,7 @@ from src.core.normalization import normalize_shipment
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.paths import data_path
 from src.core.models import Shipment, Package
-from src.core.gtip import interpret_gtip_from_email
+from src.core.gtip import interpret_gtip_from_email, is_gtip_commodity_conflict
 from src.core.commodity_profile import apply_commodity_profile_to_shipment
 from src.ai.extraction_models import (
     OpenAIShipmentExtraction,
@@ -165,46 +165,6 @@ def _apply_commodity_safety_overrides(shipment, email_text: str):
     return shipment
 
 
-GTIP_COMPATIBLE_COMMODITIES = {
-    "İçecek / Meşrubat": ["İçecek / Meşrubat", "Gıda"],
-    "Elektrik Transformatörü": [
-        "Elektrik Transformatörü",
-        "Elektrikli Makine / Ekipman",
-        "Makine",
-    ],
-    "Elektrikli Makine / Ekipman": [
-        "Elektrikli Makine / Ekipman",
-        "Elektrik Transformatörü",
-        "Makine",
-    ],
-    "Tekstil / Hazır Giyim": ["Tekstil / Hazır Giyim", "Tekstil"],
-    "Makine": ["Makine", "Elektrikli Makine / Ekipman"],
-}
-
-
-def _normalize_commodity_text(value: str | None) -> str:
-    if not value:
-        return ""
-
-    return (
-        str(value)
-        .strip()
-        .lower()
-        .replace("ı", "i")
-        .replace("İ", "i")
-        .replace("ü", "u")
-        .replace("Ü", "u")
-        .replace("ö", "o")
-        .replace("Ö", "o")
-        .replace("ğ", "g")
-        .replace("Ğ", "g")
-        .replace("ş", "s")
-        .replace("Ş", "s")
-        .replace("ç", "c")
-        .replace("Ç", "c")
-    )
-
-
 def _append_special_note(shipment, note: str):
     if not note:
         return shipment
@@ -231,43 +191,6 @@ def _append_special_note(shipment, note: str):
         shipment.special_notes = note
 
     return shipment
-def _is_gtip_commodity_conflict(email_commodity: str | None, gtip_commodity: str | None) -> bool:
-    if not email_commodity or not gtip_commodity:
-        return False
-
-    normalized_email_commodity = _normalize_commodity_text(email_commodity)
-    normalized_gtip_commodity = _normalize_commodity_text(gtip_commodity)
-
-    if normalized_email_commodity == normalized_gtip_commodity:
-        return False
-
-    compatible_values = GTIP_COMPATIBLE_COMMODITIES.get(gtip_commodity, [])
-    normalized_compatible_values = {
-        _normalize_commodity_text(value)
-        for value in compatible_values
-    }
-
-    if normalized_email_commodity in normalized_compatible_values:
-        return False
-
-    generic_values = {
-        "",
-        "urun",
-        "yuk",
-        "cargo",
-        "goods",
-        "gida",
-        "makine",
-        "unknown",
-        "unknown commodity",
-    }
-
-    if normalized_email_commodity in generic_values:
-        return False
-
-    return True
-
-
 def _apply_gtip_safety_overrides(shipment, email_text: str):
     """
     If the customer explicitly provides a GTIP / HS code, interpret it for
@@ -293,7 +216,7 @@ def _apply_gtip_safety_overrides(shipment, email_text: str):
         if commodity_group:
             email_commodity_before_gtip = shipment.commodity
 
-            if _is_gtip_commodity_conflict(email_commodity_before_gtip, commodity_group):
+            if is_gtip_commodity_conflict(email_commodity_before_gtip, commodity_group):
                 warning = (
                     "[GTIP CONSISTENCY WARNING] GTIP kodu ile ürün açıklaması "
                     "uyumsuz görünüyor. "

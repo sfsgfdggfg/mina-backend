@@ -10,6 +10,80 @@ from src.paths import data_path
 HS_COMMODITY_MAP_PATH = data_path("hs_commodity_map.json")
 
 
+GTIP_COMPATIBLE_COMMODITIES = {
+    "İçecek / Meşrubat": ["İçecek / Meşrubat", "Gıda"],
+    "Elektrik Transformatörü": [
+        "Elektrik Transformatörü",
+        "Elektrikli Makine / Ekipman",
+        "Makine",
+    ],
+    "Elektrikli Makine / Ekipman": [
+        "Elektrikli Makine / Ekipman",
+        "Elektrik Transformatörü",
+        "Makine",
+    ],
+    "Tekstil / Hazır Giyim": ["Tekstil / Hazır Giyim", "Tekstil"],
+    "Makine": ["Makine", "Elektrikli Makine / Ekipman"],
+}
+
+
+def _normalize_commodity_text(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return (
+        str(value).strip().lower()
+        .replace("ı", "i").replace("İ", "i")
+        .replace("ü", "u").replace("Ü", "u")
+        .replace("ö", "o").replace("Ö", "o")
+        .replace("ğ", "g").replace("Ğ", "g")
+        .replace("ş", "s").replace("Ş", "s")
+        .replace("ç", "c").replace("Ç", "c")
+    )
+
+
+def is_gtip_commodity_conflict(
+    commodity: Optional[str],
+    gtip_commodity: Optional[str],
+) -> bool:
+    """Return whether current commodity truth conflicts with mapped customer GTIP."""
+    if not commodity or not gtip_commodity:
+        return False
+    normalized_commodity = _normalize_commodity_text(commodity)
+    normalized_gtip = _normalize_commodity_text(gtip_commodity)
+    if normalized_commodity == normalized_gtip:
+        return False
+    compatible = {
+        _normalize_commodity_text(value)
+        for value in GTIP_COMPATIBLE_COMMODITIES.get(gtip_commodity, [])
+    }
+    if normalized_commodity in compatible:
+        return False
+    if normalized_commodity in {
+        "", "urun", "yuk", "cargo", "goods", "gida", "makine",
+        "unknown", "unknown commodity",
+    }:
+        return False
+    return True
+
+
+def assess_gtip_commodity_consistency(
+    gtip_code: Optional[str],
+    commodity: Optional[str],
+) -> Dict[str, Any]:
+    """Recompute GTIP/commodity consistency from current confirmed facts."""
+    match = map_gtip_to_commodity(gtip_code)
+    gtip_commodity = (
+        match.get("commodity_group")
+        if isinstance(match, dict)
+        else None
+    )
+    return {
+        "conflict": is_gtip_commodity_conflict(commodity, gtip_commodity),
+        "gtip_commodity": gtip_commodity,
+        "matched_hs_key": (match or {}).get("matched_hs_key"),
+    }
+
+
 def normalize_gtip_code(raw_code: Optional[str]) -> Optional[str]:
     """
     Normalize GTIP / HS codes by keeping only digits.
