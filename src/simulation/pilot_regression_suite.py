@@ -12,6 +12,7 @@ from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
 from src.simulation.pricing_policy_fixture import SYNTHETIC_AGENCY_PRICING_POLICY_JSON
 from src.simulation.attachment_intake_policy_regressions import evaluate_attachment_intake_policy_regressions
 from src.simulation.business_hours_automation_regressions import evaluate_business_hours_automation_regressions
+from src.simulation.canonical_commercial_fixture_isolation_regressions import evaluate_canonical_commercial_fixture_isolation_regressions
 from src.simulation.atomic_transition_regressions import evaluate_atomic_transition_regressions
 from src.simulation.clarification_resolution_regressions import evaluate_clarification_resolution_regressions
 from src.simulation.customer_identity_trust_regressions import evaluate_customer_identity_trust_regressions
@@ -375,6 +376,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Commercial-air freight calculation preview", evaluate_air_freight_calculation_preview_regressions),
     Suite("Runtime authority cutover and source-neutral quote journey", evaluate_runtime_authority_cutover_regressions),
     Suite("Human operational flow", evaluate_human_operational_flow_regressions),
+    Suite("Canonical commercial fixture isolation", evaluate_canonical_commercial_fixture_isolation_regressions),
     Suite("Pricing policy resolution", evaluate_pricing_policy_regressions),
     Suite(
         "Road RFQ commercial safety",
