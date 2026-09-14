@@ -168,6 +168,83 @@ def evaluate_privacy_boundary_regressions() -> dict:
             "current Turkish Gmail reply was lost while stripping history"
         )
 
+    forwarded_only = prepare_privacy_safe_text(
+        "---------- Forwarded message ---------\n"
+        "From: customer.person@example.com\n"
+        "Sent: Sunday\n"
+        "To: ops@example.com\n"
+        "Subject: Adana-Munich air shipment\n"
+        "20 pallets, 18000 kg, ready 2026-09-16.\n"
+        "Contact: +49 40 1234 5678"
+    )
+    forwarded_only_safe = str(forwarded_only.safe_text)
+    for operational_value in (
+        "Adana-Munich air shipment",
+        "20 pallets",
+        "18000 kg",
+        "2026-09-16",
+    ):
+        if operational_value not in forwarded_only_safe:
+            failures.append(
+                "forward-only operational value was lost: "
+                + operational_value
+            )
+    if (
+        "customer.person@example.com" in forwarded_only_safe
+        or "+49 40 1234 5678" in forwarded_only_safe
+        or "From:" in forwarded_only_safe
+        or "To:" in forwarded_only_safe
+    ):
+        failures.append(
+            "forward-only transport/contact metadata survived privacy minimization"
+        )
+
+    turkish_forwarded_only = prepare_privacy_safe_text(
+        "-----İletilen ileti-----\n"
+        "Kimden: musteri@example.com\n"
+        "Gönderilme tarihi: Pazar\n"
+        "Kime: operasyon@example.com\n"
+        "Konu: Adana Münih yeni yük\n"
+        "20 palet, 18000 kg, hazır 2026-09-16."
+    )
+    turkish_forwarded_safe = str(turkish_forwarded_only.safe_text)
+    if (
+        "20 palet" not in turkish_forwarded_safe
+        or "18000 kg" not in turkish_forwarded_safe
+        or "2026-09-16" not in turkish_forwarded_safe
+        or "musteri@example.com" in turkish_forwarded_safe
+    ):
+        failures.append(
+            "Turkish forward-only mail did not preserve safe operational payload"
+        )
+
+    signoff_addendum = prepare_privacy_safe_text(
+        "Merhaba,\n"
+        "Adana'dan Münih'e fiyat rica ederiz.\n\n"
+        "Saygılarımla\n"
+        "Ali Veli\n"
+        "Satış Müdürü\n"
+        "ali.veli@example.com\n"
+        "+90 532 123 45 67\n\n"
+        "Ek bilgi: 20 palet, 18000 kg, yükleme 2026-09-16."
+    )
+    signoff_addendum_safe = str(signoff_addendum.safe_text)
+    for operational_value in ("20 palet", "18000 kg", "2026-09-16"):
+        if operational_value not in signoff_addendum_safe:
+            failures.append(
+                "post-signature operational addendum was lost: "
+                + operational_value
+            )
+    if (
+        "Ali Veli" in signoff_addendum_safe
+        or "Satış Müdürü" in signoff_addendum_safe
+        or "ali.veli@example.com" in signoff_addendum_safe
+        or "+90 532 123 45 67" in signoff_addendum_safe
+    ):
+        failures.append(
+            "personal signature data survived while preserving post-signature addendum"
+        )
+
     try:
         PrivacySafeText(
             raw_body,

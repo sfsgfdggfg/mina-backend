@@ -7479,3 +7479,14 @@ All commercial tariff calculation evidence must remain on one immutable artifact
 P2-45 also closes exact semantic double-count risk. Different IDs do not authorize charging the same exact applicable surcharge semantic or the same exact local-cost evidence semantic twice. Exact duplicates fail closed; distinct commercial charges remain separately consumable when their evidence semantics actually differ.
 
 The hardening gate additionally requires customer identity isolation, tariff-validity enforcement, inquiry isolation, frozen approval-context integrity and preserved no-booking/no-outbound authority. Passing this gate completes the bounded air-learning and quote-preparation core; automated airline booking, airline portal/API execution and live schedule integration remain separate future scope.
+
+## DEC-265 — Pilot Privacy Transform Must Preserve Forward-Only Freight Payloads and Post-Signature Operational Addenda
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+The controlled-pilot privacy transform must distinguish quoted historical mail from a message whose current operator-visible content consists only of a forwarded/original block. When a forwarded/original boundary is the first meaningful line, MINAI removes the forwarding transport headers (`From/Kimden`, `Sent/Gönderilme tarihi`, `To/Kime`, `Cc/Bilgi`) while retaining the minimized subject and freight-operational payload. Nested historical quote boundaries are still removed normally, and personal email, phone and IBAN redaction still applies before any parser or persistence boundary.
+
+A recognized sign-off marker must not silently discard a later freight-operational addendum. If high-confidence structured freight evidence restarts after the sign-off, MINAI removes the sign-off and intervening personal signature lines but preserves the operational suffix. Normal signatures without a later operational suffix continue to be truncated.
+
+This behavior changes the privacy transform contract from `p1.28-v3` to `p1.28-v4`. Authorized replay receipts and readiness evidence generated under an earlier privacy transform cannot authorize the new pilot build; the sanitized historical replay and readiness-evidence chain must be regenerated against v4.

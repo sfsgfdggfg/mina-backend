@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from src.core.mail import InboundMailEnvelope
 
 
-PRIVACY_TRANSFORM_VERSION = "p1.28-v3"
+PRIVACY_TRANSFORM_VERSION = "p1.28-v4"
 
 _EMAIL_RE = re.compile(
     r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"
@@ -81,8 +81,76 @@ def fingerprint_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _message_boundary_marker(line: str) -> str | None:
+    normalized = (
+        line.strip().lower().replace("\u0307", "")
+        .strip("- \t").rstrip(":").strip()
+    )
+    if normalized in {
+        "original message",
+        "orijinal ileti",
+        "forwarded message",
+        "iletilen ileti",
+        "begin forwarded message",
+    }:
+        return normalized
+    return None
+
+
+def _leading_forwarded_payload(lines: list[str]) -> str | None:
+    first = 0
+    while first < len(lines) and not lines[first].strip():
+        first += 1
+    if first >= len(lines) or _message_boundary_marker(lines[first]) is None:
+        return None
+
+    header_prefixes = (
+        "from:", "sent:", "date:", "to:", "cc:", "subject:",
+        "kimden:", "gönderilme tarihi:", "gonderilme tarihi:",
+        "kime:", "bilgi:", "konu:",
+    )
+    subject_prefixes = ("subject:", "konu:")
+    subject_value: str | None = None
+    index = first + 1
+    saw_header = False
+
+    while index < len(lines):
+        stripped = lines[index].strip()
+        normalized = stripped.lower()
+        if not stripped:
+            if saw_header:
+                index += 1
+                while index < len(lines) and not lines[index].strip():
+                    index += 1
+                break
+            index += 1
+            continue
+        matched = next((prefix for prefix in header_prefixes if normalized.startswith(prefix)), None)
+        if matched is None:
+            break
+        saw_header = True
+        if matched in subject_prefixes:
+            candidate = stripped[len(matched):].strip()
+            if candidate:
+                subject_value = candidate
+        index += 1
+
+    payload_lines: list[str] = []
+    if subject_value:
+        payload_lines.append(subject_value)
+    payload_lines.extend(lines[index:])
+    payload = "\n".join(payload_lines).strip()
+    return payload or None
+
+
 def _strip_quoted_reply(text: str) -> str:
     lines = text.splitlines()
+    leading_payload = _leading_forwarded_payload(lines)
+    if leading_payload is not None:
+        # A message that consists only of a forwarded/original block is the
+        # current operator-visible payload. Drop transport headers but retain
+        # its freight content, then remove any nested historical thread.
+        return _strip_quoted_reply(leading_payload)
 
     for index, line in enumerate(lines):
         normalized = line.strip().lower()
@@ -90,83 +158,60 @@ def _strip_quoted_reply(text: str) -> str:
         if index == 0:
             continue
 
-        if normalized in {
-            "-----original message-----",
-            "-----orijinal ileti-----",
-            "-----forwarded message-----",
-            "-----iletilen ileti-----",
-        }:
-            return "\n".join(
-                lines[:index]
-            ).rstrip()
+        if _message_boundary_marker(line) is not None:
+            return "\n".join(lines[:index]).rstrip()
 
         if (
             normalized.startswith("on ")
             and normalized.endswith(" wrote:")
         ):
-            return "\n".join(
-                lines[:index]
-            ).rstrip()
+            return "\n".join(lines[:index]).rstrip()
 
         if (
             normalized.endswith(" tarihinde şunu yazdı:")
             and _EMAIL_RE.search(line)
         ):
-            return "\n".join(
-                lines[:index]
-            ).rstrip()
+            return "\n".join(lines[:index]).rstrip()
 
         remaining = [
             item.strip().lower()
-            for item in lines[
-                index : index + 5
-            ]
+            for item in lines[index : index + 5]
         ]
 
         if normalized.startswith("from:"):
             if (
-                any(
-                    item.startswith("sent:")
-                    for item in remaining
-                )
-                and any(
-                    item.startswith("to:")
-                    for item in remaining
-                )
-                and any(
-                    item.startswith("subject:")
-                    for item in remaining
-                )
+                any(item.startswith("sent:") for item in remaining)
+                and any(item.startswith("to:") for item in remaining)
+                and any(item.startswith("subject:") for item in remaining)
             ):
-                return "\n".join(
-                    lines[:index]
-                ).rstrip()
+                return "\n".join(lines[:index]).rstrip()
 
         if normalized.startswith("kimden:"):
             if (
                 any(
-                    item.startswith(
-                        "gönderilme tarihi:"
-                    )
-                    or item.startswith(
-                        "gonderilme tarihi:"
-                    )
+                    item.startswith("gönderilme tarihi:")
+                    or item.startswith("gonderilme tarihi:")
                     for item in remaining
                 )
-                and any(
-                    item.startswith("kime:")
-                    for item in remaining
-                )
-                and any(
-                    item.startswith("konu:")
-                    for item in remaining
-                )
+                and any(item.startswith("kime:") for item in remaining)
+                and any(item.startswith("konu:") for item in remaining)
             ):
-                return "\n".join(
-                    lines[:index]
-                ).rstrip()
+                return "\n".join(lines[:index]).rstrip()
 
     return text
+
+
+_OPERATIONAL_SUFFIX_RE = re.compile(
+    r"(?ix)"
+    r"(?:\b\d+(?:[.,]\d+)?\s*(?:kg|kgs?|ton|tons?|tonne|tonnes|t)\b)"
+    r"|(?:\b\d+\s*(?:palet|pallets?|koli|pcs?|pieces?)\b)"
+    r"|(?:\b\d+(?:[.,]\d+)?\s*(?:cm|cbm|m3|m³)\b)"
+    r"|(?:\b\d+(?:[.,]\d+)?\s*[x×]\s*\d+(?:[.,]\d+)?)"
+    r"|(?:\b20\d{2}-\d{2}-\d{2}\b)"
+    r"|(?:\b(?:pickup|loading|delivery|yükleme|yukleme|teslim|commodity|ürün|urun|equipment|ekipman|ready\s*date|cargo\s*ready|hazır\s*tarih|hazir\s*tarih|adr|temperature|sıcaklık|sicaklik)\b\s*[:\-])"
+    r"|(?:\bADR\b\s*(?:değil|degil|not|yes|no|class|sınıf|sinif|\d))"
+    r"|(?:\b(?:reefer|tenteli|curtainsider|FTL|LTL)\b)"
+)
 
 
 def _strip_signature(text: str) -> str:
@@ -174,12 +219,33 @@ def _strip_signature(text: str) -> str:
     if len(lines) < 3:
         return text
 
-    earliest_signature_index = max(2, len(lines) // 2)
+    # Exact sign-off markers are strong enough to scan after the opening body.
+    # Do not require the marker to be in the second half: a legitimate freight
+    # addendum may follow the personal signature and must not make the marker
+    # invisible.
+    earliest_signature_index = 2
 
     for index in range(earliest_signature_index, len(lines)):
         normalized = lines[index].strip().lower().rstrip(",;:")
-        if normalized in _SIGNATURE_MARKERS:
+        if normalized not in _SIGNATURE_MARKERS:
+            continue
+
+        operational_suffix_index = next(
+            (
+                suffix_index
+                for suffix_index in range(index + 1, len(lines))
+                if _OPERATIONAL_SUFFIX_RE.search(lines[suffix_index])
+            ),
+            None,
+        )
+        if operational_suffix_index is None:
             return "\n".join(lines[:index]).rstrip()
+
+        # Keep only the operational addendum that restarts after the signature;
+        # discard the marker and intervening personal signature lines.
+        prefix = lines[:index]
+        suffix = lines[operational_suffix_index:]
+        return "\n".join([*prefix, "", *suffix]).rstrip()
 
     return text
 
