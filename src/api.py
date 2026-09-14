@@ -325,6 +325,19 @@ from src.core.air_cost_scope_coverage_preview import (
     AirCostScopeCoveragePreviewError,
     build_air_cost_scope_coverage_preview,
 )
+from src.core.air_unsupported_cost_semantics_review_repository import (
+    SQLiteAirUnsupportedCostSemanticsReviewRepository,
+)
+from src.core.air_unsupported_cost_semantics_review_service import (
+    AirUnsupportedCostSemanticsReviewNotFoundError,
+    AirUnsupportedCostSemanticsReviewTransitionError,
+    build_air_unsupported_cost_semantics_review_view,
+    record_air_unsupported_cost_semantics_review,
+)
+from src.core.air_cost_completeness_preview import (
+    AirCostCompletenessPreviewError,
+    build_air_cost_completeness_preview,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -663,6 +676,7 @@ air_rate_weight_rounding_review_repository = SQLiteAirRateWeightRoundingReviewRe
 air_fx_rate_evidence_repository = SQLiteAirFxRateEvidenceRepository(pilot_store)
 air_additional_cost_evidence_repository = SQLiteAirAdditionalCostEvidenceRepository(pilot_store)
 air_cost_scope_review_repository = SQLiteAirCostScopeReviewRepository(pilot_store)
+air_unsupported_cost_semantics_review_repository = SQLiteAirUnsupportedCostSemanticsReviewRepository(pilot_store)
 air_service_availability_repository = SQLiteAirServiceAvailabilityRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
@@ -1185,6 +1199,27 @@ class AirReviewedSurchargeCostPreviewRequest(BaseModel):
 class AirCostScopeCoveragePreviewRequest(AirReviewedSurchargeCostPreviewRequest):
     cost_scope_review_id: str = Field(min_length=1, max_length=300)
     inquiry_reference: str = Field(min_length=1, max_length=300)
+
+
+class AirUnsupportedCostSemanticRequirementRequest(BaseModel):
+    semantic: Literal[
+        "weight_based_additional_cost", "percentage_additional_cost",
+        "minimum_tiered_formula_additional_cost", "customs_duties_taxes",
+        "other_unmodeled_cost",
+    ]
+    status: Literal["unresolved", "not_applicable", "applicable_unresolved"]
+    rationale: str = Field(min_length=1, max_length=800)
+
+
+class AirUnsupportedCostSemanticsReviewRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    inquiry_reference: str = Field(min_length=1, max_length=300)
+    requirements: list[AirUnsupportedCostSemanticRequirementRequest] = Field(min_length=5, max_length=5)
+    review_note: str = Field(min_length=1, max_length=1200)
+
+
+class AirCostCompletenessPreviewRequest(AirCostScopeCoveragePreviewRequest):
+    unsupported_cost_semantics_review_id: str = Field(min_length=1, max_length=300)
 
 
 class AirOperationalReadinessPreviewRequest(BaseModel):
@@ -2754,6 +2789,43 @@ def create_air_cost_scope_review(
     }
 
 
+@app.get("/air-unsupported-cost-semantics-reviews")
+def list_air_unsupported_cost_semantics_reviews():
+    return build_air_unsupported_cost_semantics_review_view(
+        repository=air_unsupported_cost_semantics_review_repository
+    )
+
+
+@app.post("/air-rate-sources/{source_id}/unsupported-cost-semantics-reviews")
+def create_air_unsupported_cost_semantics_review(
+    source_id: str, request: AirUnsupportedCostSemanticsReviewRequest, http_request: Request,
+):
+    try:
+        item, created = record_air_unsupported_cost_semantics_review(
+            source_id=source_id,
+            reviewed_by=_authenticated_operator(http_request),
+            source_repository=air_shadow_repository,
+            repository=air_unsupported_cost_semantics_review_repository,
+            requirements=[item.model_dump() for item in request.requirements],
+            **request.model_dump(exclude={"requirements"}),
+        )
+    except AirUnsupportedCostSemanticsReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirUnsupportedCostSemanticsReviewTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "review": item.model_dump(mode="json"),
+        "created": created,
+        "semantics_classification_complete": item.semantics_classification_complete,
+        "applicable_unresolved_semantics": item.applicable_unresolved_semantics,
+        "unresolved_semantics": item.unresolved_semantics,
+        "unsupported_semantics_cleared": item.unsupported_semantics_cleared,
+        "cost_completeness_authority_enabled": False,
+        "pricing_authority_enabled": False,
+        "customer_quote_eligible": False,
+    }
+
+
 @app.get("/air-service-availability-confirmations")
 def list_air_service_availability_confirmations():
     return build_air_service_availability_view(repository=air_service_availability_repository)
@@ -3167,6 +3239,44 @@ def preview_air_cost_scope_coverage(
             rounding_repository=air_rate_weight_rounding_review_repository,
         )
     except AirCostScopeCoveragePreviewError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return preview.model_dump(mode="json")
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/cost-completeness-preview")
+def preview_air_cost_completeness(
+    review_id: str,
+    candidate_id: str,
+    request: AirCostCompletenessPreviewRequest,
+):
+    try:
+        preview = build_air_cost_completeness_preview(
+            review_id=review_id, candidate_id=candidate_id,
+            cost_scope_review_id=request.cost_scope_review_id,
+            unsupported_cost_semantics_review_id=request.unsupported_cost_semantics_review_id,
+            inquiry_reference=request.inquiry_reference,
+            actual_weight_kg=request.actual_weight_kg,
+            volumetric_weight_kg=request.volumetric_weight_kg,
+            total_volume_cm3=request.total_volume_cm3,
+            cargo_context=request.cargo_context, routing_context=request.routing_context,
+            via_airport=request.via_airport, reference_date=request.reference_date,
+            fx_evidence_ids=request.fx_evidence_ids,
+            additional_cost_evidence_ids=request.additional_cost_evidence_ids,
+            fx_reference_at=request.fx_reference_at,
+            shipment_count=request.shipment_count, awb_count=request.awb_count,
+            hawb_count=request.hawb_count, mawb_count=request.mawb_count,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+            surcharge_repository=air_rate_surcharge_review_repository,
+            source_repository=air_shadow_repository,
+            scope_repository=air_cost_scope_review_repository,
+            unsupported_semantics_repository=air_unsupported_cost_semantics_review_repository,
+            validity_repository=air_rate_validity_review_repository,
+            fx_repository=air_fx_rate_evidence_repository,
+            additional_cost_repository=air_additional_cost_evidence_repository,
+            rounding_repository=air_rate_weight_rounding_review_repository,
+        )
+    except AirCostCompletenessPreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return preview.model_dump(mode="json")
 
