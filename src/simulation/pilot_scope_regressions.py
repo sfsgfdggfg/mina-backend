@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
+from src.ai.email_parser import _apply_gtip_safety_overrides
 from src.core.equipment import decide_equipment
+from src.core.gtip import has_gtip_commodity_conflict
 from src.core.models import Package, Shipment
 from src.core.risk import assess_risk
 from src.core.pilot_scope import evaluate_pilot_scope
@@ -257,6 +259,18 @@ def _transport_mode_confirmation_lifecycle(failures: list[str]) -> None:
 def evaluate_pilot_scope_regressions() -> dict:
     failures: list[str] = []
 
+    gtip_conflict_shipment = _apply_gtip_safety_overrides(
+        _road_shipment(commodity="Plastik Ürünler"),
+        "Plastik poşet yükü. GTİP: 8504.21.00.00.00",
+    )
+    if not has_gtip_commodity_conflict(gtip_conflict_shipment):
+        failures.append("GTIP commodity conflict marker was not derived by parser boundary")
+    _assert_excluded(
+        failures,
+        "GTIP commodity conflict",
+        gtip_conflict_shipment,
+    )
+
     excluded_cases = {
         "ADR": _road_shipment(is_adr=True, adr_class="3"),
         "reefer": _road_shipment(
@@ -395,6 +409,19 @@ def evaluate_pilot_scope_regressions() -> dict:
         failures.append("exact 13.60m cargo was incorrectly forced into project equipment")
     if assess_risk(length_boundary_shipment).risk_level != "green":
         failures.append("exact 13.60m cargo was incorrectly marked risky from length alone")
+
+    compatible_gtip_shipment = _apply_gtip_safety_overrides(
+        _road_shipment(commodity="İçecek / Meşrubat"),
+        "Meşrubat yükü. GTİP: 2202.10.00.00.00",
+    )
+    compatible_gtip = evaluate_pilot_scope(
+        compatible_gtip_shipment,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if has_gtip_commodity_conflict(compatible_gtip_shipment):
+        failures.append("compatible GTIP evidence was misclassified as a commodity conflict")
+    if not compatible_gtip.eligible:
+        failures.append("compatible GTIP evidence was incorrectly excluded from pilot scope")
 
     eligible = evaluate_pilot_scope(
         _road_shipment(),

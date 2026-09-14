@@ -1804,3 +1804,9 @@ A package exactly 285 cm high is not excluded solely by this height rule. Contin
 Before accepting fresh authorized replay evidence for a release, verify that replay extraction truth uses the same standard-trailer dimension envelope as runtime pilot scope. A package longer than 13.60 m, wider than 2.50 m, or higher than 2.85 m must produce `is_oversize_or_project=true` in replay scoring even when the operational equipment is Mega rather than project/lowbed.
 
 Boundary cases should remain exact: 13.60 m length, 2.50 m width and 2.85 m height are not classified oversize solely from that dimension. Because replay receipts bind exact release code, generate fresh replay evidence after this change before REAL SHADOW PILOT GO; do not reuse an older receipt that was produced with the prior height derivation.
+
+## GTIP / Commodity Conflict Guard
+
+During controlled-pilot extraction review, inspect any `[GTIP CONSISTENCY WARNING]`. The warning means the customer-provided GTIP / HS interpretation and explicit product description disagree. Do not treat the code as authoritative and do not allow that unresolved case into the simple road pilot; obtain customer/customs verification or reprocess corrected evidence first.
+
+A GTIP-bearing shipment with no conflict remains subject to the ordinary pilot gates and is not excluded solely because a GTIP / HS code is present.

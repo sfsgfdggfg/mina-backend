@@ -11,6 +11,7 @@ from src.core.data_provenance import (
     DataProvenanceError,
     require_pilot_operational_dataset,
 )
+from src.core.gtip import has_gtip_commodity_conflict
 from src.core.operational_data import (
     OperationalDataSources,
     resolve_operational_data_sources,
@@ -255,9 +256,7 @@ def check_operational_consistency(
     selected_equipment = _normalize(_get_attr(equipment_decision, "selected_equipment"))
     risk_level = _normalize(_get_attr(risk_assessment, "risk_level"))
 
-    special_notes = str(_get_attr(shipment, "special_notes", "") or "")
-
-    if "GTIP CONSISTENCY WARNING" in special_notes:
+    if has_gtip_commodity_conflict(shipment):
         warnings.append(
             "GTIP kodu ile ürün açıklaması uyumsuz görünüyor. Lütfen müşteri veya gümrük müşaviri ile doğrulayın."
         )
