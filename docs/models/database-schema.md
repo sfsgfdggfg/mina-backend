@@ -1031,3 +1031,9 @@ Supported quantity bases are only `per_shipment`, `per_awb`, `per_hawb` and `per
 P2-36 adds no persistence namespace. `additional_cost_evidence_ids` is an ephemeral preview input. The calculation reads explicitly selected durable `air_additional_cost_evidence` records and existing P2-32 FX evidence when required, but never mutates those records or persists calculated local-cost totals.
 
 The preview may expose selected evidence ids plus category/provider, source amount/currency, quantity basis/count, converted freight-currency amount and FX provenance, together with `reviewed_additional_cost_total` and `base_plus_reviewed_surcharges_and_additional_costs`. These fields are ephemeral calculation evidence only. `all_in_cost`, customer-quote eligibility and runtime authority remain false; no completeness or pricing authority record is persisted.
+
+### P2-37 Commercial-Air Cost Scope Requirements Review
+
+P2-37 adds durable `air_cost_scope_reviews` plus idempotency index `air_cost_scope_review_by_entry`. Each review stores `review_id`, `entry_id`, `inquiry_reference`, exact `source_id` / `source_sha256`, authenticated reviewer/time/note and exactly nine structured requirements. Each requirement contains one supported cost category, status (`required`, `not_applicable`, `unresolved`) and authored rationale. Category omission or duplication is invalid.
+
+Derived view fields such as `scope_classification_complete`, `required_categories`, `not_applicable_categories` and `unresolved_categories` are presentation/read-model outputs only. `scope_classification_complete` is true only when no requirement is unresolved and is not persisted as all-in or pricing authority. P2-37 adds no consumer to the reviewed-cost calculation; cost completeness, customer pricing, booking and outbound authority remain false and separately gated.

@@ -4351,3 +4351,11 @@ A commercial-air reviewed-cost preview may consume a P2-35 local-cost record onl
 Use only the record's reviewed flat quantity basis and require the corresponding explicit shipment/AWB/HAWB/MAWB count. Never assume one or substitute a different count type. If the local-cost currency differs from the freight currency, require explicit P2-32 FX evidence with exact source/inquiry/direction/timestamp matching; never invert or auto-select a rate. Preserve source-currency values and evidence provenance in the preview.
 
 Even when all selected records calculate successfully, label the result only as an extended partial subtotal. Selection does not establish that all shipment-local costs are known, and P2-35 intentionally cannot represent `/kg`, percentage, minimum/tiered, duties or taxes. Therefore `all_in_cost`, customer-quote eligibility, runtime authority, booking authority and outbound authority must remain false.
+
+## RULE-273 — Classify Every Air Local-Cost Scope Category; Default Unknown Scope to Unresolved
+
+Before MINAI may later assess commercial-air cost completeness, an authenticated operator must review the exact inquiry/source context and classify all nine supported local-cost categories exactly once: pickup, origin handling, origin terminal, documentation, customs service fee, destination handling, destination terminal, delivery and other known local costs. Allowed states are only `required`, `not_applicable` and `unresolved`, and every category requires an authored rationale.
+
+Never infer `not_applicable` from an empty repository, absent supplier reply, common trade practice, service type, another shipment or the fact that no separate charge has yet been recorded. Browser entry must begin at `unresolved`. Missing categories, duplicates or reused entry identities with different evidence fail closed. Multiple review snapshots may exist, but repository recency must not become implicit selection authority for later calculation.
+
+`scope_classification_complete` means only that no category remains unresolved. It is not cost completeness and does not mean all required costs have been captured or selected. The review must not enter the P2-36 subtotal automatically and must not create all-in, customer-price, margin, quote/send, booking, runtime or outbound authority. A later explicit matching gate is required.
