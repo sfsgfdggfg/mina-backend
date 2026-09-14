@@ -7361,3 +7361,14 @@ P2-34 introduces one durable weight-rounding review for an immutable commercial-
 A reviewed ceiling rule is consumed only when calculating the chargeable weight used for tariff weight-break evaluation. The raw chargeable weight remains visible, the rounded chargeable weight and review provenance are exposed separately, and source-SHA mismatch fails closed. An explicit `none` review is distinguishable from missing review evidence; when no review exists, legacy raw-weight preview behavior remains visible as unreviewed rather than manufacturing a rule.
 
 P2-34 does not rewrite separately reviewed surcharge application semantics. A surcharge reviewed as `actual_weight` continues to use actual weight, one reviewed as `chargeable_weight` continues to use the raw chargeable weight, and `pivot_billed_weight` uses the tariff preview's selected billed weight. This step creates no all-in cost, customer selling price, margin, quote/send, airline booking or outbound authority.
+
+## DEC-254 — Commercial-Air Local Cost Evidence Must Be Captured Separately Before Any All-In Cost Claim
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-35 introduces durable shipment/inquiry-bound evidence for flat commercial-air costs that sit outside the airline tariff/surcharge chain, such as pickup, origin handling/terminal, documentation, customs service fee, destination handling/terminal and delivery. Each record is tied to the exact commercial-air source id/SHA used as the pricing context and one inquiry reference, and preserves provider, amount, currency, quantity basis, evidence channel/reference, operator identity, timestamp and authored note.
+
+V1 accepts only explicit positive flat amounts with one reviewed unit among `per_shipment`, `per_awb`, `per_hawb` and `per_mawb`. Weight-based, percentage, minimum/tiered formulas and customs duties/taxes are intentionally outside this phase rather than being normalized into a misleading flat cost. `customs_service_fee` means the service provider's fee only and never import/export duties, taxes or government charges.
+
+P2-35 is evidence capture only. Stored additional-cost evidence must not enter the reviewed surcharge cost preview automatically, must not be FX-converted automatically, and does not make the existing subtotal all-in. A later separately bounded consumption step must explicitly select matching inquiry/source evidence, validate counts and currency conversion, and preserve provenance before any broader cost total may be claimed. No customer selling price, margin, quote/send, booking or outbound authority is created.

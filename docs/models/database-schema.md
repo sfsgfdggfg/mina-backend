@@ -1019,3 +1019,9 @@ The projection stores nothing back to persistence. `operational_evidence_complet
 `air_rate_weight_rounding_reviews` stores one immutable review per commercial-air tariff source. Each record contains `review_id`, exact `source_id` / `source_sha256`, `rounding_mode` (`none` or `ceiling`), optional `increment_kg` required only for ceiling, fixed application scope `chargeable_weight_before_break_evaluation`, reviewer/time/note evidence and a versioned source marker. The namespace is protected from ordinary pilot retention purge.
 
 Freight calculation remains ephemeral. The preview preserves raw `chargeable_weight_kg` and may additionally expose `rounding_review_id`, `rounding_mode`, `rounding_increment_kg` and `rounded_chargeable_weight_kg`. `rounding_applied=true` means a reviewed ceiling rule was evaluated; an explicit `none` review keeps it false while still exposing review provenance. No customer-price, booking or outbound authority is stored or inferred.
+
+### P2-35 Commercial-Air Additional Cost Evidence
+
+P2-35 adds `air_additional_cost_evidence` plus `air_additional_cost_evidence_by_entry`. Each immutable evidence record stores `evidence_id`, idempotent `entry_id`, `inquiry_reference`, exact air `source_id` / `source_sha256`, bounded `cost_category`, provider, positive decimal `amount`, ISO currency, flat `quantity_basis`, evidence source/reference/note, authenticated operator and aware timestamp.
+
+Supported quantity bases are only `per_shipment`, `per_awb`, `per_hawb` and `per_mawb`. Weight-based, percentage, minimum/tiered, duty and tax semantics are deliberately absent. The namespaces are durable evidence only; no current cost preview reads them and no customer-pricing, booking or outbound authority is persisted or inferred.

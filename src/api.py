@@ -303,6 +303,15 @@ from src.core.air_fx_rate_evidence_service import (
     build_air_fx_rate_evidence_view,
     record_air_fx_rate_evidence,
 )
+from src.core.air_additional_cost_evidence_repository import (
+    SQLiteAirAdditionalCostEvidenceRepository,
+)
+from src.core.air_additional_cost_evidence_service import (
+    AirAdditionalCostEvidenceNotFoundError,
+    AirAdditionalCostEvidenceTransitionError,
+    build_air_additional_cost_evidence_view,
+    record_air_additional_cost_evidence,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -639,6 +648,7 @@ air_rate_surcharge_review_repository = SQLiteAirRateSurchargeReviewRepository(pi
 air_rate_validity_review_repository = SQLiteAirRateValidityReviewRepository(pilot_store)
 air_rate_weight_rounding_review_repository = SQLiteAirRateWeightRoundingReviewRepository(pilot_store)
 air_fx_rate_evidence_repository = SQLiteAirFxRateEvidenceRepository(pilot_store)
+air_additional_cost_evidence_repository = SQLiteAirAdditionalCostEvidenceRepository(pilot_store)
 air_service_availability_repository = SQLiteAirServiceAvailabilityRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
@@ -1083,6 +1093,23 @@ class AirFxRateEvidenceRequest(BaseModel):
     evidence_source: Literal["bank", "central_bank", "airline", "manual_document", "other"]
     evidence_reference: str = Field(min_length=1, max_length=500)
     evidence_note: str = Field(min_length=1, max_length=800)
+
+
+class AirAdditionalCostEvidenceRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    inquiry_reference: str = Field(min_length=1, max_length=300)
+    cost_category: Literal[
+        "pickup", "origin_handling", "origin_terminal", "documentation",
+        "customs_service_fee", "destination_handling", "destination_terminal",
+        "delivery", "other",
+    ]
+    provider_name: str = Field(min_length=1, max_length=200)
+    amount: float = Field(gt=0, le=1_000_000_000)
+    currency: str = Field(pattern=r"^[A-Za-z]{3}$")
+    quantity_basis: Literal["per_shipment", "per_awb", "per_hawb", "per_mawb"]
+    evidence_source: Literal["email", "phone", "whatsapp", "portal", "manual_document", "other"]
+    evidence_reference: str = Field(min_length=1, max_length=500)
+    evidence_note: str = Field(min_length=1, max_length=1200)
 
 
 class AirServiceAvailabilityRequest(BaseModel):
@@ -2614,6 +2641,41 @@ def create_air_fx_rate_evidence(source_id: str, request: AirFxRateEvidenceReques
         "pricing_authority_enabled": False,
         "cost_preview_consumption_enabled": False,
         "automatic_fx_enabled": False,
+    }
+
+
+@app.get("/air-additional-cost-evidence")
+def list_air_additional_cost_evidence():
+    return build_air_additional_cost_evidence_view(
+        repository=air_additional_cost_evidence_repository
+    )
+
+
+@app.post("/air-rate-sources/{source_id}/additional-cost-evidence")
+def create_air_additional_cost_evidence(
+    source_id: str, request: AirAdditionalCostEvidenceRequest, http_request: Request,
+):
+    try:
+        item, created = record_air_additional_cost_evidence(
+            source_id=source_id,
+            amount=Decimal(str(request.amount)),
+            recorded_by=_authenticated_operator(http_request),
+            source_repository=air_shadow_repository,
+            repository=air_additional_cost_evidence_repository,
+            **request.model_dump(exclude={"amount"}),
+        )
+    except AirAdditionalCostEvidenceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirAdditionalCostEvidenceTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "evidence": item.model_dump(mode="json"),
+        "created": created,
+        "runtime_authoritative": False,
+        "pricing_authority_enabled": False,
+        "cost_preview_consumption_enabled": False,
+        "customer_quote_eligible": False,
+        "duties_and_taxes_supported": False,
     }
 
 
