@@ -4470,3 +4470,9 @@ Do not redefine Mega cargo as Lowbed / Project Cargo. The replay flag is a safet
 A system-generated `[GTIP CONSISTENCY WARNING]` means the customer-provided GTIP / HS interpretation conflicts with the explicit commodity description. Preserve the explicit commodity and request customer or customs verification; do not silently overwrite the commodity from GTIP evidence.
 
 In controlled pilot mode, an unresolved GTIP / commodity conflict must be excluded before supplier RFQ creation or customer quote progression. Compatible GTIP evidence must not be excluded merely because a code was supplied. This rule adds no legal GTIP assignment authority to MINAI and leaves non-pilot warning behavior unchanged.
+
+## RULE-289 — Explicit Special Equipment Is a Controlled-Pilot Stop Condition
+
+Treat a stated equipment requirement independently from ADR, temperature and dimension inference. The simple controlled road pilot may accept an unspecified/default equipment request or the standard Tenteli/Curtainsider family. An explicit Reefer/Frigo, Mega, ADR-capable, box/closed-body, lowbed/project or unrecognized equipment request is outside that pilot scope.
+
+Do not erase or rewrite the requested equipment to make a job pilot-eligible. Keep the equipment decision visible and route the job to human handling outside the simple pilot. A recognized Tenteli/Curtainsider alias must not be excluded solely because it is explicit.

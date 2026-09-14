@@ -9,6 +9,42 @@ from src.core.road_dimensions import (
     STANDARD_TRAILER_WIDTH_CM,
 )
 
+def _normalize_equipment_request(value: str | None) -> str:
+    normalized = (
+        str(value or "")
+        .strip()
+        .lower()
+        .replace("ı", "i")
+        .replace("İ", "i")
+        .replace("ü", "u")
+        .replace("Ü", "u")
+        .replace("ö", "o")
+        .replace("Ö", "o")
+        .replace("ş", "s")
+        .replace("Ş", "s")
+        .replace("ç", "c")
+        .replace("Ç", "c")
+        .replace("ğ", "g")
+        .replace("Ğ", "g")
+    )
+    for separator in ("/", "-", "_"):
+        normalized = normalized.replace(separator, " ")
+    return " ".join(normalized.split())
+
+
+def is_standard_road_equipment_request(value: str | None) -> bool:
+    """Return whether an explicit request stays inside the standard Tenteli pilot."""
+    if value is None or not str(value).strip():
+        return True
+    return _normalize_equipment_request(value) in {
+        "tenteli",
+        "curtainsider",
+        "curtain sider",
+        "curtain",
+        "tenteli curtainsider",
+    }
+
+
 def _has_meaningful_text(value):
     if value is None:
         return False

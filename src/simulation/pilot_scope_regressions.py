@@ -272,6 +272,11 @@ def evaluate_pilot_scope_regressions() -> dict:
     )
 
     excluded_cases = {
+        "explicit reefer equipment": _road_shipment(equipment_type="Reefer"),
+        "explicit frigo equipment": _road_shipment(equipment_type="Frigo"),
+        "explicit mega equipment": _road_shipment(equipment_type="Mega Trailer"),
+        "explicit ADR equipment": _road_shipment(equipment_type="ADR-Capable Equipment"),
+        "explicit box equipment": _road_shipment(equipment_type="Kapalı Kasa / Box Trailer"),
         "ADR": _road_shipment(is_adr=True, adr_class="3"),
         "reefer": _road_shipment(
             is_temperature_controlled=True,
@@ -422,6 +427,21 @@ def evaluate_pilot_scope_regressions() -> dict:
         failures.append("compatible GTIP evidence was misclassified as a commodity conflict")
     if not compatible_gtip.eligible:
         failures.append("compatible GTIP evidence was incorrectly excluded from pilot scope")
+
+    for standard_equipment in (
+        "Tenteli",
+        "Curtainsider",
+        "Curtain Sider",
+        "Tenteli / Curtainsider",
+    ):
+        standard_equipment_scope = evaluate_pilot_scope(
+            _road_shipment(equipment_type=standard_equipment),
+            environ={"MINAI_PILOT_MODE": "1"},
+        )
+        if not standard_equipment_scope.eligible:
+            failures.append(
+                f"standard equipment alias was incorrectly excluded: {standard_equipment}"
+            )
 
     eligible = evaluate_pilot_scope(
         _road_shipment(),
