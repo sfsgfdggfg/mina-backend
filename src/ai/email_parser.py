@@ -7,7 +7,10 @@ from src.core.normalization import normalize_shipment
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.paths import data_path
 from src.core.models import Shipment, Package
-from src.core.gtip import interpret_gtip_from_email
+from src.core.gtip import (
+    GTIP_COMMODITY_CONFLICT_MARKER,
+    interpret_gtip_from_email,
+)
 from src.core.commodity_profile import apply_commodity_profile_to_shipment
 from src.ai.extraction_models import (
     OpenAIShipmentExtraction,
@@ -295,7 +298,7 @@ def _apply_gtip_safety_overrides(shipment, email_text: str):
 
             if _is_gtip_commodity_conflict(email_commodity_before_gtip, commodity_group):
                 warning = (
-                    "[GTIP CONSISTENCY WARNING] GTIP kodu ile ürün açıklaması "
+                    f"{GTIP_COMMODITY_CONFLICT_MARKER} GTIP kodu ile ürün açıklaması "
                     "uyumsuz görünüyor. "
                     f"Email commodity: {email_commodity_before_gtip}; "
                     f"GTIP commodity: {commodity_group}."

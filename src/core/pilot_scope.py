@@ -11,6 +11,7 @@ from src.core.commodity_profile import (
     load_commodity_dictionary,
     normalize_commodity_value,
 )
+from src.core.gtip import has_gtip_commodity_conflict
 from src.core.models import Shipment
 from src.core.pilot_access import pilot_mode_enabled
 from src.core.road_dimensions import (
@@ -128,6 +129,12 @@ def evaluate_pilot_scope(
         _append_reason(
             reasons,
             f"Transport mode '{shipment.transport_mode}' is outside road-only pilot scope.",
+        )
+
+    if has_gtip_commodity_conflict(shipment):
+        _append_reason(
+            reasons,
+            "GTIP / commodity conflict requires customer or customs verification before pilot processing.",
         )
 
     if shipment.is_adr:

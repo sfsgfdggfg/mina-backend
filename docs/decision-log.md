@@ -7567,3 +7567,14 @@ The authorized sanitized replay safety fact `is_oversize_or_project` represents 
 This preserves the narrower project-equipment distinction separately. Height from 286 cm through 300 cm remains Mega Trailer rather than Lowbed / Project Cargo, but it is still non-standard-height cargo and must be represented as `is_oversize_or_project=true` for safety-critical replay scoring. Exactly 285 cm is not classified true solely because of height.
 
 This closes an evidence mismatch where live runtime correctly excluded 286–300 cm cargo from the simple road pilot while authorized replay extraction truth could omit the corresponding safety fact.
+
+## DEC-273 — Unresolved GTIP / Commodity Contradictions Stay Outside the Controlled Road Pilot
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+Customer-provided GTIP / HS evidence remains interpretive rather than legally authoritative. When the deterministic GTIP mapper and the explicit product description materially conflict, MINAI must preserve the customer commodity text and retain the existing operational warning instead of silently replacing the commodity from the code.
+
+For the controlled road pilot, that warning is now also a scope boundary. A shipment carrying the system-generated GTIP commodity-conflict marker cannot proceed as simple pilot cargo until the contradiction is independently verified or the intake is reprocessed with corrected evidence. This does not convert MINAI into a customs-classification authority and does not make every GTIP-bearing shipment exceptional.
+
+Compatible customer-provided GTIP evidence remains pilot-eligible subject to the normal road, safety, dimension, commodity, identity and commercial gates. Outside controlled pilot mode, the existing warning-only behavior remains unchanged.

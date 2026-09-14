@@ -8,6 +8,15 @@ from typing import Any, Dict, Optional
 from src.paths import data_path
 
 HS_COMMODITY_MAP_PATH = data_path("hs_commodity_map.json")
+GTIP_COMMODITY_CONFLICT_MARKER = "[GTIP CONSISTENCY WARNING]"
+
+
+def has_gtip_commodity_conflict(shipment: Any) -> bool:
+    return bool(
+        getattr(shipment, "gtip_detected_from_email", False)
+        and GTIP_COMMODITY_CONFLICT_MARKER
+        in str(getattr(shipment, "special_notes", "") or "")
+    )
 
 
 def normalize_gtip_code(raw_code: Optional[str]) -> Optional[str]:
