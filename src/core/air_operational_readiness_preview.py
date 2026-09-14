@@ -43,6 +43,7 @@ class AirOperationalReadinessPreview(BaseModel):
     capacity_status: Optional[Literal["available", "unavailable"]] = None
     schedule_status: Optional[Literal["confirmed", "not_confirmed"]] = None
     flight_reference: Optional[str] = None
+    expected_delivery_date: Optional[date] = None
     operational_blockers: list[AirOperationalBlocker] = Field(default_factory=list, max_length=3)
     tariff_validity_confirmed: bool
     fx_applied: bool
@@ -189,6 +190,7 @@ def build_air_operational_readiness_preview(
         capacity_status=confirmation.capacity_status,
         schedule_status=confirmation.schedule_status,
         flight_reference=confirmation.flight_reference,
+        expected_delivery_date=confirmation.expected_delivery_date,
         operational_blockers=blockers,
         capacity_confirmed=capacity_confirmed,
         schedule_confirmed=schedule_confirmed,

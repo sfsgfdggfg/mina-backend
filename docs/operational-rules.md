@@ -4383,3 +4383,10 @@ Before calculating a commercial-air customer price, require P2-39 cost completen
 Use the shared pricing engine unchanged for cost markup, gross margin, fixed profit, manual sell-price override and configured currency rounding. Do not derive a markup from accepted-quote medians, customer preference learning, historical win/loss observations or any other advisory LearningFact. Those facts may inform a human later but never mutate price automatically.
 
 A successful air customer-price calculation remains preview-only. Do not create a quote case, approval record, outbound message or booking action from P2-40, and do not label it quote-ready until separate operational/readiness gates validate tariff validity, capacity/schedule and the remaining quote requirements.
+
+
+## RULE-277 — Do Not Declare an Air Quote Ready Until Shipment, Customer Price and Service-Date Evidence Converge
+
+For air quote readiness, use the shipment gross weight and package dimensions directly; never substitute default or estimated calculation values for missing evidence. Require an air-mode shipment, customer identity match, route locations, commodity, cargo-ready date, explicit ADR/temperature/high-value state, and exact addresses whenever pickup or delivery local-cost scope is required. The selected service date must not precede cargo-ready date.
+
+Do not require a customer delivery deadline when none was supplied. When a required delivery date exists, quote readiness requires evidence of the expected delivery date and must block if the evidence is missing or later than the customer deadline. `quote_ready` authorizes only the next controlled quote-creation step; it does not create, approve, send or book anything.

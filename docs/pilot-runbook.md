@@ -1717,3 +1717,10 @@ Use `Customer Price Preview Hesapla` only after the same screen can produce `Cos
 Confirm that the result shows the pricing policy source and formula used together with the confirmed air cost basis and preview selling price. If pricing policy is missing or invalid, treat the result as blocked and configure/approve the appropriate policy rather than inventing a margin. Historical accepted-quote learning must not be used as an automatic fallback.
 
 `PRICE PREVIEW` is not a quote. Do not send it to the customer or treat it as booking authority. P2-40 intentionally leaves quote readiness, quote creation/approval, tariff/service-date validity and airline capacity/schedule to subsequent controlled gates.
+
+
+## Commercial-Air Quote Readiness Gate (P2-41)
+
+Before declaring an air price ready for quote drafting, select the exact customer, tariff row, cost-scope review, unsupported-cost review, local-cost/FX evidence and service date. Provide shipment pickup/delivery address, commodity, gross weight, package quantity/dimensions, cargo-ready date and explicit ADR / temperature-control / high-value states. The gate recomputes P2-39/P2-40 from package volume and gross weight, and independently checks tariff validity plus matching capacity/schedule evidence for the same inquiry/service date.
+
+If the customer supplied no required-delivery date, leave it absent; do not ask only to satisfy the system. If the customer supplied a deadline, the selected availability evidence must include an expected-delivery date at or before the deadline. `QUOTE READY` means the evidence chain is sufficient to proceed to controlled quote creation. It is not a QuoteCase, approval, sent quote or booking.

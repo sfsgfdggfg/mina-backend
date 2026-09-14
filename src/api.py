@@ -342,6 +342,10 @@ from src.core.air_customer_pricing_preview import (
     AirCustomerPricingPreviewError,
     build_air_customer_pricing_preview,
 )
+from src.core.air_quote_readiness_preview import (
+    AirQuoteReadinessPreviewError,
+    build_air_quote_readiness_preview,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -1168,6 +1172,7 @@ class AirServiceAvailabilityRequest(BaseModel):
     routing_context: Literal["direct", "connecting"]
     via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
     service_date: date
+    expected_delivery_date: Optional[date] = None
     capacity_status: Literal["available", "unavailable"]
     schedule_status: Literal["confirmed", "not_confirmed"]
     flight_reference: Optional[str] = Field(default=None, max_length=120)
@@ -1228,6 +1233,26 @@ class AirCostCompletenessPreviewRequest(AirCostScopeCoveragePreviewRequest):
 
 class AirCustomerPricingPreviewRequest(AirCostCompletenessPreviewRequest):
     customer_id: str = Field(min_length=1, max_length=200)
+    quote_pricing_override: Optional[PricingFormula] = None
+
+
+class AirQuoteReadinessPreviewRequest(BaseModel):
+    cost_scope_review_id: str = Field(min_length=1, max_length=300)
+    unsupported_cost_semantics_review_id: str = Field(min_length=1, max_length=300)
+    inquiry_reference: str = Field(min_length=1, max_length=300)
+    customer_id: str = Field(min_length=1, max_length=200)
+    service_date: date
+    shipment: Shipment
+    cargo_context: Literal["general_cargo", "special_cargo"]
+    routing_context: Literal["direct", "connecting"]
+    via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    fx_evidence_ids: list[str] = Field(default_factory=list, max_length=20)
+    additional_cost_evidence_ids: list[str] = Field(default_factory=list, max_length=100)
+    fx_reference_at: Optional[datetime] = None
+    shipment_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    awb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    hawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    mawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
     quote_pricing_override: Optional[PricingFormula] = None
 
 
@@ -3326,6 +3351,47 @@ def preview_air_customer_pricing(
             master_data_repository=master_data_repository,
         )
     except AirCustomerPricingPreviewError as exc:
+        detail = str(exc)
+        status = 404 if detail == "customer_master_profile_not_found" else 422
+        raise HTTPException(status_code=status, detail=detail) from exc
+    return preview.model_dump(mode="json")
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/quote-readiness-preview")
+def preview_air_quote_readiness(
+    review_id: str,
+    candidate_id: str,
+    request: AirQuoteReadinessPreviewRequest,
+):
+    try:
+        preview = build_air_quote_readiness_preview(
+            review_id=review_id, candidate_id=candidate_id,
+            cost_scope_review_id=request.cost_scope_review_id,
+            unsupported_cost_semantics_review_id=request.unsupported_cost_semantics_review_id,
+            inquiry_reference=request.inquiry_reference, customer_id=request.customer_id,
+            service_date=request.service_date, shipment=request.shipment,
+            cargo_context=request.cargo_context, routing_context=request.routing_context,
+            via_airport=request.via_airport,
+            fx_evidence_ids=request.fx_evidence_ids,
+            additional_cost_evidence_ids=request.additional_cost_evidence_ids,
+            fx_reference_at=request.fx_reference_at,
+            shipment_count=request.shipment_count, awb_count=request.awb_count,
+            hawb_count=request.hawb_count, mawb_count=request.mawb_count,
+            quote_pricing_override=request.quote_pricing_override,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+            surcharge_repository=air_rate_surcharge_review_repository,
+            source_repository=air_shadow_repository,
+            scope_repository=air_cost_scope_review_repository,
+            unsupported_semantics_repository=air_unsupported_cost_semantics_review_repository,
+            additional_cost_repository=air_additional_cost_evidence_repository,
+            rounding_repository=air_rate_weight_rounding_review_repository,
+            validity_repository=air_rate_validity_review_repository,
+            availability_repository=air_service_availability_repository,
+            fx_repository=air_fx_rate_evidence_repository,
+            master_data_repository=master_data_repository,
+        )
+    except AirQuoteReadinessPreviewError as exc:
         detail = str(exc)
         status = 404 if detail == "customer_master_profile_not_found" else 422
         raise HTTPException(status_code=status, detail=detail) from exc

@@ -37,6 +37,7 @@ def record_air_service_availability_confirmation(
     repository: AirServiceAvailabilityRepository,
     via_airport: Optional[str] = None,
     flight_reference: Optional[str] = None,
+    expected_delivery_date: Optional[date] = None,
     confirmed_at: Optional[datetime] = None,
 ) -> tuple[AirServiceAvailabilityConfirmation, bool]:
     source = source_repository.get_rate_source(source_id)
@@ -53,6 +54,7 @@ def record_air_service_availability_confirmation(
             routing_context=routing_context,
             via_airport=via_airport,
             service_date=service_date,
+            expected_delivery_date=expected_delivery_date,
             capacity_status=capacity_status,
             schedule_status=schedule_status,
             flight_reference=flight_reference,

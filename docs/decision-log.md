@@ -7427,3 +7427,10 @@ P2-40 may calculate a commercial-air customer selling-price preview only after P
 Air pricing must reuse the shared `resolve_pricing_policy` and `calculate_customer_quote` implementation so cost-markup percentage, gross-margin percentage, fixed-profit, manual sell-price override and currency rounding behave exactly as they do in the established pricing flow. A missing or invalid policy fails closed and produces no customer price.
 
 The P2-40 result is a `customer_price_preview`, not a QuoteCase, quote approval, sendable quote or booking instruction. `quote_ready`, `quote_created`, quote-send, booking, outbound and runtime authority remain false. Tariff validity, capacity/schedule and final quote-readiness remain separate later gates.
+
+
+## DEC-260 — Air Quote Readiness Requires Complete Shipment, Pricing and Exact Service-Date Operational Evidence
+
+**Decision:** A commercial-air inquiry may expose `quote_ready=true` only when the exact P2-39 cost-completeness chain prices successfully through P2-40, the selected service date has reviewed tariff validity plus matching capacity/schedule evidence, and the shipment snapshot contains the inputs that materially determine air pricing and special handling. Gross weight and package dimensions are calculation inputs and must fail closed before pricing if absent; MINAI may not fabricate them. ADR, temperature-control and high-value states must be explicit, with ADR class or temperature requirement when applicable.
+
+A customer required-delivery date is not mandatory. If the customer did not provide one, P2-41 must not create a clarification blocker merely to obtain it. If one was provided, matching availability evidence must carry an expected-delivery date and that date must be on or before the customer requirement. P2-41 may return `quote_ready=true`, but it does not create a QuoteCase, approval, customer message or booking and grants no send/outbound/runtime authority.
