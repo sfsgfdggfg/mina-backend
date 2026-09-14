@@ -26,7 +26,7 @@ def _source_repo(cargo_scope: str = "general_cargo") -> InMemoryAirShadowReposit
         entry_id="reviewed-surcharge-cost-source",
         airline_name="THY",
         document_name="reviewed-cost.pdf",
-        sha256_hex="9" * 64,
+        sha256_hex="a" * 64,
         cargo_scope=cargo_scope,
         origin_airport="ADA",
         recorded_by="Air Operator",
@@ -98,7 +98,7 @@ def _surcharge_repo(*candidates: AirRateSurchargeCandidate) -> InMemoryAirRateSu
     repo.create(AirRateSurchargeReview(
         review_id="surcharge-cost-review-001",
         source_id="source-0001",
-        source_sha256="9" * 64,
+        source_sha256="a" * 64,
         structure_review_id="structure-review-0001",
         extracted_text_sha256="b" * 64,
         candidates=list(candidates),
