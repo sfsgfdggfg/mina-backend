@@ -21,6 +21,7 @@ from src.simulation.customer_quote_automated_send_regressions import evaluate_cu
 from src.simulation.data_provenance_regressions import evaluate_data_provenance_regressions
 from src.simulation.data_path_regressions import evaluate_data_path_regressions
 from src.simulation.extraction_confirmation_regressions import evaluate_extraction_confirmation_regressions
+from src.simulation.gtip_conflict_hardening_regressions import evaluate_gtip_conflict_hardening_regressions
 from src.simulation.initial_supplier_rfq_regressions import evaluate_initial_supplier_rfq_regressions
 from src.simulation.supplier_dispatch_policy_regressions import evaluate_supplier_dispatch_policy_regressions
 from src.simulation.supplier_primary_dispatch_regressions import evaluate_supplier_primary_dispatch_regressions
@@ -287,6 +288,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Python source compilation", evaluate_source_compile_regressions),
     Suite("Extraction confirmation", evaluate_extraction_confirmation_regressions),
     Suite("Explicit road-mode inference", evaluate_explicit_road_inference_regressions),
+    Suite("GTIP commodity conflict hardening", evaluate_gtip_conflict_hardening_regressions),
     Suite(
         "OpenAI structured output contract",
         evaluate_openai_structured_output_regressions,

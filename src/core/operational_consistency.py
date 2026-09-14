@@ -15,6 +15,7 @@ from src.core.operational_data import (
     OperationalDataSources,
     resolve_operational_data_sources,
 )
+from src.core.gtip import assess_gtip_commodity_consistency
 
 
 def _normalize(value: Optional[str]) -> str:
@@ -255,11 +256,16 @@ def check_operational_consistency(
     selected_equipment = _normalize(_get_attr(equipment_decision, "selected_equipment"))
     risk_level = _normalize(_get_attr(risk_assessment, "risk_level"))
 
-    special_notes = str(_get_attr(shipment, "special_notes", "") or "")
-
-    if "GTIP CONSISTENCY WARNING" in special_notes:
+    gtip_consistency = assess_gtip_commodity_consistency(
+        _get_attr(shipment, "gtip_code"),
+        _get_attr(shipment, "commodity"),
+    )
+    if gtip_consistency["conflict"]:
         warnings.append(
             "GTIP kodu ile ürün açıklaması uyumsuz görünüyor. Lütfen müşteri veya gümrük müşaviri ile doğrulayın."
+        )
+        errors.append(
+            "GTIP / ürün açıklaması çelişkisi doğrulanmadan tedarikçi RFQ veya müşteri teklif akışı başlatılmamalıdır."
         )
 
     if is_adr and not adr_class:

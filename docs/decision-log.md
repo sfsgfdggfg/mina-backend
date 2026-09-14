@@ -7567,3 +7567,14 @@ The authorized sanitized replay safety fact `is_oversize_or_project` represents 
 This preserves the narrower project-equipment distinction separately. Height from 286 cm through 300 cm remains Mega Trailer rather than Lowbed / Project Cargo, but it is still non-standard-height cargo and must be represented as `is_oversize_or_project=true` for safety-critical replay scoring. Exactly 285 cm is not classified true solely because of height.
 
 This closes an evidence mismatch where live runtime correctly excluded 286–300 cm cargo from the simple road pilot while authorized replay extraction truth could omit the corresponding safety fact.
+
+## DEC-273 — Unresolved GTIP / Commodity Conflict Blocks Controlled-Pilot Commercial Progression
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+The existing GTIP consistency rule preserves the customer's explicit commodity when a customer-provided GTIP/HS mapping points to a clearly incompatible operational commodity. In the controlled pilot, that conflict is not merely display metadata: supplier RFQ or customer quote progression must not begin until the conflict is resolved from current confirmed facts.
+
+GTIP consistency is therefore recomputed from the current shipment `gtip_code`, current confirmed `commodity`, and the validated HS commodity map. The parser may retain the historical warning note for provenance, but that text is not operational authority. A stale warning cannot keep a genuinely corrected shipment blocked, and removing a warning string cannot make an unresolved conflict safe.
+
+MINAI still does not assign a legally authoritative GTIP. Resolution requires the operator to update the confirmed shipment facts from customer or customs-broker evidence. Compatible mapped commodity families remain non-conflicting. This change closes a fail-open where an explicit GTIP/commodity conflict produced `quote_ready`, required no human review, and created supplier RFQ drafts despite the existing rule stating that verification was required.

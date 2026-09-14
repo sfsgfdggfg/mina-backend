@@ -4464,3 +4464,9 @@ For `285 < height_cm <= 300`, select Mega Trailer and require human operational 
 For authorized sanitized replay, derive `is_oversize_or_project=true` when any package exceeds the shared standard-trailer dimensional envelope: `length_cm > 1360`, `width_cm > 250`, or `height_cm > 285`.
 
 Do not redefine Mega cargo as Lowbed / Project Cargo. The replay flag is a safety-critical standard-trailer exclusion fact; equipment selection remains `Mega Trailer` for `285 < height_cm <= 300` and `Lowbed / Project Cargo` for `height_cm > 300`. Exact standard-trailer boundaries remain non-oversize from that dimension alone.
+
+## RULE-288 — GTIP / Commodity Conflict Is a Commercial Stop Until Current Facts Are Reconciled
+
+When a shipment carries a GTIP/HS code that maps to an operational commodity incompatible with the current confirmed commodity, preserve the explicit commodity but fail closed before supplier RFQ or customer quote progression. The conflict must appear in operational consistency as both a visible verification warning and a blocking error.
+
+Recompute the conflict from current shipment facts and the validated HS commodity map on every operational evaluation. Do not use the presence or absence of a `special_notes` warning string, or a legacy detection flag, as authority. After customer or customs-broker evidence resolves the GTIP or commodity value, the blocker may clear automatically if the current facts are compatible. MINAI must not silently rewrite the commodity or claim legally authoritative GTIP classification.
