@@ -346,6 +346,11 @@ from src.core.air_quote_readiness_preview import (
     AirQuoteReadinessPreviewError,
     build_air_quote_readiness_preview,
 )
+from src.core.air_quote_preparation import (
+    AirQuotePreparationNotFoundError,
+    AirQuotePreparationTransitionError,
+    prepare_air_quote_case,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -1243,6 +1248,27 @@ class AirQuoteReadinessPreviewRequest(BaseModel):
     customer_id: str = Field(min_length=1, max_length=200)
     service_date: date
     shipment: Shipment
+    cargo_context: Literal["general_cargo", "special_cargo"]
+    routing_context: Literal["direct", "connecting"]
+    via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    fx_evidence_ids: list[str] = Field(default_factory=list, max_length=20)
+    additional_cost_evidence_ids: list[str] = Field(default_factory=list, max_length=100)
+    fx_reference_at: Optional[datetime] = None
+    shipment_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    awb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    hawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    mawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+    quote_pricing_override: Optional[PricingFormula] = None
+
+
+class AirQuotePreparationRequest(BaseModel):
+    review_id: str = Field(min_length=1, max_length=300)
+    candidate_id: str = Field(min_length=1, max_length=300)
+    cost_scope_review_id: str = Field(min_length=1, max_length=300)
+    unsupported_cost_semantics_review_id: str = Field(min_length=1, max_length=300)
+    inquiry_reference: str = Field(min_length=1, max_length=300)
+    customer_id: str = Field(min_length=1, max_length=200)
+    service_date: date
     cargo_context: Literal["general_cargo", "special_cargo"]
     routing_context: Literal["direct", "connecting"]
     via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
@@ -3396,6 +3422,58 @@ def preview_air_quote_readiness(
         status = 404 if detail == "customer_master_profile_not_found" else 422
         raise HTTPException(status_code=status, detail=detail) from exc
     return preview.model_dump(mode="json")
+
+
+@app.post("/mina-jobs/{job_id}/air-quote/prepare")
+def prepare_mina_job_air_quote(
+    job_id: str, request: AirQuotePreparationRequest, http_request: Request,
+):
+    try:
+        result = prepare_air_quote_case(
+            job_id=job_id,
+            review_id=request.review_id,
+            candidate_id=request.candidate_id,
+            cost_scope_review_id=request.cost_scope_review_id,
+            unsupported_cost_semantics_review_id=request.unsupported_cost_semantics_review_id,
+            inquiry_reference=request.inquiry_reference,
+            customer_id=request.customer_id,
+            service_date=request.service_date,
+            cargo_context=request.cargo_context,
+            routing_context=request.routing_context,
+            via_airport=request.via_airport,
+            fx_evidence_ids=request.fx_evidence_ids,
+            additional_cost_evidence_ids=request.additional_cost_evidence_ids,
+            fx_reference_at=request.fx_reference_at,
+            shipment_count=request.shipment_count,
+            awb_count=request.awb_count,
+            hawb_count=request.hawb_count,
+            mawb_count=request.mawb_count,
+            quote_pricing_override=request.quote_pricing_override,
+            prepared_by=_authenticated_operator(http_request),
+            mina_job_repository=mina_job_repository,
+            quote_case_repository=quote_case_repository,
+            approval_repository=quote_approval_repository,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+            surcharge_repository=air_rate_surcharge_review_repository,
+            source_repository=air_shadow_repository,
+            scope_repository=air_cost_scope_review_repository,
+            unsupported_semantics_repository=air_unsupported_cost_semantics_review_repository,
+            additional_cost_repository=air_additional_cost_evidence_repository,
+            rounding_repository=air_rate_weight_rounding_review_repository,
+            validity_repository=air_rate_validity_review_repository,
+            availability_repository=air_service_availability_repository,
+            fx_repository=air_fx_rate_evidence_repository,
+            master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository,
+        )
+    except AirQuotePreparationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirQuotePreparationTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result.model_dump(mode="json")
 
 
 @app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/operational-readiness-preview")

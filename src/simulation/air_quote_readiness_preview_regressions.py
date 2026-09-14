@@ -138,6 +138,8 @@ def evaluate_air_quote_readiness_preview_regressions() -> dict:
         and ready.shipment_inputs_complete is True
         and ready.pricing_complete is True
         and ready.operational_evidence_complete is True
+        and ready.regulatory_compliance_clear is True
+        and ready.regulatory_compliance.status == "clear"
         and ready.delivery_deadline_status == "not_provided"
         and ready.blockers == []
         and ready.package_piece_count == 2

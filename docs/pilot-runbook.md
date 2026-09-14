@@ -1724,3 +1724,11 @@ Confirm that the result shows the pricing policy source and formula used togethe
 Before declaring an air price ready for quote drafting, select the exact customer, tariff row, cost-scope review, unsupported-cost review, local-cost/FX evidence and service date. Provide shipment pickup/delivery address, commodity, gross weight, package quantity/dimensions, cargo-ready date and explicit ADR / temperature-control / high-value states. The gate recomputes P2-39/P2-40 from package volume and gross weight, and independently checks tariff validity plus matching capacity/schedule evidence for the same inquiry/service date.
 
 If the customer supplied no required-delivery date, leave it absent; do not ask only to satisfy the system. If the customer supplied a deadline, the selected availability evidence must include an expected-delivery date at or before the deadline. `QUOTE READY` means the evidence chain is sufficient to proceed to controlled quote creation. It is not a QuoteCase, approval, sent quote or booking.
+
+## Commercial-Air Durable Quote Preparation and Human Approval (P2-42)
+
+After the Air Quote Readiness Gate returns READY, select the matching open air MINA price-request job and run **QuoteCase + Human Approval Hazırla**. The backend ignores any separate shipment draft and reruns readiness from the persisted MINA job shipment. If readiness has become blocked, no durable quote/approval is written and the MINA job stage is unchanged.
+
+A successful preparation creates the normal shared QuoteCase and a `pending` QuoteApproval, links the case to the MINA job, and moves an eligible price-request job to `quote_ready`. The quote review screen shows **Air Readiness Provenance · Frozen Snapshot**, including tariff/source, service evidence, cost basis and pricing provenance. Repeating the exact same preparation returns the existing case; different evidence for an already-linked job is rejected rather than silently replacing it.
+
+Review/revise/approve the quote with the existing quote controls. Revisions preserve the frozen air evidence lineage and require a fresh approval as usual. P2-42 does not send customer mail or create a booking; those remain separate controlled actions.

@@ -4390,3 +4390,11 @@ A successful air customer-price calculation remains preview-only. Do not create 
 For air quote readiness, use the shipment gross weight and package dimensions directly; never substitute default or estimated calculation values for missing evidence. Require an air-mode shipment, customer identity match, route locations, commodity, cargo-ready date, explicit ADR/temperature/high-value state, and exact addresses whenever pickup or delivery local-cost scope is required. The selected service date must not precede cargo-ready date.
 
 Do not require a customer delivery deadline when none was supplied. When a required delivery date exists, quote readiness requires evidence of the expected delivery date and must block if the evidence is missing or later than the customer deadline. `quote_ready` authorizes only the next controlled quote-creation step; it does not create, approve, send or book anything.
+
+## RULE-278 — Revalidate the Authoritative MINA Shipment Before Creating an Air Quote; Freeze the Evidence and Require Human Approval
+
+Never create a durable air customer quote directly from a standalone preview or browser-entered shipment copy. Resolve an existing open air `price_request` MINA job, rerun P2-41 using that job's persisted shipment, and write QuoteCase/QuoteApproval only when the result is READY. Generic regulatory compliance is part of this gate; a blocked, pending-review or clarification-required regulatory state prevents readiness.
+
+Store the exact readiness lineage on both the QuoteCase and its pending QuoteApproval. The same exact preparation may be retried idempotently. A different tariff row, scope/semantic review, availability confirmation, selected cost/FX evidence or pricing context must not silently create another QuoteCase for the same MINA job. Quote revisions may change customer-facing text or sales price under the existing revision rules, but they must preserve the frozen air evidence lineage until an explicit future re-preparation flow exists.
+
+Human approval is mandatory. P2-42 does not send the quote, book capacity or create outbound/runtime authority.
