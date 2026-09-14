@@ -14,6 +14,7 @@ from src.core.commodity_profile import (
 from src.core.gtip import has_gtip_commodity_conflict
 from src.core.equipment import (
     is_standard_road_equipment_request,
+    requires_bulk_or_liquid_equipment_review,
     requires_open_trailer_loading,
 )
 from src.core.models import Shipment
@@ -139,6 +140,12 @@ def evaluate_pilot_scope(
         _append_reason(
             reasons,
             "Explicit special or non-standard equipment is outside the simple standard-trailer pilot scope.",
+        )
+
+    if requires_bulk_or_liquid_equipment_review(shipment):
+        _append_reason(
+            reasons,
+            "Bulk, liquid, tanker, tipper or silo equipment requirement is outside the simple standard-trailer pilot scope.",
         )
 
     if requires_open_trailer_loading(shipment):

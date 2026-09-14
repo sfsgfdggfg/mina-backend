@@ -7600,3 +7600,14 @@ Road Freight RULE-012 already states that `Overhead Crane`, `Tavan Vinci`, `Cran
 The deterministic equipment engine must therefore select `Open Trailer / Platform` when one of these loading requirements is present and no stronger explicit non-standard equipment request already exists. The operational risk engine must require human review, and the simple controlled standard-trailer pilot must fail closed for the case. Existing project/oversize/heavy rules and explicit stronger special-equipment requests retain priority.
 
 This closes a fail-open where a top-loading shipment could remain Tenteli, green-risk and pilot-eligible solely because the requirement existed only in structured shipment notes.
+
+## DEC-276 — Bulk and Liquid Cargo Cannot Default to Standard Tenteli
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+Road Freight RULE-014 already requires Tanker, Damper or Silobas evaluation for bulk or liquid cargo. A bulk/liquid signal is therefore an equipment-authority boundary even when ADR, temperature, dimensions and the explicit `equipment_type` field otherwise look ordinary.
+
+When deterministic shipment evidence contains a clear bulk/liquid signal but no stronger explicit non-standard equipment request, MINAI must return `Bulk / Liquid Equipment Review` rather than silently defaulting to Tenteli. Operational risk must require human review, and the simple controlled standard-trailer pilot must fail closed. If Tanker, Damper, Silobas or another special equipment type is explicitly supplied, preserve that explicit request rather than replacing it with the generic review state.
+
+This closes a fail-open where bulk/liquid cargo could remain Tenteli, green-risk and pilot-eligible solely because the special cargo form was present only in commodity or shipment notes.

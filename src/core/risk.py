@@ -8,7 +8,10 @@ from src.core.road_dimensions import (
     requires_nonstandard_height_equipment,
 )
 from src.core.extraction_confirmation import require_operational_shipment
-from src.core.equipment import requires_open_trailer_loading
+from src.core.equipment import (
+    requires_bulk_or_liquid_equipment_review,
+    requires_open_trailer_loading,
+)
 
 
 def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
@@ -100,6 +103,13 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
 
     if commodity_profile.get("requires_management_review"):
         requires_management_review = True
+        requires_human_review = True
+
+    # Bulk / liquid cargo form requires special-equipment review.
+    if requires_bulk_or_liquid_equipment_review(shipment):
+        risk_reasons.append(
+            "Dökme veya sıvı yük için Tanker / Damper / Silobas tipi özel ekipman değerlendirmesi gerekir."
+        )
         requires_human_review = True
 
     # Special loading method

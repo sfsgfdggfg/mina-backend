@@ -1822,3 +1822,9 @@ Do not clear a special-equipment request to make the case fit the pilot. Preserv
 During controlled-pilot extraction review, inspect shipment notes for `Overhead Crane`, `Tavan Vinci`, `Crane Loading` or `Üstten Yükleme`. These are not ordinary Tenteli loading instructions: they require Open Trailer / Platform evaluation and must stay outside the simple standard-trailer pilot even when package dimensions and safety booleans otherwise look normal.
 
 Do not clear the loading instruction merely to make the job pilot-eligible. Preserve any stronger explicit special-equipment or project/heavy requirement if one already exists.
+
+## Bulk / Liquid Cargo Pilot Check
+
+During controlled-pilot extraction review, inspect commodity, shipment notes and package descriptors for explicit bulk/liquid evidence such as `Dökme Yük`, `Sıvı Yük`, `Bulk Cargo`, `Liquid Cargo`, Tanker, Damper or Silobas. These are not ordinary Tenteli cargo and must remain outside the simple standard-trailer pilot even when dimensions and safety booleans otherwise look normal.
+
+If the exact equipment is not yet authoritative, expect `Bulk / Liquid Equipment Review` plus human review rather than an invented Tanker/Damper/Silobas choice. If an explicit special equipment request already exists, preserve it.
