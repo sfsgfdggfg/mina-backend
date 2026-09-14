@@ -338,6 +338,10 @@ from src.core.air_cost_completeness_preview import (
     AirCostCompletenessPreviewError,
     build_air_cost_completeness_preview,
 )
+from src.core.air_customer_pricing_preview import (
+    AirCustomerPricingPreviewError,
+    build_air_customer_pricing_preview,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -1220,6 +1224,11 @@ class AirUnsupportedCostSemanticsReviewRequest(BaseModel):
 
 class AirCostCompletenessPreviewRequest(AirCostScopeCoveragePreviewRequest):
     unsupported_cost_semantics_review_id: str = Field(min_length=1, max_length=300)
+
+
+class AirCustomerPricingPreviewRequest(AirCostCompletenessPreviewRequest):
+    customer_id: str = Field(min_length=1, max_length=200)
+    quote_pricing_override: Optional[PricingFormula] = None
 
 
 class AirOperationalReadinessPreviewRequest(BaseModel):
@@ -3278,6 +3287,48 @@ def preview_air_cost_completeness(
         )
     except AirCostCompletenessPreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return preview.model_dump(mode="json")
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/customer-pricing-preview")
+def preview_air_customer_pricing(
+    review_id: str,
+    candidate_id: str,
+    request: AirCustomerPricingPreviewRequest,
+):
+    try:
+        preview = build_air_customer_pricing_preview(
+            review_id=review_id, candidate_id=candidate_id,
+            cost_scope_review_id=request.cost_scope_review_id,
+            unsupported_cost_semantics_review_id=request.unsupported_cost_semantics_review_id,
+            inquiry_reference=request.inquiry_reference, customer_id=request.customer_id,
+            quote_pricing_override=request.quote_pricing_override,
+            actual_weight_kg=request.actual_weight_kg,
+            volumetric_weight_kg=request.volumetric_weight_kg,
+            total_volume_cm3=request.total_volume_cm3,
+            cargo_context=request.cargo_context, routing_context=request.routing_context,
+            via_airport=request.via_airport, reference_date=request.reference_date,
+            fx_evidence_ids=request.fx_evidence_ids,
+            additional_cost_evidence_ids=request.additional_cost_evidence_ids,
+            fx_reference_at=request.fx_reference_at,
+            shipment_count=request.shipment_count, awb_count=request.awb_count,
+            hawb_count=request.hawb_count, mawb_count=request.mawb_count,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+            surcharge_repository=air_rate_surcharge_review_repository,
+            source_repository=air_shadow_repository,
+            scope_repository=air_cost_scope_review_repository,
+            unsupported_semantics_repository=air_unsupported_cost_semantics_review_repository,
+            validity_repository=air_rate_validity_review_repository,
+            fx_repository=air_fx_rate_evidence_repository,
+            additional_cost_repository=air_additional_cost_evidence_repository,
+            rounding_repository=air_rate_weight_rounding_review_repository,
+            master_data_repository=master_data_repository,
+        )
+    except AirCustomerPricingPreviewError as exc:
+        detail = str(exc)
+        status = 404 if detail == "customer_master_profile_not_found" else 422
+        raise HTTPException(status_code=status, detail=detail) from exc
     return preview.model_dump(mode="json")
 
 

@@ -4375,3 +4375,11 @@ Do not promote P2-38 flat coverage to a complete air cost basis by itself. Befor
 The same preview must retain the P2-38 requirement that every required flat local-cost category has consumable selected evidence. It must also inspect reviewed surcharge exclusions. Destination/cargo/routing exclusions proven not applicable are allowed; missing FX, incomplete surcharge review or unreviewed flat quantity semantics are unresolved cost and must block. Exact-source airline weight rounding must be reviewed; common practice or raw fallback is insufficient for completeness.
 
 A successful result confirms only the inquiry/source cost basis used by the preview. Preserve provenance and the confirmed amount/currency, but keep customer-price eligibility, margin/pricing authority, quote-send, booking, outbound, runtime authority and `all_in_cost` false until later separately controlled gates.
+
+## RULE-276 — Price Air Only from Confirmed Cost and Existing Verified Pricing Policy; Never Promote Advisory Learning to Margin Authority
+
+Before calculating a commercial-air customer price, require P2-39 cost completeness for the same explicit inquiry/source context and an active explicit Customer Master identity. Resolve pricing only through the shared precedence order: quote override > verified customer pricing policy > agency default. If no policy resolves or the agency configuration is invalid, do not calculate a selling price.
+
+Use the shared pricing engine unchanged for cost markup, gross margin, fixed profit, manual sell-price override and configured currency rounding. Do not derive a markup from accepted-quote medians, customer preference learning, historical win/loss observations or any other advisory LearningFact. Those facts may inform a human later but never mutate price automatically.
+
+A successful air customer-price calculation remains preview-only. Do not create a quote case, approval record, outbound message or booking action from P2-40, and do not label it quote-ready until separate operational/readiness gates validate tariff validity, capacity/schedule and the remaining quote requirements.
