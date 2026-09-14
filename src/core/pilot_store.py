@@ -86,6 +86,8 @@ PERSISTENT_STATE_NAMESPACES = (
     "air_unsupported_cost_semantics_review_by_entry",
     "air_service_availability_confirmations",
     "air_service_availability_by_entry",
+    "air_operation_handoffs",
+    "air_operation_handoff_by_job",
     "operational_work_assignments",
     "operational_shift_close_receipts",
     "operational_shift_open_acceptance_receipts",

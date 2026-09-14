@@ -408,6 +408,7 @@ def transition_mina_job_stage(
     *, repository: MinaJobRepository, mina_code: str,
     target_stage: MinaJobStage, actor: str, reason: str | None = None,
     occurred_at: datetime | None = None, operation_execution_repository=None,
+    air_operation_handoff_repository=None,
 ) -> MinaJob:
     timestamp = aware_utc(occurred_at)
     normalized_actor = _normalized_actor(actor)
@@ -423,6 +424,20 @@ def transition_mina_job_stage(
             raise MinaJobTransitionError(
                 f"MINA job cannot transition from {job.stage} to {target_stage}."
             )
+        if (
+            target_stage == "operation_opened"
+            and job.job_kind == "price_request"
+            and job.shipment.transport_mode == "air"
+        ):
+            if air_operation_handoff_repository is None:
+                raise MinaJobTransitionError(
+                    "Air price-request operation_opened transition requires durable air operation handoff authority."
+                )
+            handoff = air_operation_handoff_repository.find_by_job(job.job_id)
+            if handoff is None:
+                raise MinaJobTransitionError(
+                    "Air price-request operation_opened transition requires a durable air operation handoff."
+                )
         if operation_execution_repository is not None and job.lifecycle_version == 2:
             from src.core.operation_execution_service import validate_operation_transition_evidence
             validate_operation_transition_evidence(

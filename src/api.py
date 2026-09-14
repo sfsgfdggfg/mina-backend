@@ -351,6 +351,13 @@ from src.core.air_quote_preparation import (
     AirQuotePreparationTransitionError,
     prepare_air_quote_case,
 )
+from src.core.air_operation_handoff_repository import SQLiteAirOperationHandoffRepository
+from src.core.air_operation_handoff_service import (
+    AirOperationHandoffNotFoundError,
+    AirOperationHandoffTransitionError,
+    build_air_operation_handoff_view,
+    prepare_air_operation_handoff,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -691,6 +698,7 @@ air_additional_cost_evidence_repository = SQLiteAirAdditionalCostEvidenceReposit
 air_cost_scope_review_repository = SQLiteAirCostScopeReviewRepository(pilot_store)
 air_unsupported_cost_semantics_review_repository = SQLiteAirUnsupportedCostSemanticsReviewRepository(pilot_store)
 air_service_availability_repository = SQLiteAirServiceAvailabilityRepository(pilot_store)
+air_operation_handoff_repository = SQLiteAirOperationHandoffRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
@@ -3716,11 +3724,44 @@ def get_mina_job(job_id: str):
             agency_policy_repository=agency_automation_policy_repository,
             operation_execution_repository=operation_execution_repository,
             operation_start_message_repository=operation_start_message_repository,
+            air_operation_handoff_repository=air_operation_handoff_repository,
             learning_fact_repository=learning_fact_repository,
             job_id=job_id,
         )
     except MinaJobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/mina-jobs/{job_id}/air-operation-handoff")
+def get_mina_job_air_operation_handoff(job_id: str):
+    try:
+        return build_air_operation_handoff_view(
+            handoff_repository=air_operation_handoff_repository,
+            mina_repository=mina_job_repository,
+            job_id=job_id,
+        )
+    except AirOperationHandoffNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/air-operation-handoff")
+def prepare_mina_job_air_operation_handoff(job_id: str, http_request: Request):
+    try:
+        result = prepare_air_operation_handoff(
+            job_id=job_id,
+            handed_off_by=_authenticated_operator(http_request),
+            handoff_repository=air_operation_handoff_repository,
+            mina_repository=mina_job_repository,
+            quote_case_repository=quote_case_repository,
+            approval_repository=quote_approval_repository,
+        )
+    except AirOperationHandoffNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirOperationHandoffTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result.model_dump(mode="json")
 
 
 @app.get("/mina-jobs/{job_id}/operation-start")
@@ -4017,6 +4058,7 @@ def update_mina_job_stage(
             actor=_authenticated_operator(http_request),
             reason=request.reason,
             operation_execution_repository=operation_execution_repository,
+            air_operation_handoff_repository=air_operation_handoff_repository,
         )
     except MinaJobTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

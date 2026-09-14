@@ -8,6 +8,7 @@ from src.core.automation_policy_repository import AgencyAutomationPolicyReposito
 from src.core.automation_policy_service import resolve_effective_automation_policy
 from src.core.master_data_repository import MasterDataRepository
 from src.core.operation_execution_repository import OperationExecutionRepository
+from src.core.air_operation_handoff_repository import AirOperationHandoffRepository
 from src.core.operation_start_repository import OperationStartMessageRepository
 from src.core.operation_start_service import build_operation_start_view
 from src.core.operation_execution_service import build_operation_execution_view
@@ -68,6 +69,7 @@ def build_mina_job_detail(
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
     operation_execution_repository: OperationExecutionRepository | None = None,
     operation_start_message_repository: OperationStartMessageRepository | None = None,
+    air_operation_handoff_repository: AirOperationHandoffRepository | None = None,
     learning_fact_repository: LearningFactRepository | None = None,
     job_id: str,
     now: datetime | None = None,
@@ -257,6 +259,10 @@ def build_mina_job_detail(
         build_operation_start_view(operation_start_message_repository, job_id=job.job_id)
         if operation_start_message_repository is not None else None
     )
+    air_operation_handoff = (
+        air_operation_handoff_repository.find_by_job(job.job_id)
+        if air_operation_handoff_repository is not None else None
+    )
     learning = (
         build_learning_fact_view(
             repository=learning_fact_repository, subject_type="operation", subject_id=job.job_id,
@@ -299,6 +305,10 @@ def build_mina_job_detail(
         "supplier_prices": supplier_prices,
         "operation": operation,
         "operation_start": operation_start,
+        "air_operation_handoff": (
+            None if air_operation_handoff is None
+            else air_operation_handoff.model_dump(mode="json")
+        ),
         "learning": learning,
         "loss_feedback": loss_feedback,
         "customer_commercial_context": (
@@ -321,7 +331,19 @@ def build_mina_job_detail(
                 and bool(job.supplier_rfq_workflow_id)
                 and bool(supplier_prices and supplier_prices.get("price_offers"))
             ),
-            "operation_start_available": (not job.is_closed and job.stage == "accepted"),
+            "operation_start_available": (
+                not job.is_closed
+                and job.stage == "accepted"
+                and job.shipment.transport_mode != "air"
+            ),
+            "air_operation_handoff_available": (
+                not job.is_closed
+                and job.stage == "accepted"
+                and job.shipment.transport_mode == "air"
+                and quote_case is not None
+                and quote_case.air_quote_context is not None
+                and air_operation_handoff is None
+            ),
             "supplier_decision_outcome_recordable": (
                 job.lifecycle_version == 2
                 and job.stage == "completed"

@@ -2292,7 +2292,48 @@ function operationStartMessageCard(message, refresh) {
 }
 
 function renderOperationStartSection(container, data, jobId, refresh) {
-  const section = sectionBlock("Operasyonu Başlat", "Müşteri kabulünden sonra seçilen tedarikçiye onay + toplama talimatı, fiyat vermiş diğer tedarikçilere nazik kapanış.");
+  const isAir = data.summary?.transport_mode === "air";
+  const airHandoff = data.air_operation_handoff || null;
+  const title = isAir ? "Havayolu Operasyon Handoff" : "Operasyonu Başlat";
+  const subtitle = isAir
+    ? "Kabul edilmiş ve gönderilmiş air teklifinin frozen tarife / maliyet / servis kanıtını operasyona devret. Bu adım booking yapmaz ve airline'a mesaj göndermez."
+    : "Müşteri kabulünden sonra seçilen tedarikçiye onay + toplama talimatı, fiyat vermiş diğer tedarikçilere nazik kapanış.";
+  const section = sectionBlock(title, subtitle);
+
+  if (isAir) {
+    if (airHandoff) {
+      const ctx = airHandoff.air_quote_context || {};
+      const box = node("div", "", "operation-start-launch approval-focused");
+      box.append(
+        node("strong", `Air handoff hazır · ${ctx.airline_name || "Havayolu"}`),
+        node("div", `Servis: ${ctx.service_date || "-"}${ctx.expected_delivery_date ? ` → beklenen teslim ${ctx.expected_delivery_date}` : ""} · Rota: ${ctx.origin_airport || "-"} → ${ctx.via_airport ? `${ctx.via_airport} → ` : ""}${ctx.destination_code || "-"}`, "small"),
+        node("div", `Cost basis: ${ctx.confirmed_cost_basis_amount || "-"} ${ctx.confirmed_cost_basis_currency || ""} · Customer price: ${ctx.customer_final_price || "-"} ${ctx.customer_price_currency || ""}`, "small"),
+        node("div", `Tarife source: ${ctx.source_id || "-"} · row ${ctx.candidate_id || "-"} · availability ${ctx.availability_confirmation_id || "-"}`, "small muted"),
+        node("div", `Müşteri kabulü: ${formatDate(airHandoff.accepted_at)} · ${airHandoff.accepted_by || "-"} · Handoff: ${formatDate(airHandoff.handed_off_at)} · ${airHandoff.handed_off_by || "-"}`, "small policy-evidence"),
+        node("div", `Gönderim kanıtı: ${(airHandoff.customer_quote_sent_evidence || []).length} kayıt · approval ${airHandoff.approval_id || "-"} · rev.${airHandoff.revision_number ?? 0}`, "small muted"),
+        node("div", "BOOKING HENÜZ YOK · AIRLINE CONTACT YAPILMADI · OUTBOUND / BOOKING AUTHORITY YOK", "notice")
+      );
+      section.append(box);
+    } else if (data.controls?.air_operation_handoff_available) {
+      const box = node("div", "", "operation-start-launch approval-focused");
+      box.append(node("div", "Current approved quote, current revision sent evidence ve customer acceptance timeline yeniden doğrulanacak. Handoff yalnız bu zincir tam ise oluşturulur.", "notice"));
+      const feedback = node("div", "", "muted approval-feedback");
+      const start = actionButton("Havayolu Operasyonuna Devret", "approve", async () => {
+        if (!window.confirm("Kabul edilmiş havayolu teklifini operasyon akışına devretmek istiyor musun? Booking veya airline mesajı oluşturulmayacak.")) return;
+        start.disabled = true; feedback.textContent = "Approval, sent evidence ve acceptance zinciri doğrulanıyor…";
+        try {
+          await api(`/mina-jobs/${encodeURIComponent(jobId)}/air-operation-handoff`, { method: "POST" });
+          await refresh();
+        } catch (error) { feedback.textContent = error.message || String(error); start.disabled = false; }
+      });
+      box.append(start, feedback); section.append(box);
+    } else {
+      section.append(emptyState("Air operation handoff henüz hazır değil", "Current air quote approved + sent + customer accepted olduğunda handoff kontrolü açılır."));
+    }
+    container.append(section);
+    return;
+  }
+
   const view = data.operation_start || {};
   const messages = view.messages || [];
   if (data.controls?.operation_start_available && !messages.length) {
@@ -2477,6 +2518,27 @@ function renderOperationSection(container, data, jobId, refresh) {
   ]);
   const editable = lifecycleV2 && !closed && activeStages.has(stage);
   const section = sectionBlock("Operasyon", "Gerçek operasyon kanıtlarını kaydet; milestone ilerlemeleri backend geçiş ve kanıt kontrollerinden geçer.");
+
+  if (data.summary?.transport_mode === "air") {
+    const handoff = data.air_operation_handoff || null;
+    if (handoff) {
+      const ctx = handoff.air_quote_context || {};
+      const grid = node("div", "", "detail-grid operation-grid");
+      grid.append(
+        summaryItem("Havayolu", ctx.airline_name || "-"),
+        summaryItem("Servis tarihi", ctx.service_date || "-"),
+        summaryItem("Beklenen teslim", ctx.expected_delivery_date || "-"),
+        summaryItem("Uçuş referansı", ctx.flight_reference || "-"),
+        summaryItem("Rota", `${ctx.origin_airport || "-"} → ${ctx.via_airport ? `${ctx.via_airport} → ` : ""}${ctx.destination_code || "-"}`),
+        summaryItem("Booking", "Henüz teyit edilmedi")
+      );
+      section.append(grid, node("div", "P2-43 yalnız quote→operation handoff yapar. Road araç/plaka/sürücü kontrolleri air işine uygulanmaz; booking ve gerçek air execution sonraki kontrollü adımlarda açılacaktır.", "notice"));
+    } else {
+      section.append(node("div", "Air operasyon execution, kabul edilmiş teklif operasyona devredildikten sonra açılır.", "muted small"));
+    }
+    container.append(section);
+    return;
+  }
 
   const grid = node("div", "", "detail-grid operation-grid");
   grid.append(

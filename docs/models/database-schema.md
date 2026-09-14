@@ -1070,3 +1070,11 @@ P2-42 adds no new persistence namespace. Existing `quote_cases`, `quote_approval
 `air_quote_context_v1` freezes the preparation key; inquiry/customer identity; immutable tariff source ID/SHA; airline/origin/destination; table review and row; cost-scope and unsupported-cost review IDs; validity, rounding and availability evidence IDs; service/expected-delivery/routing/flight evidence; confirmed cost basis and customer price/currency; pricing-policy source; selected FX/local-cost evidence IDs; and authenticated preparer/time. Quote revisions copy the QuoteCase air context into the new approval snapshot rather than recomputing it from current repositories.
 
 No separate `air_quote_cases` or `air_quote_approvals` table is introduced. The MINA job's existing `quote_case_id` remains the single durable linkage and prevents silent parallel quote cases for one job.
+
+### P2-43 Commercial-Air Accepted Quote Operation Handoff
+
+P2-43 adds durable `air_operation_handoffs` plus one-per-job index `air_operation_handoff_by_job`. Each immutable handoff stores `handoff_id`, MINA job/code, linked QuoteCase/current approval/current revision, the complete frozen `air_quote_context_v1`, all durable current-revision customer-quote sent evidence, customer-acceptance actor/time and authenticated handoff actor/time.
+
+Sent-evidence snapshots retain evidence kind (`manual_external_send`, `automated_provider_send`, or `operator_provider_reconciliation`), approval/revision, recipient, observed sent time and provider metadata when available. No newest/latest sent record is selected implicitly; all matching durable sent evidence is frozen.
+
+Booking fields are intentionally non-authoritative in P2-43: `booking_confirmed=false`, `booking_reference=null`, `airline_contact_performed=false`, `booking_authority=false`, `outbound_authority=false`, and `runtime_authoritative=false`. The handoff's existence is the only new authority used to permit the existing MINA `accepted -> operation_opened` transition for an air price-request job. Road `operation_start_messages` are not created.
