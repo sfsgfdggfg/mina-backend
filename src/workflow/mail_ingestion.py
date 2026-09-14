@@ -204,6 +204,7 @@ def process_customer_inquiry_mail(
             mail=safe_mail,
             proposed_shipment=proposed_shipment,
             repository=proposal_repository,
+            trusted_customer_name=trusted_customer_name,
         )
 
         return _extraction_required_result(

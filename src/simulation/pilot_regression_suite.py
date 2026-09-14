@@ -16,6 +16,7 @@ from src.simulation.canonical_commercial_fixture_isolation_regressions import ev
 from src.simulation.atomic_transition_regressions import evaluate_atomic_transition_regressions
 from src.simulation.clarification_resolution_regressions import evaluate_clarification_resolution_regressions
 from src.simulation.customer_identity_trust_regressions import evaluate_customer_identity_trust_regressions
+from src.simulation.customer_email_identity_binding_regressions import evaluate_customer_email_identity_binding_regressions
 from src.simulation.customer_quote_automated_send_regressions import evaluate_customer_quote_automated_send_regressions
 from src.simulation.data_provenance_regressions import evaluate_data_provenance_regressions
 from src.simulation.data_path_regressions import evaluate_data_path_regressions
@@ -291,6 +292,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
         evaluate_openai_structured_output_regressions,
     ),
     Suite("Customer identity trust", evaluate_customer_identity_trust_regressions),
+    Suite("Customer email identity binding", evaluate_customer_email_identity_binding_regressions),
     Suite("Data provenance", evaluate_data_provenance_regressions),
     Suite("Repository data path normalization", evaluate_data_path_regressions),
     Suite("Operational data injection", evaluate_operational_data_injection_regressions),

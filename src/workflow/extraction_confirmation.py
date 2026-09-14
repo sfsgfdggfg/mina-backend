@@ -95,6 +95,7 @@ def create_extraction_proposal(
     mail: InboundMailEnvelope,
     proposed_shipment: ShipmentProposalSnapshot,
     repository: ExtractionProposalRepository,
+    trusted_customer_name: str | None = None,
 ) -> ShipmentExtractionProposal:
     if not isinstance(proposed_shipment, ShipmentProposalSnapshot):
         raise TypeError(
@@ -104,6 +105,11 @@ def create_extraction_proposal(
         ShipmentExtractionProposal(
             inbound_mail=mail,
             proposed_shipment=proposed_shipment,
+            trusted_customer_name=(
+                trusted_customer_name.strip()
+                if trusted_customer_name and trusted_customer_name.strip()
+                else None
+            ),
         )
     )
 
@@ -123,6 +129,8 @@ def _load_proposal(
 def _validated_confirmed_shipment(
     proposed: ShipmentProposalSnapshot,
     corrections: dict[str, Any],
+    *,
+    trusted_customer_name: str | None = None,
 ) -> tuple[Shipment, dict[str, Any], list[str]]:
     blocked_fields = {"regulatory_exception_reviews"}
     unknown_fields = set(corrections) - set(ShipmentProposalSnapshot.model_fields)
@@ -161,6 +169,16 @@ def _validated_confirmed_shipment(
             "Safety-sensitive fields must be explicit before confirmation: "
             + ", ".join(unknown_safety_fields)
         )
+
+    if trusted_customer_name:
+        trusted = " ".join(trusted_customer_name.strip().casefold().split())
+        candidate_name = " ".join(
+            (candidate.customer_name or "").strip().casefold().split()
+        )
+        if candidate_name != trusted:
+            raise ExtractionCorrectionError(
+                "Trusted customer identity cannot be changed during extraction confirmation."
+            )
 
     if candidate.is_adr is False and candidate.adr_class is not None:
         raise ExtractionCorrectionError(
@@ -214,6 +232,7 @@ def confirm_extraction_proposal(
             _validated_confirmed_shipment(
                 proposal.proposed_shipment,
                 corrections or {},
+                trusted_customer_name=proposal.trusted_customer_name,
             )
         )
         confirmation_time = confirmed_at or utc_now()

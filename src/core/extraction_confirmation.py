@@ -62,6 +62,7 @@ class ShipmentExtractionProposal(BaseModel):
     proposal_id: str = Field(default_factory=lambda: str(uuid4()))
     inbound_mail: InboundMailEnvelope
     proposed_shipment: ShipmentProposalSnapshot
+    trusted_customer_name: Optional[str] = Field(default=None, max_length=240)
     source_attachment_review_id: Optional[str] = None
     extraction_status: ExtractionStatus = "proposed"
 
@@ -124,6 +125,20 @@ class ShipmentExtractionProposal(BaseModel):
 
     @model_validator(mode="after")
     def validate_confirmation_state(self):
+        if self.trusted_customer_name:
+            trusted = " ".join(self.trusted_customer_name.strip().casefold().split())
+            proposed_name = " ".join((self.proposed_shipment.customer_name or "").strip().casefold().split())
+            if proposed_name != trusted:
+                raise ValueError(
+                    "Trusted customer identity must match the proposed shipment customer."
+                )
+            if self.confirmed_shipment is not None:
+                confirmed_name = " ".join((self.confirmed_shipment.customer_name or "").strip().casefold().split())
+                if confirmed_name != trusted:
+                    raise ValueError(
+                        "Trusted customer identity must match the confirmed shipment customer."
+                    )
+
         confirmation_metadata = (
             self.confirmed_shipment,
             self.confirmed_by,

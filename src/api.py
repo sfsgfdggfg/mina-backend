@@ -21,6 +21,7 @@ from src.core.data_provenance import (
 from src.core.customer_memory import (
     CustomerMemoryProfile,
     load_customer_memory,
+    sender_matches_profile,
     save_customer_profile,
     set_customer_profile_active_status,
     update_customer_profile,
@@ -463,6 +464,7 @@ from src.core.master_data_repository import (
 )
 from src.core.master_data_service import (
     bootstrap_legacy_master_data,
+    customer_to_legacy_memory,
     create_customer_master,
     create_supplier_master,
     supplier_geography_view,
@@ -5236,6 +5238,36 @@ def reject_attachment_review_endpoint(
 
 @app.post("/process-email")
 def process_email(request: ProcessEmailRequest):
+    trusted_customer_name = None
+    if pilot_mode_enabled():
+        sender = (request.sender_address or "").strip()
+        if not sender:
+            raise HTTPException(
+                status_code=422,
+                detail="pilot_manual_email_sender_required",
+            )
+        active_profiles = [
+            customer_to_legacy_memory(item)
+            for item in master_data_repository.list_customers()
+            if item.active
+        ]
+        matches = [
+            profile
+            for profile in active_profiles
+            if sender_matches_profile(profile, sender)
+        ]
+        if not matches:
+            raise HTTPException(
+                status_code=422,
+                detail="sender_not_in_verified_pilot_scope",
+            )
+        if len(matches) != 1:
+            raise HTTPException(
+                status_code=409,
+                detail="sender_matches_multiple_pilot_customers",
+            )
+        trusted_customer_name = matches[0].customer_name
+
     try:
         result = process_customer_inquiry_mail(
             mail=InboundMailEnvelope(
@@ -5252,6 +5284,7 @@ def process_email(request: ProcessEmailRequest):
             proposal_repository=(
                 extraction_proposal_repository
             ),
+            trusted_customer_name=trusted_customer_name,
         )
     except InboundMailIdempotencyConflictError as exc:
         raise HTTPException(
