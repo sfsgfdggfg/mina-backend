@@ -10,9 +10,11 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from src.core.models import Package
 from src.core.privacy import PrivacySafeText
 from src.simulation.authorized_sanitized_replay import (
     AuthorizedReplayExecutionError,
+    _proposal_facts,
     main as authorized_main,
     run_authorized_replay,
 )
@@ -111,6 +113,35 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
     def require(name: str, condition: bool) -> None:
         if not condition:
             failures.append(name)
+
+    overlength_proposal = _snapshot(adr=False).model_copy(
+        update={
+            "packages": [
+                Package(
+                    package_type="machine", quantity=1, length_cm=1361,
+                    width_cm=80, height_cm=150, weight_kg=5000,
+                )
+            ]
+        }
+    )
+    require(
+        "authorized replay derives overlength project truth from shared road dimensions",
+        _proposal_facts(overlength_proposal).get("is_oversize_or_project") is True,
+    )
+    boundary_proposal = _snapshot(adr=False).model_copy(
+        update={
+            "packages": [
+                Package(
+                    package_type="machine", quantity=1, length_cm=1360,
+                    width_cm=80, height_cm=150, weight_kg=5000,
+                )
+            ]
+        }
+    )
+    require(
+        "authorized replay does not overclassify exact 13.60m boundary",
+        _proposal_facts(boundary_proposal).get("is_oversize_or_project") is not True,
+    )
 
     cases = [
         _case(

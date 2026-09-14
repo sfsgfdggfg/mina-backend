@@ -1,6 +1,11 @@
 from src.core.models import Shipment, RiskAssessment
 from src.core.commodity_profile import get_commodity_operational_profile
 from src.core.cargo_weight import assess_cargo_weight
+from src.core.road_dimensions import (
+    is_overlength,
+    is_overwidth,
+    is_project_height,
+)
 from src.core.extraction_confirmation import require_operational_shipment
 
 
@@ -108,11 +113,15 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
         requires_human_review = True
 
     for package in shipment.packages:
-        if package.height_cm and package.height_cm > 300:
+        if is_overlength(package):
+            risk_reasons.append("Gabari dışı yük uzunluğu; standart 13.60m dorse sınırı aşılıyor.")
+            requires_human_review = True
+
+        if is_project_height(package):
             risk_reasons.append("Gabari dışı yük yüksekliği.")
             requires_human_review = True
 
-        if package.width_cm and package.width_cm > 250:
+        if is_overwidth(package):
             risk_reasons.append("Gabari dışı yük genişliği.")
             requires_human_review = True
 

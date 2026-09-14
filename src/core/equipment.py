@@ -2,6 +2,12 @@ from src.core.models import Shipment, EquipmentDecision
 from src.core.commodity_profile import get_commodity_operational_profile
 from src.core.cargo_weight import assess_cargo_weight
 from src.core.extraction_confirmation import require_operational_shipment
+from src.core.road_dimensions import (
+    MEGA_TRAILER_HEIGHT_TRIGGER_CM,
+    PROJECT_CARGO_HEIGHT_CM,
+    STANDARD_TRAILER_LENGTH_CM,
+    STANDARD_TRAILER_WIDTH_CM,
+)
 
 def _has_meaningful_text(value):
     if value is None:
@@ -106,7 +112,20 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
 
     # Package dimension triggers
     for package in shipment.packages:
-        if package.height_cm and package.height_cm > 300:
+        if package.length_cm and package.length_cm > STANDARD_TRAILER_LENGTH_CM:
+            return EquipmentDecision(
+                selected_equipment="Lowbed / Project Cargo",
+                reason="Yük uzunluğu standart 13.60m dorse sınırını aşmaktadır.",
+                confidence=0.90,
+                source="rule_engine",
+                explanation=(
+                    f"Yük uzunluğu {package.length_cm} cm olarak tespit edildi. "
+                    "Standart 13.60m tenteli dorse profilini aştığı için "
+                    "Lowbed / Project Cargo değerlendirilmelidir."
+                ),
+            )
+
+        if package.height_cm and package.height_cm > PROJECT_CARGO_HEIGHT_CM:
             return EquipmentDecision(
                 selected_equipment="Lowbed / Project Cargo",
                 reason="Yük yüksekliği 3.00m üzerindedir.",
@@ -118,7 +137,7 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
                 ),
             )
 
-        if package.height_cm and package.height_cm > 285:
+        if package.height_cm and package.height_cm > MEGA_TRAILER_HEIGHT_TRIGGER_CM:
             return EquipmentDecision(
                 selected_equipment="Mega Trailer",
                 reason="Yük yüksekliği 2.85m üzerindedir.",
@@ -130,7 +149,7 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
                 ),
             )
 
-        if package.width_cm and package.width_cm > 250:
+        if package.width_cm and package.width_cm > STANDARD_TRAILER_WIDTH_CM:
             return EquipmentDecision(
                 selected_equipment="Platform / Lowbed",
                 reason="Yük genişliği 2.50m üzerindedir.",

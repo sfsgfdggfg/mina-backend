@@ -1764,3 +1764,9 @@ Before generating the next authorized sanitized replay receipt, confirm the runt
 If a sender signs off and then adds freight information, the transform preserves the later high-confidence operational addendum while removing the sign-off and intervening personal signature block. Treat any unexpected loss of weight, package/dimension, operational date, ADR/temperature, equipment or labelled pickup/loading/delivery facts as a privacy-boundary regression and stop the replay.
 
 Because v4 changes what content is preserved, any authorized replay receipt or readiness evidence produced under `p1.28-v3` or earlier is stale for this build. Run the authorized sanitized replay again on the approved external dataset, then build fresh readiness evidence before evaluating REAL SHADOW PILOT GO. Do not manually edit an older receipt/evidence file to change its privacy-transform version.
+
+## Road Pilot Overlength Guard
+
+During controlled-pilot extraction review, inspect any explicit package length together with width, height and weight. A package longer than **13.60 m (1360 cm)** is outside the simple standard-trailer pilot: do not approve it as an ordinary Tenteli load. The backend should return project/oversize scope exclusion and project/lowbed equipment guidance.
+
+A package exactly 13.60 m long is not excluded from the pilot solely on the length check; all other readiness, dimension, weight, equipment and commodity gates still apply. If authorized sanitized replay contains an overlength case, its expected truth must classify that case as oversize/project using the same shared dimension rule as runtime.
