@@ -4458,3 +4458,9 @@ Controlled-pilot manual email fallback requires a sender address and one active 
 The shared Road Freight v1 height rule must be applied consistently across equipment, risk and controlled-pilot scope. Any package with `height_cm > 285` requires non-standard height equipment and must not enter the simple standard-trailer pilot as ordinary Tenteli cargo.
 
 For `285 < height_cm <= 300`, select Mega Trailer and require human operational review; for `height_cm > 300`, preserve the existing Lowbed / Project Cargo treatment. The exact `height_cm = 285` boundary must remain eligible from height alone, subject to all other pilot gates.
+
+## RULE-287 — Replay Oversize Truth Must Follow the Standard-Trailer Envelope, Not Only Project-Cargo Thresholds
+
+For authorized sanitized replay, derive `is_oversize_or_project=true` when any package exceeds the shared standard-trailer dimensional envelope: `length_cm > 1360`, `width_cm > 250`, or `height_cm > 285`.
+
+Do not redefine Mega cargo as Lowbed / Project Cargo. The replay flag is a safety-critical standard-trailer exclusion fact; equipment selection remains `Mega Trailer` for `285 < height_cm <= 300` and `Lowbed / Project Cargo` for `height_cm > 300`. Exact standard-trailer boundaries remain non-oversize from that dimension alone.

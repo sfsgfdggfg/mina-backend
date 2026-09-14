@@ -7556,3 +7556,14 @@ Road Freight v1 already defines height above 2.85 m as incompatible with the sta
 Equipment semantics remain unchanged: `height_cm > 285` and `<= 300` selects Mega Trailer, while `height_cm > 300` selects Lowbed / Project Cargo. Pilot scope and operational risk now share the same non-standard-height boundary. Exactly `285 cm` is not excluded or reviewed solely because of height.
 
 This closes a fail-open where 286–300 cm cargo selected special equipment but still appeared green and eligible for the simple controlled road pilot.
+
+## DEC-272 — Authorized Replay Uses the Same Standard-Trailer Dimension Boundary as Live Pilot Scope
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+The authorized sanitized replay safety fact `is_oversize_or_project` represents cargo that is outside the ordinary standard-trailer dimensional envelope, not only cargo that already requires full project/lowbed handling. Replay derivation must therefore use the same Road Freight v1 standard-trailer boundaries as live pilot scope: length above 13.60 m, width above 2.50 m, or height above 2.85 m.
+
+This preserves the narrower project-equipment distinction separately. Height from 286 cm through 300 cm remains Mega Trailer rather than Lowbed / Project Cargo, but it is still non-standard-height cargo and must be represented as `is_oversize_or_project=true` for safety-critical replay scoring. Exactly 285 cm is not classified true solely because of height.
+
+This closes an evidence mismatch where live runtime correctly excluded 286–300 cm cargo from the simple road pilot while authorized replay extraction truth could omit the corresponding safety fact.

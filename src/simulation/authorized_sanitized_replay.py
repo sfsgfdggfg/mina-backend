@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from src.core.road_dimensions import requires_project_dimension_handling
+from src.core.road_dimensions import exceeds_standard_trailer_dimensions
 from src.ai.email_parser import (
     EmailParserUnavailableError,
     parse_email_with_ai,
@@ -173,7 +173,7 @@ def _proposal_facts(
         )
     )
     has_oversize_dimensions = any(
-        requires_project_dimension_handling(package)
+        exceeds_standard_trailer_dimensions(package)
         for package in proposal.packages
     )
     if has_project_text or has_oversize_dimensions:
