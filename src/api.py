@@ -358,6 +358,17 @@ from src.core.air_operation_handoff_service import (
     build_air_operation_handoff_view,
     prepare_air_operation_handoff,
 )
+from src.core.air_learning_feedback_repository import (
+    AirLearningFeedbackConflictError,
+    SQLiteAirLearningFeedbackRepository,
+)
+from src.core.air_learning_service import (
+    AirLearningTransitionError,
+    build_air_learning_feedback_view,
+    build_air_route_learning_advisory_for_route,
+    derive_air_route_learning,
+    record_air_learning_feedback,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -699,6 +710,7 @@ air_cost_scope_review_repository = SQLiteAirCostScopeReviewRepository(pilot_stor
 air_unsupported_cost_semantics_review_repository = SQLiteAirUnsupportedCostSemanticsReviewRepository(pilot_store)
 air_service_availability_repository = SQLiteAirServiceAvailabilityRepository(pilot_store)
 air_operation_handoff_repository = SQLiteAirOperationHandoffRepository(pilot_store)
+air_learning_feedback_repository = SQLiteAirLearningFeedbackRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
@@ -1267,6 +1279,34 @@ class AirQuoteReadinessPreviewRequest(BaseModel):
     hawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
     mawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
     quote_pricing_override: Optional[PricingFormula] = None
+
+
+class AirLearningAdvisoryRequest(BaseModel):
+    routing_context: Literal["direct", "connecting"]
+    via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+
+
+class AirLearningFeedbackRequest(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=300)
+    tariff_usage: Literal["used_as_quoted", "used_with_correction", "not_used"]
+    actual_airline_name: str = Field(min_length=1, max_length=200)
+    actual_routing_context: Literal["direct", "connecting"]
+    actual_via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    actual_service_date: Optional[date] = None
+    actual_delivery_date: Optional[date] = None
+    actual_chargeable_weight_kg: Optional[Decimal] = Field(default=None, gt=0)
+    actual_cost_amount: Optional[Decimal] = Field(default=None, gt=0)
+    actual_cost_currency: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    correction_categories: list[Literal[
+        "chargeable_weight", "base_rate", "surcharge", "local_cost", "fx", "airline",
+        "routing", "service_date", "delivery_date", "other",
+    ]] = Field(default_factory=list, max_length=10)
+    evidence_source: Literal[
+        "airline_invoice", "airline_booking_confirmation", "airline_email", "portal", "operator", "other"
+    ]
+    source_reference: str = Field(min_length=1, max_length=300)
+    note: str = Field(min_length=3, max_length=1200)
+    supersedes_feedback_id: Optional[str] = Field(default=None, max_length=100)
 
 
 class AirQuotePreparationRequest(BaseModel):
@@ -3391,6 +3431,34 @@ def preview_air_customer_pricing(
     return preview.model_dump(mode="json")
 
 
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/learning-advisory")
+def preview_air_learning_advisory(
+    review_id: str, candidate_id: str, request: AirLearningAdvisoryRequest,
+):
+    review = air_rate_table_review_repository.get(review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail=f"Air rate table review not found: {review_id}")
+    candidate = next((item for item in review.candidates if item.candidate_id == candidate_id), None)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail=f"Air rate table row not found: {candidate_id}")
+    if candidate.status != "confirmed":
+        raise HTTPException(status_code=409, detail="Air learning advisory requires a confirmed tariff row.")
+    source = air_shadow_repository.get_rate_source(review.source_id)
+    if source is None or source.sha256_hex != review.source_sha256:
+        raise HTTPException(status_code=409, detail="Air learning advisory source provenance mismatch.")
+    if not source.origin_airport or not candidate.destination_code:
+        raise HTTPException(status_code=422, detail="Air learning advisory requires exact origin and destination IATA codes.")
+    try:
+        return build_air_route_learning_advisory_for_route(
+            learning_repository=learning_fact_repository,
+            origin_airport=source.origin_airport, destination_code=candidate.destination_code,
+            airline_name=source.airline_name, routing_context=request.routing_context,
+            via_airport=request.via_airport,
+        )
+    except AirLearningTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/quote-readiness-preview")
 def preview_air_quote_readiness(
     review_id: str,
@@ -3725,6 +3793,7 @@ def get_mina_job(job_id: str):
             operation_execution_repository=operation_execution_repository,
             operation_start_message_repository=operation_start_message_repository,
             air_operation_handoff_repository=air_operation_handoff_repository,
+            air_learning_feedback_repository=air_learning_feedback_repository,
             learning_fact_repository=learning_fact_repository,
             job_id=job_id,
         )
@@ -3762,6 +3831,70 @@ def prepare_mina_job_air_operation_handoff(job_id: str, http_request: Request):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result.model_dump(mode="json")
+
+
+@app.get("/mina-jobs/{job_id}/air-learning-feedback")
+def get_mina_job_air_learning_feedback(job_id: str):
+    if mina_job_repository.get(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    try:
+        return build_air_learning_feedback_view(
+            job_id=job_id,
+            feedback_repository=air_learning_feedback_repository,
+            learning_repository=learning_fact_repository,
+            handoff_repository=air_operation_handoff_repository,
+        )
+    except (AirLearningFeedbackConflictError, AirLearningTransitionError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/mina-jobs/{job_id}/air-learning-feedback")
+def record_mina_job_air_learning_feedback(
+    job_id: str, request: AirLearningFeedbackRequest, http_request: Request,
+):
+    try:
+        feedback = record_air_learning_feedback(
+            feedback_repository=air_learning_feedback_repository,
+            handoff_repository=air_operation_handoff_repository,
+            mina_repository=mina_job_repository,
+            job_id=job_id, recorded_by=_authenticated_operator(http_request),
+            **request.model_dump(),
+        )
+        derivation = derive_air_route_learning(
+            job_id=job_id, feedback_repository=air_learning_feedback_repository,
+            learning_repository=learning_fact_repository,
+            created_by=_authenticated_operator(http_request),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}") from exc
+    except (AirLearningFeedbackConflictError, AirLearningTransitionError, LearningFactConflictError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "feedback": feedback.model_dump(mode="json"),
+        "derivation": derivation,
+        "pricing_authority_created": False,
+        "tariff_authority_created": False,
+        "routing_authority_created": False,
+        "booking_authority_created": False,
+    }
+
+
+@app.post("/mina-jobs/{job_id}/derive-air-learning")
+def derive_mina_job_air_learning(job_id: str, http_request: Request):
+    if mina_job_repository.get(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    try:
+        return derive_air_route_learning(
+            job_id=job_id, feedback_repository=air_learning_feedback_repository,
+            learning_repository=learning_fact_repository,
+            created_by=_authenticated_operator(http_request),
+        )
+    except (AirLearningFeedbackConflictError, AirLearningTransitionError, LearningFactConflictError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/mina-jobs/{job_id}/operation-start")

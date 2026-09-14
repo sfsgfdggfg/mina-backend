@@ -82,6 +82,7 @@ from src.simulation.air_customer_pricing_preview_regressions import evaluate_air
 from src.simulation.air_quote_readiness_preview_regressions import evaluate_air_quote_readiness_preview_regressions
 from src.simulation.air_quote_preparation_regressions import evaluate_air_quote_preparation_regressions
 from src.simulation.air_operation_handoff_regressions import evaluate_air_operation_handoff_regressions
+from src.simulation.air_learning_feedback_regressions import evaluate_air_learning_feedback_regressions
 from src.simulation.air_fx_consumption_preview_regressions import evaluate_air_fx_consumption_preview_regressions
 from src.simulation.air_operational_readiness_preview_regressions import evaluate_air_operational_readiness_preview_regressions
 from src.simulation.air_reviewed_surcharge_cost_preview_regressions import evaluate_air_reviewed_surcharge_cost_preview_regressions
@@ -364,6 +365,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Commercial-air quote readiness preview", evaluate_air_quote_readiness_preview_regressions),
     Suite("Commercial-air quote human-approval preparation", evaluate_air_quote_preparation_regressions),
     Suite("Commercial-air accepted quote operation handoff", evaluate_air_operation_handoff_regressions),
+    Suite("Commercial-air learning feedback loop", evaluate_air_learning_feedback_regressions),
     Suite("Commercial-air FX consumption preview", evaluate_air_fx_consumption_preview_regressions),
     Suite("Commercial-air operational readiness preview", evaluate_air_operational_readiness_preview_regressions),
     Suite("Commercial-air reviewed surcharge cost preview", evaluate_air_reviewed_surcharge_cost_preview_regressions),

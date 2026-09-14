@@ -36,6 +36,7 @@ class AirQuoteContextSnapshot(BaseModel):
 
     confirmed_cost_basis_amount: Decimal = Field(gt=0)
     confirmed_cost_basis_currency: str = Field(min_length=3, max_length=3)
+    quoted_chargeable_weight_kg: Optional[Decimal] = Field(default=None, gt=0)
     customer_final_price: Decimal = Field(gt=0)
     customer_price_currency: str = Field(min_length=3, max_length=3)
     pricing_policy_source: Optional[str] = Field(default=None, max_length=80)

@@ -4406,3 +4406,11 @@ Do not start an air operation from the `accepted` stage label alone. Resolve the
 Freeze all matching current-revision sent evidence, the acceptance actor/time and the P2-42 air quote context into the immutable air-operation handoff. Only after that record exists may an air price-request job enter `operation_opened`. Retrying the same job returns the existing handoff rather than creating another one.
 
 P2-43 does not book capacity, contact the airline or reuse road vehicle/plaka/sürücü operation-start semantics. Keep `booking_confirmed`, airline-contact, booking/outbound and runtime authority false until later explicit air-operation evidence supports those transitions.
+
+## RULE-280 — Learn Air Outcomes Only from Current Explicit Evidence; Never Turn Confirmed Air Advisories into Execution Authority
+
+Record commercial-air feedback only for a lifecycle-v2 air MINA job that already has the durable P2-43 operation handoff. Freeze the handoff's air quote context into every feedback record. The first feedback is immutable; corrections require a new entry that explicitly supersedes the current record. Same-entry retries may be idempotent only when the evidence is identical. Keep superseded records for audit but exclude them from aggregation.
+
+Do not infer actual airline, route, chargeable weight, cost or delivery outcome from absence, current repository state or the originally quoted plan. Missing evidence stays missing. Do not normalize actual cost across currencies with latest, nearest, inverse or implicit FX. Aggregate only exact quoted route contexts and require the P2-44 minimum sample counts before proposing route observations.
+
+All derived `air.*` LearningFacts must remain advisory even after human confirmation. They may be displayed beside a future air quote as historical context, but they must not change tariff evidence, cost completeness, pricing policy, customer price, route selection, booking, outbound messages or runtime execution. Preserve `runtime_authoritative=false` for confirmed air route facts until a separately reviewed future authority design explicitly changes that boundary.
