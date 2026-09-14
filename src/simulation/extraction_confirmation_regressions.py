@@ -56,6 +56,7 @@ def evaluate_extraction_confirmation_regressions() -> dict:
         InMemoryQuoteApprovalRepository,
     )
     from src.core.quote_case_repository import InMemoryQuoteCaseRepository
+    from src.core.mina_job_repository import InMemoryMinaJobRepository
     from src.core.supplier_rfq import SupplierRFQDraft
     from src.core.supplier_rfq_lifecycle import approve_supplier_rfq
     from src.core.supplier_rfq_repository import InMemorySupplierRFQRepository
@@ -253,6 +254,7 @@ def evaluate_extraction_confirmation_regressions() -> dict:
         failures.append("corrected confirmation did not create confirmed snapshot")
 
     unknown_repository = InMemoryExtractionProposalRepository()
+    unknown_mina_jobs = InMemoryMinaJobRepository()
     unknown = create_extraction_proposal(
         mail=mail,
         proposed_shipment=_snapshot(
@@ -268,21 +270,48 @@ def evaluate_extraction_confirmation_regressions() -> dict:
         "is_high_value",
     }:
         failures.append("unknown safety facts were not preserved explicitly")
-    unknown_confirmation = confirm_extraction_proposal(
+    try:
+        confirm_extraction_proposal(
+            repository=unknown_repository,
+            proposal_id=unknown.proposal_id,
+            operator_identity="Safety Operator",
+            mina_job_repository=unknown_mina_jobs,
+        )
+    except ExtractionCorrectionError as exc:
+        if "Safety-sensitive fields must be explicit" not in str(exc):
+            failures.append("unknown safety confirmation failed for the wrong reason")
+    else:
+        failures.append("unknown safety facts gained operational authority at confirmation")
+
+    stored_unknown = unknown_repository.get(unknown.proposal_id)
+    if stored_unknown is None or stored_unknown.extraction_status != "proposed":
+        failures.append("failed unknown-safety confirmation mutated proposal state")
+    if unknown_mina_jobs.list_all():
+        failures.append("failed unknown-safety confirmation created a MINA job")
+
+    resolved_unknown = confirm_extraction_proposal(
         repository=unknown_repository,
         proposal_id=unknown.proposal_id,
         operator_identity="Safety Operator",
+        corrections={
+            "is_adr": False,
+            "is_temperature_controlled": False,
+            "is_high_value": False,
+        },
+        mina_job_repository=unknown_mina_jobs,
     )
     if (
-        unknown_confirmation.confirmed_shipment is None
-        or unknown_confirmation.confirmed_shipment.is_adr is not None
-        or unknown_confirmation.confirmed_shipment.is_temperature_controlled
-        is not None
-        or unknown_confirmation.confirmed_shipment.is_high_value is not None
-        or unknown_confirmation.changed_fields
-        or unknown_confirmation.operator_corrections
+        resolved_unknown.confirmed_shipment is None
+        or resolved_unknown.confirmed_shipment.is_adr is not False
+        or resolved_unknown.confirmed_shipment.is_temperature_controlled is not False
+        or resolved_unknown.confirmed_shipment.is_high_value is not False
+        or set(resolved_unknown.changed_fields) != {
+            "is_adr", "is_temperature_controlled", "is_high_value"
+        }
+        or len(unknown_mina_jobs.list_all()) != 1
     ):
-        failures.append("unknown safety facts were not confirmed unchanged")
+        failures.append("explicit operator safety resolution was not preserved")
+
     unknown_result = resume_confirmed_extraction(
         repository=unknown_repository,
         proposal_id=unknown.proposal_id,
@@ -291,7 +320,7 @@ def evaluate_extraction_confirmation_regressions() -> dict:
         quote_case_repository=InMemoryQuoteCaseRepository(),
     )
     if unknown_result.get("result_type") != "supplier_rfq_approval_required":
-        failures.append("ordinary shipment with unknown safety facts did not resume")
+        failures.append("safety-resolved ordinary shipment did not resume")
 
     explicit_false_repository = InMemoryExtractionProposalRepository()
     explicit_false = create_extraction_proposal(
@@ -530,8 +559,6 @@ def evaluate_extraction_confirmation_regressions() -> dict:
         failures.append("extraction checkpoint changed outbound mail safety")
 
     import src.api as api
-
-    from src.core.mina_job_repository import InMemoryMinaJobRepository
 
     original_api_state = (
         api.parse_email_with_ai,

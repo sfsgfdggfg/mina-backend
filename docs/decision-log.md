@@ -7523,3 +7523,14 @@ Commercial-flow regressions that progress from supplier evidence into customer q
 `durable provenance recovery`, `atomic workflow transitions`, `human operational flow`, `quote approval workflow contract` and `quote approval repository/workflow integration` must all pass when the ambient agency-pricing environment is absent and when it contains an unrelated invalid value. Their local fixtures are test-only evidence and do not establish a runtime agency default.
 
 A dedicated canonical isolation regression runs these commercial suites under deliberately invalid ambient agency pricing so future test-order or runner-environment coupling fails visibly instead of producing a false-positive pilot gate.
+
+## DEC-269 — Safety Truth Must Be Explicit Before Human Extraction Confirmation Creates Operational Authority
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+The human extraction-confirmation checkpoint must not convert an unresolved safety field into an operational Shipment. `is_adr`, `is_temperature_controlled` and `is_high_value` must each be explicitly `true` or `false` before confirmation may succeed. AI-only negative values remain non-authoritative until the source or operator establishes them, while conservative positive values and explicit source negatives continue to be preserved under the existing safety-truth rules.
+
+A failed confirmation caused by unknown safety truth must be non-mutating: the extraction proposal remains `proposed`, no MINA job is created and no downstream operational workflow may start. The operator may resolve the fields through the existing correction contract and then confirm the exact resulting snapshot. Conditional details such as ADR class or temperature requirement remain governed by the existing contradiction, missing-information, regulatory and risk gates rather than being fabricated at confirmation.
+
+This aligns live controlled-pilot behavior with authorized sanitized replay, where unresolved safety truth already stops at extraction confirmation. Direct development helpers that construct a `Shipment` without the human checkpoint do not become evidence that unknown safety is acceptable in the real pilot path.
