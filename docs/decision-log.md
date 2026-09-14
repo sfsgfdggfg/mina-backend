@@ -7416,3 +7416,14 @@ P2-39 may confirm a bounded inquiry-level air cost basis only by combining four 
 Unsupported-cost semantic review is durable human evidence. Every semantic starts unresolved in the browser and must be classified exactly once as `unresolved`, `not_applicable` or `applicable_unresolved`, with rationale, authenticated reviewer/time and source SHA provenance. `applicable_unresolved` never becomes a zero-cost assumption. The completeness preview never auto-selects the newest review and never treats repository absence as not-applicable evidence.
 
 For surcharge exclusions, only destination/cargo/routing mismatches already proven by reviewed applicability may be treated as non-blocking. `currency_mismatch_no_fx`, incomplete flat review and unreviewed flat quantity basis remain blockers. When all gates pass, P2-39 may expose `cost_completeness_confirmed=true` plus the confirmed cost-basis amount/currency. This does not create customer selling price, pricing policy, quote/send authority, booking, outbound execution or runtime authority, and the response deliberately keeps `all_in_cost=false` to avoid conflating cost-basis completeness with a customer-facing commercial offer.
+
+## DEC-259 — Air Customer Pricing Must Reuse the Shared Pricing Resolver and Remain a Preview Until Quote Readiness
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-40 may calculate a commercial-air customer selling-price preview only after P2-39 returns `cost_completeness_confirmed=true` for the exact inquiry/source evidence chain. The customer must be an explicit active Customer Master record. Pricing authority must come only from the existing resolver hierarchy: explicit quote override, then the verified Customer Master pricing policy, then the configured agency default. Accepted-quote learning, commercial advisory facts and observed historical markup statistics are never pricing authority.
+
+Air pricing must reuse the shared `resolve_pricing_policy` and `calculate_customer_quote` implementation so cost-markup percentage, gross-margin percentage, fixed-profit, manual sell-price override and currency rounding behave exactly as they do in the established pricing flow. A missing or invalid policy fails closed and produces no customer price.
+
+The P2-40 result is a `customer_price_preview`, not a QuoteCase, quote approval, sendable quote or booking instruction. `quote_ready`, `quote_created`, quote-send, booking, outbound and runtime authority remain false. Tariff validity, capacity/schedule and final quote-readiness remain separate later gates.

@@ -1709,3 +1709,11 @@ In **Settings → Havayolu Listeleri**, first complete the normal tariff/surchar
 In the reviewed-cost panel select the exact Cost Scope Review and Unsupported Cost Semantics Review, then choose only the additional-cost and FX evidence intended for this calculation and enter required shipment/AWB/HAWB/MAWB counts. **Cost Completeness Kontrol Et** confirms only when flat coverage is complete, unsupported semantics are cleared, weight rounding is reviewed and no cost-relevant surcharge exclusion remains. Destination/cargo/routing non-applicable surcharge lines may remain excluded.
 
 `Cost completeness CONFIRMED` is not a customer quote and is not an all-in label. Do not apply/send a customer price from P2-39 alone. Tariff validity, capacity/schedule, customer pricing policy, quote approval and outbound execution remain separate controlled gates.
+
+## Commercial-Air Customer Pricing Preview (P2-40)
+
+Use `Customer Price Preview Hesapla` only after the same screen can produce `Cost completeness CONFIRMED`. Select the active Customer Master record explicitly. Leave quote override empty to use the normal customer-policy/agency-default resolver, or enter an explicit override when an operator is intentionally overriding the normal policy.
+
+Confirm that the result shows the pricing policy source and formula used together with the confirmed air cost basis and preview selling price. If pricing policy is missing or invalid, treat the result as blocked and configure/approve the appropriate policy rather than inventing a margin. Historical accepted-quote learning must not be used as an automatic fallback.
+
+`PRICE PREVIEW` is not a quote. Do not send it to the customer or treat it as booking authority. P2-40 intentionally leaves quote readiness, quote creation/approval, tariff/service-date validity and airline capacity/schedule to subsequent controlled gates.

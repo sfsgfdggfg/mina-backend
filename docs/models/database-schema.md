@@ -1049,3 +1049,9 @@ The response derives `required_categories`, `covered_required_categories`, `miss
 P2-39 adds durable namespaces `air_unsupported_cost_semantics_reviews` and `air_unsupported_cost_semantics_review_by_entry`. Each review is bound to exact `source_id` / `source_sha256` plus `inquiry_reference`, keeps authenticated reviewer/time/note, and contains exactly five semantic requirements: weight-based additional cost, percentage additional cost, minimum/tiered/formula additional cost, customs duties/taxes, and other unmodeled cost. Each requirement stores status (`unresolved`, `not_applicable`, `applicable_unresolved`) and authored rationale.
 
 The final cost-completeness preview is ephemeral and adds no persistence namespace. It consumes one explicitly selected P2-37 scope review, one explicitly selected P2-39 unsupported-semantics review, P2-38/P2-36 selected cost/FX/count inputs, the reviewed surcharge result and exact-source weight-rounding evidence. `cost_completeness_confirmed` and confirmed cost-basis amount/currency are read-model outputs only. Customer pricing, quote/send, booking, outbound/runtime authority and `all_in_cost` remain false.
+
+### P2-40 Commercial-Air Customer Pricing Preview
+
+P2-40 adds no persistence namespace. The preview consumes the existing P2-39 cost-completeness read model plus an explicit active `customer_id`, optional explicit `quote_pricing_override`, Customer Master pricing policy and configured agency pricing policy. The shared pricing resolver returns the policy source/formula/rounding and the shared pricing engine returns the ephemeral `customer_price_preview`.
+
+No QuoteCase, approval, outbound message, booking state or learning fact is written. The preview explicitly exposes `quote_ready=false`, `quote_created=false`, `quote_send_authority=false`, `booking_authority=false`, `outbound_authority=false` and `runtime_authoritative=false`.
