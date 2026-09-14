@@ -1677,3 +1677,11 @@ In **Ayarlar → Havayolu Listeleri**, use **Additional / Local Cost Evidence** 
 Use `customs_service_fee` only for a broker/service-provider fee. Do not enter customs duties, taxes, government charges, `/kg` rates, percentages, minimums or tiered formulas into this form. Those require separate future evidence models instead of approximation.
 
 P2-35 only records evidence. The existing **Reviewed Surcharge Cost Preview** and **Operational Readiness Preview** do not automatically consume these records, and their subtotal remains partial. Do not manually add a stored record and then label the result all-in or customer-ready. Explicit cost-consumption, matching counts and any required FX remain a later gate.
+
+## Commercial-Air Explicit Additional / Local Cost Consumption (P2-36)
+
+In **Reviewed Surcharge Cost Preview**, select an **Additional / Local Cost Evidence** record only when it belongs to the current inquiry and exact tariff source. Enter the same inquiry reference and the explicit count required by its stored quantity basis: shipment, AWB, HAWB or MAWB. Merely seeing a stored local-cost record in the list does not include it in the calculation.
+
+For a local cost in another currency, also select the exact P2-32 FX evidence in the direction `local-cost currency -> freight currency` and enter that evidence's exact timezone-aware reference timestamp. Do not invert a reverse pair and do not use latest/nearest FX. Missing count, inquiry mismatch, source mismatch or missing matching FX must stop the preview.
+
+Read **Extended partial subtotal** as `base freight + reviewed airline surcharges + explicitly selected local costs`. It is not proof that all local costs were discovered. Unsupported `/kg`, percentage, minimum/tiered, customs duty/tax and other unmodelled costs may still exist, so the UI must continue to show **ALL-IN DEĞİL**. The same selected subtotal may be displayed inside Operational Readiness, but operational completeness still does not authorize a customer quote or airline booking.

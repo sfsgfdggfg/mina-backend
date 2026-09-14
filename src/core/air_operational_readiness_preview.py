@@ -5,6 +5,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.core.air_additional_cost_evidence_repository import AirAdditionalCostEvidenceRepository
 from src.core.air_fx_rate_evidence_repository import AirFxRateEvidenceRepository
 from src.core.air_rate_structure_review_repository import AirRateStructureReviewRepository
 from src.core.air_rate_surcharge_review_repository import AirRateSurchargeReviewRepository
@@ -79,6 +80,7 @@ def build_air_operational_readiness_preview(
     validity_repository: AirRateValidityReviewRepository,
     availability_repository: AirServiceAvailabilityRepository,
     fx_repository: AirFxRateEvidenceRepository | None = None,
+    additional_cost_repository: AirAdditionalCostEvidenceRepository | None = None,
     rounding_repository: AirRateWeightRoundingReviewRepository | None = None,
     volumetric_weight_kg=None,
     total_volume_cm3=None,
@@ -88,10 +90,12 @@ def build_air_operational_readiness_preview(
     hawb_count: Optional[int] = None,
     mawb_count: Optional[int] = None,
     fx_evidence_ids: Optional[list[str]] = None,
+    additional_cost_evidence_ids: Optional[list[str]] = None,
     fx_reference_at: Optional[datetime] = None,
 ) -> AirOperationalReadinessPreview:
     inquiry = _normalized_inquiry_reference(inquiry_reference)
     selected_fx_ids = list(fx_evidence_ids or [])
+    selected_additional_ids = list(additional_cost_evidence_ids or [])
     if fx_reference_at is not None and not selected_fx_ids:
         raise AirOperationalReadinessPreviewError("fx_evidence_ids_required_for_fx_context")
 
@@ -110,8 +114,9 @@ def build_air_operational_readiness_preview(
             hawb_count=hawb_count,
             mawb_count=mawb_count,
             reference_date=service_date,
-            inquiry_reference=inquiry if selected_fx_ids else None,
+            inquiry_reference=inquiry if (selected_fx_ids or selected_additional_ids) else None,
             fx_evidence_ids=selected_fx_ids,
+            additional_cost_evidence_ids=selected_additional_ids,
             fx_reference_at=fx_reference_at,
             table_repository=table_repository,
             structure_repository=structure_repository,
@@ -119,6 +124,7 @@ def build_air_operational_readiness_preview(
             source_repository=source_repository,
             validity_repository=validity_repository,
             fx_repository=fx_repository,
+            additional_cost_repository=additional_cost_repository,
             rounding_repository=rounding_repository,
         )
     except AirReviewedSurchargeCostPreviewError as exc:

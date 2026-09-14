@@ -1025,3 +1025,9 @@ Freight calculation remains ephemeral. The preview preserves raw `chargeable_wei
 P2-35 adds `air_additional_cost_evidence` plus `air_additional_cost_evidence_by_entry`. Each immutable evidence record stores `evidence_id`, idempotent `entry_id`, `inquiry_reference`, exact air `source_id` / `source_sha256`, bounded `cost_category`, provider, positive decimal `amount`, ISO currency, flat `quantity_basis`, evidence source/reference/note, authenticated operator and aware timestamp.
 
 Supported quantity bases are only `per_shipment`, `per_awb`, `per_hawb` and `per_mawb`. Weight-based, percentage, minimum/tiered, duty and tax semantics are deliberately absent. The namespaces are durable evidence only; no current cost preview reads them and no customer-pricing, booking or outbound authority is persisted or inferred.
+
+### P2-36 Commercial-Air Explicit Additional Cost Consumption
+
+P2-36 adds no persistence namespace. `additional_cost_evidence_ids` is an ephemeral preview input. The calculation reads explicitly selected durable `air_additional_cost_evidence` records and existing P2-32 FX evidence when required, but never mutates those records or persists calculated local-cost totals.
+
+The preview may expose selected evidence ids plus category/provider, source amount/currency, quantity basis/count, converted freight-currency amount and FX provenance, together with `reviewed_additional_cost_total` and `base_plus_reviewed_surcharges_and_additional_costs`. These fields are ephemeral calculation evidence only. `all_in_cost`, customer-quote eligibility and runtime authority remain false; no completeness or pricing authority record is persisted.

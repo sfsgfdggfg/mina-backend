@@ -6,6 +6,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.core.air_additional_cost_evidence_repository import AirAdditionalCostEvidenceRepository
 from src.core.air_fx_rate_evidence_repository import AirFxRateEvidenceRepository
 from src.core.air_freight_calculation_preview import (
     AirFreightCalculationPreview,
@@ -58,6 +59,24 @@ class AirReviewedFlatSurchargeComponent(BaseModel):
     fx_effective_at: Optional[datetime] = None
 
 
+class AirReviewedAdditionalCostComponent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    evidence_id: str
+    cost_category: str
+    provider_name: str
+    currency: str
+    amount_per_unit: Decimal
+    quantity_basis: Literal["per_shipment", "per_awb", "per_hawb", "per_mawb"]
+    applied_count: int = Field(ge=1, le=1000)
+    additional_cost: Decimal
+    source_currency: Optional[str] = None
+    source_amount_per_unit: Optional[Decimal] = None
+    source_additional_cost: Optional[Decimal] = None
+    fx_evidence_id: Optional[str] = None
+    fx_rate: Optional[Decimal] = None
+    fx_effective_at: Optional[datetime] = None
+
+
 class AirReviewedSurchargeExclusion(BaseModel):
     model_config = ConfigDict(extra="forbid")
     candidate_id: str
@@ -88,13 +107,18 @@ class AirReviewedSurchargeCostPreview(BaseModel):
     reviewed_valid_to: Optional[date] = None
     included_surcharges: list[AirReviewedSurchargeComponent] = Field(default_factory=list, max_length=100)
     included_flat_surcharges: list[AirReviewedFlatSurchargeComponent] = Field(default_factory=list, max_length=100)
+    included_additional_costs: list[AirReviewedAdditionalCostComponent] = Field(default_factory=list, max_length=100)
     excluded_surcharges: list[AirReviewedSurchargeExclusion] = Field(default_factory=list, max_length=100)
+    additional_cost_evidence_ids_used: list[str] = Field(default_factory=list, max_length=100)
     reviewed_per_kg_surcharge_total: Decimal
     reviewed_flat_surcharge_total: Decimal
+    reviewed_additional_cost_total: Decimal
     base_plus_reviewed_per_kg_surcharges: Decimal
     base_plus_reviewed_surcharges: Decimal
+    base_plus_reviewed_surcharges_and_additional_costs: Decimal
     all_in_cost: bool = False
     flat_surcharges_included: bool = False
+    additional_costs_included: bool = False
     fx_applied: bool = False
     surcharge_rounding_applied: bool = False
     capacity_confirmed: bool = False
@@ -149,6 +173,7 @@ def build_air_reviewed_surcharge_cost_preview(
     source_repository: AirShadowRepository,
     validity_repository: AirRateValidityReviewRepository | None = None,
     fx_repository: AirFxRateEvidenceRepository | None = None,
+    additional_cost_repository: AirAdditionalCostEvidenceRepository | None = None,
     rounding_repository: AirRateWeightRoundingReviewRepository | None = None,
     volumetric_weight_kg=None,
     total_volume_cm3=None,
@@ -160,6 +185,7 @@ def build_air_reviewed_surcharge_cost_preview(
     reference_date: Optional[date] = None,
     inquiry_reference: Optional[str] = None,
     fx_evidence_ids: Optional[list[str]] = None,
+    additional_cost_evidence_ids: Optional[list[str]] = None,
     fx_reference_at: Optional[datetime] = None,
 ) -> AirReviewedSurchargeCostPreview:
     try:
@@ -203,12 +229,19 @@ def build_air_reviewed_surcharge_cost_preview(
 
     normalized_inquiry = " ".join(str(inquiry_reference or "").strip().split()) or None
     selected_fx_ids = list(fx_evidence_ids or [])
+    selected_additional_ids = list(additional_cost_evidence_ids or [])
     if len(selected_fx_ids) > 20:
         raise AirReviewedSurchargeCostPreviewError("too_many_fx_evidence_ids")
+    if len(selected_additional_ids) > 100:
+        raise AirReviewedSurchargeCostPreviewError("too_many_additional_cost_evidence_ids")
     if any(not str(evidence_id or "").strip() for evidence_id in selected_fx_ids):
         raise AirReviewedSurchargeCostPreviewError("invalid_fx_evidence_id")
+    if any(not str(evidence_id or "").strip() for evidence_id in selected_additional_ids):
+        raise AirReviewedSurchargeCostPreviewError("invalid_additional_cost_evidence_id")
     if len(selected_fx_ids) != len(set(selected_fx_ids)):
         raise AirReviewedSurchargeCostPreviewError("duplicate_fx_evidence_id")
+    if len(selected_additional_ids) != len(set(selected_additional_ids)):
+        raise AirReviewedSurchargeCostPreviewError("duplicate_additional_cost_evidence_id")
     if selected_fx_ids:
         if fx_repository is None:
             raise AirReviewedSurchargeCostPreviewError("air_fx_evidence_repository_required")
@@ -218,8 +251,15 @@ def build_air_reviewed_surcharge_cost_preview(
             raise AirReviewedSurchargeCostPreviewError("fx_reference_at_required")
         if fx_reference_at.tzinfo is None:
             raise AirReviewedSurchargeCostPreviewError("fx_reference_at_must_be_timezone_aware")
-    elif normalized_inquiry is not None or fx_reference_at is not None:
+    elif fx_reference_at is not None:
         raise AirReviewedSurchargeCostPreviewError("fx_evidence_ids_required_for_fx_context")
+    if selected_additional_ids:
+        if additional_cost_repository is None:
+            raise AirReviewedSurchargeCostPreviewError("air_additional_cost_evidence_repository_required")
+        if normalized_inquiry is None:
+            raise AirReviewedSurchargeCostPreviewError("inquiry_reference_required_for_additional_costs")
+    if normalized_inquiry is not None and not selected_fx_ids and not selected_additional_ids:
+        raise AirReviewedSurchargeCostPreviewError("evidence_ids_required_for_inquiry_context")
 
     fx_by_pair = {}
     for evidence_id in selected_fx_ids:
@@ -254,9 +294,12 @@ def build_air_reviewed_surcharge_cost_preview(
 
     included: list[AirReviewedSurchargeComponent] = []
     included_flat: list[AirReviewedFlatSurchargeComponent] = []
+    included_additional: list[AirReviewedAdditionalCostComponent] = []
     excluded: list[AirReviewedSurchargeExclusion] = []
     per_kg_total = Decimal("0")
     flat_total = Decimal("0")
+    additional_total = Decimal("0")
+    used_additional_ids: set[str] = set()
 
     def exclude(candidate, reason: str) -> None:
         excluded.append(AirReviewedSurchargeExclusion(
@@ -373,6 +416,65 @@ def build_air_reviewed_surcharge_cost_preview(
         ))
         per_kg_total += cost
 
+    for evidence_id in selected_additional_ids:
+        evidence = additional_cost_repository.get(evidence_id)
+        if evidence is None:
+            raise AirReviewedSurchargeCostPreviewError(
+                f"air_additional_cost_evidence_not_found:{evidence_id}"
+            )
+        if evidence.source_id != source.source_id or evidence.source_sha256 != source.sha256_hex:
+            raise AirReviewedSurchargeCostPreviewError(
+                f"air_additional_cost_evidence_source_mismatch:{evidence_id}"
+            )
+        if evidence.inquiry_reference != normalized_inquiry:
+            raise AirReviewedSurchargeCostPreviewError(
+                f"air_additional_cost_evidence_inquiry_mismatch:{evidence_id}"
+            )
+        count = flat_counts[evidence.quantity_basis]
+        if count is None:
+            raise AirReviewedSurchargeCostPreviewError(
+                f"additional_cost_count_required:{evidence.quantity_basis}:{evidence_id}"
+            )
+        fx_evidence = None
+        if evidence.currency != freight.currency:
+            fx_evidence = fx_by_pair.get((evidence.currency, freight.currency))
+            if fx_evidence is None:
+                raise AirReviewedSurchargeCostPreviewError(
+                    f"additional_cost_currency_mismatch_no_fx:{evidence_id}"
+                )
+        source_cost = evidence.amount * count
+        converted_amount = evidence.amount if fx_evidence is None else evidence.amount * fx_evidence.rate
+        cost = source_cost if fx_evidence is None else source_cost * fx_evidence.rate
+        if fx_evidence is not None:
+            used_fx_ids.add(fx_evidence.evidence_id)
+        used_additional_ids.add(evidence.evidence_id)
+        included_additional.append(AirReviewedAdditionalCostComponent(
+            evidence_id=evidence.evidence_id,
+            cost_category=evidence.cost_category,
+            provider_name=evidence.provider_name,
+            currency=freight.currency,
+            amount_per_unit=converted_amount,
+            quantity_basis=evidence.quantity_basis,
+            applied_count=count,
+            additional_cost=cost,
+            source_currency=None if fx_evidence is None else evidence.currency,
+            source_amount_per_unit=None if fx_evidence is None else evidence.amount,
+            source_additional_cost=None if fx_evidence is None else source_cost,
+            fx_evidence_id=None if fx_evidence is None else fx_evidence.evidence_id,
+            fx_rate=None if fx_evidence is None else fx_evidence.rate,
+            fx_effective_at=None if fx_evidence is None else fx_evidence.effective_at,
+        ))
+        additional_total += cost
+
+    unused_additional_ids = [
+        evidence_id for evidence_id in selected_additional_ids
+        if evidence_id not in used_additional_ids
+    ]
+    if unused_additional_ids:
+        raise AirReviewedSurchargeCostPreviewError(
+            f"unused_additional_cost_evidence:{unused_additional_ids[0]}"
+        )
+
     unused_fx_ids = [evidence_id for evidence_id in selected_fx_ids if evidence_id not in used_fx_ids]
     if unused_fx_ids:
         raise AirReviewedSurchargeCostPreviewError(f"unused_fx_evidence:{unused_fx_ids[0]}")
@@ -391,12 +493,19 @@ def build_air_reviewed_surcharge_cost_preview(
         reviewed_valid_to=None if validity_review is None else validity_review.valid_to,
         included_surcharges=included,
         included_flat_surcharges=included_flat,
+        included_additional_costs=included_additional,
         excluded_surcharges=excluded,
+        additional_cost_evidence_ids_used=sorted(used_additional_ids),
         reviewed_per_kg_surcharge_total=per_kg_total,
         reviewed_flat_surcharge_total=flat_total,
+        reviewed_additional_cost_total=additional_total,
         base_plus_reviewed_per_kg_surcharges=freight.recommended_base_freight + per_kg_total,
         base_plus_reviewed_surcharges=freight.recommended_base_freight + per_kg_total + flat_total,
+        base_plus_reviewed_surcharges_and_additional_costs=(
+            freight.recommended_base_freight + per_kg_total + flat_total + additional_total
+        ),
         flat_surcharges_included=bool(included_flat),
+        additional_costs_included=bool(included_additional),
         fx_applied=bool(used_fx_ids),
         tariff_validity_confirmed=tariff_validity_confirmed,
     )

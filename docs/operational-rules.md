@@ -4343,3 +4343,11 @@ Pickup, local handling/terminal, documentation, customs-service, destination han
 P2-35 supports only flat `per_shipment`, `per_awb`, `per_hawb` and `per_mawb` amounts. Do not coerce `/kg`, percentage, minimum/tiered formulas, duties, taxes or government charges into this model. `customs_service_fee` is a service fee category, not customs duty/tax authority.
 
 Repository presence is not cost-consumption authority. Additional-cost evidence must not be auto-added to the existing reviewed surcharge subtotal, auto-converted through any FX record, reused across inquiries or treated as an all-in/customer-ready cost. A later explicit consumption rule is required.
+
+## RULE-272 — Consume Air Local Costs Only by Exact Explicit Selection; Never Infer Completeness
+
+A commercial-air reviewed-cost preview may consume a P2-35 local-cost record only when its evidence id is explicitly selected for that preview. The record must match the exact tariff source id/SHA and inquiry. Duplicate, missing, wrong-source and wrong-inquiry selections fail closed. Stored but unselected local-cost evidence must have zero calculation effect.
+
+Use only the record's reviewed flat quantity basis and require the corresponding explicit shipment/AWB/HAWB/MAWB count. Never assume one or substitute a different count type. If the local-cost currency differs from the freight currency, require explicit P2-32 FX evidence with exact source/inquiry/direction/timestamp matching; never invert or auto-select a rate. Preserve source-currency values and evidence provenance in the preview.
+
+Even when all selected records calculate successfully, label the result only as an extended partial subtotal. Selection does not establish that all shipment-local costs are known, and P2-35 intentionally cannot represent `/kg`, percentage, minimum/tiered, duties or taxes. Therefore `all_in_cost`, customer-quote eligibility, runtime authority, booking authority and outbound authority must remain false.
