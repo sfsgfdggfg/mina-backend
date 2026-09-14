@@ -1780,3 +1780,9 @@ Pilot gate regressions that expect commercial progression must carry their own e
 The controlled-pilot regression gate now includes a commercial-fixture isolation check. The provenance-recovery, atomic-transition, human-flow and quote-approval commercial regressions must carry their own synthetic pricing authority and must not depend on `pilot_regression_suite` injecting a valid `MINAI_AGENCY_PRICING_POLICY_JSON` value.
 
 If a commercial regression passes only inside the canonical runner but fails standalone, treat that as a gate-integrity defect. Do not fix it by adding another global environment default. Make the regression declare the exact synthetic commercial authority it needs, and verify it with ambient agency pricing both absent and intentionally invalid.
+
+## Extraction Safety Truth Gate
+
+At the extraction-confirmation screen, do not approve a proposal while ADR status, temperature-control status or high-value status is still unknown. The API returns a validation error and leaves the proposal unconfirmed; it must not create a MINA job or supplier workflow. Resolve each safety field explicitly from customer evidence or operator review, then confirm again.
+
+Treat `false` as valid only when it is explicitly established. An AI-only negative that remained `None` after safety-truth normalization is not permission to proceed. This runtime rule intentionally matches authorized sanitized replay, where a case with unresolved safety truth remains at `extraction_confirmation_required`.

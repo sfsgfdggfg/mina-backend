@@ -4438,3 +4438,9 @@ Use the shared Road Freight v1 standard trailer length of 13.60 m as an explicit
 The exact boundary `length_cm = 1360` is not overlength by itself. Existing width, height, heavy-piece, special-equipment, commodity, ADR, temperature and other operational rules remain separate and may still block or redirect the shipment.
 
 Authorized sanitized replay must derive `is_oversize_or_project=true` from the same shared road-dimension rule so replay evidence cannot disagree with live pilot-scope behavior.
+
+## RULE-284 — Unknown ADR, Temperature-Control and High-Value Truth Cannot Pass the Human Confirmation Boundary
+
+Before a customer extraction proposal becomes an operational Shipment, `is_adr`, `is_temperature_controlled` and `is_high_value` must all be explicit booleans. `None` is unresolved truth, not a negative answer. Confirmation must fail closed until the operator corrects or confirms those fields explicitly.
+
+Unknown-safety confirmation failure must not persist a confirmed snapshot, create a MINA job or start any supplier/pricing workflow. Existing contradiction guards remain in force: ADR class cannot coexist with `is_adr=false`, and a temperature requirement cannot coexist with `is_temperature_controlled=false`. Positive safety states continue through the existing missing-information, regulatory, equipment, risk and pilot-scope gates.

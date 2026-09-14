@@ -147,6 +147,21 @@ def _validated_confirmed_shipment(
             "Shipment corrections are invalid."
         ) from exc
 
+    unknown_safety_fields = [
+        field_name
+        for field_name in (
+            "is_adr",
+            "is_temperature_controlled",
+            "is_high_value",
+        )
+        if getattr(candidate, field_name) is None
+    ]
+    if unknown_safety_fields:
+        raise ExtractionCorrectionError(
+            "Safety-sensitive fields must be explicit before confirmation: "
+            + ", ".join(unknown_safety_fields)
+        )
+
     if candidate.is_adr is False and candidate.adr_class is not None:
         raise ExtractionCorrectionError(
             "ADR class must be empty when ADR status is explicitly false."
