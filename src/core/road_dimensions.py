@@ -43,5 +43,13 @@ def is_project_height(package: PackageDimensions) -> bool:
     )
 
 
+def exceeds_standard_trailer_dimensions(package: PackageDimensions) -> bool:
+    return (
+        is_overlength(package)
+        or is_overwidth(package)
+        or requires_nonstandard_height_equipment(package)
+    )
+
+
 def requires_project_dimension_handling(package: PackageDimensions) -> bool:
     return is_overlength(package) or is_overwidth(package) or is_project_height(package)

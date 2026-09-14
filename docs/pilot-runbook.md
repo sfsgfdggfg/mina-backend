@@ -1798,3 +1798,9 @@ The manual `process-email` fallback in pilot mode must include the real sender a
 During extraction review, treat package height above **2.85 m (285 cm)** as outside the simple standard-trailer pilot even when it does not exceed the 3.00 m project-cargo threshold. A 286–300 cm package should produce Mega Trailer guidance, human-review risk and pilot-scope exclusion; above 300 cm the existing Lowbed / Project Cargo behavior remains in force.
 
 A package exactly 285 cm high is not excluded solely by this height rule. Continue evaluating length, width, weight, commodity, ADR, temperature, equipment and all other readiness gates independently.
+
+## Authorized Replay Standard-Trailer Dimension Check
+
+Before accepting fresh authorized replay evidence for a release, verify that replay extraction truth uses the same standard-trailer dimension envelope as runtime pilot scope. A package longer than 13.60 m, wider than 2.50 m, or higher than 2.85 m must produce `is_oversize_or_project=true` in replay scoring even when the operational equipment is Mega rather than project/lowbed.
+
+Boundary cases should remain exact: 13.60 m length, 2.50 m width and 2.85 m height are not classified oversize solely from that dimension. Because replay receipts bind exact release code, generate fresh replay evidence after this change before REAL SHADOW PILOT GO; do not reuse an older receipt that was produced with the prior height derivation.

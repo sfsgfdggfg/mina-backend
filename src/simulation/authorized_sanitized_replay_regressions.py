@@ -143,6 +143,35 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         _proposal_facts(boundary_proposal).get("is_oversize_or_project") is not True,
     )
 
+    nonstandard_height_proposal = _snapshot(adr=False).model_copy(
+        update={
+            "packages": [
+                Package(
+                    package_type="machine", quantity=1, length_cm=500,
+                    width_cm=200, height_cm=286, weight_kg=5000,
+                )
+            ]
+        }
+    )
+    require(
+        "authorized replay derives non-standard 2.85m-plus height truth from shared road dimensions",
+        _proposal_facts(nonstandard_height_proposal).get("is_oversize_or_project") is True,
+    )
+    standard_height_boundary = _snapshot(adr=False).model_copy(
+        update={
+            "packages": [
+                Package(
+                    package_type="machine", quantity=1, length_cm=500,
+                    width_cm=200, height_cm=285, weight_kg=5000,
+                )
+            ]
+        }
+    )
+    require(
+        "authorized replay does not overclassify exact 2.85m height boundary",
+        _proposal_facts(standard_height_boundary).get("is_oversize_or_project") is not True,
+    )
+
     cases = [
         _case(
             "authorized-ordinary",
