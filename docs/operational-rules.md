@@ -4335,3 +4335,11 @@ Commercial-air tariff calculations must not assume 0.5 kg, 1 kg or any other wei
 When a ceiling rule exists, round the raw chargeable weight upward to the reviewed increment before evaluating tariff weight breaks. Preserve both raw and rounded chargeable weight plus the review id/mode/increment in the preview. If the source has an explicit no-rounding review, preserve the raw weight and show that the absence of rounding is reviewed evidence. If no review exists, keep raw legacy calculation and label rounding as unreviewed.
 
 This rule applies only to tariff break evaluation. Do not silently reinterpret a surcharge's separately reviewed actual/chargeable/pivot billed-weight basis, and do not use the rounding review as customer-pricing, margin, availability, booking, quote/send or outbound authority.
+
+## RULE-271 — Capture Flat Air Local Costs as Inquiry-Bound Evidence; Never Treat Them as Automatically Included
+
+Pickup, local handling/terminal, documentation, customs-service, destination handling/terminal and delivery charges may be recorded only from explicit evidence for the current inquiry and exact commercial-air source context. Preserve provider, amount, currency, flat quantity basis, channel/reference, authenticated operator/time and authored note. Reusing an evidence entry identity with different commercial facts must fail closed.
+
+P2-35 supports only flat `per_shipment`, `per_awb`, `per_hawb` and `per_mawb` amounts. Do not coerce `/kg`, percentage, minimum/tiered formulas, duties, taxes or government charges into this model. `customs_service_fee` is a service fee category, not customs duty/tax authority.
+
+Repository presence is not cost-consumption authority. Additional-cost evidence must not be auto-added to the existing reviewed surcharge subtotal, auto-converted through any FX record, reused across inquiries or treated as an all-in/customer-ready cost. A later explicit consumption rule is required.

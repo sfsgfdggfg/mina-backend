@@ -1669,3 +1669,11 @@ In **Ayarlar → Havayolu Listeleri**, use **Airline Weight Rounding** only when
 After review, **Navlun Önizleme**, **Reviewed Surcharge Cost Preview** and **Operational Readiness Preview** expose the rounding provenance. The raw chargeable weight remains visible. A ceiling review rounds upward before tariff break comparison; an explicit no-rounding review stays distinguishable from missing evidence. If no review exists, the previews continue using raw chargeable weight and display rounding as unreviewed.
 
 P2-34 does not change separately reviewed surcharge weight bases and does not make the partial cost customer-ready or bookable. Margin, customer selling price, quote approval/send and airline booking remain outside this step.
+
+## Commercial-Air Additional / Local Cost Evidence (P2-35)
+
+In **Ayarlar → Havayolu Listeleri**, use **Additional / Local Cost Evidence** only when the current inquiry has explicit evidence for a flat cost outside the airline tariff chain. Record the inquiry reference, provider, category, positive amount/currency, exact flat quantity basis (`shipment`, `AWB`, `HAWB` or `MAWB`), evidence source/reference and an operator-authored note.
+
+Use `customs_service_fee` only for a broker/service-provider fee. Do not enter customs duties, taxes, government charges, `/kg` rates, percentages, minimums or tiered formulas into this form. Those require separate future evidence models instead of approximation.
+
+P2-35 only records evidence. The existing **Reviewed Surcharge Cost Preview** and **Operational Readiness Preview** do not automatically consume these records, and their subtotal remains partial. Do not manually add a stored record and then label the result all-in or customer-ready. Explicit cost-consumption, matching counts and any required FX remain a later gate.
