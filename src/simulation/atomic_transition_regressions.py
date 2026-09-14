@@ -21,6 +21,7 @@ from src.core.models import (
     SupplierQuote,
 )
 from src.core.pilot_store import SQLitePilotStore, SQLiteTransactionError
+from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
 from src.core.quote_approval import QuoteApproval, QuoteApprovalSnapshot
 from src.core.quote_approval_service import (
     approve_quote,
@@ -41,6 +42,7 @@ from src.core.supplier_rfq import (
 )
 from src.core.supplier_rfq_lifecycle import attach_supplier_rfq_response
 from src.core.supplier_rfq_repository import DuplicateSupplierRFQResponseError
+from src.simulation.pricing_policy_fixture import SYNTHETIC_AGENCY_PRICING_POLICY_JSON
 from src.workflow.pipeline import process_shipment
 from src.workflow.extraction_confirmation import (
     ExtractionConfirmationTransitionError,
@@ -54,6 +56,12 @@ from src.workflow.supplier_rfq_progression import (
     _require_unchanged_progression_state,
     resume_supplier_rfq_workflow,
 )
+
+
+_DEVELOPMENT_PRICING_ENV = {
+    "MINAI_PILOT_MODE": "0",
+    AGENCY_PRICING_POLICY_ENV: SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+}
 
 
 class InjectedPersistenceError(RuntimeError):
@@ -113,7 +121,7 @@ def _rfq_creation_atomicity(failures: list[str], root: Path) -> None:
         if write_count == 1:
             raise InjectedPersistenceError("after first RFQ creation write")
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         with patch.object(store, "upsert", side_effect=fail_after_first_write):
             try:
                 process_shipment(
@@ -135,7 +143,7 @@ def _rfq_creation_atomicity(failures: list[str], root: Path) -> None:
     ):
         failures.append("RFQ creation rollback left a workflow")
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         recovered = process_shipment(
             _shipment(),
             rfq_repository=reopened_rfqs,
@@ -366,7 +374,7 @@ def _quote_progression_atomicity(failures: list[str], root: Path) -> None:
     )
     selection = _selection_fixture(draft)
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         with patch(
             "src.workflow.supplier_rfq_progression.select_suppliers_for_shipment",
             return_value=selection,
@@ -402,7 +410,7 @@ def _quote_progression_atomicity(failures: list[str], root: Path) -> None:
     ):
         failures.append("quote rollback left stale progression state")
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         with patch(
             "src.workflow.supplier_rfq_progression.select_suppliers_for_shipment",
             return_value=selection,
@@ -462,7 +470,7 @@ def _extraction_resume_atomicity(failures: list[str], root: Path) -> None:
             raise InjectedPersistenceError("after deferred RFQ writes")
         return original_save(proposal)
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         with patch.object(proposals, "save", side_effect=fail_on_completed):
             try:
                 resume_confirmed_extraction(
@@ -491,7 +499,7 @@ def _extraction_resume_atomicity(failures: list[str], root: Path) -> None:
     if durable is None or durable.resume_status != "not_started":
         failures.append("extraction rollback left a stale resume claim")
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         recovered = resume_confirmed_extraction(
             repository=retry_proposals,
             proposal_id=confirmed.proposal_id,
@@ -532,7 +540,7 @@ def _extraction_stale_finalization(failures: list[str], root: Path) -> None:
     first_snapshot = proposals.get(confirmed.proposal_id)
     second_snapshot = proposals.get(confirmed.proposal_id)
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         resume_confirmed_extraction(
             repository=proposals,
             proposal_id=confirmed.proposal_id,
@@ -653,7 +661,7 @@ def _rfq_stale_finalization(failures: list[str], root: Path) -> None:
     )
     first_snapshot = rfqs.get_workflow(workflow.workflow_id)
     second_snapshot = rfqs.get_workflow(workflow.workflow_id)
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         with patch(
             "src.workflow.supplier_rfq_progression.select_suppliers_for_shipment",
             return_value=_selection_fixture(draft),

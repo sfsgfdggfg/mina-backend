@@ -3899,9 +3899,11 @@ def evaluate_quote_approval_model() -> dict:
 
 def evaluate_quote_approval_workflow_contract() -> dict:
     from datetime import datetime
+    from unittest.mock import patch
 
     from src.core.mail import MailSendResult
     from src.core.models import Shipment
+    from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
     from src.core.quote_approval_repository import (
         InMemoryQuoteApprovalRepository,
     )
@@ -3916,6 +3918,9 @@ def evaluate_quote_approval_workflow_contract() -> dict:
     from src.core.supplier_rfq_repository import (
         InMemorySupplierRFQRepository,
     )
+    from src.simulation.pricing_policy_fixture import (
+        SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+    )
     from src.simulation.supplier_simulator import (
         simulate_supplier_rfq_responses,
     )
@@ -3925,6 +3930,9 @@ def evaluate_quote_approval_workflow_contract() -> dict:
     )
 
     failures = []
+    pricing_env = {
+        AGENCY_PRICING_POLICY_ENV: SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+    }
     rfq_repository = InMemorySupplierRFQRepository()
     approval_repository = InMemoryQuoteApprovalRepository()
     quote_case_repository = InMemoryQuoteCaseRepository()
@@ -3943,17 +3951,18 @@ def evaluate_quote_approval_workflow_contract() -> dict:
         is_temperature_controlled=False,
     )
 
-    quote_result = pipeline.process_shipment(
-        shipment=quote_shipment,
-        email_text=(
-            "Adana'dan Hamburg'a 20 ton tekstil yükü için "
-            "komple tenteli araç fiyatı rica ederiz. "
-            "Yük ADR değildir ve 12.08.2026 tarihinde hazırdır."
-        ),
-        rfq_repository=rfq_repository,
-        approval_repository=approval_repository,
-        quote_case_repository=quote_case_repository,
-    )
+    with patch.dict("os.environ", pricing_env, clear=False):
+        quote_result = pipeline.process_shipment(
+            shipment=quote_shipment,
+            email_text=(
+                "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+                "komple tenteli araç fiyatı rica ederiz. "
+                "Yük ADR değildir ve 12.08.2026 tarihinde hazırdır."
+            ),
+            rfq_repository=rfq_repository,
+            approval_repository=approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
 
     drafts = quote_result.get("supplier_rfq_drafts") or []
     draft = next(
@@ -3990,12 +3999,13 @@ def evaluate_quote_approval_workflow_contract() -> dict:
             rfq_repository,
             responses[0],
         )
-        quote_result = resume_supplier_rfq_workflow(
-            workflow_id=workflow.workflow_id,
-            rfq_repository=rfq_repository,
-            approval_repository=approval_repository,
-            quote_case_repository=quote_case_repository,
-        )
+        with patch.dict("os.environ", pricing_env, clear=False):
+            quote_result = resume_supplier_rfq_workflow(
+                workflow_id=workflow.workflow_id,
+                rfq_repository=rfq_repository,
+                approval_repository=approval_repository,
+                quote_case_repository=quote_case_repository,
+            )
 
     supplier_quote = quote_result.get("supplier_quote")
     customer_quote = quote_result.get("customer_quote")
@@ -4731,9 +4741,11 @@ def evaluate_quote_approval_repository() -> dict:
 
 def evaluate_quote_approval_repository_workflow_integration() -> dict:
     from datetime import datetime
+    from unittest.mock import patch
 
     from src.core.mail import MailSendResult
     from src.core.models import Shipment
+    from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
     from src.core.quote_approval_repository import (
         InMemoryQuoteApprovalRepository,
     )
@@ -4749,12 +4761,18 @@ def evaluate_quote_approval_repository_workflow_integration() -> dict:
     from src.core.supplier_rfq_repository import (
         InMemorySupplierRFQRepository,
     )
+    from src.simulation.pricing_policy_fixture import (
+        SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+    )
     from src.workflow import pipeline
     from src.workflow.supplier_rfq_progression import (
         resume_supplier_rfq_workflow,
     )
 
     failures = []
+    pricing_env = {
+        AGENCY_PRICING_POLICY_ENV: SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+    }
 
     approval_repository = InMemoryQuoteApprovalRepository()
     rfq_repository = InMemorySupplierRFQRepository()
@@ -4774,17 +4792,18 @@ def evaluate_quote_approval_repository_workflow_integration() -> dict:
         is_temperature_controlled=False,
     )
 
-    initial_result = pipeline.process_shipment(
-        shipment=quote_shipment,
-        email_text=(
-            "Adana'dan Hamburg'a 20 ton tekstil yükü için "
-            "komple tenteli araç fiyatı rica ederiz. "
-            "Yük ADR değildir ve 12.08.2026 tarihinde hazırdır."
-        ),
-        rfq_repository=rfq_repository,
-        approval_repository=approval_repository,
-        quote_case_repository=quote_case_repository,
-    )
+    with patch.dict("os.environ", pricing_env, clear=False):
+        initial_result = pipeline.process_shipment(
+            shipment=quote_shipment,
+            email_text=(
+                "Adana'dan Hamburg'a 20 ton tekstil yükü için "
+                "komple tenteli araç fiyatı rica ederiz. "
+                "Yük ADR değildir ve 12.08.2026 tarihinde hazırdır."
+            ),
+            rfq_repository=rfq_repository,
+            approval_repository=approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
 
     if initial_result.get("quote_approval") is not None:
         failures.append(
@@ -4854,12 +4873,13 @@ def evaluate_quote_approval_repository_workflow_integration() -> dict:
                 ),
             )
 
-            resumed_result = resume_supplier_rfq_workflow(
-                workflow_id=workflow.workflow_id,
-                rfq_repository=rfq_repository,
-                approval_repository=approval_repository,
-                quote_case_repository=quote_case_repository,
-            )
+            with patch.dict("os.environ", pricing_env, clear=False):
+                resumed_result = resume_supplier_rfq_workflow(
+                    workflow_id=workflow.workflow_id,
+                    rfq_repository=rfq_repository,
+                    approval_repository=approval_repository,
+                    quote_case_repository=quote_case_repository,
+                )
 
             quote_approval = resumed_result.get("quote_approval")
 
@@ -4896,16 +4916,17 @@ def evaluate_quote_approval_repository_workflow_integration() -> dict:
         }
     )
 
-    early_stop_result = pipeline.process_shipment(
-        shipment=early_stop_shipment,
-        email_text=(
-            "Adana'dan Hamburg'a ADR kapsamındaki kimyasal "
-            "yük için fiyat rica ederiz. ADR sınıfı belli değil."
-        ),
-        rfq_repository=rfq_repository,
-        approval_repository=approval_repository,
-        quote_case_repository=quote_case_repository,
-    )
+    with patch.dict("os.environ", pricing_env, clear=False):
+        early_stop_result = pipeline.process_shipment(
+            shipment=early_stop_shipment,
+            email_text=(
+                "Adana'dan Hamburg'a ADR kapsamındaki kimyasal "
+                "yük için fiyat rica ederiz. ADR sınıfı belli değil."
+            ),
+            rfq_repository=rfq_repository,
+            approval_repository=approval_repository,
+            quote_case_repository=quote_case_repository,
+        )
 
     if early_stop_result.get("quote_approval") is not None:
         failures.append(

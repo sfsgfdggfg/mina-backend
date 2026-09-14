@@ -7512,3 +7512,14 @@ A regression scenario that expects quote progression may not rely solely on ambi
 `human_operational_flow` therefore carries its explicit development-only synthetic pricing configuration together with `MINAI_PILOT_MODE=0`. The suite must produce the same result when run standalone with no agency pricing environment and when the surrounding process contains an unrelated or invalid agency-pricing value. The canonical runner's synthetic pricing environment remains a broad offline test fixture, but it is no longer the hidden prerequisite that makes this operational-flow regression pass.
 
 This is a test-authority boundary only. It does not add a runtime pricing default, customer pricing policy, quote authority or pilot configuration.
+
+## DEC-268 — Canonical Commercial Regressions Must Not Depend on Runner-Injected Pricing Authority
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+Commercial-flow regressions that progress from supplier evidence into customer quote creation must declare their synthetic pricing authority inside the regression that requires it. The canonical runner may continue to provide a broad synthetic agency-pricing environment for offline compatibility, but that environment must not be the hidden prerequisite that makes a suite pass.
+
+`durable provenance recovery`, `atomic workflow transitions`, `human operational flow`, `quote approval workflow contract` and `quote approval repository/workflow integration` must all pass when the ambient agency-pricing environment is absent and when it contains an unrelated invalid value. Their local fixtures are test-only evidence and do not establish a runtime agency default.
+
+A dedicated canonical isolation regression runs these commercial suites under deliberately invalid ambient agency pricing so future test-order or runner-environment coupling fails visibly instead of producing a false-positive pilot gate.

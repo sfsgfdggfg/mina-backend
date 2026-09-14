@@ -22,6 +22,7 @@ from src.core.extraction_confirmation_repository import (
 from src.core.mail import InboundMailEnvelope
 from src.core.models import Package, Shipment
 from src.core.pilot_store import SQLitePilotStore
+from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
 from src.core.quote_approval_repository import InMemoryQuoteApprovalRepository
 from src.core.quote_case_repository import InMemoryQuoteCaseRepository
 from src.core.sqlite_repositories import (
@@ -41,10 +42,21 @@ from src.workflow.extraction_confirmation import (
     confirm_extraction_proposal,
     resume_confirmed_extraction,
 )
+from src.simulation.pricing_policy_fixture import SYNTHETIC_AGENCY_PRICING_POLICY_JSON
 from src.workflow.supplier_rfq_progression import (
     SupplierRFQWorkflowProgressionError,
     resume_supplier_rfq_workflow,
 )
+
+
+_PILOT_PRICING_ENV = {
+    "MINAI_PILOT_MODE": "1",
+    AGENCY_PRICING_POLICY_ENV: SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+}
+_DEVELOPMENT_PRICING_ENV = {
+    "MINAI_PILOT_MODE": "0",
+    AGENCY_PRICING_POLICY_ENV: SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+}
 
 
 def _shipment() -> Shipment:
@@ -211,7 +223,7 @@ def _blocked_result_builder_and_initial_path(
     registry_path.parent.mkdir(parents=True)
     registry_path.write_text("{malformed", encoding="utf-8")
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+    with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
         with _provenance_patches(registry_path):
             direct = build_data_provenance_blocked_result(_shipment())
             initial = process_shipment(
@@ -278,7 +290,7 @@ def _extraction_malformed_recovery(
     registry_path.parent.mkdir(parents=True)
     registry_path.write_text("{malformed", encoding="utf-8")
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+    with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
         with _provenance_patches(registry_path):
             blocked = resume_confirmed_extraction(
                 repository=proposals,
@@ -310,7 +322,7 @@ def _extraction_malformed_recovery(
         failures.append("extraction provenance block was not durably retryable")
 
     _write_registry(registry_path, fingerprint_matches=True)
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+    with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
         with _provenance_patches(registry_path):
             recovered = resume_confirmed_extraction(
                 repository=proposals,
@@ -358,7 +370,7 @@ def _fingerprint_mismatch_recovery(
     registry_path.parent.mkdir(parents=True)
     _write_registry(registry_path, fingerprint_matches=False)
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+    with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
         with _provenance_patches(registry_path):
             blocked = resume_confirmed_extraction(
                 repository=proposals,
@@ -370,7 +382,7 @@ def _fingerprint_mismatch_recovery(
     if blocked.get("result_type") != "data_provenance_blocked":
         failures.append("fingerprint mismatch did not block extraction resume")
     _write_registry(registry_path, fingerprint_matches=True)
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+    with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
         with _provenance_patches(registry_path):
             recovered = resume_confirmed_extraction(
                 repository=proposals,
@@ -424,7 +436,7 @@ def _rfq_progression_recovery(failures: list[str], temp_root: Path) -> None:
     registry_path.parent.mkdir(parents=True)
     registry_path.write_text("{malformed", encoding="utf-8")
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+    with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
         with _provenance_patches(registry_path):
             blocked = resume_supplier_rfq_workflow(
                 workflow_id=workflow.workflow_id,
@@ -466,7 +478,7 @@ def _rfq_progression_recovery(failures: list[str], temp_root: Path) -> None:
         "rejected_suppliers": [],
         "source": "provenance_recovery_regression",
     }
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+    with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
         with _provenance_patches(registry_path):
             with patch(
                 "src.workflow.supplier_rfq_progression.select_suppliers_for_shipment",
@@ -536,7 +548,7 @@ def _api_and_development_behavior(
     api.mina_job_repository = InMemoryMinaJobRepository()
     api.pilot_store = None
     try:
-        with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+        with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
             with patch.object(api, "_runtime_master_data_authority", return_value=None):
                 with _provenance_patches(registry_path):
                     result = api.resume_extraction_proposal_endpoint(
@@ -552,7 +564,7 @@ def _api_and_development_behavior(
 
         api_workflow = SupplierRFQWorkflow(shipment=_shipment())
         api.supplier_rfq_repository.save_workflow(api_workflow)
-        with patch.dict(os.environ, {"MINAI_PILOT_MODE": "1"}, clear=False):
+        with patch.dict(os.environ, _PILOT_PRICING_ENV, clear=False):
             with patch.object(api, "_runtime_master_data_authority", return_value=None):
                 with _provenance_patches(registry_path):
                     quote_result = api.resume_supplier_rfq_quote(
@@ -570,7 +582,7 @@ def _api_and_development_behavior(
             api.pilot_store,
         ) = original
 
-    with patch.dict(os.environ, {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict(os.environ, _DEVELOPMENT_PRICING_ENV, clear=False):
         development = process_shipment(_shipment())
     if development.get("result_type") == "data_provenance_blocked":
         failures.append("valid development workflow gained pilot enforcement")

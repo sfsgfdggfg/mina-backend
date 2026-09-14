@@ -1774,3 +1774,9 @@ A package exactly 13.60 m long is not excluded from the pilot solely on the leng
 ## Regression Isolation Check
 
 Pilot gate regressions that expect commercial progression must carry their own explicit synthetic commercial fixtures rather than passing only because the canonical runner injected an ambient value. `human_operational_flow` is expected to pass both with `MINAI_AGENCY_PRICING_POLICY_JSON` absent and with an unrelated invalid ambient value, because the regression supplies its own deterministic development-only pricing fixture. Do not interpret that fixture as a runtime agency pricing default.
+
+## Canonical Commercial Fixture Isolation
+
+The controlled-pilot regression gate now includes a commercial-fixture isolation check. The provenance-recovery, atomic-transition, human-flow and quote-approval commercial regressions must carry their own synthetic pricing authority and must not depend on `pilot_regression_suite` injecting a valid `MINAI_AGENCY_PRICING_POLICY_JSON` value.
+
+If a commercial regression passes only inside the canonical runner but fails standalone, treat that as a gate-integrity defect. Do not fix it by adding another global environment default. Make the regression declare the exact synthetic commercial authority it needs, and verify it with ambient agency pricing both absent and intentionally invalid.
