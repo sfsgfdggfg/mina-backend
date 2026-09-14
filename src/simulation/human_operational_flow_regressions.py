@@ -6,6 +6,7 @@ from unittest.mock import patch
 from src.ai.supplier_rfq_generator import generate_supplier_rfq_drafts
 from src.core.mail import InboundMailEnvelope
 from src.core.models import EquipmentDecision, Package, Shipment
+from src.core.pricing_policy import AGENCY_PRICING_POLICY_ENV
 from src.core.quote_approval_repository import InMemoryQuoteApprovalRepository
 from src.core.quote_case_repository import InMemoryQuoteCaseRepository
 from src.core.relative_dates import infer_supplier_vehicle_available_date
@@ -20,6 +21,15 @@ from src.core.supplier_selection import select_suppliers_for_shipment
 from src.workflow.pipeline import process_shipment
 from src.workflow.supplier_response_ingestion import ingest_supplier_reply
 from src.workflow.supplier_rfq_progression import resume_supplier_rfq_workflow
+from src.simulation.pricing_policy_fixture import (
+    SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+)
+
+
+_DEVELOPMENT_PRICING_ENV = {
+    "MINAI_PILOT_MODE": "0",
+    AGENCY_PRICING_POLICY_ENV: SYNTHETIC_AGENCY_PRICING_POLICY_JSON,
+}
 
 
 def _shipment() -> Shipment:
@@ -103,7 +113,7 @@ def evaluate_human_operational_flow_regressions() -> dict:
     ))
     approvals = InMemoryQuoteApprovalRepository()
     cases = InMemoryQuoteCaseRepository()
-    with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict("os.environ", _DEVELOPMENT_PRICING_ENV, clear=False):
         fallback = resume_supplier_rfq_workflow(
             workflow_id=workflow.workflow_id,
             rfq_repository=repo,
@@ -135,7 +145,7 @@ def evaluate_human_operational_flow_regressions() -> dict:
     ))
     approvals = InMemoryQuoteApprovalRepository()
     cases = InMemoryQuoteCaseRepository()
-    with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict("os.environ", _DEVELOPMENT_PRICING_ENV, clear=False):
         clarification = resume_supplier_rfq_workflow(
             workflow_id=workflow.workflow_id,
             rfq_repository=repo,
@@ -160,7 +170,7 @@ def evaluate_human_operational_flow_regressions() -> dict:
     ):
         failures.append("incomplete quote did not persist same-RFQ follow-up draft")
     else:
-        with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+        with patch.dict("os.environ", _DEVELOPMENT_PRICING_ENV, clear=False):
             repeated = resume_supplier_rfq_workflow(
                 workflow_id=workflow.workflow_id,
                 rfq_repository=repo,
@@ -248,7 +258,7 @@ def evaluate_human_operational_flow_regressions() -> dict:
         ):
             failures.append("transit-only follow-up reply did not merge with prior quote")
         else:
-            with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+            with patch.dict("os.environ", _DEVELOPMENT_PRICING_ENV, clear=False):
                 completed = resume_supplier_rfq_workflow(
                     workflow_id=workflow.workflow_id,
                     rfq_repository=repo,
@@ -295,7 +305,7 @@ def evaluate_human_operational_flow_regressions() -> dict:
             update={"status": "clarification_required"}
         )
     ])
-    with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict("os.environ", _DEVELOPMENT_PRICING_ENV, clear=False):
         recovered = resume_supplier_rfq_workflow(
             workflow_id=recovery_workflow.workflow_id,
             rfq_repository=recovery_repo,
@@ -336,7 +346,7 @@ def evaluate_human_operational_flow_regressions() -> dict:
         is_high_value=None,
         packages=[],
     )
-    with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+    with patch.dict("os.environ", _DEVELOPMENT_PRICING_ENV, clear=False):
         initial_indicative = process_shipment(
             indicative, rfq_repository=indicative_repo
         )
@@ -366,7 +376,7 @@ def evaluate_human_operational_flow_regressions() -> dict:
         ))
         indicative_approvals = InMemoryQuoteApprovalRepository()
         indicative_cases = InMemoryQuoteCaseRepository()
-        with patch.dict("os.environ", {"MINAI_PILOT_MODE": "0"}, clear=False):
+        with patch.dict("os.environ", _DEVELOPMENT_PRICING_ENV, clear=False):
             indicative_done = resume_supplier_rfq_workflow(
                 workflow_id=initial_indicative["supplier_rfq_workflow"].workflow_id,
                 rfq_repository=indicative_repo,
