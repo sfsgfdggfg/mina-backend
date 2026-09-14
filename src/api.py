@@ -1143,6 +1143,7 @@ class AirReviewedSurchargeCostPreviewRequest(BaseModel):
     reference_date: Optional[date] = None
     inquiry_reference: Optional[str] = Field(default=None, max_length=300)
     fx_evidence_ids: list[str] = Field(default_factory=list, max_length=20)
+    additional_cost_evidence_ids: list[str] = Field(default_factory=list, max_length=100)
     fx_reference_at: Optional[datetime] = None
     shipment_count: Optional[int] = Field(default=None, ge=1, le=1000)
     awb_count: Optional[int] = Field(default=None, ge=1, le=1000)
@@ -1160,6 +1161,7 @@ class AirOperationalReadinessPreviewRequest(BaseModel):
     routing_context: Literal["direct", "connecting"]
     via_airport: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
     fx_evidence_ids: list[str] = Field(default_factory=list, max_length=20)
+    additional_cost_evidence_ids: list[str] = Field(default_factory=list, max_length=100)
     fx_reference_at: Optional[datetime] = None
     shipment_count: Optional[int] = Field(default=None, ge=1, le=1000)
     awb_count: Optional[int] = Field(default=None, ge=1, le=1000)
@@ -3035,6 +3037,7 @@ def preview_air_reviewed_surcharge_cost(
             reference_date=request.reference_date,
             inquiry_reference=request.inquiry_reference,
             fx_evidence_ids=request.fx_evidence_ids,
+            additional_cost_evidence_ids=request.additional_cost_evidence_ids,
             fx_reference_at=request.fx_reference_at,
             shipment_count=request.shipment_count,
             awb_count=request.awb_count,
@@ -3046,6 +3049,7 @@ def preview_air_reviewed_surcharge_cost(
             source_repository=air_shadow_repository,
             validity_repository=air_rate_validity_review_repository,
             fx_repository=air_fx_rate_evidence_repository,
+            additional_cost_repository=air_additional_cost_evidence_repository,
             rounding_repository=air_rate_weight_rounding_review_repository,
         )
     except AirReviewedSurchargeCostPreviewError as exc:
@@ -3072,6 +3076,7 @@ def preview_air_operational_readiness(
             routing_context=request.routing_context,
             via_airport=request.via_airport,
             fx_evidence_ids=request.fx_evidence_ids,
+            additional_cost_evidence_ids=request.additional_cost_evidence_ids,
             fx_reference_at=request.fx_reference_at,
             shipment_count=request.shipment_count,
             awb_count=request.awb_count,
@@ -3084,6 +3089,7 @@ def preview_air_operational_readiness(
             validity_repository=air_rate_validity_review_repository,
             availability_repository=air_service_availability_repository,
             fx_repository=air_fx_rate_evidence_repository,
+            additional_cost_repository=air_additional_cost_evidence_repository,
             rounding_repository=air_rate_weight_rounding_review_repository,
         )
     except AirOperationalReadinessPreviewError as exc:

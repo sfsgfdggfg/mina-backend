@@ -7372,3 +7372,14 @@ P2-35 introduces durable shipment/inquiry-bound evidence for flat commercial-air
 V1 accepts only explicit positive flat amounts with one reviewed unit among `per_shipment`, `per_awb`, `per_hawb` and `per_mawb`. Weight-based, percentage, minimum/tiered formulas and customs duties/taxes are intentionally outside this phase rather than being normalized into a misleading flat cost. `customs_service_fee` means the service provider's fee only and never import/export duties, taxes or government charges.
 
 P2-35 is evidence capture only. Stored additional-cost evidence must not enter the reviewed surcharge cost preview automatically, must not be FX-converted automatically, and does not make the existing subtotal all-in. A later separately bounded consumption step must explicitly select matching inquiry/source evidence, validate counts and currency conversion, and preserve provenance before any broader cost total may be claimed. No customer selling price, margin, quote/send, booking or outbound authority is created.
+
+## DEC-255 — Air Additional Costs Enter Preview Only by Explicit Evidence Selection and Remain Partial
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-36 allows the reviewed commercial-air cost preview to consume P2-35 additional/local-cost evidence only when the operator explicitly selects each `evidence_id`. Repository presence is never selection authority. Every selected record must match the exact immutable air source id/SHA and the explicit inquiry reference; missing, duplicate, source-mismatched or inquiry-mismatched selections fail closed rather than being ignored.
+
+Each selected flat cost uses only its recorded `per_shipment`, `per_awb`, `per_hawb` or `per_mawb` quantity basis and therefore requires the matching explicit ephemeral count already used by the reviewed-cost preview. No count defaults to one and no count type substitutes for another. Same-currency costs retain their source amount. Cross-currency costs require an explicitly selected P2-32 FX record whose direction is exactly local-cost currency to freight currency and whose source, inquiry and effective timestamp match the preview context; no inverse/latest/nearest FX is derived.
+
+The response preserves the selected evidence id, category, provider, source amount/currency, quantity basis/count and FX provenance when conversion occurs, and exposes an `extended partial subtotal = base freight + reviewed airline surcharges + explicitly selected local costs`. This is still not an all-in cost: P2-36 proves only what was explicitly selected, not that every pickup, handling, terminal, delivery, customs-service or unsupported weight/percentage/tiered/duty/tax cost has been discovered. Customer selling price, margin, quote approval/send, booking and outbound authority remain separate gates.

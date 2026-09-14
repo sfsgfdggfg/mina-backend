@@ -74,6 +74,7 @@ from src.simulation.air_rate_weight_rounding_review_regressions import evaluate_
 from src.simulation.air_service_availability_regressions import evaluate_air_service_availability_regressions
 from src.simulation.air_fx_rate_evidence_regressions import evaluate_air_fx_rate_evidence_regressions
 from src.simulation.air_additional_cost_evidence_regressions import evaluate_air_additional_cost_evidence_regressions
+from src.simulation.air_additional_cost_consumption_regressions import evaluate_air_additional_cost_consumption_regressions
 from src.simulation.air_fx_consumption_preview_regressions import evaluate_air_fx_consumption_preview_regressions
 from src.simulation.air_operational_readiness_preview_regressions import evaluate_air_operational_readiness_preview_regressions
 from src.simulation.air_reviewed_surcharge_cost_preview_regressions import evaluate_air_reviewed_surcharge_cost_preview_regressions
@@ -348,6 +349,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Commercial-air service availability evidence", evaluate_air_service_availability_regressions),
     Suite("Commercial-air FX rate evidence", evaluate_air_fx_rate_evidence_regressions),
     Suite("Commercial-air additional-cost evidence", evaluate_air_additional_cost_evidence_regressions),
+    Suite("Commercial-air additional-cost consumption", evaluate_air_additional_cost_consumption_regressions),
     Suite("Commercial-air FX consumption preview", evaluate_air_fx_consumption_preview_regressions),
     Suite("Commercial-air operational readiness preview", evaluate_air_operational_readiness_preview_regressions),
     Suite("Commercial-air reviewed surcharge cost preview", evaluate_air_reviewed_surcharge_cost_preview_regressions),
