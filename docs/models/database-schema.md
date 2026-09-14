@@ -1037,3 +1037,9 @@ The preview may expose selected evidence ids plus category/provider, source amou
 P2-37 adds durable `air_cost_scope_reviews` plus idempotency index `air_cost_scope_review_by_entry`. Each review stores `review_id`, `entry_id`, `inquiry_reference`, exact `source_id` / `source_sha256`, authenticated reviewer/time/note and exactly nine structured requirements. Each requirement contains one supported cost category, status (`required`, `not_applicable`, `unresolved`) and authored rationale. Category omission or duplication is invalid.
 
 Derived view fields such as `scope_classification_complete`, `required_categories`, `not_applicable_categories` and `unresolved_categories` are presentation/read-model outputs only. `scope_classification_complete` is true only when no requirement is unresolved and is not persisted as all-in or pricing authority. P2-37 adds no consumer to the reviewed-cost calculation; cost completeness, customer pricing, booking and outbound authority remain false and separately gated.
+
+### P2-38 Commercial-Air Required Flat Cost Coverage Preview
+
+P2-38 adds no persistence namespace. `cost_scope_review_id`, `inquiry_reference`, explicitly selected additional-cost evidence ids, explicit quantity counts and optional explicit FX evidence are ephemeral preview inputs. The gate reads one durable P2-37 `air_cost_scope_reviews` record and the existing P2-35/P2-36 evidence path without mutating either.
+
+The response derives `required_categories`, `covered_required_categories`, `missing_required_categories`, `unresolved_categories`, `conflicting_not_applicable_categories`, blockers and `required_flat_cost_coverage_complete`. Coverage is based only on local-cost records that the existing P2-36 calculation actually includes. The preview persists no calculated total or completeness state and always retains `all_in_cost=false`, `customer_quote_eligible=false`, `pricing_authority=false` and `runtime_authoritative=false`.

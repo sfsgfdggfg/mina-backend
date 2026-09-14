@@ -4359,3 +4359,11 @@ Before MINAI may later assess commercial-air cost completeness, an authenticated
 Never infer `not_applicable` from an empty repository, absent supplier reply, common trade practice, service type, another shipment or the fact that no separate charge has yet been recorded. Browser entry must begin at `unresolved`. Missing categories, duplicates or reused entry identities with different evidence fail closed. Multiple review snapshots may exist, but repository recency must not become implicit selection authority for later calculation.
 
 `scope_classification_complete` means only that no category remains unresolved. It is not cost completeness and does not mean all required costs have been captured or selected. The review must not enter the P2-36 subtotal automatically and must not create all-in, customer-price, margin, quote/send, booking, runtime or outbound authority. A later explicit matching gate is required.
+
+## RULE-274 — Treat Air Scope Coverage as Complete Only When Every Required Flat Category Has Consumable Selected Evidence
+
+To evaluate inquiry-level commercial-air local-cost coverage, explicitly select one P2-37 scope review and the P2-35 local-cost evidence records to test. The scope review must match the exact tariff source id/SHA and inquiry. Never choose the newest scope review automatically and never let stored-but-unselected evidence satisfy a required category.
+
+A `required` category is covered only if its explicitly selected evidence survives the full P2-36 consumption rules, including exact inquiry/source matching, matching shipment/AWB/HAWB/MAWB count and exact directional/timestamped FX where needed. If the scope still contains `unresolved`, coverage remains incomplete. If selected evidence belongs to a category marked `not_applicable`, surface the contradiction and keep coverage incomplete.
+
+Even a successful `required_flat_cost_coverage_complete` result is not an all-in cost statement. Preserve `all_in_cost=false` and no customer-pricing, margin, quote/send, booking, runtime or outbound authority because unsupported weight-based, percentage, minimum/tiered, duty/tax and unknown cost semantics may still exist.
