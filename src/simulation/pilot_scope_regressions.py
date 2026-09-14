@@ -322,6 +322,44 @@ def evaluate_pilot_scope_regressions() -> dict:
     for name, shipment in excluded_cases.items():
         _assert_excluded(failures, name, shipment)
 
+    top_loading_signals = (
+        "Tavan vinci ile üstten yükleme gereklidir.",
+        "Overhead Crane loading required.",
+        "Crane Loading",
+        "Üstten Yükleme",
+    )
+    for top_loading_note in top_loading_signals:
+        top_loading_shipment = _road_shipment(special_notes=top_loading_note)
+        top_loading_scope = evaluate_pilot_scope(
+            top_loading_shipment,
+            environ={"MINAI_PILOT_MODE": "1"},
+        )
+        if top_loading_scope.eligible:
+            failures.append(
+                f"top-loading requirement remained pilot eligible: {top_loading_note}"
+            )
+        if decide_equipment(top_loading_shipment).selected_equipment != "Open Trailer / Platform":
+            failures.append(
+                f"top-loading requirement did not select open trailer/platform: {top_loading_note}"
+            )
+        top_loading_risk = assess_risk(top_loading_shipment)
+        if (
+            top_loading_risk.risk_level != "yellow"
+            or not top_loading_risk.requires_human_review
+        ):
+            failures.append(
+                f"top-loading requirement did not trigger human review: {top_loading_note}"
+            )
+
+    explicit_special_with_top_loading = _road_shipment(
+        equipment_type="Mega Trailer",
+        special_notes="Tavan vinci ile üstten yükleme gereklidir.",
+    )
+    if decide_equipment(explicit_special_with_top_loading).selected_equipment != "Mega Trailer":
+        failures.append(
+            "top-loading rule overwrote a stronger explicit non-standard equipment request"
+        )
+
     overlength_shipment = _road_shipment(
         packages=[
             Package(

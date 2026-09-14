@@ -1816,3 +1816,9 @@ A GTIP-bearing shipment with no conflict remains subject to the ordinary pilot g
 During extraction confirmation, inspect any explicit `equipment_type` independently from ADR, temperature and package dimensions. The simple controlled road pilot accepts the default/unspecified equipment path and recognized Tenteli/Curtainsider requests only. Explicit Reefer/Frigo, Mega, ADR-capable, box/closed-body, lowbed/project or unknown equipment requests must return pilot-scope exclusion even when the remaining shipment facts look ordinary.
 
 Do not clear a special-equipment request to make the case fit the pilot. Preserve the requested equipment for operator review and handle that job outside the simple standard-trailer pilot.
+
+## Top-Loading / Crane-Loading Pilot Check
+
+During controlled-pilot extraction review, inspect shipment notes for `Overhead Crane`, `Tavan Vinci`, `Crane Loading` or `Üstten Yükleme`. These are not ordinary Tenteli loading instructions: they require Open Trailer / Platform evaluation and must stay outside the simple standard-trailer pilot even when package dimensions and safety booleans otherwise look normal.
+
+Do not clear the loading instruction merely to make the job pilot-eligible. Preserve any stronger explicit special-equipment or project/heavy requirement if one already exists.

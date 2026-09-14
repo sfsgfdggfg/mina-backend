@@ -45,6 +45,21 @@ def is_standard_road_equipment_request(value: str | None) -> bool:
     }
 
 
+
+
+def requires_open_trailer_loading(shipment: Shipment) -> bool:
+    """Detect explicit top-loading / crane-loading requirements from shipment notes."""
+    text = _normalize_equipment_request(getattr(shipment, "special_notes", None))
+    if not text:
+        return False
+    signals = (
+        "overhead crane",
+        "tavan vinci",
+        "crane loading",
+        "ustten yukleme",
+    )
+    return any(signal in text for signal in signals)
+
 def _has_meaningful_text(value):
     if value is None:
         return False
@@ -224,6 +239,23 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
                 "shipment brüt veya package-line toplam ağırlığını "
                 "güvenle ayırmıyor. Ekipman atanmadan önce paket adedi ve "
                 "parça başı ağırlıklar netleştirilmelidir."
+            ),
+        )
+
+    # Explicit top-loading / crane-loading requirement
+    if (
+        requires_open_trailer_loading(shipment)
+        and is_standard_road_equipment_request(shipment.equipment_type)
+    ):
+        return EquipmentDecision(
+            selected_equipment="Open Trailer / Platform",
+            reason="Üstten / vinç ile yükleme gereksinimi tespit edildi.",
+            confidence=0.90,
+            source="rule_engine",
+            explanation=(
+                "Shipment notlarında overhead crane / tavan vinci / crane loading / "
+                "üstten yükleme gereksinimi bulundu. Standart Tenteli yerine "
+                "Open Trailer / Platform değerlendirilmelidir."
             ),
         )
 

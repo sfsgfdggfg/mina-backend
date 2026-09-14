@@ -8,6 +8,7 @@ from src.core.road_dimensions import (
     requires_nonstandard_height_equipment,
 )
 from src.core.extraction_confirmation import require_operational_shipment
+from src.core.equipment import requires_open_trailer_loading
 
 
 def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
@@ -99,6 +100,13 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
 
     if commodity_profile.get("requires_management_review"):
         requires_management_review = True
+        requires_human_review = True
+
+    # Special loading method
+    if requires_open_trailer_loading(shipment):
+        risk_reasons.append(
+            "Üstten / vinç ile yükleme gereksinimi var; Open Trailer / Platform değerlendirmesi gerekir."
+        )
         requires_human_review = True
 
     # Heavy / oversize
