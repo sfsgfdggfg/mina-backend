@@ -49,7 +49,11 @@ from src.core.supplier_rfq_repository import SupplierRFQRepository
 from src.core.supplier_price_repository import SupplierPriceRepository
 from src.core.sqlite_repositories import atomic_repository_transaction
 from src.core.supplier_selection import select_suppliers_for_shipment
-from src.workflow.pipeline import build_data_provenance_blocked_result
+from src.workflow.pipeline import (
+    build_customer_identity_blocked_result,
+    build_data_provenance_blocked_result,
+    customer_identity_verification_required,
+)
 
 
 class SupplierRFQWorkflowNotFoundError(LookupError):
@@ -351,6 +355,29 @@ def _progress_supplier_rfq_workflow(
         customer_profiles=customer_profiles,
         learning_repository=learning_fact_repository,
     )
+    supplier_rfq_drafts = [
+        draft
+        for draft in rfq_repository.list_drafts()
+        if draft.workflow_id == workflow.workflow_id
+    ]
+    supplier_rfq_responses = [
+        response
+        for draft in supplier_rfq_drafts
+        for response in rfq_repository.list_responses(draft.rfq_id)
+    ]
+    if customer_identity_verification_required(
+        customer_memory=customer_memory,
+        sender_address=workflow.sender_address,
+        master_data_repository=master_data_repository,
+    ):
+        return build_customer_identity_blocked_result(
+            shipment,
+            customer_memory=customer_memory,
+            supplier_rfq_workflow=workflow,
+            supplier_rfq_drafts=supplier_rfq_drafts,
+            supplier_rfq_responses=supplier_rfq_responses,
+        )
+
     commodity_profile = get_commodity_record(shipment.commodity)
     missing_info = apply_road_rfq_readiness(
         shipment,
@@ -363,16 +390,6 @@ def _progress_supplier_rfq_workflow(
         customer_memory=customer_memory,
     )
     pilot_scope = evaluate_pilot_scope(shipment)
-    supplier_rfq_drafts = [
-        draft
-        for draft in rfq_repository.list_drafts()
-        if draft.workflow_id == workflow.workflow_id
-    ]
-    supplier_rfq_responses = [
-        response
-        for draft in supplier_rfq_drafts
-        for response in rfq_repository.list_responses(draft.rfq_id)
-    ]
     if not pilot_scope.eligible:
         action_recommendation = generate_action_recommendation(
             shipment=shipment,

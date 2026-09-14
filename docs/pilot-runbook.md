@@ -1786,3 +1786,9 @@ If a commercial regression passes only inside the canonical runner but fails sta
 At the extraction-confirmation screen, do not approve a proposal while ADR status, temperature-control status or high-value status is still unknown. The API returns a validation error and leaves the proposal unconfirmed; it must not create a MINA job or supplier workflow. Resolve each safety field explicitly from customer evidence or operator review, then confirm again.
 
 Treat `false` as valid only when it is explicitly established. An AI-only negative that remained `None` after safety-truth normalization is not permission to proceed. This runtime rule intentionally matches authorized sanitized replay, where a case with unresolved safety truth remains at `extraction_confirmation_required`.
+
+## Customer Email Identity Binding Hardening
+
+For controlled Outlook intake, the extraction proposal now carries the canonical trusted Customer Master name that was established before AI use. Treat this as immutable email identity authority: correct shipment facts during confirmation, but do not change the bound customer to another Master Data record. If the customer association itself is wrong, reject/reprocess the intake rather than overriding the identity in place.
+
+The manual `process-email` fallback in pilot mode must include the real sender address of the approved customer. MINAI verifies that sender against active Customer Master trust rules before parsing. A missing/untrusted/ambiguous sender is a stop condition. If Customer Master sender trust changes after an RFQ workflow was created, later quote progression must return `customer_identity_verification_required` until current identity evidence is safe again; do not bypass this with agency-default pricing.

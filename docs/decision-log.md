@@ -7534,3 +7534,14 @@ The human extraction-confirmation checkpoint must not convert an unresolved safe
 A failed confirmation caused by unknown safety truth must be non-mutating: the extraction proposal remains `proposed`, no MINA job is created and no downstream operational workflow may start. The operator may resolve the fields through the existing correction contract and then confirm the exact resulting snapshot. Conditional details such as ADR class or temperature requirement remain governed by the existing contradiction, missing-information, regulatory and risk gates rather than being fabricated at confirmation.
 
 This aligns live controlled-pilot behavior with authorized sanitized replay, where unresolved safety truth already stops at extraction confirmation. Direct development helpers that construct a `Shipment` without the human checkpoint do not become evidence that unknown safety is acceptable in the real pilot path.
+
+## DEC-270 — Trusted Customer Email Identity Remains Bound Through Confirmation and Commercial Progression
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+A customer identity established by the controlled Outlook trusted-sender gate is durable authority, not a parser hint. The canonical Customer Master name is therefore stored on the extraction proposal as `trusted_customer_name`. Human extraction confirmation may correct shipment facts but may not change that bound customer identity. A rejected identity change must leave the proposal unconfirmed and must not create a MINA job.
+
+Master-Data-backed email workflows also recheck sender/customer identity before supplier RFQ authority and again during supplier-response/quote progression. When an email sender no longer matches the confirmed Customer Master identity, the workflow returns `customer_identity_verification_required` and creates no new supplier RFQ or customer QuoteCase. Existing RFQ evidence may remain visible, but trust drift does not become implicit commercial authority.
+
+The manual `/process-email` fallback remains `source=manual` and does not claim Microsoft Graph provenance. In controlled pilot mode it now requires an explicit sender and exactly one active Customer Master trusted-sender match before AI parsing. Missing, untrusted or ambiguous sender identity fails closed before the parser. Non-email manual intake continues through the separate manual-intake workflow and is not converted into an email identity claim.

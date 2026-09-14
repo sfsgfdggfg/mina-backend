@@ -4444,3 +4444,11 @@ Authorized sanitized replay must derive `is_oversize_or_project=true` from the s
 Before a customer extraction proposal becomes an operational Shipment, `is_adr`, `is_temperature_controlled` and `is_high_value` must all be explicit booleans. `None` is unresolved truth, not a negative answer. Confirmation must fail closed until the operator corrects or confirms those fields explicitly.
 
 Unknown-safety confirmation failure must not persist a confirmed snapshot, create a MINA job or start any supplier/pricing workflow. Existing contradiction guards remain in force: ADR class cannot coexist with `is_adr=false`, and a temperature requirement cannot coexist with `is_temperature_controlled=false`. Positive safety states continue through the existing missing-information, regulatory, equipment, risk and pilot-scope gates.
+
+## RULE-285 — Email-Derived Customer Identity Must Stay Sender-Bound End to End
+
+When controlled inbound processing resolves exactly one trusted Customer Master identity, persist that canonical customer name with the extraction proposal. Human confirmation must not replace it with a different customer identity. The trusted binding must survive durable proposal persistence and attachment-derived customer proposals.
+
+For Master-Data-backed email workflows, a present sender address must still match the confirmed shipment customer before supplier selection/RFQ creation and before later quote progression. `sender_verification_required`, unmatched identity or later trust drift is a commercial blocker, not advisory metadata. Do not fall back to an agency pricing policy or supplier workflow merely because customer-specific memory was not applied.
+
+Controlled-pilot manual email fallback requires a sender address and one active trusted Customer Master match before AI use. Missing, unknown or ambiguous manual-email sender identity fails closed. Phone, WhatsApp, portal, face-to-face and other non-email manual intake remain separate and do not fabricate email trust evidence.

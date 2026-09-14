@@ -468,6 +468,7 @@ def apply_attachment_interpretation_review(
             proposal = ShipmentExtractionProposal(
                 inbound_mail=review.inbound_mail,
                 proposed_shipment=candidate,
+                trusted_customer_name=review.trusted_customer_name,
                 source_attachment_review_id=review.review_id,
                 source="attachment_interpretation_review",
             )

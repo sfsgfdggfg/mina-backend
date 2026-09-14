@@ -63,6 +63,26 @@ def generate_action_recommendation(
             source="pilot_scope_engine",
         )
 
+    if result_type == "customer_identity_verification_required":
+        return ActionRecommendation(
+            action_type="customer_identity_verification_required",
+            title="Müşteri Kimliği Yeniden Doğrulanmalı",
+            message=(
+                "E-posta göndereni ile doğrulanmış Customer Master kimliği eşleşmiyor. "
+                "MINAI tedarikçi seçimi, RFQ ve müşteri teklifine geçmeden akışı durdurdu."
+            ),
+            priority="high",
+            checklist=_extend_checklist(
+                [
+                    "E-posta gönderen adresini ve Customer Master kaydını kontrol et.",
+                    "Yanlış müşteri seçildiyse güvenli intake/confirmation akışından düzelt.",
+                    "Trusted sender eşleşmeden supplier RFQ veya müşteri teklifi oluşturma.",
+                ],
+                commodity_action_checklist,
+            ),
+            source="customer_identity_gate",
+        )
+
     if result_type == "data_provenance_blocked":
         return ActionRecommendation(
             action_type="data_provenance_blocked",

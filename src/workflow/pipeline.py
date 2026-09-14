@@ -120,6 +120,82 @@ def build_data_provenance_blocked_result(
     }
 
 
+def customer_identity_verification_required(
+    *,
+    customer_memory,
+    sender_address: str | None,
+    master_data_repository: MasterDataRepository | None,
+) -> bool:
+    if master_data_repository is None:
+        return False
+    if not sender_address or not sender_address.strip():
+        return False
+    return bool(
+        customer_memory is None
+        or not getattr(customer_memory, "matched", False)
+        or getattr(customer_memory, "identity_status", None) != "trusted_sender"
+    )
+
+
+def build_customer_identity_blocked_result(
+    shipment: Shipment,
+    *,
+    customer_memory,
+    supplier_rfq_workflow=None,
+    supplier_rfq_drafts=None,
+    supplier_rfq_responses=None,
+) -> dict:
+    commodity_profile = get_commodity_record(shipment.commodity)
+    missing_info = apply_road_rfq_readiness(
+        shipment,
+        check_missing_information(shipment),
+    )
+    regulatory_compliance = assess_regulatory_compliance(shipment)
+    equipment_decision = decide_equipment(shipment)
+    risk_assessment = assess_risk(
+        shipment=shipment,
+        customer_memory=customer_memory,
+    )
+    pilot_scope = evaluate_pilot_scope(shipment)
+    action_recommendation = generate_action_recommendation(
+        shipment=shipment,
+        equipment_decision=equipment_decision,
+        risk_assessment=risk_assessment,
+        missing_info=missing_info,
+        result_type="customer_identity_verification_required",
+    )
+    return {
+        "shipment": shipment,
+        "pilot_scope": pilot_scope,
+        "customer_memory": customer_memory,
+        "commodity_profile": commodity_profile,
+        "missing_info": missing_info,
+        "regulatory_compliance": regulatory_compliance,
+        "equipment_decision": equipment_decision,
+        "risk_assessment": risk_assessment,
+        "supplier_selection": None,
+        "operational_consistency": None,
+        "quote_readiness": None,
+        "supplier_rfq_workflow": supplier_rfq_workflow,
+        "supplier_rfq_drafts": supplier_rfq_drafts or [],
+        "supplier_rfq_responses": supplier_rfq_responses or [],
+        "valid_supplier_rfq_responses": [],
+        "supplier_rfq_response_validation": None,
+        "supplier_quote_comparisons": [],
+        "supplier_quote_selection_decision": None,
+        "supplier_quote": None,
+        "customer_quote": None,
+        "quote_draft": None,
+        "quote_approval": None,
+        "quote_send_safety": None,
+        "quote_case": None,
+        "clarification_draft": None,
+        "management_review_draft": None,
+        "action_recommendation": action_recommendation,
+        "result_type": "customer_identity_verification_required",
+    }
+
+
 def process_shipment(
     shipment: Shipment,
     email_text: str | None = None,
@@ -171,6 +247,16 @@ def process_shipment(
         )
     except DataProvenanceError:
         return build_data_provenance_blocked_result(shipment)
+
+    if customer_identity_verification_required(
+        customer_memory=customer_memory,
+        sender_address=sender_address,
+        master_data_repository=master_data_repository,
+    ):
+        return build_customer_identity_blocked_result(
+            shipment,
+            customer_memory=customer_memory,
+        )
 
     commodity_profile = get_commodity_record(shipment.commodity)
     missing_info = apply_road_rfq_readiness(
