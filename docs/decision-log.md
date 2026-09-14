@@ -7589,3 +7589,14 @@ The controlled road pilot is the ordinary standard Tenteli/Curtainsider flow. An
 Pilot eligibility now accepts no explicit equipment request or a recognized Tenteli/Curtainsider standard-family request. Any other explicit equipment value fails closed from the simple pilot. Equipment selection itself is unchanged and continues to preserve the requested equipment so the operator can see the real requirement outside pilot scope.
 
 This closes a fail-open where explicit Reefer, Mega, ADR-capable and box-trailer requests could remain green and pilot-eligible while the equipment engine correctly selected the special equipment.
+
+## DEC-275 — Explicit Top-Loading Requirements Are Non-Standard Road Equipment Authority
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+Road Freight RULE-012 already states that `Overhead Crane`, `Tavan Vinci`, `Crane Loading` and `Üstten Yükleme` require Open Trailer evaluation. These signals are operational equipment requirements even when dimensions, ADR and temperature-control fields look ordinary.
+
+The deterministic equipment engine must therefore select `Open Trailer / Platform` when one of these loading requirements is present and no stronger explicit non-standard equipment request already exists. The operational risk engine must require human review, and the simple controlled standard-trailer pilot must fail closed for the case. Existing project/oversize/heavy rules and explicit stronger special-equipment requests retain priority.
+
+This closes a fail-open where a top-loading shipment could remain Tenteli, green-risk and pilot-eligible solely because the requirement existed only in structured shipment notes.

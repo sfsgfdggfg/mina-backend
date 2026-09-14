@@ -12,7 +12,10 @@ from src.core.commodity_profile import (
     normalize_commodity_value,
 )
 from src.core.gtip import has_gtip_commodity_conflict
-from src.core.equipment import is_standard_road_equipment_request
+from src.core.equipment import (
+    is_standard_road_equipment_request,
+    requires_open_trailer_loading,
+)
 from src.core.models import Shipment
 from src.core.pilot_access import pilot_mode_enabled
 from src.core.road_dimensions import (
@@ -136,6 +139,12 @@ def evaluate_pilot_scope(
         _append_reason(
             reasons,
             "Explicit special or non-standard equipment is outside the simple standard-trailer pilot scope.",
+        )
+
+    if requires_open_trailer_loading(shipment):
+        _append_reason(
+            reasons,
+            "Top-loading or crane-loading requirement is outside the simple standard-trailer pilot scope.",
         )
 
     if has_gtip_commodity_conflict(shipment):

@@ -4476,3 +4476,9 @@ In controlled pilot mode, an unresolved GTIP / commodity conflict must be exclud
 Treat a stated equipment requirement independently from ADR, temperature and dimension inference. The simple controlled road pilot may accept an unspecified/default equipment request or the standard Tenteli/Curtainsider family. An explicit Reefer/Frigo, Mega, ADR-capable, box/closed-body, lowbed/project or unrecognized equipment request is outside that pilot scope.
 
 Do not erase or rewrite the requested equipment to make a job pilot-eligible. Keep the equipment decision visible and route the job to human handling outside the simple pilot. A recognized Tenteli/Curtainsider alias must not be excluded solely because it is explicit.
+
+## RULE-290 — Top-Loading / Crane-Loading Requirements Cannot Be Treated as Standard Tenteli Pilot Cargo
+
+Treat `Overhead Crane`, `Tavan Vinci`, `Crane Loading` and `Üstten Yükleme` as explicit loading-method evidence requiring Open Trailer / Platform evaluation. Do not require oversize dimensions, ADR, reefer or a pre-filled special `equipment_type` before honoring this evidence.
+
+For otherwise ordinary road cargo, this requirement must produce Open Trailer / Platform equipment guidance, human review and controlled-pilot scope exclusion. If a stronger explicit non-standard equipment request or project/heavy rule already applies, preserve that stronger requirement rather than downgrading it to Open Trailer.
