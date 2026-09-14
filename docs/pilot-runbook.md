@@ -1732,3 +1732,11 @@ After the Air Quote Readiness Gate returns READY, select the matching open air M
 A successful preparation creates the normal shared QuoteCase and a `pending` QuoteApproval, links the case to the MINA job, and moves an eligible price-request job to `quote_ready`. The quote review screen shows **Air Readiness Provenance · Frozen Snapshot**, including tariff/source, service evidence, cost basis and pricing provenance. Repeating the exact same preparation returns the existing case; different evidence for an already-linked job is rejected rather than silently replacing it.
 
 Review/revise/approve the quote with the existing quote controls. Revisions preserve the frozen air evidence lineage and require a fresh approval as usual. P2-42 does not send customer mail or create a booking; those remain separate controlled actions.
+
+## Commercial-Air Accepted Quote → Operation Handoff (P2-43)
+
+After the air quote has been approved, actually sent through the normal quote-send controls and explicitly marked **Müşteri Kabul Etti**, open the MINA job. For an air job the road **Operasyonu Başlat** supplier-message panel is replaced by **Havayolu Operasyon Handoff**. Choose **Havayolu Operasyonuna Devret**.
+
+The backend rechecks the current QuoteCase, current approved snapshot, frozen air provenance, current-revision sent evidence and customer-acceptance timeline before writing anything. A successful handoff moves the job to `operation_opened` and displays the airline, route, service/expected-delivery dates, tariff/source row, cost basis, customer price, approval/revision and sent-evidence count from the frozen handoff.
+
+Treat the resulting card as an internal operation handoff only. **BOOKING HENÜZ YOK** means exactly that: no airline message was sent, no capacity booking was created and any flight reference inherited from the earlier availability evidence remains schedule evidence rather than a booking confirmation. Road vehicle/plaka/sürücü controls are intentionally hidden for air jobs at this stage.

@@ -4398,3 +4398,11 @@ Never create a durable air customer quote directly from a standalone preview or 
 Store the exact readiness lineage on both the QuoteCase and its pending QuoteApproval. The same exact preparation may be retried idempotently. A different tariff row, scope/semantic review, availability confirmation, selected cost/FX evidence or pricing context must not silently create another QuoteCase for the same MINA job. Quote revisions may change customer-facing text or sales price under the existing revision rules, but they must preserve the frozen air evidence lineage until an explicit future re-preparation flow exists.
 
 Human approval is mandatory. P2-42 does not send the quote, book capacity or create outbound/runtime authority.
+
+## RULE-279 — Hand Off an Accepted Air Quote Only from the Current Approved, Sent and Accepted Evidence Chain
+
+Do not start an air operation from the `accepted` stage label alone. Resolve the linked QuoteCase and require the current approval to be approved and still match the exact current supplier-cost/customer-price/draft snapshot. The approval's frozen air context must equal the QuoteCase air context. Require durable sent evidence for the current approval and revision; a manually forced `quote_sent` stage is not delivery evidence. Require exactly one durable customer-acceptance stage event with actor and timestamp.
+
+Freeze all matching current-revision sent evidence, the acceptance actor/time and the P2-42 air quote context into the immutable air-operation handoff. Only after that record exists may an air price-request job enter `operation_opened`. Retrying the same job returns the existing handoff rather than creating another one.
+
+P2-43 does not book capacity, contact the airline or reuse road vehicle/plaka/sürücü operation-start semantics. Keep `booking_confirmed`, airline-contact, booking/outbound and runtime authority false until later explicit air-operation evidence supports those transitions.

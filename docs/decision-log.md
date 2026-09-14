@@ -7444,3 +7444,14 @@ A successful preparation creates the existing shared QuoteCase + pending QuoteAp
 Preparation is idempotent for the same MINA job plus exact evidence/pricing context. Repeating that exact context returns the existing case. If the job is already linked to a QuoteCase created from different air evidence, P2-42 fails closed instead of creating a second case or selecting a newer/latest evidence record implicitly. A blocked P2-41 result writes no QuoteCase, approval or MINA stage transition.
 
 P2-42 itself performs no customer send and no airline booking. It only places a deterministic air draft into the existing human-approval lifecycle; outbound delivery remains an explicit later action guarded by the existing approval/send controls.
+
+## DEC-262 — Accepted Air Quotes Must Enter Operations Through a Durable Evidence Handoff, Not a Road Supplier-Start Flow
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-43 introduces a bounded durable handoff between the accepted commercial-air quote lifecycle and the existing MINA operation lifecycle. Handoff is allowed only for a lifecycle-v2 air `price_request` job with a linked QuoteCase whose current QuoteApproval is `approved`, whose frozen `air_quote_context_snapshot` still matches the QuoteCase air context and current quote snapshot, whose current revision has durable customer-quote sent evidence, and whose timeline contains exactly one explicit transition to `accepted`.
+
+The handoff freezes the full P2-42 air quote context together with all current-revision sent evidence and the customer-acceptance actor/time. It then moves the MINA job from `accepted` to `operation_opened` in the same transaction and writes a dedicated timeline event. Repeating the handoff for the same job is idempotent; a second parallel handoff is not created.
+
+Air handoff is not airline booking. It does not call the road `operation_start` supplier-message flow, does not contact an airline, does not create a booking reference and grants no booking/outbound/runtime authority. Generic stage mutation may not bypass this gate: an air price-request job can enter `operation_opened` only when durable air-handoff evidence exists.
