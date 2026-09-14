@@ -4327,3 +4327,11 @@ The commercial-air operational-readiness preview must use an explicit inquiry re
 If explicit FX evidence is supplied, reuse P2-32 rules unchanged: exact selected evidence only, matching source/inquiry/direction/timestamp, no automatic latest/nearest choice and no reciprocal inference. Availability evidence must never supply or change FX, and FX evidence must never imply capacity or schedule.
 
 `operational_evidence_complete` is an evidence-status flag only. It must not authorize a customer price, margin, quote/send action, booking, airline selection or outbound execution. The preview remains ephemeral and partial-cost-only.
+
+## RULE-270 — Never Infer Airline Weight Rounding; Apply Only an Exact-Source Reviewed Ceiling Rule
+
+Commercial-air tariff calculations must not assume 0.5 kg, 1 kg or any other weight rounding from convention, prior shipments or another airline/source. For each immutable tariff source, weight rounding may be reviewed once as explicit `none` or `ceiling`. A ceiling rule requires an explicit positive `increment_kg`, authenticated reviewer, timestamp and evidence note; source SHA mismatch blocks consumption.
+
+When a ceiling rule exists, round the raw chargeable weight upward to the reviewed increment before evaluating tariff weight breaks. Preserve both raw and rounded chargeable weight plus the review id/mode/increment in the preview. If the source has an explicit no-rounding review, preserve the raw weight and show that the absence of rounding is reviewed evidence. If no review exists, keep raw legacy calculation and label rounding as unreviewed.
+
+This rule applies only to tariff break evaluation. Do not silently reinterpret a surcharge's separately reviewed actual/chargeable/pivot billed-weight basis, and do not use the rounding review as customer-pricing, margin, availability, booking, quote/send or outbound authority.

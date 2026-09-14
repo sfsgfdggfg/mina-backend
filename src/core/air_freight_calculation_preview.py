@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from decimal import Decimal
-from typing import Optional
+from decimal import Decimal, ROUND_CEILING
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.core.air_rate_structure_review_repository import AirRateStructureReviewRepository
 from src.core.air_rate_table_review_repository import AirRateTableReviewRepository
+from src.core.air_rate_weight_rounding_review_repository import AirRateWeightRoundingReviewRepository
 
 
 class AirFreightCalculationPreviewError(ValueError):
@@ -43,6 +44,10 @@ class AirFreightCalculationPreview(BaseModel):
     recommended_billed_weight_kg: Decimal
     recommended_base_freight: Decimal
     pivot_applied: bool
+    rounding_review_id: Optional[str] = None
+    rounding_mode: Optional[Literal["none", "ceiling"]] = None
+    rounding_increment_kg: Optional[Decimal] = None
+    rounded_chargeable_weight_kg: Optional[Decimal] = None
     rounding_applied: bool = False
     surcharges_included: bool = False
     capacity_confirmed: bool = False
@@ -85,6 +90,7 @@ def build_air_freight_calculation_preview(
     actual_weight_kg,
     table_repository: AirRateTableReviewRepository,
     structure_repository: AirRateStructureReviewRepository,
+    rounding_repository: AirRateWeightRoundingReviewRepository | None = None,
     volumetric_weight_kg=None,
     total_volume_cm3=None,
 ) -> AirFreightCalculationPreview:
@@ -113,6 +119,22 @@ def build_air_freight_calculation_preview(
         volumetric_source = "operator_supplied_volumetric_weight"
 
     chargeable = max(actual, volumetric)
+    rounding_review = None
+    effective_chargeable = chargeable
+    rounding_applied = False
+    if rounding_repository is not None:
+        rounding_review = rounding_repository.get_by_source(review.source_id)
+        if rounding_review is not None:
+            if rounding_review.source_sha256 != review.source_sha256:
+                raise AirFreightCalculationPreviewError("air_rate_weight_rounding_source_mismatch")
+            if rounding_review.rounding_mode == "ceiling":
+                increment = rounding_review.increment_kg
+                if increment is None:
+                    raise AirFreightCalculationPreviewError("air_rate_weight_rounding_increment_required")
+                units = (chargeable / increment).to_integral_value(rounding=ROUND_CEILING)
+                effective_chargeable = units * increment
+                rounding_applied = True
+
     minimum = row.rates.get("MIN")
     plus_rates: list[tuple[str, Decimal, Decimal]] = []
     for key, rate in row.rates.items():
@@ -123,7 +145,7 @@ def build_air_freight_calculation_preview(
 
     options: list[AirFreightCalculationOption] = []
     for key, threshold, rate in sorted(plus_rates, key=lambda item: item[1]):
-        billed = max(chargeable, threshold)
+        billed = max(effective_chargeable, threshold)
         raw_freight = billed * rate
         minimum_applied = minimum is not None and minimum > raw_freight
         freight = minimum if minimum_applied else raw_freight
@@ -134,7 +156,7 @@ def build_air_freight_calculation_preview(
             billed_weight_kg=billed,
             base_freight=freight,
             minimum_applied=minimum_applied,
-            is_pivot_option=threshold > chargeable,
+            is_pivot_option=threshold > effective_chargeable,
         ))
 
     best = min(options, key=lambda item: (item.base_freight, item.billed_weight_kg, item.threshold_kg))
@@ -156,4 +178,11 @@ def build_air_freight_calculation_preview(
         recommended_billed_weight_kg=best.billed_weight_kg,
         recommended_base_freight=best.base_freight,
         pivot_applied=best.is_pivot_option,
+        rounding_review_id=None if rounding_review is None else rounding_review.review_id,
+        rounding_mode=None if rounding_review is None else rounding_review.rounding_mode,
+        rounding_increment_kg=None if rounding_review is None else rounding_review.increment_kg,
+        rounded_chargeable_weight_kg=(
+            None if rounding_review is None else effective_chargeable
+        ),
+        rounding_applied=rounding_applied,
     )

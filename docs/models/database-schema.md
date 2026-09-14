@@ -1013,3 +1013,9 @@ For every converted surcharge component, the response preserves source currency/
 P2-33 adds no persistence namespace. The preview reads existing reviewed tariff/cost evidence, tariff-validity evidence, optional explicitly selected FX evidence and durable `air_service_availability_confirmations`, then returns an ephemeral readiness projection.
 
 The projection stores nothing back to persistence. `operational_evidence_complete` is computed only from the explicit service-date tariff validity plus exact-context capacity and schedule evidence. Customer quote readiness, booking readiness, outbound authority and runtime authority remain false and are not persisted or inferred.
+
+### P2-34 Commercial-Air Weight Rounding Review
+
+`air_rate_weight_rounding_reviews` stores one immutable review per commercial-air tariff source. Each record contains `review_id`, exact `source_id` / `source_sha256`, `rounding_mode` (`none` or `ceiling`), optional `increment_kg` required only for ceiling, fixed application scope `chargeable_weight_before_break_evaluation`, reviewer/time/note evidence and a versioned source marker. The namespace is protected from ordinary pilot retention purge.
+
+Freight calculation remains ephemeral. The preview preserves raw `chargeable_weight_kg` and may additionally expose `rounding_review_id`, `rounding_mode`, `rounding_increment_kg` and `rounded_chargeable_weight_kg`. `rounding_applied=true` means a reviewed ceiling rule was evaluated; an explicit `none` review keeps it false while still exposing review provenance. No customer-price, booking or outbound authority is stored or inferred.

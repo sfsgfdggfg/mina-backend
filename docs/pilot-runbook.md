@@ -1661,3 +1661,11 @@ After tariff row, surcharge, validity and shipment-specific capacity/schedule ev
 Read `Operational evidence COMPLETE` only as confirmation that the tariff is valid for the service date and matching capacity/schedule evidence is positive. Missing availability appears as `availability_evidence_missing`; negative capacity and unconfirmed schedule remain visible blockers. Conflicting exact-context confirmations stop the preview instead of choosing the latest record.
 
 The displayed cost is still a partial reviewed reference cost. P2-33 does not make the customer quote ready, does not add margin, does not approve/send a quote and does not create booking authority or outbound execution authority.
+
+## Commercial-Air Weight Rounding Review (P2-34)
+
+In **Ayarlar → Havayolu Listeleri**, use **Airline Weight Rounding** only when the exact tariff/airline evidence establishes how chargeable weight is handled before weight-break pricing. Choose **No rounding (explicit)** when the evidence explicitly supports no rounding. Choose **Ceiling / yukarı yuvarla** only with the evidenced increment such as `0.5` or `1`; do not enter a customary increment merely to complete the workflow. Add an operator-authored review note.
+
+After review, **Navlun Önizleme**, **Reviewed Surcharge Cost Preview** and **Operational Readiness Preview** expose the rounding provenance. The raw chargeable weight remains visible. A ceiling review rounds upward before tariff break comparison; an explicit no-rounding review stays distinguishable from missing evidence. If no review exists, the previews continue using raw chargeable weight and display rounding as unreviewed.
+
+P2-34 does not change separately reviewed surcharge weight bases and does not make the partial cost customer-ready or bookable. Margin, customer selling price, quote approval/send and airline booking remain outside this step.

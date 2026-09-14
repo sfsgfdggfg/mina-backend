@@ -70,6 +70,7 @@ from src.simulation.air_rate_surcharge_applicability_scope_regressions import ev
 from src.simulation.air_rate_surcharge_operational_conditions_regressions import evaluate_air_rate_surcharge_operational_conditions_regressions
 from src.simulation.air_rate_surcharge_flat_quantity_basis_regressions import evaluate_air_rate_surcharge_flat_quantity_basis_regressions
 from src.simulation.air_rate_validity_review_regressions import evaluate_air_rate_validity_review_regressions
+from src.simulation.air_rate_weight_rounding_review_regressions import evaluate_air_rate_weight_rounding_review_regressions
 from src.simulation.air_service_availability_regressions import evaluate_air_service_availability_regressions
 from src.simulation.air_fx_rate_evidence_regressions import evaluate_air_fx_rate_evidence_regressions
 from src.simulation.air_fx_consumption_preview_regressions import evaluate_air_fx_consumption_preview_regressions
@@ -342,6 +343,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Commercial-air surcharge operational-condition review", evaluate_air_rate_surcharge_operational_conditions_regressions),
     Suite("Commercial-air flat surcharge quantity-basis review", evaluate_air_rate_surcharge_flat_quantity_basis_regressions),
     Suite("Commercial-air tariff validity review", evaluate_air_rate_validity_review_regressions),
+    Suite("Commercial-air weight-rounding review", evaluate_air_rate_weight_rounding_review_regressions),
     Suite("Commercial-air service availability evidence", evaluate_air_service_availability_regressions),
     Suite("Commercial-air FX rate evidence", evaluate_air_fx_rate_evidence_regressions),
     Suite("Commercial-air FX consumption preview", evaluate_air_fx_consumption_preview_regressions),

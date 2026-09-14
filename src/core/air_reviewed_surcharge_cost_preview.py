@@ -16,6 +16,7 @@ from src.core.air_rate_structure_review_repository import AirRateStructureReview
 from src.core.air_rate_surcharge_review_repository import AirRateSurchargeReviewRepository
 from src.core.air_rate_table_review_repository import AirRateTableReviewRepository
 from src.core.air_rate_validity_review_repository import AirRateValidityReviewRepository
+from src.core.air_rate_weight_rounding_review_repository import AirRateWeightRoundingReviewRepository
 from src.core.air_shadow_repository import AirShadowRepository
 
 
@@ -148,6 +149,7 @@ def build_air_reviewed_surcharge_cost_preview(
     source_repository: AirShadowRepository,
     validity_repository: AirRateValidityReviewRepository | None = None,
     fx_repository: AirFxRateEvidenceRepository | None = None,
+    rounding_repository: AirRateWeightRoundingReviewRepository | None = None,
     volumetric_weight_kg=None,
     total_volume_cm3=None,
     via_airport: Optional[str] = None,
@@ -169,6 +171,7 @@ def build_air_reviewed_surcharge_cost_preview(
             total_volume_cm3=total_volume_cm3,
             table_repository=table_repository,
             structure_repository=structure_repository,
+            rounding_repository=rounding_repository,
         )
     except AirFreightCalculationPreviewError as exc:
         raise AirReviewedSurchargeCostPreviewError(str(exc)) from exc

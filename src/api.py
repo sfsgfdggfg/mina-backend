@@ -285,6 +285,15 @@ from src.core.air_rate_surcharge_review_repository import (
 from src.core.air_rate_validity_review_repository import (
     SQLiteAirRateValidityReviewRepository,
 )
+from src.core.air_rate_weight_rounding_review_repository import (
+    SQLiteAirRateWeightRoundingReviewRepository,
+)
+from src.core.air_rate_weight_rounding_review_service import (
+    AirRateWeightRoundingReviewNotFoundError,
+    AirRateWeightRoundingReviewTransitionError,
+    build_air_rate_weight_rounding_review_view,
+    review_air_rate_weight_rounding,
+)
 from src.core.air_fx_rate_evidence_repository import (
     SQLiteAirFxRateEvidenceRepository,
 )
@@ -628,6 +637,7 @@ air_rate_structure_review_repository = SQLiteAirRateStructureReviewRepository(pi
 air_rate_table_review_repository = SQLiteAirRateTableReviewRepository(pilot_store)
 air_rate_surcharge_review_repository = SQLiteAirRateSurchargeReviewRepository(pilot_store)
 air_rate_validity_review_repository = SQLiteAirRateValidityReviewRepository(pilot_store)
+air_rate_weight_rounding_review_repository = SQLiteAirRateWeightRoundingReviewRepository(pilot_store)
 air_fx_rate_evidence_repository = SQLiteAirFxRateEvidenceRepository(pilot_store)
 air_service_availability_repository = SQLiteAirServiceAvailabilityRepository(pilot_store)
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
@@ -1054,6 +1064,12 @@ class AirRateSurchargeFlatQuantityBasisRequest(BaseModel):
 class AirRateValidityReviewRequest(BaseModel):
     valid_from: date
     valid_to: date
+    review_note: str = Field(min_length=1, max_length=800)
+
+
+class AirRateWeightRoundingReviewRequest(BaseModel):
+    rounding_mode: Literal["none", "ceiling"]
+    increment_kg: Optional[float] = Field(default=None, gt=0, le=100)
     review_note: str = Field(min_length=1, max_length=800)
 
 
@@ -2535,6 +2551,42 @@ def review_air_rate_source_validity(source_id: str, request: AirRateValidityRevi
     }
 
 
+@app.get("/air-rate-weight-rounding-reviews")
+def list_air_rate_weight_rounding_reviews():
+    return build_air_rate_weight_rounding_review_view(
+        repository=air_rate_weight_rounding_review_repository
+    )
+
+
+@app.post("/air-rate-sources/{source_id}/weight-rounding-review")
+def review_air_rate_source_weight_rounding(
+    source_id: str, request: AirRateWeightRoundingReviewRequest, http_request: Request,
+):
+    try:
+        review = review_air_rate_weight_rounding(
+            source_id=source_id,
+            rounding_mode=request.rounding_mode,
+            increment_kg=(
+                None if request.increment_kg is None else Decimal(str(request.increment_kg))
+            ),
+            review_note=request.review_note,
+            reviewed_by=_authenticated_operator(http_request),
+            source_repository=air_shadow_repository,
+            repository=air_rate_weight_rounding_review_repository,
+        )
+    except AirRateWeightRoundingReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AirRateWeightRoundingReviewTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "review": review.model_dump(mode="json"),
+        "freight_preview_consumption_enabled": True,
+        "runtime_authoritative": False,
+        "customer_pricing_authority_enabled": False,
+        "booking_authority_enabled": False,
+    }
+
+
 @app.get("/air-fx-rate-evidence")
 def list_air_fx_rate_evidence():
     return build_air_fx_rate_evidence_view(repository=air_fx_rate_evidence_repository)
@@ -2895,6 +2947,7 @@ def preview_air_freight_calculation(
             total_volume_cm3=request.total_volume_cm3,
             table_repository=air_rate_table_review_repository,
             structure_repository=air_rate_structure_review_repository,
+            rounding_repository=air_rate_weight_rounding_review_repository,
         )
     except AirFreightCalculationPreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -2931,6 +2984,7 @@ def preview_air_reviewed_surcharge_cost(
             source_repository=air_shadow_repository,
             validity_repository=air_rate_validity_review_repository,
             fx_repository=air_fx_rate_evidence_repository,
+            rounding_repository=air_rate_weight_rounding_review_repository,
         )
     except AirReviewedSurchargeCostPreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -2968,6 +3022,7 @@ def preview_air_operational_readiness(
             validity_repository=air_rate_validity_review_repository,
             availability_repository=air_service_availability_repository,
             fx_repository=air_fx_rate_evidence_repository,
+            rounding_repository=air_rate_weight_rounding_review_repository,
         )
     except AirOperationalReadinessPreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
