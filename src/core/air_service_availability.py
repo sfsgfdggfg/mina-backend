@@ -26,6 +26,7 @@ class AirServiceAvailabilityConfirmation(BaseModel):
     routing_context: AirAvailabilityRoutingContext
     via_airport: Optional[str] = Field(default=None, min_length=3, max_length=3)
     service_date: date
+    expected_delivery_date: Optional[date] = None
     capacity_status: AirAvailabilityCapacityStatus
     schedule_status: AirAvailabilityScheduleStatus
     flight_reference: Optional[str] = Field(default=None, max_length=120)
@@ -68,8 +69,12 @@ class AirServiceAvailabilityConfirmation(BaseModel):
     def validate_routing_and_schedule(self):
         if self.routing_context == "direct" and self.via_airport is not None:
             raise ValueError("Direct air availability confirmation cannot carry a via airport.")
-        if self.schedule_status == "not_confirmed" and self.flight_reference is not None:
-            raise ValueError("Unconfirmed air schedule cannot carry a flight reference.")
+        if self.schedule_status == "not_confirmed" and (
+            self.flight_reference is not None or self.expected_delivery_date is not None
+        ):
+            raise ValueError("Unconfirmed air schedule cannot carry flight or expected-delivery evidence.")
+        if self.expected_delivery_date is not None and self.expected_delivery_date < self.service_date:
+            raise ValueError("Expected delivery date cannot be before air service date.")
         return self
 
     @property

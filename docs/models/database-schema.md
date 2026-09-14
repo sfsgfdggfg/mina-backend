@@ -1055,3 +1055,10 @@ The final cost-completeness preview is ephemeral and adds no persistence namespa
 P2-40 adds no persistence namespace. The preview consumes the existing P2-39 cost-completeness read model plus an explicit active `customer_id`, optional explicit `quote_pricing_override`, Customer Master pricing policy and configured agency pricing policy. The shared pricing resolver returns the policy source/formula/rounding and the shared pricing engine returns the ephemeral `customer_price_preview`.
 
 No QuoteCase, approval, outbound message, booking state or learning fact is written. The preview explicitly exposes `quote_ready=false`, `quote_created=false`, `quote_send_authority=false`, `booking_authority=false`, `outbound_authority=false` and `runtime_authoritative=false`.
+
+
+### P2-41 Commercial-Air Quote Readiness Preview and Delivery-Date Evidence
+
+P2-41 adds no quote-readiness persistence namespace. The ephemeral read model consumes P2-39 cost completeness, P2-40 customer pricing, the existing air operational-readiness evidence, an explicit Customer Master identity and a shipment snapshot. It returns shipment blockers, computed package piece count/volume, delivery-deadline status and `quote_ready`; quote creation/send/booking/outbound/runtime flags remain false.
+
+`air_service_availability_confirmations` gains optional `expected_delivery_date`. Historical records without this value remain valid. When present it cannot precede `service_date`, and unconfirmed schedules cannot carry flight or expected-delivery evidence. The field becomes mandatory for P2-41 only when the customer shipment includes a required-delivery date.
