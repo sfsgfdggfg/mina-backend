@@ -1693,3 +1693,11 @@ In **Ayarlar → Havayolu Listeleri**, use **Air Cost Scope Requirements Review*
 The form intentionally starts every category as Unresolved. A saved review may show `Scope classification COMPLETE` once every category is either required or not applicable, but that wording does **not** mean the cost is complete. Required categories still need separately captured and explicitly selected cost evidence where applicable, and unsupported variable/weight-based/percentage/tiered/duty/tax semantics remain outside P2-37.
 
 P2-37 does not change Reviewed Cost Preview or Operational Readiness totals. Do not treat a scope review as all-in confirmation, do not apply customer margin from it, and do not use it as quote/send, booking or outbound authority. Cost-evidence matching remains a later gate.
+
+## Commercial-Air Required Flat Local-Cost Coverage Preview (P2-38)
+
+After a P2-37 cost-scope review exists, use **Required Flat Local-Cost Coverage** on the confirmed tariff row. Select the exact scope review for the inquiry, then select only the P2-35 local-cost evidence records intended for this calculation. Supply matching shipment/AWB/HAWB/MAWB counts and any explicitly required P2-32 FX evidence exactly as in P2-36.
+
+Read `Required flat-cost coverage COMPLETE` narrowly: every P2-37 category marked `required` is represented by a local-cost record that P2-36 successfully consumed, no scope category remains unresolved, and no selected cost contradicts a `not_applicable` classification. Missing required categories and not-applicable conflicts are shown as blockers. Stored but unselected evidence has no coverage effect.
+
+Do not label the subtotal all-in and do not apply customer margin solely because this gate is complete. P2-38 does not model or prove `/kg`, percentage, minimum/tiered, customs duty/tax or unknown future cost semantics, and it creates no quote/send, booking or outbound authority.

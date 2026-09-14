@@ -7394,3 +7394,14 @@ P2-37 introduces inquiry-bound human review of the local-cost scope that may sit
 The review deliberately separates **scope requirements** from **cost evidence**. `required` means the inquiry needs that cost area resolved before a later completeness assessment; it does not mean a price has been captured. `not_applicable` is an explicit human scope decision, never the default. `unresolved` remains visible and makes `scope_classification_complete=false`. The browser defaults every category to unresolved rather than assuming a narrower quote scope.
 
 Even `scope_classification_complete=true` proves only that every supported category has been classified. It does not prove that every required cost has matching P2-35/P2-36 evidence, that bundled/weight-based/percentage/tiered/duty/tax semantics are covered, or that the subtotal is all-in. P2-37 creates no automatic cost-preview consumption, customer selling price, margin, quote/send, booking, runtime or outbound authority. A later bounded gate must explicitly compare one selected scope review with selected cost evidence before any cost-completeness statement is allowed.
+
+## DEC-257 — Required Air Local-Cost Coverage Must Be Proven by Explicit Scope-to-Consumed-Evidence Matching
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-38 introduces an ephemeral commercial-air coverage preview that compares one explicitly selected P2-37 cost-scope review with only the P2-35 additional-cost evidence records that P2-36 actually consumes in the same preview. A scope review is never auto-selected by recency, and repository presence is never enough to satisfy coverage.
+
+Every selected scope review must match the exact immutable air source id/SHA and inquiry reference. A category marked `required` is covered only when at least one explicitly selected local-cost evidence record for that category passes the existing P2-36 source/inquiry, quantity-count and FX checks and therefore appears in `included_additional_costs`. Missing count or FX fails closed before coverage can be claimed. A selected cost in a category reviewed as `not_applicable` is a visible contradiction and blocks coverage completeness.
+
+`required_flat_cost_coverage_complete=true` means only that the P2-37 scope classification has no unresolved category, every reviewed `required` flat category is represented by consumed P2-36 evidence, and no selected evidence contradicts a `not_applicable` category. It does not mean the shipment cost is all-in or globally complete: P2-35/P2-38 still cannot prove weight-based, percentage, minimum/tiered, customs duty/tax or unknown future cost semantics. Customer selling price, margin, quote/send, booking, runtime and outbound authority remain false and separately gated.

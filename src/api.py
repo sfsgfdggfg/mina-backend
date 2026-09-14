@@ -321,6 +321,10 @@ from src.core.air_cost_scope_review_service import (
     build_air_cost_scope_review_view,
     record_air_cost_scope_review,
 )
+from src.core.air_cost_scope_coverage_preview import (
+    AirCostScopeCoveragePreviewError,
+    build_air_cost_scope_coverage_preview,
+)
 from src.core.air_service_availability_repository import (
     SQLiteAirServiceAvailabilityRepository,
 )
@@ -1176,6 +1180,11 @@ class AirReviewedSurchargeCostPreviewRequest(BaseModel):
     awb_count: Optional[int] = Field(default=None, ge=1, le=1000)
     hawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
     mawb_count: Optional[int] = Field(default=None, ge=1, le=1000)
+
+
+class AirCostScopeCoveragePreviewRequest(AirReviewedSurchargeCostPreviewRequest):
+    cost_scope_review_id: str = Field(min_length=1, max_length=300)
+    inquiry_reference: str = Field(min_length=1, max_length=300)
 
 
 class AirOperationalReadinessPreviewRequest(BaseModel):
@@ -3117,6 +3126,47 @@ def preview_air_reviewed_surcharge_cost(
             rounding_repository=air_rate_weight_rounding_review_repository,
         )
     except AirReviewedSurchargeCostPreviewError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return preview.model_dump(mode="json")
+
+
+@app.post("/air-rate-table-reviews/{review_id}/rows/{candidate_id}/cost-scope-coverage-preview")
+def preview_air_cost_scope_coverage(
+    review_id: str,
+    candidate_id: str,
+    request: AirCostScopeCoveragePreviewRequest,
+):
+    try:
+        preview = build_air_cost_scope_coverage_preview(
+            review_id=review_id,
+            candidate_id=candidate_id,
+            cost_scope_review_id=request.cost_scope_review_id,
+            inquiry_reference=request.inquiry_reference,
+            actual_weight_kg=request.actual_weight_kg,
+            volumetric_weight_kg=request.volumetric_weight_kg,
+            total_volume_cm3=request.total_volume_cm3,
+            cargo_context=request.cargo_context,
+            routing_context=request.routing_context,
+            via_airport=request.via_airport,
+            reference_date=request.reference_date,
+            fx_evidence_ids=request.fx_evidence_ids,
+            additional_cost_evidence_ids=request.additional_cost_evidence_ids,
+            fx_reference_at=request.fx_reference_at,
+            shipment_count=request.shipment_count,
+            awb_count=request.awb_count,
+            hawb_count=request.hawb_count,
+            mawb_count=request.mawb_count,
+            table_repository=air_rate_table_review_repository,
+            structure_repository=air_rate_structure_review_repository,
+            surcharge_repository=air_rate_surcharge_review_repository,
+            source_repository=air_shadow_repository,
+            scope_repository=air_cost_scope_review_repository,
+            validity_repository=air_rate_validity_review_repository,
+            fx_repository=air_fx_rate_evidence_repository,
+            additional_cost_repository=air_additional_cost_evidence_repository,
+            rounding_repository=air_rate_weight_rounding_review_repository,
+        )
+    except AirCostScopeCoveragePreviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return preview.model_dump(mode="json")
 
