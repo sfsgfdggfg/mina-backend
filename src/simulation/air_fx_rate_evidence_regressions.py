@@ -192,11 +192,12 @@ def evaluate_air_fx_rate_evidence_regressions() -> dict:
     check(
         "FX Rate Evidence" in js
         and "1 BASE = rate QUOTE" in js
-        and "Cost preview bu kaydı henüz tüketmez" in js
+        and "1 BASE = rate QUOTE" in js
         and "ISO-8601 + offset" in js
-        and "air_fx_rate_evidence_repository" not in preview_source
+        and "explicit" in js.casefold()
+        and "fx_evidence_ids" in preview_source
         and "openai" not in service.casefold(),
-        "browser exposes directional timestamped FX evidence while calculation and AI consumption remain closed",
+        "browser exposes directional timestamped FX evidence while automatic FX and AI consumption remain closed",
     )
 
     return {"passed": not failures, "passes": passes, "failures": failures}

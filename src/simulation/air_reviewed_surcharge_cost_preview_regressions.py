@@ -254,7 +254,7 @@ def evaluate_air_reviewed_surcharge_cost_preview_regressions() -> dict:
     check(
         "Reviewed Surcharge Cost Preview" in js
         and "ALL-IN DEĞİL" in js
-        and "FX hariç" in js
+        and "ters veya otomatik FX yok" in js
         and "openai" not in service.casefold(),
         "browser labels reviewed surcharge preview as partial non-quote cost and service has no OpenAI dependency",
     )

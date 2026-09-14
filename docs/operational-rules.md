@@ -4311,3 +4311,11 @@ Do not infer an FX rate from today's market, file age, browser time, a previousl
 The base and quote currencies must differ. Do not automatically invert the recorded pair, substitute `QUOTE→BASE` for `BASE→QUOTE`, or treat the existence of evidence as permission to convert. Reused `entry_id` with different evidence fails closed.
 
 P2-31 does not change calculation behavior. Cross-currency surcharge candidates remain excluded with `currency_mismatch_no_fx`, and `fx_applied=false` until a separately bounded conversion-consumption rule validates evidence scope, direction and time. FX evidence creates no customer price, margin, quote, booking, availability or outbound authority and must not leak into road pricing.
+
+## RULE-268 — Never Auto-Select or Invert FX Evidence in the Air Surcharge Preview
+
+Cross-currency air surcharge conversion is permitted only when the preview request explicitly selects the FX evidence id and supplies the same inquiry reference plus an aware `fx_reference_at`. Repository presence, recency, today's date, nearest timestamp or prior use is not selection authority.
+
+The evidence direction must exactly match surcharge currency to freight currency. Never invert a reverse pair or derive an unstated reciprocal. The evidence must match the exact air-rate source id/SHA, inquiry and effective timestamp. Missing, duplicate, mismatched or unused selected evidence fails closed.
+
+When conversion is allowed, preserve the original surcharge currency/rate/cost in the response and expose the FX evidence id/rate/effective timestamp used. Do not apply hidden rounding. The resulting subtotal remains non-authoritative partial reference cost with no customer price, margin, quote/send, booking, availability or outbound authority.

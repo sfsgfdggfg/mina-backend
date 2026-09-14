@@ -1645,3 +1645,11 @@ In **Ayarlar → Havayolu Listeleri**, record an FX rate only when the current i
 Do not reverse the pair mentally or assume the inverse rate, do not use today's rate unless that exact timestamped rate is the cited evidence, and do not reuse another shipment's FX observation. If the pair or timestamp is uncertain, leave the evidence unrecorded rather than guessing.
 
 P2-31 does **not** convert cross-currency surcharges. Reviewed Surcharge Cost Preview continues to show those items as `currency_mismatch_no_fx` and keeps `fx_applied=false`. Customer selling price, margin, quote/send, booking and outbound authority remain outside this step.
+
+## Commercial-Air Explicit FX Consumption Preview (P2-32)
+
+In **Reviewed Surcharge Cost Preview**, leave FX evidence unselected unless the current inquiry requires a cross-currency surcharge conversion and the operator has verified the exact FX record. Select only the evidence whose stored direction is surcharge currency -> freight currency, then enter the same inquiry reference and the exact timezone-aware effective timestamp from that evidence.
+
+If no FX evidence is selected, cross-currency surcharges remain excluded as `currency_mismatch_no_fx`. Do not expect MINAI to choose the latest/nearest rate or invert a reverse pair. A selected evidence record that does not match source SHA, inquiry, direction or timestamp must stop the preview.
+
+Read converted values as partial reference cost only. The UI also preserves source-currency amounts and identifies the FX evidence used. P2-32 does not create customer selling price, margin, quote/send, booking, capacity/schedule or outbound authority.
