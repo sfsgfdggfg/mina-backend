@@ -75,6 +75,7 @@ PERSISTENT_STATE_NAMESPACES = (
     "air_rate_surcharge_reviews",
     "air_rate_surcharge_review_by_source",
     "air_rate_validity_reviews",
+    "air_rate_weight_rounding_reviews",
     "air_fx_rate_evidence",
     "air_fx_rate_evidence_by_entry",
     "air_service_availability_confirmations",

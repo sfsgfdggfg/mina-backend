@@ -7350,3 +7350,14 @@ P2-33 adds an ephemeral operational-readiness preview that combines the exact re
 `operational_evidence_complete=true` means only that the selected tariff is reviewed and valid for the explicit service date and that exactly matching capacity and schedule evidence is positive for the same source SHA, inquiry, destination, routing/via context and service date. Multiple exact-context availability confirmations are ambiguous and fail closed rather than using latest/nearest semantics.
 
 Operational evidence completeness does not make the partial reviewed cost all-in or customer-ready. P2-33 never sets customer quote readiness, booking readiness, outbound authority or runtime authority. Customer selling price, margin policy, final quote approval and booking execution remain separately controlled future gates.
+
+## DEC-253 — Airline Weight Rounding Requires Exact-Source Human Review Before Tariff Calculation Consumption
+
+**Status:** Accepted
+**Date:** 2026-09-14
+
+P2-34 introduces one durable weight-rounding review for an immutable commercial-air tariff source. MINAI must not infer a 0.5 kg, 1 kg or other rounding convention from common airline practice. An authenticated operator must explicitly review either `none` or `ceiling`; `ceiling` additionally requires a positive bounded `increment_kg`. The review is bound to the exact source id/SHA, records actor/time/note evidence and cannot be silently re-decided for that source.
+
+A reviewed ceiling rule is consumed only when calculating the chargeable weight used for tariff weight-break evaluation. The raw chargeable weight remains visible, the rounded chargeable weight and review provenance are exposed separately, and source-SHA mismatch fails closed. An explicit `none` review is distinguishable from missing review evidence; when no review exists, legacy raw-weight preview behavior remains visible as unreviewed rather than manufacturing a rule.
+
+P2-34 does not rewrite separately reviewed surcharge application semantics. A surcharge reviewed as `actual_weight` continues to use actual weight, one reviewed as `chargeable_weight` continues to use the raw chargeable weight, and `pivot_billed_weight` uses the tariff preview's selected billed weight. This step creates no all-in cost, customer selling price, margin, quote/send, airline booking or outbound authority.
