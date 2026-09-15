@@ -7729,3 +7729,11 @@ If the relevant Turkey date falls outside the verified holiday-coverage years, s
 ### Evidence boundary
 
 The holiday calendar is reusable through a single `turkey_holiday_observance()` authority. Authorized sanitized replay already carries ready/delivery dates and `human_review_expected`, so no new replay schema field is required. Exact-release replay evidence must still be regenerated before pilot GO.
+
+## DEC-287 — Pilot Preparation Enters Feature Freeze and Uses a Day 0 Launch Gate
+
+**Date:** 2026-09-15
+
+MINAI enters a pilot-preparation feature freeze. Until the first controlled-pilot checkpoint is completed, new product capabilities are deferred to the strategy/future-work backlog. Allowed changes are limited to proven pilot-blocking defects, safety/regression hardening, deployment/readiness preparation and documentation. A pilot-blocking code fix after release freeze creates a new release candidate and requires fresh release-bound replay/readiness evidence.
+
+The first real controlled shadow-pilot day must follow `docs/pilot-day-0-checklist.md`. The ordered launch gates are: exact release freeze; technical/profile/data verification; authorized pre-sanitized historical replay and receipt; recording of already-existing organization/privacy/OpenAI/deployment/retention/operator/senior-reviewer approvals; final `REAL SHADOW PILOT: GO`; one-real-mail smoke; and controlled observation of the first 3–5 jobs. A failed mandatory gate is NO-GO and cannot be waived by UI state, operator convenience or a passing lower-level test.
