@@ -7657,3 +7657,21 @@ Top-loading / crane-loading requirements are a controlled-pilot exclusion and eq
 MINAI therefore represents confirmed top-loading authority as structured `top_loading_required` evidence. Live runtime continues to recognize legacy/explicit note signals, while replay derives the structured fact from parser output and uses operator-confirmed `top_loading_required=true` for downstream historical truth. Losing this fact in replay is safety-critical because it can change Open Trailer handling into Tenteli supplier progression.
 
 This is backward-compatible with existing Shipment snapshots and replay schema `1.0`; ordinary false/default cases need not add the derived fact. Any release containing this replay behavior requires fresh exact-commit authorized sanitized replay evidence before pilot readiness can rely on it.
+
+## DEC-281 — Authorized Replay Must Preserve Contractual Transit Management Review
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+### Decision
+
+Contractual transit guarantees, delay penalties and equivalent penalty clauses are operational authority that can require `management_review` before supplier progression or customer quote generation. Authorized sanitized replay must represent this with structured operator-confirmed `contractual_transit_risk=true` evidence rather than depending on free-text `special_notes` surviving the replay boundary.
+
+The replay disposition contract includes `management_review`. Losing a required management-review disposition, or progressing suppliers while that disposition is expected, is a safety-critical replay failure. Existing note-based runtime detection remains supported, while the structured fact gives historical replay a deterministic ground-truth representation.
+
+### Consequences
+
+- A correct release can replay contractual transit/penalty cases without an unsupported-disposition error.
+- Replay cannot pass if a required management review silently degrades to normal supplier RFQ progression.
+- Free-text historical notes do not become operational replay authority by themselves.
+- Any release containing this replay-contract change requires fresh exact-commit authorized sanitized replay evidence before real-pilot readiness can be claimed.

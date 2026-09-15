@@ -261,6 +261,38 @@ def evaluate_sanitized_replay_regressions() -> dict:
             in top_loading_result.cases[0].safety_critical_mismatches,
         )
 
+        contract_risk_path = root / "contract-risk-safety.jsonl"
+        _write(
+            contract_risk_path,
+            [
+                _case(
+                    "contract-risk-safety",
+                    {"contractual_transit_risk": _fact(True)},
+                    "management_review",
+                    progression=False,
+                )
+            ],
+        )
+        contract_risk_case = load_cases(contract_risk_path)[0]
+        contract_risk_result = run_replay(
+            [contract_risk_case],
+            lambda _case: ReplayActual(
+                facts={"contractual_transit_risk": False},
+                disposition="supplier_rfq_approval_required",
+                supplier_progressed=True,
+            ),
+        )
+        require(
+            "contractual transit management-review loss is safety-critical replay failure",
+            not contract_risk_result.passed
+            and "safety_field:contractual_transit_risk"
+            in contract_risk_result.cases[0].safety_critical_mismatches
+            and "management_review_lost"
+            in contract_risk_result.cases[0].safety_critical_mismatches
+            and "incorrect_supplier_progression"
+            in contract_risk_result.cases[0].safety_critical_mismatches,
+        )
+
         require("ordinary mismatch visible", result.grouped_mismatches["field:delivery_city"] == 1)
         require("safety mismatch fails aggregate", not result.passed and result.safety_critical_mismatches >= 1)
         require("safety mismatch produces nonzero", replay_exit_code(result) != 0)

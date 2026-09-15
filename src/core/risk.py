@@ -41,7 +41,10 @@ def _risk_note_text(shipment: Shipment) -> str:
     return normalize_commodity_value(shipment.special_notes)
 
 
-def _contains_contractual_transit_risk(shipment: Shipment) -> bool:
+def requires_contractual_transit_review(shipment: Shipment) -> bool:
+    """Return whether contractual transit/penalty terms require management review."""
+    if getattr(shipment, "contractual_transit_risk", False) is True:
+        return True
     text = _risk_note_text(shipment)
     signals = (
         "transit suresi garanti",
@@ -157,7 +160,7 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
         requires_human_review = True
 
     # Contractual transit guarantees / penalties require management review.
-    if _contains_contractual_transit_risk(shipment):
+    if requires_contractual_transit_review(shipment):
         risk_reasons.append(
             "Transit süresi garantisi veya gecikme/cezai şart bulundu; yönetim incelemesi gerekir."
         )
