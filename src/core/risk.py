@@ -17,7 +17,10 @@ from src.core.equipment import (
 )
 
 
-def _contains_lithium_battery_signal(shipment: Shipment) -> bool:
+def requires_lithium_battery_review(shipment: Shipment) -> bool:
+    """Return whether explicit lithium battery/pil evidence needs human review."""
+    if getattr(shipment, "lithium_battery_review_required", False) is True:
+        return True
     text = normalize_commodity_value(
         " ".join(
             str(value)
@@ -159,7 +162,7 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
 
     # Lithium battery operations are an explicit operational review signal.
     # Do not infer ADR truth from commodity text alone.
-    if _contains_lithium_battery_signal(shipment):
+    if requires_lithium_battery_review(shipment):
         risk_reasons.append(
             "Lityum batarya / pil operasyonu. ADR sınıflandırması ve özel taşıma şartları ayrıca kontrol edilmeli."
         )

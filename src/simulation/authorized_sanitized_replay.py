@@ -23,6 +23,7 @@ from src.core.equipment import (
 from src.core.risk import (
     requires_contractual_transit_review,
     requires_cross_dock_review,
+    requires_lithium_battery_review,
     requires_strict_document_review,
 )
 from src.ai.email_parser import (
@@ -157,6 +158,7 @@ def _proposal_facts(
             "bulk_liquid_equipment_review_required",
             "strict_document_review_required",
             "cross_dock_review_required",
+            "lithium_battery_review_required",
             "contractual_transit_risk",
         }
     }
@@ -170,6 +172,8 @@ def _proposal_facts(
         facts["strict_document_review_required"] = True
     if requires_cross_dock_review(proposal):
         facts["cross_dock_review_required"] = True
+    if requires_lithium_battery_review(proposal):
+        facts["lithium_battery_review_required"] = True
     if requires_contractual_transit_review(proposal):
         facts["contractual_transit_risk"] = True
 

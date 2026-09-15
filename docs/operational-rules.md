@@ -4532,3 +4532,9 @@ When customer evidence explicitly indicates bulk/liquid cargo or Tanker/Damper/S
 - Authorized sanitized replay may derive the facts from explicit sanitized proposal text, but downstream truth comes from operator-confirmed replay facts.
 - Cases requiring these reviews remain eligible for normal RFQ approval progression unless another independent rule blocks them.
 - If `human_review_expected=true` and replay loses the review requirement, the replay is safety-critical FAIL.
+
+## RULE-299 — Lithium Battery Review Truth Must Be Replay-Verifiable
+
+When explicit lithium battery / lithium-ion / lityum batarya / lityum pil evidence requires operational review, authorized replay must encode operator-confirmed `lithium_battery_review_required=true` and set `human_review_expected=true`. The shipment may remain eligible for normal Road supplier RFQ progression when no independent blocking rule applies.
+
+This structured fact must not infer `is_adr=true`, must not invent a non-standard equipment request, and must not create pilot exclusion or management-review authority on its own. Loss of the positive fact or required human review is a safety-critical replay failure.
