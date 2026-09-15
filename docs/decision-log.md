@@ -7611,3 +7611,14 @@ Road Freight RULE-014 already requires Tanker, Damper or Silobas evaluation for 
 When deterministic shipment evidence contains a clear bulk/liquid signal but no stronger explicit non-standard equipment request, MINAI must return `Bulk / Liquid Equipment Review` rather than silently defaulting to Tenteli. Operational risk must require human review, and the simple controlled standard-trailer pilot must fail closed. If Tanker, Damper, Silobas or another special equipment type is explicitly supplied, preserve that explicit request rather than replacing it with the generic review state.
 
 This closes a fail-open where bulk/liquid cargo could remain Tenteli, green-risk and pilot-eligible solely because the special cargo form was present only in commodity or shipment notes.
+
+## DEC-277 — Lithium Battery Text Is a Human-Review Signal, Not Invented ADR Authority
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+Road Freight RULE-024 already classifies Lithium Battery operations as risky. A shipment whose commodity or structured shipment notes explicitly identify lithium/lithium-ion batteries must therefore not remain green merely because `is_adr=false` is currently confirmed. Commodity text alone is not sufficient legal or operational evidence to rewrite ADR truth, choose special ADR equipment, or automatically exclude the job from the controlled road pilot.
+
+The operational risk engine must mark explicit `Lithium Battery`, `Lithium-Ion` / `Li-ion`, `Lityum Batarya` and `Lityum Pil` evidence for human review and tell the operator to verify ADR classification and special handling requirements. Existing explicit ADR truth remains authoritative. Equipment selection and pilot-scope eligibility remain unchanged unless another independent rule requires them to change.
+
+This closes a fail-open where explicit lithium-battery cargo could appear green-risk while preserving the newer authority boundary that safety classifications are not invented from commodity text alone.

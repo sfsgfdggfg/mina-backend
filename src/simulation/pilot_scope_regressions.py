@@ -540,6 +540,36 @@ def evaluate_pilot_scope_regressions() -> dict:
     if not unknown_value.eligible:
         failures.append("unknown cargo value blocked otherwise eligible road freight")
 
+    for lithium_commodity in (
+        "Lithium Battery",
+        "Lityum Batarya",
+        "Lityum Pil",
+        "Li-ion battery pack",
+    ):
+        lithium_shipment = _road_shipment(commodity=lithium_commodity)
+        lithium_scope = evaluate_pilot_scope(
+            lithium_shipment,
+            environ={"MINAI_PILOT_MODE": "1"},
+        )
+        if not lithium_scope.eligible:
+            failures.append(
+                f"lithium battery risk signal incorrectly became automatic pilot exclusion: {lithium_commodity}"
+            )
+        lithium_risk = assess_risk(lithium_shipment)
+        if (
+            lithium_risk.risk_level != "yellow"
+            or not lithium_risk.requires_human_review
+            or lithium_risk.requires_management_review
+            or not any("lityum" in reason.lower() for reason in lithium_risk.risk_reasons)
+        ):
+            failures.append(
+                f"lithium battery signal did not require operational human review: {lithium_commodity}"
+            )
+        if decide_equipment(lithium_shipment).selected_equipment != "Tenteli / Curtainsider":
+            failures.append(
+                f"lithium battery risk signal invented equipment authority: {lithium_commodity}"
+            )
+
     high_value_shipment = _road_shipment(
         is_high_value=True,
         equipment_type="Tenteli",

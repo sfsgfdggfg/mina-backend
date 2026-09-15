@@ -1,5 +1,8 @@
 from src.core.models import Shipment, RiskAssessment
-from src.core.commodity_profile import get_commodity_operational_profile
+from src.core.commodity_profile import (
+    get_commodity_operational_profile,
+    normalize_commodity_value,
+)
 from src.core.cargo_weight import assess_cargo_weight
 from src.core.road_dimensions import (
     is_overlength,
@@ -12,6 +15,26 @@ from src.core.equipment import (
     requires_bulk_or_liquid_equipment_review,
     requires_open_trailer_loading,
 )
+
+
+def _contains_lithium_battery_signal(shipment: Shipment) -> bool:
+    text = normalize_commodity_value(
+        " ".join(
+            str(value)
+            for value in (shipment.commodity, shipment.special_notes)
+            if value
+        )
+    )
+    signals = (
+        "lithium battery",
+        "lithium-ion",
+        "lithium ion",
+        "li-ion",
+        "li ion",
+        "lityum batarya",
+        "lityum pil",
+    )
+    return any(signal in text for signal in signals)
 
 
 def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
@@ -74,6 +97,14 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
     elif shipment.is_adr:
         risk_reasons.append(
             f"ADR Class {shipment.adr_class} yük. ADR taşıma şartları ayrıca kontrol edilmeli."
+        )
+        requires_human_review = True
+
+    # Lithium battery operations are an explicit operational review signal.
+    # Do not infer ADR truth from commodity text alone.
+    if _contains_lithium_battery_signal(shipment):
+        risk_reasons.append(
+            "Lityum batarya / pil operasyonu. ADR sınıflandırması ve özel taşıma şartları ayrıca kontrol edilmeli."
         )
         requires_human_review = True
 

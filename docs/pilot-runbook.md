@@ -1828,3 +1828,9 @@ Do not clear the loading instruction merely to make the job pilot-eligible. Pres
 During controlled-pilot extraction review, inspect commodity, shipment notes and package descriptors for explicit bulk/liquid evidence such as `Dökme Yük`, `Sıvı Yük`, `Bulk Cargo`, `Liquid Cargo`, Tanker, Damper or Silobas. These are not ordinary Tenteli cargo and must remain outside the simple standard-trailer pilot even when dimensions and safety booleans otherwise look normal.
 
 If the exact equipment is not yet authoritative, expect `Bulk / Liquid Equipment Review` plus human review rather than an invented Tanker/Damper/Silobas choice. If an explicit special equipment request already exists, preserve it.
+
+## Lithium Battery Risk Check
+
+During extraction review, treat an explicit lithium/lithium-ion battery description as a yellow operational-review signal even when the currently confirmed ADR flag is false. Verify the actual ADR classification, packaging and special handling requirements from customer/operator evidence before relying on the load as ordinary road cargo.
+
+Do not change the ADR flag or equipment merely from the commodity wording. If independent ADR evidence is established, follow the normal ADR equipment and controlled-pilot scope gates; otherwise preserve the confirmed safety truth and the human-review warning.

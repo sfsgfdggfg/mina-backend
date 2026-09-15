@@ -4488,3 +4488,9 @@ For otherwise ordinary road cargo, this requirement must produce Open Trailer / 
 Treat explicit `Dökme Yük`, `Sıvı Yük`, `Bulk Cargo`, `Liquid Cargo`, Tanker, Damper or Silobas evidence as non-standard road-equipment authority. Do not require ADR, reefer, oversize dimensions or a pre-filled special `equipment_type` before honoring this evidence.
 
 If the evidence establishes bulk/liquid cargo but not the exact equipment, return `Bulk / Liquid Equipment Review`, require human operational review and exclude the case from the simple controlled standard-trailer pilot. Preserve any explicit Tanker/Damper/Silobas or stronger project/heavy equipment request instead of downgrading it to the generic review state.
+
+## RULE-292 — Lithium Battery Evidence Requires Operational Review Without Inventing ADR Truth
+
+Treat explicit lithium/lithium-ion battery evidence in the commodity or structured shipment notes as an operational risk signal. At minimum, `Lithium Battery`, `Lithium-Ion` / `Li-ion`, `Lityum Batarya` and `Lityum Pil` must trigger human review with an instruction to verify ADR classification and special handling requirements.
+
+Do not automatically set `is_adr=true`, assign ADR equipment, require management review, or exclude the job from controlled-pilot scope solely because this text is present. Explicit ADR/customer/operator evidence and the existing ADR gates remain authoritative.
