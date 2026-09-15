@@ -1854,3 +1854,9 @@ This change alters authorized replay behavior while keeping JSONL schema version
 Before accepting an authorized sanitized replay receipt for a release, include top-loading / crane-loading historical cases when the approved dataset contains them. Operator ground truth should use structured `top_loading_required=true`; do not paste free-form shipment notes into the replay contract merely to reproduce the rule.
 
 Verify that the replay produces `pilot_scope_excluded`, Open Trailer / Platform evaluation where no stronger equipment rule applies, and no supplier progression. A replay build that drops the structured fact can incorrectly turn the same confirmed shipment into ordinary Tenteli cargo, so any replay-code change affecting this fact requires a fresh receipt bound to the exact release commit.
+
+### Contractual Transit / Penalty Replay Check
+
+Before accepting authorized sanitized replay evidence for a release, include any approved historical case that contains a guaranteed transit time, delay penalty, penalty clause or equivalent contractual timing liability with operator-confirmed `contractual_transit_risk=true`. Its expected disposition must be `management_review`, and supplier progression must be false.
+
+A replay that turns such a case into ordinary supplier RFQ progression is not acceptable evidence even if extraction fields otherwise match. Because this changes the replay disposition/evidence contract, generate a fresh replay receipt against the exact release commit after merge; do not reuse an earlier receipt.

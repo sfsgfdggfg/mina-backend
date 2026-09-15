@@ -611,6 +611,15 @@ def evaluate_pilot_scope_regressions() -> dict:
         ):
             failures.append(f"contractual transit risk did not block quote generation: {note}")
 
+    structured_contractual_risk = _road_shipment(contractual_transit_risk=True)
+    structured_contract_risk = assess_risk(structured_contractual_risk)
+    if (
+        structured_contract_risk.risk_level != "red"
+        or not structured_contract_risk.requires_human_review
+        or not structured_contract_risk.requires_management_review
+    ):
+        failures.append("structured contractual transit risk did not require management review")
+
     document_risk_cases = (
         "Akreditifli gönderi, sıkı evrak şartları var.",
         "Shipment under letter of credit; strict document conditions apply.",

@@ -4514,3 +4514,9 @@ Replay cases without a GTIP / commodity contradiction do not need to declare `gt
 For top-loading / crane-loading cargo, authorized sanitized replay must derive `top_loading_required=true` from explicit extraction evidence such as `Tavan Vinci`, `Overhead Crane`, `Crane Loading` or `Üstten Yükleme`. Historical operator ground truth must carry that structured fact when confirmed.
 
 A confirmed `top_loading_required=true` case must remain outside the simple standard-trailer pilot, must select Open Trailer / Platform evaluation unless a stronger equipment rule applies, and must not progress supplier RFQs as ordinary Tenteli cargo. Loss of the fact, loss of pilot exclusion, or incorrect supplier progression is a safety-critical replay failure. Do not make free-form `special_notes` itself the replay authority.
+
+## RULE-296 — Contractual Transit Risk Is Structured Replay Safety Evidence
+
+Transit-time guarantees, delay penalties, contractual penalties and equivalent explicit terms require management review. Runtime may detect this from explicit shipment notes, but authorized sanitized replay must encode operator-confirmed historical truth as `contractual_transit_risk=true`.
+
+When this fact is true, the expected replay disposition is `management_review`, customer quote generation remains blocked, and supplier progression must remain false. If the structured fact, management-review disposition or progression block is lost, replay must fail safety-critical validation.

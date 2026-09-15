@@ -17,6 +17,7 @@ from typing import Any
 
 from src.core.road_dimensions import exceeds_standard_trailer_dimensions
 from src.core.equipment import requires_open_trailer_loading
+from src.core.risk import requires_contractual_transit_review
 from src.ai.email_parser import (
     EmailParserUnavailableError,
     parse_email_with_ai,
@@ -143,12 +144,18 @@ def _proposal_facts(
         field_name: data.get(field_name)
         for field_name in SCORED_FIELDS
         if field_name in data
-        and field_name not in {"gtip_commodity_conflict", "top_loading_required"}
+        and field_name not in {
+            "gtip_commodity_conflict",
+            "top_loading_required",
+            "contractual_transit_risk",
+        }
     }
     if proposal.gtip_commodity_conflict:
         facts["gtip_commodity_conflict"] = True
     if requires_open_trailer_loading(proposal):
         facts["top_loading_required"] = True
+    if requires_contractual_transit_review(proposal):
+        facts["contractual_transit_risk"] = True
 
     explicit_project_values = [
         proposal.commodity,
@@ -232,6 +239,8 @@ def _operational_disposition(
     )
     if quote_result_type == "clarification":
         return "clarification_required"
+    if quote_result_type == "management_review":
+        return "management_review"
 
     raise AuthorizedReplayExecutionError(
         "unsupported_operational_replay_disposition"

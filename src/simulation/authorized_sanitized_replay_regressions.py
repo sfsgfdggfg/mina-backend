@@ -52,7 +52,7 @@ def _case(
         for field_name in SCORED_FIELDS
         if field_name in data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "contractual_transit_risk"}
             and data.get(field_name) is not True
         )
     }
@@ -90,6 +90,10 @@ def _synthetic_parser(
 ):
     if not isinstance(safe_text, PrivacySafeText):
         raise AssertionError("parser received non-privacy-safe text")
+    if "CONTRACT RISK" in safe_text:
+        return _snapshot(adr=False).model_copy(
+            update={"special_notes": "Guaranteed transit time. Delay penalty applies."}
+        )
     if "TOP LOADING" in safe_text:
         return _snapshot(adr=False).model_copy(
             update={"special_notes": "Tavan vinci ile üstten yükleme gereklidir."}
@@ -220,7 +224,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in conflict_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "contractual_transit_risk"}
             and conflict_data.get(field_name) is not True
         )
     }
@@ -237,7 +241,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in top_loading_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "contractual_transit_risk"}
             and top_loading_data.get(field_name) is not True
         )
     }
@@ -257,6 +261,41 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
                 "supplier_progression_expected": False,
             },
             "tags": ["synthetic", "authorized-replay-regression", "top-loading"],
+        }
+    )
+
+    contractual_risk_proposal = _snapshot(adr=False).model_copy(
+        update={"special_notes": "Guaranteed transit time. Delay penalty applies."}
+    )
+    require(
+        "authorized replay derives structured contractual transit risk evidence",
+        _proposal_facts(contractual_risk_proposal).get("contractual_transit_risk") is True,
+    )
+    contractual_data = contractual_risk_proposal.model_dump(mode="json")
+    contractual_facts = {
+        field_name: _fact(contractual_data.get(field_name))
+        for field_name in SCORED_FIELDS
+        if field_name in contractual_data
+        and not (
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "contractual_transit_risk"}
+            and contractual_data.get(field_name) is not True
+        )
+    }
+    contractual_facts["contractual_transit_risk"] = _fact(True)
+    contractual_case = ReplayCase.model_validate(
+        {
+            "schema_version": "1.0",
+            "case_id": "authorized-contract-risk",
+            "sender_address": "logistics@customer.invalid",
+            "sender_domain": "customer.invalid",
+            "subject": "Synthetic authorized replay contract risk",
+            "body_text": "Synthetic CONTRACT RISK road inquiry.",
+            "expected": {
+                "facts": contractual_facts,
+                "disposition": "management_review",
+                "supplier_progression_expected": False,
+            },
+            "tags": ["synthetic", "authorized-replay-regression", "contract-risk"],
         }
     )
 
@@ -299,6 +338,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         ),
         gtip_conflict_case,
         top_loading_case,
+        contractual_case,
     ]
 
     with tempfile.TemporaryDirectory() as temporary:
@@ -321,8 +361,8 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             operational_data_sources=sources,
         )
         require(
-            "five synthetic authorized cases executed",
-            len(result.cases) == 5,
+            "six synthetic authorized cases executed",
+            len(result.cases) == 6,
         )
         require(
             "authorized synthetic replay passes",
@@ -359,6 +399,12 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             and result.cases[4].equipment_correct is True
             and result.cases[4].supplier_progression_correct is True
             and result.cases[4].passed_safety,
+        )
+        require(
+            "operator-confirmed contractual transit risk remains management-review blocked downstream",
+            result.cases[5].actual_disposition == "management_review"
+            and result.cases[5].supplier_progression_correct is True
+            and result.cases[5].passed_safety,
         )
         require(
             "operational sources are read-only during replay",

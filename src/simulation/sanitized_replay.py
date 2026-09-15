@@ -28,10 +28,12 @@ DISPOSITIONS = {
     "pilot_scope_excluded",
     "supplier_rfq_approval_required",
     "data_provenance_blocked",
+    "management_review",
 }
 SAFETY_FIELDS = {
     "is_adr", "is_temperature_controlled", "is_high_value", "transport_mode",
     "is_oversize_or_project", "gtip_commodity_conflict", "top_loading_required",
+    "contractual_transit_risk",
 }
 SCORED_FIELDS = {
     "customer_name", "pickup_country", "pickup_city", "pickup_postcode",
@@ -40,6 +42,7 @@ SCORED_FIELDS = {
     "transport_mode", "cargo_ready_date", "required_delivery_date", "is_adr",
     "is_temperature_controlled", "temperature_requirement", "is_high_value",
     "is_oversize_or_project", "gtip_commodity_conflict", "top_loading_required",
+    "contractual_transit_risk",
 }
 
 _EMAIL = re.compile(r"(?i)(?<![\w.-])[\w.+-]+@([\w.-]+\.[a-z]{2,})(?![\w.-])")
@@ -79,7 +82,7 @@ class ReplayExpectations(BaseModel):
     disposition: Literal[
         "extraction_confirmation_required", "clarification_required",
         "pilot_scope_excluded", "supplier_rfq_approval_required",
-        "data_provenance_blocked",
+        "data_provenance_blocked", "management_review",
     ]
     equipment: str | None = None
     supplier_progression_expected: bool | None = None
@@ -300,7 +303,9 @@ def _safety_mismatches(case: ReplayCase, actual: ReplayActual, fields: list[Repl
             critical.append(f"safety_field:{name}")
     if case.expected.disposition == "pilot_scope_excluded" and actual.disposition != "pilot_scope_excluded":
         critical.append("scope_exclusion_lost")
-    if case.expected.disposition in {"clarification_required", "pilot_scope_excluded", "data_provenance_blocked"} and actual.supplier_progressed:
+    if case.expected.disposition == "management_review" and actual.disposition != "management_review":
+        critical.append("management_review_lost")
+    if case.expected.disposition in {"clarification_required", "pilot_scope_excluded", "data_provenance_blocked", "management_review"} and actual.supplier_progressed:
         critical.append("incorrect_supplier_progression")
     return critical
 
