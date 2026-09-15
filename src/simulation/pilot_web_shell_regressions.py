@@ -196,6 +196,27 @@ def evaluate_pilot_web_shell_regressions() -> dict:
             "pilot web shell requires HTTPS even on loopback",
         )
 
+    edge_env = {
+        **_web_env(password_hash),
+        "MINAI_PILOT_BIND_HOST": "0.0.0.0",
+        "MINAI_PILOT_EDGE_HTTPS": "1",
+        "MINAI_PILOT_BASE_URL": "https://pilot.example.invalid",
+    }
+    with _controlled_web_environment(edge_env):
+        with TestClient(
+            api_module.app, base_url="http://internal", client=("203.0.113.10", 50000),
+        ) as edge_client:
+            edge_insecure = edge_client.get("/app/login")
+            edge_https = edge_client.get(
+                "/app/login",
+                headers={"X-Forwarded-Proto": "https"},
+            )
+        check(
+            edge_insecure.status_code == 426
+            and edge_https.status_code == 200,
+            "edge pilot trusts forwarded HTTPS only in explicit edge mode",
+        )
+
     with _controlled_web_environment(_web_env(password_hash)):
         with TestClient(
             api_module.app, base_url="https://127.0.0.1", client=("127.0.0.1", 50000),

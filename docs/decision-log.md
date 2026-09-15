@@ -7743,3 +7743,16 @@ The first real controlled shadow-pilot day must follow `docs/pilot-day-0-checkli
 The controlled Road shadow pilot must start from a dedicated clean release worktree and a fresh external SQLite persistence store. Development/smoke state must not be reused as real-pilot continuity state; prior smoke databases may be retained separately for engineering evidence.
 
 The seven readiness approvals (organization, privacy/legal, OpenAI data-control, deployment/storage, retention/deletion, named operators and senior Road reviewer) must exist before they are attested. `src.pilot_readiness_evidence` records existing authority only after the exact-release authorized replay receipt is available; it never grants approval. The repository contains only the approval checklist/matrix, while approver identities and supporting references remain in the approved external pilot change record.
+
+## DEC-289 — First Real Pilot Uses a Centrally Hosted Browser Deployment
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+The first agency is both MINAI's first customer and the long-running validation site for subsequent controlled releases. The real pilot therefore moves from a workstation-local deployment model to a centrally hosted browser model. Sibel uses MINAI through an authenticated HTTPS web session; the Pilot Owner / Senior Road Reviewer can use the same deployment remotely to observe real jobs and intervene without physical access to the operator PC.
+
+The initial hosting target is Railway in its EU West (Amsterdam) region with a single service instance and one persistent volume. The pilot remains single-instance while SQLite is authoritative persistence. The platform terminates public TLS; MINAI's explicit edge-HTTPS mode may trust the forwarded HTTPS scheme only when that mode is enabled. Outside edge mode, existing private/loopback network and direct-TLS restrictions remain unchanged.
+
+Cloud deployment does not relax pilot authority. Named-user authentication, CSRF controls, route allowlisting, verified external operational data, fresh real-pilot persistence, shadow outbound mode, authorized replay, seven readiness attestations and the Day 0 GO gate remain mandatory. Secrets and customer/supplier data must not be baked into the image or committed to Git. Persistent SQLite state, the verified operational pack and Outlook delegated-auth cache remain under the attached external volume.
+
+For the first customer, operational SQLite retention is 365 days. Sanitized replay/regression corpus and release/readiness evidence are retained as long-term product-validation assets unless a legal, customer, contractual or explicit deletion requirement overrides that policy. Pilot backups use a 90-day rolling target. This retention decision does not waive applicable privacy or deletion obligations.

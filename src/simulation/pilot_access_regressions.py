@@ -4,6 +4,7 @@ import json
 
 from src.core.pilot_access import (
     authorize_pilot_request,
+    resolve_pilot_request_scheme,
     route_allowed,
 )
 
@@ -120,6 +121,73 @@ def evaluate_pilot_access_regressions() -> dict:
     )
     if public_network.allowed or public_network.status_code != 403:
         failures.append("public-network pilot request was accepted")
+
+    edge_env = {
+        **env,
+        "MINAI_PILOT_BIND_HOST": "0.0.0.0",
+        "MINAI_PILOT_EDGE_HTTPS": "1",
+        "MINAI_PILOT_BASE_URL": "https://pilot.example.invalid",
+    }
+    edge_scheme = resolve_pilot_request_scheme(
+        request_scheme="http",
+        forwarded_proto="https",
+        environ=edge_env,
+    )
+    if edge_scheme != "https":
+        failures.append("edge HTTPS proxy scheme was not resolved")
+    local_scheme = resolve_pilot_request_scheme(
+        request_scheme="http",
+        forwarded_proto="https",
+        environ=env,
+    )
+    if local_scheme != "http":
+        failures.append("non-edge pilot trusted a forwarded scheme")
+
+    edge_authenticated = authorize_pilot_request(
+        method="POST",
+        path="/process-email",
+        client_host="203.0.113.10",
+        authorization=f"Bearer {operator_one_token}",
+        request_scheme="https",
+        environ=edge_env,
+    )
+    if not edge_authenticated.allowed:
+        failures.append("authenticated HTTPS edge pilot request was rejected")
+
+    edge_insecure = authorize_pilot_request(
+        method="POST",
+        path="/process-email",
+        client_host="203.0.113.10",
+        authorization=f"Bearer {operator_one_token}",
+        request_scheme="http",
+        environ=edge_env,
+    )
+    if edge_insecure.allowed or edge_insecure.status_code != 426:
+        failures.append("edge pilot accepted a non-HTTPS request")
+
+    edge_no_auth = authorize_pilot_request(
+        method="POST",
+        path="/process-email",
+        client_host="203.0.113.10",
+        authorization=None,
+        request_scheme="https",
+        environ=edge_env,
+    )
+    if edge_no_auth.allowed or edge_no_auth.status_code != 401:
+        failures.append("edge pilot accepted an unauthenticated workflow request")
+
+    edge_missing_base = dict(edge_env)
+    edge_missing_base.pop("MINAI_PILOT_BASE_URL")
+    missing_edge_base = authorize_pilot_request(
+        method="GET",
+        path="/health",
+        client_host="203.0.113.10",
+        authorization=None,
+        request_scheme="https",
+        environ=edge_missing_base,
+    )
+    if missing_edge_base.allowed or missing_edge_base.status_code != 503:
+        failures.append("edge pilot did not fail closed without HTTPS base URL")
 
     disabled_routes = (
         ("GET", "/run-test-suite"),

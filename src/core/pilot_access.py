@@ -7,6 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 from typing import Mapping
+from urllib.parse import urlsplit
 
 
 class PilotAccessConfigurationError(RuntimeError):
@@ -228,6 +229,11 @@ def pilot_mode_enabled(environ: Mapping[str, str] | None = None) -> bool:
     return _env_truthy(env.get("MINAI_PILOT_MODE"))
 
 
+def edge_https_pilot_enabled(environ: Mapping[str, str] | None = None) -> bool:
+    env = environ if environ is not None else os.environ
+    return _env_truthy(env.get("MINAI_PILOT_EDGE_HTTPS"))
+
+
 def _load_operators(env: Mapping[str, str]) -> list[PilotOperator]:
     raw = (env.get("MINAI_PILOT_OPERATORS_JSON") or "").strip()
     if not raw:
@@ -321,30 +327,51 @@ def validate_pilot_configuration(
         raise PilotAccessConfigurationError(
             "MINAI_PILOT_BIND_HOST must be an explicit IP address."
         ) from exc
-    if (
-        bind_ip.is_unspecified
-        or bind_ip.is_multicast
-        or not (bind_ip.is_private or bind_ip.is_loopback)
-    ):
-        raise PilotAccessConfigurationError(
-            "Pilot bind host must be a specific private or loopback address."
-        )
-
-    if not bind_ip.is_loopback:
-        tls_cert = (
-            env.get("MINAI_PILOT_TLS_CERTFILE")
-            or ""
-        ).strip()
-        tls_key = (
-            env.get("MINAI_PILOT_TLS_KEYFILE")
-            or ""
-        ).strip()
-
-        if not tls_cert or not tls_key:
+    edge_https = edge_https_pilot_enabled(env)
+    if edge_https:
+        if not bind_ip.is_unspecified:
             raise PilotAccessConfigurationError(
-                "Private-network pilot binding requires "
-                "TLS certificate and key configuration."
+                "Edge-HTTPS pilot binding must use an unspecified container address."
             )
+        base_url = (env.get("MINAI_PILOT_BASE_URL") or "").strip()
+        parsed_base = urlsplit(base_url)
+        if (
+            parsed_base.scheme.lower() != "https"
+            or not parsed_base.hostname
+            or parsed_base.username is not None
+            or parsed_base.password is not None
+            or parsed_base.path not in {"", "/"}
+            or parsed_base.query
+            or parsed_base.fragment
+        ):
+            raise PilotAccessConfigurationError(
+                "Edge-HTTPS pilot requires a clean HTTPS MINAI_PILOT_BASE_URL origin."
+            )
+    else:
+        if (
+            bind_ip.is_unspecified
+            or bind_ip.is_multicast
+            or not (bind_ip.is_private or bind_ip.is_loopback)
+        ):
+            raise PilotAccessConfigurationError(
+                "Pilot bind host must be a specific private or loopback address."
+            )
+
+        if not bind_ip.is_loopback:
+            tls_cert = (
+                env.get("MINAI_PILOT_TLS_CERTFILE")
+                or ""
+            ).strip()
+            tls_key = (
+                env.get("MINAI_PILOT_TLS_KEYFILE")
+                or ""
+            ).strip()
+
+            if not tls_cert or not tls_key:
+                raise PilotAccessConfigurationError(
+                    "Private-network pilot binding requires "
+                    "TLS certificate and key configuration."
+                )
 
 
 def route_allowed(method: str, path: str) -> bool:
@@ -384,6 +411,23 @@ def _operator_from_authorization(
     return None
 
 
+def resolve_pilot_request_scheme(
+    *,
+    request_scheme: str | None,
+    forwarded_proto: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> str:
+    env = environ if environ is not None else os.environ
+    direct_scheme = (request_scheme or "").strip().lower()
+    if not edge_https_pilot_enabled(env):
+        return direct_scheme
+
+    forwarded = (forwarded_proto or "").split(",", 1)[0].strip().lower()
+    if forwarded in {"http", "https"}:
+        return forwarded
+    return direct_scheme
+
+
 def authorize_pilot_transport(
     *,
     client_host: str | None,
@@ -399,6 +443,11 @@ def authorize_pilot_transport(
         networks = _load_allowed_networks(env)
     except PilotAccessConfigurationError as exc:
         return PilotAccessDecision(False, 503, str(exc))
+
+    if edge_https_pilot_enabled(env):
+        if (request_scheme or "").lower() != "https":
+            return PilotAccessDecision(False, 426, "pilot_https_required")
+        return PilotAccessDecision(True, 200, "pilot_edge_https_allowed")
 
     if not _client_network_allowed(client_host, networks):
         return PilotAccessDecision(False, 403, "pilot_network_denied")
