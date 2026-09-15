@@ -62,7 +62,10 @@ def requires_contractual_transit_review(shipment: Shipment) -> bool:
     return any(signal in text for signal in signals)
 
 
-def _contains_strict_document_condition(shipment: Shipment) -> bool:
+def requires_strict_document_review(shipment: Shipment) -> bool:
+    """Return whether letter-of-credit/strict-document terms need human review."""
+    if getattr(shipment, "strict_document_review_required", False) is True:
+        return True
     text = _risk_note_text(shipment)
     signals = (
         "akreditif",
@@ -75,7 +78,10 @@ def _contains_strict_document_condition(shipment: Shipment) -> bool:
     return any(signal in text for signal in signals)
 
 
-def _contains_cross_docking_signal(shipment: Shipment) -> bool:
+def requires_cross_dock_review(shipment: Shipment) -> bool:
+    """Return whether cross-dock/transfer handling needs human review."""
+    if getattr(shipment, "cross_dock_review_required", False) is True:
+        return True
     text = _risk_note_text(shipment)
     signals = (
         "cross-dock",
@@ -168,14 +174,14 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
         requires_human_review = True
 
     # Letter-of-credit / strict document conditions require documentation review.
-    if _contains_strict_document_condition(shipment):
+    if requires_strict_document_review(shipment):
         risk_reasons.append(
             "Akreditif veya sıkı evrak şartı bulundu; dokümantasyon incelemesi gerekir."
         )
         requires_human_review = True
 
     # Cross-docking / transfer operations carry additional handling-damage risk.
-    if _contains_cross_docking_signal(shipment):
+    if requires_cross_dock_review(shipment):
         risk_reasons.append(
             "Cross-dock / aktarmalı operasyon; ek elleçleme ve hasar riski ayrıca kontrol edilmeli."
         )

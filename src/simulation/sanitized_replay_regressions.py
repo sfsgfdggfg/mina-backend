@@ -27,12 +27,14 @@ def _fact(value=None, state="known"):
     return {"state": state, "value": value if state == "known" else None}
 
 
-def _case(case_id: str, facts: dict, disposition: str, *, body="Sanitized freight inquiry.", equipment=None, progression=None):
+def _case(case_id: str, facts: dict, disposition: str, *, body="Sanitized freight inquiry.", equipment=None, progression=None, human_review=None):
     expected = {"facts": facts, "disposition": disposition}
     if equipment is not None:
         expected["equipment"] = equipment
     if progression is not None:
         expected["supplier_progression_expected"] = progression
+    if human_review is not None:
+        expected["human_review_expected"] = human_review
     return {
         "schema_version": "1.0", "case_id": case_id,
         "sender_address": f"{case_id}@customer.invalid", "sender_domain": "customer.invalid",
@@ -76,6 +78,7 @@ def _actuals(cases):
             facts=facts, disposition=case.expected.disposition,
             equipment=case.expected.equipment,
             supplier_progressed=bool(case.expected.supplier_progression_expected),
+            human_review_required=bool(case.expected.human_review_expected),
         )
     unexpected = dict(actuals["unexpected-inference"].facts)
     unexpected["cargo_ready_date"] = "2026-09-01"
@@ -323,6 +326,37 @@ def evaluate_sanitized_replay_regressions() -> dict:
             in contract_risk_result.cases[0].safety_critical_mismatches
             and "incorrect_supplier_progression"
             in contract_risk_result.cases[0].safety_critical_mismatches,
+        )
+
+        strict_document_path = root / "strict-document-human-review.jsonl"
+        _write(
+            strict_document_path,
+            [
+                _case(
+                    "strict-document-human-review",
+                    {"strict_document_review_required": _fact(True)},
+                    "supplier_rfq_approval_required",
+                    progression=True,
+                    human_review=True,
+                )
+            ],
+        )
+        strict_document_case = load_cases(strict_document_path)[0]
+        strict_document_result = run_replay(
+            [strict_document_case],
+            lambda _case: ReplayActual(
+                facts={"strict_document_review_required": True},
+                disposition="supplier_rfq_approval_required",
+                supplier_progressed=True,
+                human_review_required=False,
+            ),
+        )
+        require(
+            "required human review loss is safety-critical replay failure",
+            not strict_document_result.passed
+            and "human_review_lost"
+            in strict_document_result.cases[0].safety_critical_mismatches
+            and strict_document_result.cases[0].human_review_correct is False,
         )
 
         require("ordinary mismatch visible", result.grouped_mismatches["field:delivery_city"] == 1)

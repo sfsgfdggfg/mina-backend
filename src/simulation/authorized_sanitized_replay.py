@@ -20,7 +20,11 @@ from src.core.equipment import (
     requires_bulk_or_liquid_equipment_review,
     requires_open_trailer_loading,
 )
-from src.core.risk import requires_contractual_transit_review
+from src.core.risk import (
+    requires_contractual_transit_review,
+    requires_cross_dock_review,
+    requires_strict_document_review,
+)
 from src.ai.email_parser import (
     EmailParserUnavailableError,
     parse_email_with_ai,
@@ -151,6 +155,8 @@ def _proposal_facts(
             "gtip_commodity_conflict",
             "top_loading_required",
             "bulk_liquid_equipment_review_required",
+            "strict_document_review_required",
+            "cross_dock_review_required",
             "contractual_transit_risk",
         }
     }
@@ -160,6 +166,10 @@ def _proposal_facts(
         facts["top_loading_required"] = True
     if requires_bulk_or_liquid_equipment_review(proposal):
         facts["bulk_liquid_equipment_review_required"] = True
+    if requires_strict_document_review(proposal):
+        facts["strict_document_review_required"] = True
+    if requires_cross_dock_review(proposal):
+        facts["cross_dock_review_required"] = True
     if requires_contractual_transit_review(proposal):
         facts["contractual_transit_risk"] = True
 
@@ -298,11 +308,16 @@ def build_authorized_replay_actual(
     supplier_progressed = bool(
         result.get("supplier_rfq_drafts")
     )
+    risk_assessment = result.get("risk_assessment")
+    human_review_required = bool(
+        getattr(risk_assessment, "requires_human_review", False)
+    )
     return ReplayActual(
         facts=facts,
         disposition=disposition,
         equipment=equipment,
         supplier_progressed=supplier_progressed,
+        human_review_required=human_review_required,
     )
 
 

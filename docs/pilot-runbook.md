@@ -1864,3 +1864,7 @@ A replay that turns such a case into ordinary supplier RFQ progression is not ac
 ## Bulk / Liquid Replay Evidence Check
 
 For sanitized historical cases where bulk/liquid or Tanker/Damper/Silobas need is explicit, record operator-confirmed `bulk_liquid_equipment_review_required=true`. Expected disposition is `pilot_scope_excluded`; supplier progression must be `false`. Verify the authorized replay preserves the exclusion and `Bulk / Liquid Equipment Review` decision. A receipt from a commit before this replay-contract change is not valid evidence for the new release.
+
+### Yellow Human-Review Replay Check
+
+For historical cases with explicit letter-of-credit / strict-document terms, record `strict_document_review_required=true`; for cross-dock / transfer handling, record `cross_dock_review_required=true`. Set `human_review_expected=true` while keeping the expected operational disposition at the actual non-blocking stage (normally `supplier_rfq_approval_required`). A replay that preserves progression but drops the required human review must FAIL safety evidence. Any release containing this replay-contract change requires a fresh authorized sanitized replay receipt for that exact release commit.
