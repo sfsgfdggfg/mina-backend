@@ -297,6 +297,7 @@ def _apply_gtip_safety_overrides(shipment, email_text: str):
             email_commodity_before_gtip = shipment.commodity
 
             if _is_gtip_commodity_conflict(email_commodity_before_gtip, commodity_group):
+                shipment.gtip_commodity_conflict = True
                 warning = (
                     f"{GTIP_COMMODITY_CONFLICT_MARKER} GTIP kodu ile ürün açıklaması "
                     "uyumsuz görünüyor. "

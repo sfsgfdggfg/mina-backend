@@ -142,7 +142,10 @@ def _proposal_facts(
         field_name: data.get(field_name)
         for field_name in SCORED_FIELDS
         if field_name in data
+        and field_name != "gtip_commodity_conflict"
     }
+    if proposal.gtip_commodity_conflict:
+        facts["gtip_commodity_conflict"] = True
 
     explicit_project_values = [
         proposal.commodity,

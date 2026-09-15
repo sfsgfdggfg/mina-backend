@@ -10,6 +10,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from src.ai.email_parser import _apply_gtip_safety_overrides
+from src.core.gtip import has_gtip_commodity_conflict
 from src.core.models import Package
 from src.core.privacy import PrivacySafeText
 from src.simulation.authorized_sanitized_replay import (
@@ -49,6 +51,10 @@ def _case(
         field_name: _fact(data.get(field_name))
         for field_name in SCORED_FIELDS
         if field_name in data
+        and not (
+            field_name == "gtip_commodity_conflict"
+            and data.get(field_name) is not True
+        )
     }
     expected = {
         "facts": facts,
@@ -84,6 +90,14 @@ def _synthetic_parser(
 ):
     if not isinstance(safe_text, PrivacySafeText):
         raise AssertionError("parser received non-privacy-safe text")
+    if "GTIP CONFLICT" in safe_text:
+        proposal = _snapshot(adr=False).model_copy(
+            update={"commodity": "Plastik Ürünler"}
+        )
+        return _apply_gtip_safety_overrides(
+            proposal,
+            "Synthetic GTIP CONFLICT road inquiry. Commodity: Plastik Ürünler. GTIP: 850421000000.",
+        )
     if "ADR TRUE" in safe_text:
         return _snapshot(adr=True)
     if "ADR UNKNOWN" in safe_text:
@@ -172,6 +186,58 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         _proposal_facts(standard_height_boundary).get("is_oversize_or_project") is not True,
     )
 
+    gtip_conflict_proposal = _apply_gtip_safety_overrides(
+        _snapshot(adr=False).model_copy(
+            update={"commodity": "Plastik Ürünler"}
+        ),
+        "Synthetic GTIP CONFLICT road inquiry. Commodity: Plastik Ürünler. GTIP: 850421000000.",
+    )
+    require(
+        "authorized replay parser records structured GTIP commodity conflict evidence",
+        has_gtip_commodity_conflict(gtip_conflict_proposal)
+        and gtip_conflict_proposal.gtip_commodity_conflict is True
+        and _proposal_facts(gtip_conflict_proposal).get("gtip_commodity_conflict") is True,
+    )
+    compatible_gtip_proposal = _apply_gtip_safety_overrides(
+        _snapshot(adr=False).model_copy(
+            update={"commodity": "İçecek / Meşrubat"}
+        ),
+        "Synthetic compatible GTIP road inquiry. Commodity: İçecek / Meşrubat. GTIP: 220210000000.",
+    )
+    require(
+        "authorized replay does not invent GTIP conflict on compatible evidence",
+        not has_gtip_commodity_conflict(compatible_gtip_proposal)
+        and _proposal_facts(compatible_gtip_proposal).get("gtip_commodity_conflict") is not True,
+    )
+
+    conflict_data = gtip_conflict_proposal.model_dump(mode="json")
+    conflict_facts = {
+        field_name: _fact(conflict_data.get(field_name))
+        for field_name in SCORED_FIELDS
+        if field_name in conflict_data
+        and not (
+            field_name == "gtip_commodity_conflict"
+            and conflict_data.get(field_name) is not True
+        )
+    }
+    gtip_conflict_case = ReplayCase.model_validate(
+        {
+            "schema_version": "1.0",
+            "case_id": "authorized-gtip-conflict",
+            "sender_address": "logistics@customer.invalid",
+            "sender_domain": "customer.invalid",
+            "subject": "Synthetic authorized replay GTIP conflict",
+            "body_text": "Synthetic GTIP CONFLICT road inquiry.",
+            "expected": {
+                "facts": conflict_facts,
+                "disposition": "pilot_scope_excluded",
+                "equipment": "Tenteli",
+                "supplier_progression_expected": False,
+            },
+            "tags": ["synthetic", "authorized-replay-regression", "gtip-conflict"],
+        }
+    )
+
     cases = [
         _case(
             "authorized-ordinary",
@@ -191,6 +257,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             disposition="extraction_confirmation_required",
             progression=False,
         ),
+        gtip_conflict_case,
     ]
 
     with tempfile.TemporaryDirectory() as temporary:
@@ -213,8 +280,8 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             operational_data_sources=sources,
         )
         require(
-            "three synthetic authorized cases executed",
-            len(result.cases) == 3,
+            "four synthetic authorized cases executed",
+            len(result.cases) == 4,
         )
         require(
             "authorized synthetic replay passes",
@@ -238,6 +305,12 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             result.cases[2].actual_disposition
             == "extraction_confirmation_required"
             and result.cases[2].supplier_progression_correct is True,
+        )
+        require(
+            "operator-confirmed GTIP conflict remains pilot-scope excluded downstream",
+            result.cases[3].actual_disposition == "pilot_scope_excluded"
+            and result.cases[3].supplier_progression_correct is True
+            and result.cases[3].passed_safety,
         )
         require(
             "operational sources are read-only during replay",

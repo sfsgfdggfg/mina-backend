@@ -7633,3 +7633,16 @@ Road Freight RULE-027, RULE-028 and RULE-029 are operational-risk authority, not
 Explicit letter-of-credit / strict-document conditions require human documentation review, and explicit cross-dock / transfer handling requires human operational review because of added handling/damage exposure. These yellow review signals may continue through the existing reviewed workflow but must not remain invisible as green risk.
 
 RULE-023 remains separate: MINAI must not invent a universal numeric road-transit threshold from route dates alone. Impossible/tight transit timing requires a separately evidence-backed route/service-time policy before deterministic automatic classification is added.
+
+## DEC-279 — Authorized Replay Carries Structured GTIP / Commodity Conflict Truth
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+The live extraction-confirmation path preserves parser-produced structured shipment evidence into the human-confirmed Shipment unless the operator explicitly corrects an editable field. Authorized sanitized replay must not instead discard a GTIP / commodity contradiction before downstream pilot-scope evaluation.
+
+`Shipment` therefore carries `gtip_commodity_conflict` as structured boolean evidence. The production parser sets it when an explicit customer GTIP/HS code maps to a commodity that conflicts with the stated commodity; the existing human-readable consistency warning remains for audit visibility, and legacy persisted warning-marker snapshots remain readable through the compatibility helper.
+
+Authorized replay treats `gtip_commodity_conflict=true` as a positive, safety-critical derived ground-truth fact, analogous to the existing oversize/project replay fact. AI extraction is still scored as evidence only: downstream replay receives the operator-confirmed expected boolean, not an unconfirmed parser warning string. Losing an expected GTIP conflict must fail replay safety scoring and losing its pilot-scope exclusion must remain a safety-critical mismatch.
+
+The replay JSONL schema version remains `1.0` because the additional expected fact is backward-compatible and optional. Historical cases that contain a real GTIP / commodity contradiction must explicitly label `gtip_commodity_conflict=true`; ordinary cases need not add a false value. Because replay behavior changed, old replay receipts are not release evidence for this commit and a fresh exact-release authorized replay is required before REAL SHADOW PILOT GO.

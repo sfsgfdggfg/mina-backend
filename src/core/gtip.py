@@ -12,6 +12,11 @@ GTIP_COMMODITY_CONFLICT_MARKER = "[GTIP CONSISTENCY WARNING]"
 
 
 def has_gtip_commodity_conflict(shipment: Any) -> bool:
+    if getattr(shipment, "gtip_commodity_conflict", False) is True:
+        return True
+
+    # Backward compatibility for snapshots produced before structured conflict
+    # evidence existed. New parser output sets gtip_commodity_conflict directly.
     return bool(
         getattr(shipment, "gtip_detected_from_email", False)
         and GTIP_COMMODITY_CONFLICT_MARKER

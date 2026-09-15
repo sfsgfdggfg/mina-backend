@@ -48,6 +48,7 @@ class Shipment(BaseModel):
     hs_heading: Optional[str] = None
     hs_subheading: Optional[str] = None
     gtip_detected_from_email: bool = False
+    gtip_commodity_conflict: bool = False
     gross_weight_kg: Optional[float] = None
     weight_is_approximate: bool = True
 
