@@ -7646,3 +7646,14 @@ The live extraction-confirmation path preserves parser-produced structured shipm
 Authorized replay treats `gtip_commodity_conflict=true` as a positive, safety-critical derived ground-truth fact, analogous to the existing oversize/project replay fact. AI extraction is still scored as evidence only: downstream replay receives the operator-confirmed expected boolean, not an unconfirmed parser warning string. Losing an expected GTIP conflict must fail replay safety scoring and losing its pilot-scope exclusion must remain a safety-critical mismatch.
 
 The replay JSONL schema version remains `1.0` because the additional expected fact is backward-compatible and optional. Historical cases that contain a real GTIP / commodity contradiction must explicitly label `gtip_commodity_conflict=true`; ordinary cases need not add a false value. Because replay behavior changed, old replay receipts are not release evidence for this commit and a fresh exact-release authorized replay is required before REAL SHADOW PILOT GO.
+
+## DEC-280 — Top-Loading Replay Evidence Must Match Live Pilot Scope
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+Top-loading / crane-loading requirements are a controlled-pilot exclusion and equipment-authority boundary. Authorized sanitized replay must be able to prove that boundary without treating free-form `special_notes` as operator ground truth.
+
+MINAI therefore represents confirmed top-loading authority as structured `top_loading_required` evidence. Live runtime continues to recognize legacy/explicit note signals, while replay derives the structured fact from parser output and uses operator-confirmed `top_loading_required=true` for downstream historical truth. Losing this fact in replay is safety-critical because it can change Open Trailer handling into Tenteli supplier progression.
+
+This is backward-compatible with existing Shipment snapshots and replay schema `1.0`; ordinary false/default cases need not add the derived fact. Any release containing this replay behavior requires fresh exact-commit authorized sanitized replay evidence before pilot readiness can rely on it.

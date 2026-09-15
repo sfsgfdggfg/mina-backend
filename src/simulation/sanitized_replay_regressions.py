@@ -231,6 +231,36 @@ def evaluate_sanitized_replay_regressions() -> dict:
             in gtip_conflict_result.cases[0].safety_critical_mismatches,
         )
 
+        top_loading_path = root / "top-loading-safety.jsonl"
+        _write(
+            top_loading_path,
+            [
+                _case(
+                    "top-loading-safety",
+                    {"top_loading_required": _fact(True)},
+                    "pilot_scope_excluded",
+                    progression=False,
+                )
+            ],
+        )
+        top_loading_case = load_cases(top_loading_path)[0]
+        top_loading_result = run_replay(
+            [top_loading_case],
+            lambda _case: ReplayActual(
+                facts={"top_loading_required": False},
+                disposition="supplier_rfq_approval_required",
+                supplier_progressed=True,
+            ),
+        )
+        require(
+            "top-loading requirement loss is safety-critical replay failure",
+            not top_loading_result.passed
+            and "safety_field:top_loading_required"
+            in top_loading_result.cases[0].safety_critical_mismatches
+            and "scope_exclusion_lost"
+            in top_loading_result.cases[0].safety_critical_mismatches,
+        )
+
         require("ordinary mismatch visible", result.grouped_mismatches["field:delivery_city"] == 1)
         require("safety mismatch fails aggregate", not result.passed and result.safety_critical_mismatches >= 1)
         require("safety mismatch produces nonzero", replay_exit_code(result) != 0)

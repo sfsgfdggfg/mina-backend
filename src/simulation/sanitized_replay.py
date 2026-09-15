@@ -31,7 +31,7 @@ DISPOSITIONS = {
 }
 SAFETY_FIELDS = {
     "is_adr", "is_temperature_controlled", "is_high_value", "transport_mode",
-    "is_oversize_or_project", "gtip_commodity_conflict",
+    "is_oversize_or_project", "gtip_commodity_conflict", "top_loading_required",
 }
 SCORED_FIELDS = {
     "customer_name", "pickup_country", "pickup_city", "pickup_postcode",
@@ -39,7 +39,7 @@ SCORED_FIELDS = {
     "gross_weight_kg", "packages", "service_type", "equipment_type",
     "transport_mode", "cargo_ready_date", "required_delivery_date", "is_adr",
     "is_temperature_controlled", "temperature_requirement", "is_high_value",
-    "is_oversize_or_project", "gtip_commodity_conflict",
+    "is_oversize_or_project", "gtip_commodity_conflict", "top_loading_required",
 }
 
 _EMAIL = re.compile(r"(?i)(?<![\w.-])[\w.+-]+@([\w.-]+\.[a-z]{2,})(?![\w.-])")

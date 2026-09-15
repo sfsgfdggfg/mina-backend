@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from src.core.road_dimensions import exceeds_standard_trailer_dimensions
+from src.core.equipment import requires_open_trailer_loading
 from src.ai.email_parser import (
     EmailParserUnavailableError,
     parse_email_with_ai,
@@ -142,10 +143,12 @@ def _proposal_facts(
         field_name: data.get(field_name)
         for field_name in SCORED_FIELDS
         if field_name in data
-        and field_name != "gtip_commodity_conflict"
+        and field_name not in {"gtip_commodity_conflict", "top_loading_required"}
     }
     if proposal.gtip_commodity_conflict:
         facts["gtip_commodity_conflict"] = True
+    if requires_open_trailer_loading(proposal):
+        facts["top_loading_required"] = True
 
     explicit_project_values = [
         proposal.commodity,

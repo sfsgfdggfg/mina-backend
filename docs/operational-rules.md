@@ -4508,3 +4508,9 @@ Represent an unresolved GTIP / commodity contradiction as structured `gtip_commo
 Authorized sanitized replay must expose a positive conflict as a safety-critical derived extraction fact and must use operator-confirmed historical `gtip_commodity_conflict=true` truth when constructing the downstream confirmed Shipment. Do not copy an unconfirmed parser warning string into operational ground truth. If expected conflict truth is lost, replay must fail safety scoring; if the expected controlled-pilot exclusion is lost or supplier progression occurs, replay must also fail closed.
 
 Replay cases without a GTIP / commodity contradiction do not need to declare `gtip_commodity_conflict=false`. Any historical conflict case used for release evidence must declare the positive fact explicitly and must be replayed against the exact release commit before pilot GO.
+
+## RULE-295 — Authorized Replay Must Preserve Confirmed Top-Loading Authority
+
+For top-loading / crane-loading cargo, authorized sanitized replay must derive `top_loading_required=true` from explicit extraction evidence such as `Tavan Vinci`, `Overhead Crane`, `Crane Loading` or `Üstten Yükleme`. Historical operator ground truth must carry that structured fact when confirmed.
+
+A confirmed `top_loading_required=true` case must remain outside the simple standard-trailer pilot, must select Open Trailer / Platform evaluation unless a stronger equipment rule applies, and must not progress supplier RFQs as ordinary Tenteli cargo. Loss of the fact, loss of pilot exclusion, or incorrect supplier progression is a safety-critical replay failure. Do not make free-form `special_notes` itself the replay authority.

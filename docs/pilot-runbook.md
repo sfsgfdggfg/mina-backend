@@ -1848,3 +1848,9 @@ When preparing the external sanitized replay set, inspect historical inquiries t
 During replay, confirm that the production parser emits the structured conflict fact and that downstream replay preserves the operator-confirmed conflict through the confirmation boundary. A parser mismatch, lost conflict fact, lost pilot exclusion or supplier progression is safety-critical and invalidates the replay result. Do not satisfy this check by copying or editing the human-readable `[GTIP CONSISTENCY WARNING]` text into expected ground truth.
 
 This change alters authorized replay behavior while keeping JSONL schema version `1.0` backward-compatible. Generate a new replay receipt against the exact release commit; do not reuse a receipt from a build that predates structured GTIP conflict replay evidence.
+
+## Top-Loading Authorized Replay Check
+
+Before accepting an authorized sanitized replay receipt for a release, include top-loading / crane-loading historical cases when the approved dataset contains them. Operator ground truth should use structured `top_loading_required=true`; do not paste free-form shipment notes into the replay contract merely to reproduce the rule.
+
+Verify that the replay produces `pilot_scope_excluded`, Open Trailer / Platform evaluation where no stronger equipment rule applies, and no supplier progression. A replay build that drops the structured fact can incorrectly turn the same confirmed shipment into ordinary Tenteli cargo, so any replay-code change affecting this fact requires a fresh receipt bound to the exact release commit.

@@ -48,7 +48,9 @@ def is_standard_road_equipment_request(value: str | None) -> bool:
 
 
 def requires_open_trailer_loading(shipment: Shipment) -> bool:
-    """Detect explicit top-loading / crane-loading requirements from shipment notes."""
+    """Detect explicit top-loading / crane-loading requirements."""
+    if getattr(shipment, "top_loading_required", False) is True:
+        return True
     text = _normalize_equipment_request(getattr(shipment, "special_notes", None))
     if not text:
         return False
