@@ -4538,3 +4538,9 @@ When customer evidence explicitly indicates bulk/liquid cargo or Tanker/Damper/S
 When explicit lithium battery / lithium-ion / lityum batarya / lityum pil evidence requires operational review, authorized replay must encode operator-confirmed `lithium_battery_review_required=true` and set `human_review_expected=true`. The shipment may remain eligible for normal Road supplier RFQ progression when no independent blocking rule applies.
 
 This structured fact must not infer `is_adr=true`, must not invent a non-standard equipment request, and must not create pilot exclusion or management-review authority on its own. Loss of the positive fact or required human review is a safety-critical replay failure.
+
+## RULE-300 — Explicit Source Operational Evidence Must Survive AI Note Omission
+
+When the customer source explicitly states top-loading/crane loading, bulk/liquid or Tanker/Damper/Silobas need, lithium-battery/pil content, letter-of-credit/strict-document conditions, cross-dock/transfer handling, or contractual transit/penalty terms, the extraction pipeline must preserve that evidence as the corresponding structured proposal fact even if the AI structured output omits `special_notes` or `equipment_type`.
+
+The deterministic source-text recovery must reuse the canonical operational signal helpers. Recovered facts remain proposals until extraction confirmation. They must not infer ADR truth, invent a new equipment rule, or independently expand management authority beyond the existing downstream rule associated with that fact.

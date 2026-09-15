@@ -8,8 +8,14 @@ from unittest.mock import patch
 
 from openai.lib._pydantic import to_strict_json_schema
 
-from src.ai.email_parser import _build_openai_client
-from src.ai.extraction_models import OpenAIShipmentExtraction
+from src.ai.email_parser import (
+    _build_openai_client,
+    build_shipment_from_extraction,
+)
+from src.ai.extraction_models import (
+    OpenAIShipmentExtraction,
+    ShipmentExtraction,
+)
 from src.config import OPENAI_MODEL
 from src.core.clarification_requirements import ClarificationRequirement
 
@@ -85,6 +91,85 @@ def evaluate_openai_structured_output_regressions() -> dict[str, object]:
         failures.append("wire conversion did not preserve value types")
     if OpenAIShipmentExtraction().to_internal().commodity_attributes != {}:
         failures.append("empty wire attributes were not preserved")
+
+    # A valid model response may omit free-form notes. Explicit operational
+    # handling/review evidence must still be recovered deterministically from
+    # the source text before extraction confirmation.
+    base_extraction = ShipmentExtraction(
+        customer_name="Synthetic Customer",
+        pickup_country="Türkiye",
+        pickup_city="Adana",
+        delivery_country="Almanya",
+        delivery_city="Munich",
+        commodity="General cargo",
+        gross_weight_kg=9000,
+        service_type="FTL",
+        transport_mode="road",
+        equipment_type=None,
+        special_notes=None,
+    )
+    explicit_signal_cases = (
+        (
+            "top-loading",
+            "Road FTL quote. Loading requires overhead crane and top loading.",
+            "top_loading_required",
+        ),
+        (
+            "bulk-liquid",
+            "Road FTL quote. Tanker required.",
+            "bulk_liquid_equipment_review_required",
+        ),
+        (
+            "lithium-battery",
+            "Road FTL quote. Cargo contains lithium battery packs.",
+            "lithium_battery_review_required",
+        ),
+        (
+            "strict-document",
+            "Road FTL quote. Shipment under letter of credit; strict document conditions apply.",
+            "strict_document_review_required",
+        ),
+        (
+            "cross-dock",
+            "Road FTL quote. Cross-docking required at transit hub.",
+            "cross_dock_review_required",
+        ),
+        (
+            "contractual-transit",
+            "Road FTL quote. Guaranteed transit time required. Delay penalty applies.",
+            "contractual_transit_risk",
+        ),
+    )
+    for label, source_text, field_name in explicit_signal_cases:
+        proposal = build_shipment_from_extraction(
+            base_extraction,
+            source_text,
+        )
+        if getattr(proposal, field_name) is not True:
+            failures.append(
+                f"raw source text did not preserve explicit {label} evidence"
+            )
+        if label == "lithium-battery" and proposal.is_adr is not None:
+            failures.append(
+                "lithium source evidence invented ADR truth"
+            )
+
+    ordinary_proposal = build_shipment_from_extraction(
+        base_extraction,
+        "Road FTL quote for ordinary palletized general cargo.",
+    )
+    for field_name in (
+        "top_loading_required",
+        "bulk_liquid_equipment_review_required",
+        "lithium_battery_review_required",
+        "strict_document_review_required",
+        "cross_dock_review_required",
+        "contractual_transit_risk",
+    ):
+        if getattr(ordinary_proposal, field_name) is not False:
+            failures.append(
+                f"ordinary source text invented {field_name}"
+            )
 
     try:
         OpenAIShipmentExtraction.model_validate(

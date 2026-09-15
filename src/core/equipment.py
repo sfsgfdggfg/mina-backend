@@ -47,11 +47,21 @@ def is_standard_road_equipment_request(value: str | None) -> bool:
 
 
 
-def requires_open_trailer_loading(shipment: Shipment) -> bool:
+def requires_open_trailer_loading(
+    shipment: Shipment,
+    *,
+    source_text: str | None = None,
+) -> bool:
     """Detect explicit top-loading / crane-loading requirements."""
     if getattr(shipment, "top_loading_required", False) is True:
         return True
-    text = _normalize_equipment_request(getattr(shipment, "special_notes", None))
+    text = _normalize_equipment_request(
+        " ".join(
+            str(value)
+            for value in (getattr(shipment, "special_notes", None), source_text)
+            if value
+        )
+    )
     if not text:
         return False
     signals = (
@@ -63,7 +73,11 @@ def requires_open_trailer_loading(shipment: Shipment) -> bool:
     return any(signal in text for signal in signals)
 
 
-def requires_bulk_or_liquid_equipment_review(shipment: Shipment) -> bool:
+def requires_bulk_or_liquid_equipment_review(
+    shipment: Shipment,
+    *,
+    source_text: str | None = None,
+) -> bool:
     """Detect explicit bulk/liquid cargo evidence that requires non-standard equipment review."""
     if getattr(shipment, "bulk_liquid_equipment_review_required", False) is True:
         return True
@@ -71,6 +85,7 @@ def requires_bulk_or_liquid_equipment_review(shipment: Shipment) -> bool:
         getattr(shipment, "commodity", None),
         getattr(shipment, "special_notes", None),
         *(getattr(package, "package_type", None) for package in shipment.packages),
+        source_text,
     ]
     text = _normalize_equipment_request(" ".join(str(value) for value in values if value))
     if not text:
