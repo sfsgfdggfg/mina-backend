@@ -31,6 +31,14 @@ from src.simulation.sanitized_replay import (
 )
 
 
+_POSITIVE_DERIVED_FACT_FIELDS = {
+    "gtip_commodity_conflict",
+    "top_loading_required",
+    "contractual_transit_risk",
+    "bulk_liquid_equipment_review_required",
+}
+
+
 def _fact(value):
     if value is None:
         return {"state": "unknown", "value": None}
@@ -52,7 +60,7 @@ def _case(
         for field_name in SCORED_FIELDS
         if field_name in data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "contractual_transit_risk"}
+            field_name in _POSITIVE_DERIVED_FACT_FIELDS
             and data.get(field_name) is not True
         )
     }
@@ -93,6 +101,10 @@ def _synthetic_parser(
     if "CONTRACT RISK" in safe_text:
         return _snapshot(adr=False).model_copy(
             update={"special_notes": "Guaranteed transit time. Delay penalty applies."}
+        )
+    if "BULK REVIEW" in safe_text:
+        return _snapshot(adr=False).model_copy(
+            update={"special_notes": "Silobas gerekli"}
         )
     if "TOP LOADING" in safe_text:
         return _snapshot(adr=False).model_copy(
@@ -224,7 +236,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in conflict_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "contractual_transit_risk"}
+            field_name in _POSITIVE_DERIVED_FACT_FIELDS
             and conflict_data.get(field_name) is not True
         )
     }
@@ -241,7 +253,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in top_loading_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "contractual_transit_risk"}
+            field_name in _POSITIVE_DERIVED_FACT_FIELDS
             and top_loading_data.get(field_name) is not True
         )
     }
@@ -277,7 +289,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in contractual_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "contractual_transit_risk"}
+            field_name in _POSITIVE_DERIVED_FACT_FIELDS
             and contractual_data.get(field_name) is not True
         )
     }
@@ -296,6 +308,60 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
                 "supplier_progression_expected": False,
             },
             "tags": ["synthetic", "authorized-replay-regression", "contract-risk"],
+        }
+    )
+
+    bulk_review_proposal = _snapshot(adr=False).model_copy(
+        update={"special_notes": "Silobas gerekli"}
+    )
+    require(
+        "authorized replay derives structured bulk/liquid review evidence from proposal notes",
+        _proposal_facts(bulk_review_proposal).get(
+            "bulk_liquid_equipment_review_required"
+        ) is True,
+    )
+    package_bulk_review_proposal = _snapshot(adr=False).model_copy(
+        update={
+            "packages": [
+                Package(
+                    package_type="Silobas", quantity=1, length_cm=100,
+                    width_cm=100, height_cm=100, weight_kg=1000,
+                )
+            ]
+        }
+    )
+    require(
+        "authorized replay derives structured bulk/liquid review evidence from package type",
+        _proposal_facts(package_bulk_review_proposal).get(
+            "bulk_liquid_equipment_review_required"
+        ) is True,
+    )
+    bulk_review_data = bulk_review_proposal.model_dump(mode="json")
+    bulk_review_facts = {
+        field_name: _fact(bulk_review_data.get(field_name))
+        for field_name in SCORED_FIELDS
+        if field_name in bulk_review_data
+        and not (
+            field_name in _POSITIVE_DERIVED_FACT_FIELDS
+            and bulk_review_data.get(field_name) is not True
+        )
+    }
+    bulk_review_facts["bulk_liquid_equipment_review_required"] = _fact(True)
+    bulk_review_case = ReplayCase.model_validate(
+        {
+            "schema_version": "1.0",
+            "case_id": "authorized-bulk-review",
+            "sender_address": "logistics@customer.invalid",
+            "sender_domain": "customer.invalid",
+            "subject": "Synthetic authorized replay bulk review",
+            "body_text": "Synthetic BULK REVIEW road inquiry.",
+            "expected": {
+                "facts": bulk_review_facts,
+                "disposition": "pilot_scope_excluded",
+                "equipment": "Bulk / Liquid Equipment Review",
+                "supplier_progression_expected": False,
+            },
+            "tags": ["synthetic", "authorized-replay-regression", "bulk-review"],
         }
     )
 
@@ -339,6 +405,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         gtip_conflict_case,
         top_loading_case,
         contractual_case,
+        bulk_review_case,
     ]
 
     with tempfile.TemporaryDirectory() as temporary:
@@ -361,8 +428,8 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             operational_data_sources=sources,
         )
         require(
-            "six synthetic authorized cases executed",
-            len(result.cases) == 6,
+            "seven synthetic authorized cases executed",
+            len(result.cases) == 7,
         )
         require(
             "authorized synthetic replay passes",
@@ -405,6 +472,13 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             result.cases[5].actual_disposition == "management_review"
             and result.cases[5].supplier_progression_correct is True
             and result.cases[5].passed_safety,
+        )
+        require(
+            "operator-confirmed bulk/liquid review remains pilot-scope excluded downstream",
+            result.cases[6].actual_disposition == "pilot_scope_excluded"
+            and result.cases[6].equipment_correct is True
+            and result.cases[6].supplier_progression_correct is True
+            and result.cases[6].passed_safety,
         )
         require(
             "operational sources are read-only during replay",

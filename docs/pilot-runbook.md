@@ -1860,3 +1860,9 @@ Verify that the replay produces `pilot_scope_excluded`, Open Trailer / Platform 
 Before accepting authorized sanitized replay evidence for a release, include any approved historical case that contains a guaranteed transit time, delay penalty, penalty clause or equivalent contractual timing liability with operator-confirmed `contractual_transit_risk=true`. Its expected disposition must be `management_review`, and supplier progression must be false.
 
 A replay that turns such a case into ordinary supplier RFQ progression is not acceptable evidence even if extraction fields otherwise match. Because this changes the replay disposition/evidence contract, generate a fresh replay receipt against the exact release commit after merge; do not reuse an earlier receipt.
+
+## Bulk / Liquid Authorized Replay Check
+
+When the approved sanitized historical set contains a bulk/liquid, Tanker, Damper or Silobas case, record operator-confirmed `expected.facts.bulk_liquid_equipment_review_required` as known `true`. Expect `pilot_scope_excluded`, no supplier progression, and `Bulk / Liquid Equipment Review` when no stronger explicit equipment is authoritative.
+
+During replay, confirm that extraction evidence from commodity, shipment notes or package descriptors derives the structured fact and that downstream replay preserves the operator-confirmed value. A lost fact can incorrectly turn the same load into standard Tenteli cargo. Any release changing this evidence path requires a fresh authorized replay receipt bound to the exact release commit; do not reuse an earlier receipt.

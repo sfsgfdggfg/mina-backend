@@ -65,6 +65,8 @@ def requires_open_trailer_loading(shipment: Shipment) -> bool:
 
 def requires_bulk_or_liquid_equipment_review(shipment: Shipment) -> bool:
     """Detect explicit bulk/liquid cargo evidence that requires non-standard equipment review."""
+    if getattr(shipment, "bulk_liquid_equipment_review_required", False) is True:
+        return True
     values = [
         getattr(shipment, "commodity", None),
         getattr(shipment, "special_notes", None),

@@ -7675,3 +7675,21 @@ The replay disposition contract includes `management_review`. Losing a required 
 - Replay cannot pass if a required management review silently degrades to normal supplier RFQ progression.
 - Free-text historical notes do not become operational replay authority by themselves.
 - Any release containing this replay-contract change requires fresh exact-commit authorized sanitized replay evidence before real-pilot readiness can be claimed.
+
+## DEC-282 — Authorized Replay Must Preserve Bulk / Liquid Equipment-Review Authority
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+### Decision
+
+Bulk/liquid cargo evidence can originate from commodity text, shipment notes or package descriptors and can force special-equipment review plus controlled-pilot exclusion. Authorized sanitized replay must represent this authority as structured operator-confirmed `bulk_liquid_equipment_review_required=true` evidence instead of depending on free-form `special_notes` or package text surviving the replay boundary.
+
+The live runtime continues to recognize existing note/commodity/package signals. Replay derives the structured positive fact from parser output, scores it as safety-critical extraction evidence, and constructs downstream historical truth from the operator-confirmed expected boolean. A confirmed positive fact must preserve `Bulk / Liquid Equipment Review` when no stronger explicit equipment is authoritative, preserve `pilot_scope_excluded`, and prevent ordinary supplier progression.
+
+### Consequences
+
+- Historical Tanker/Damper/Silobas or bulk/liquid review authority can be represented without making free-form notes replay authority.
+- Losing the structured fact, pilot exclusion or supplier-progression block is a safety-critical replay failure.
+- Ordinary cases need not declare an explicit false fact; replay schema `1.0` remains backward-compatible.
+- This replay behavior requires a fresh authorized sanitized replay receipt bound to the exact release commit before real-pilot readiness can rely on it.

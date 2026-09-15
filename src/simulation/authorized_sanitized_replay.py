@@ -16,7 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from src.core.road_dimensions import exceeds_standard_trailer_dimensions
-from src.core.equipment import requires_open_trailer_loading
+from src.core.equipment import (
+    requires_bulk_or_liquid_equipment_review,
+    requires_open_trailer_loading,
+)
 from src.core.risk import requires_contractual_transit_review
 from src.ai.email_parser import (
     EmailParserUnavailableError,
@@ -148,6 +151,7 @@ def _proposal_facts(
             "gtip_commodity_conflict",
             "top_loading_required",
             "contractual_transit_risk",
+            "bulk_liquid_equipment_review_required",
         }
     }
     if proposal.gtip_commodity_conflict:
@@ -156,6 +160,8 @@ def _proposal_facts(
         facts["top_loading_required"] = True
     if requires_contractual_transit_review(proposal):
         facts["contractual_transit_risk"] = True
+    if requires_bulk_or_liquid_equipment_review(proposal):
+        facts["bulk_liquid_equipment_review_required"] = True
 
     explicit_project_values = [
         proposal.commodity,

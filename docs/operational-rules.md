@@ -4520,3 +4520,9 @@ A confirmed `top_loading_required=true` case must remain outside the simple stan
 Transit-time guarantees, delay penalties, contractual penalties and equivalent explicit terms require management review. Runtime may detect this from explicit shipment notes, but authorized sanitized replay must encode operator-confirmed historical truth as `contractual_transit_risk=true`.
 
 When this fact is true, the expected replay disposition is `management_review`, customer quote generation remains blocked, and supplier progression must remain false. If the structured fact, management-review disposition or progression block is lost, replay must fail safety-critical validation.
+
+## RULE-297 — Bulk / Liquid Special-Equipment Review Is Structured Replay Safety Evidence
+
+When explicit bulk/liquid, Tanker, Damper or Silobas evidence requires non-standard road-equipment review, authorized sanitized replay must encode operator-confirmed historical truth as `bulk_liquid_equipment_review_required=true`. Runtime may continue deriving the same authority from commodity, shipment notes or package descriptors.
+
+A confirmed positive fact must remain outside the simple standard-trailer pilot, must select `Bulk / Liquid Equipment Review` unless stronger explicit special-equipment authority applies, and must not progress suppliers as ordinary Tenteli cargo. Loss of the fact, loss of pilot exclusion or supplier progression is a safety-critical replay failure. Do not make free-form `special_notes` the replay authority.

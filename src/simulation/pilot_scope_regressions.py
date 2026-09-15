@@ -409,6 +409,27 @@ def evaluate_pilot_scope_regressions() -> dict:
                 f"bulk/liquid requirement did not trigger human review: {bulk_liquid_update}"
             )
 
+    structured_bulk_review = _road_shipment(
+        bulk_liquid_equipment_review_required=True
+    )
+    structured_bulk_scope = evaluate_pilot_scope(
+        structured_bulk_review,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if structured_bulk_scope.eligible:
+        failures.append("structured bulk/liquid review evidence remained pilot eligible")
+    if (
+        decide_equipment(structured_bulk_review).selected_equipment
+        != "Bulk / Liquid Equipment Review"
+    ):
+        failures.append("structured bulk/liquid evidence did not require equipment review")
+    structured_bulk_risk = assess_risk(structured_bulk_review)
+    if (
+        structured_bulk_risk.risk_level != "yellow"
+        or not structured_bulk_risk.requires_human_review
+    ):
+        failures.append("structured bulk/liquid evidence did not trigger human review")
+
     explicit_tanker = _road_shipment(
         equipment_type="Tanker",
         special_notes="Sıvı yük",
