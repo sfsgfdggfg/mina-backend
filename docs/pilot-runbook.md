@@ -566,6 +566,9 @@ particular deployment’s purge must follow the approved evidence-review process
 
 ## H. GO/NO-GO Reminders
 
+> **Day 0 execution checklist:** use `docs/pilot-day-0-checklist.md` as the ordered launch gate. It consolidates the existing release-freeze, technical/profile, authorized replay, attestation, final readiness, one-real-mail smoke and first-3–5-job observation steps. The checklist does not weaken or replace any control in this runbook.
+
+
 The pilot is NO-GO unless all are true:
 
 - the running SHA is explicitly approved;
