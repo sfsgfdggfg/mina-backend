@@ -632,6 +632,18 @@ def evaluate_pilot_scope_regressions() -> dict:
     ):
         failures.append("structured contractual transit risk did not require management review")
 
+    structured_document_risk = assess_risk(
+        _road_shipment(strict_document_review_required=True)
+    )
+    if structured_document_risk.risk_level != "yellow" or not structured_document_risk.requires_human_review:
+        failures.append("structured strict-document evidence did not require human review")
+
+    structured_cross_dock_risk = assess_risk(
+        _road_shipment(cross_dock_review_required=True)
+    )
+    if structured_cross_dock_risk.risk_level != "yellow" or not structured_cross_dock_risk.requires_human_review:
+        failures.append("structured cross-dock evidence did not require human review")
+
     document_risk_cases = (
         "Akreditifli gönderi, sıkı evrak şartları var.",
         "Shipment under letter of credit; strict document conditions apply.",

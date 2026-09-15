@@ -7683,3 +7683,7 @@ The replay disposition contract includes `management_review`. Losing a required 
 **Reason:** Live runtime excludes such cargo from the simple standard-trailer pilot and routes it to special-equipment review. A replay that drops special-notes-only evidence can otherwise produce Tenteli selection and supplier progression for a release that would correctly fail closed live.
 
 **Release evidence:** Loss of this structured fact, loss of pilot exclusion, or supplier progression when exclusion is expected is safety-critical. Any release containing this replay-contract change requires a fresh authorized sanitized replay receipt bound to the exact release commit.
+
+## DEC-283 — Yellow Operational Reviews Must Be Replay-Verifiable
+
+Authorized sanitized replay must verify not only blocking dispositions but also required human-review behavior for explicit operational risk evidence. Letter-of-credit / strict-document conditions and cross-dock / transfer conditions are represented by structured boolean evidence rather than treating free-text `special_notes` as operator ground truth. Replay expectations may set `human_review_expected`; losing a required review is safety-critical even when supplier RFQ progression remains allowed. Extra review where none was expected is visible but is not classified as safety-critical by this rule.

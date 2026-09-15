@@ -4524,3 +4524,11 @@ When this fact is true, the expected replay disposition is `management_review`, 
 ## RULE-297 — Authorized Replay Must Preserve Bulk / Liquid Equipment-Review Truth
 
 When customer evidence explicitly indicates bulk/liquid cargo or Tanker/Damper/Silobas-type special-equipment need, authorized replay must encode `bulk_liquid_equipment_review_required=true`. Operator-confirmed truth with this fact must remain outside the simple standard-trailer pilot, must select `Bulk / Liquid Equipment Review` unless a stronger explicit non-standard equipment request applies, and must not progress to supplier RFQ approval as standard Tenteli cargo.
+
+## RULE-298 — Strict-Document and Cross-Dock Review Evidence Must Survive Replay
+
+- `strict_document_review_required=true` and `cross_dock_review_required=true` are structured operational-review evidence.
+- Runtime risk assessment must consume these facts and preserve the existing yellow + human-review behavior.
+- Authorized sanitized replay may derive the facts from explicit sanitized proposal text, but downstream truth comes from operator-confirmed replay facts.
+- Cases requiring these reviews remain eligible for normal RFQ approval progression unless another independent rule blocks them.
+- If `human_review_expected=true` and replay loses the review requirement, the replay is safety-critical FAIL.

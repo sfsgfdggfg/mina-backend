@@ -33,7 +33,8 @@ DISPOSITIONS = {
 SAFETY_FIELDS = {
     "is_adr", "is_temperature_controlled", "is_high_value", "transport_mode",
     "is_oversize_or_project", "gtip_commodity_conflict", "top_loading_required",
-    "bulk_liquid_equipment_review_required", "contractual_transit_risk",
+    "bulk_liquid_equipment_review_required", "strict_document_review_required",
+    "cross_dock_review_required", "contractual_transit_risk",
 }
 SCORED_FIELDS = {
     "customer_name", "pickup_country", "pickup_city", "pickup_postcode",
@@ -42,7 +43,8 @@ SCORED_FIELDS = {
     "transport_mode", "cargo_ready_date", "required_delivery_date", "is_adr",
     "is_temperature_controlled", "temperature_requirement", "is_high_value",
     "is_oversize_or_project", "gtip_commodity_conflict", "top_loading_required",
-    "bulk_liquid_equipment_review_required", "contractual_transit_risk",
+    "bulk_liquid_equipment_review_required", "strict_document_review_required",
+    "cross_dock_review_required", "contractual_transit_risk",
 }
 
 _EMAIL = re.compile(r"(?i)(?<![\w.-])[\w.+-]+@([\w.-]+\.[a-z]{2,})(?![\w.-])")
@@ -86,6 +88,7 @@ class ReplayExpectations(BaseModel):
     ]
     equipment: str | None = None
     supplier_progression_expected: bool | None = None
+    human_review_expected: bool | None = None
 
     @field_validator("facts")
     @classmethod
@@ -122,6 +125,7 @@ class ReplayActual:
     disposition: str
     equipment: str | None = None
     supplier_progressed: bool = False
+    human_review_required: bool = False
 
 
 @dataclass(frozen=True)
@@ -148,6 +152,7 @@ class ReplayCaseResult:
     clarification_correct: bool = False
     equipment_correct: bool | None = None
     supplier_progression_correct: bool | None = None
+    human_review_correct: bool | None = None
     safety_critical_mismatches: list[str] = field(default_factory=list)
 
 
@@ -305,6 +310,8 @@ def _safety_mismatches(case: ReplayCase, actual: ReplayActual, fields: list[Repl
         critical.append("scope_exclusion_lost")
     if case.expected.disposition == "management_review" and actual.disposition != "management_review":
         critical.append("management_review_lost")
+    if case.expected.human_review_expected is True and not actual.human_review_required:
+        critical.append("human_review_lost")
     if case.expected.disposition in {"clarification_required", "pilot_scope_excluded", "data_provenance_blocked", "management_review"} and actual.supplier_progressed:
         critical.append("incorrect_supplier_progression")
     return critical
@@ -330,10 +337,15 @@ def run_replay(cases: Iterable[ReplayCase], extractor: ExtractionCallable) -> Re
             grouped["disposition"] += 1
         equipment_correct = None if case.expected.equipment is None else actual.equipment == case.expected.equipment
         progression_correct = None if case.expected.supplier_progression_expected is None else actual.supplier_progressed == case.expected.supplier_progression_expected
+        human_review_correct = None if case.expected.human_review_expected is None else actual.human_review_required == case.expected.human_review_expected
+        if human_review_correct is False:
+            grouped["human_review"] += 1
         safety = _safety_mismatches(case, actual, fields)
         mismatches = [item.field for item in fields if item.outcome in {"incorrect", "missing", "unexpected_inference"}]
         if not disposition_correct:
             mismatches.append("disposition")
+        if human_review_correct is False:
+            mismatches.append("human_review")
         results.append(ReplayCaseResult(
             case_id=case.case_id, passed_safety=not safety, fields=fields,
             expected_disposition=case.expected.disposition, actual_disposition=actual.disposition,
@@ -341,7 +353,7 @@ def run_replay(cases: Iterable[ReplayCase], extractor: ExtractionCallable) -> Re
             scope_correct=(case.expected.disposition == "pilot_scope_excluded") == (actual.disposition == "pilot_scope_excluded"),
             clarification_correct=(case.expected.disposition == "clarification_required") == (actual.disposition == "clarification_required"),
             equipment_correct=equipment_correct, supplier_progression_correct=progression_correct,
-            safety_critical_mismatches=safety,
+            human_review_correct=human_review_correct, safety_critical_mismatches=safety,
         ))
     def metric(attribute: str) -> tuple[int, int]:
         values = [getattr(item, attribute) for item in results if getattr(item, attribute) is not None]
