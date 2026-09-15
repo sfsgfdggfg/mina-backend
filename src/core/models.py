@@ -59,6 +59,7 @@ class Shipment(BaseModel):
     ] = None
     equipment_type: Optional[str] = None
     top_loading_required: bool = False
+    bulk_liquid_equipment_review_required: bool = False
     contractual_transit_risk: bool = False
 
     cargo_ready_date: Optional[str] = None

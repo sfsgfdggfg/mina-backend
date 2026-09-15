@@ -7675,3 +7675,11 @@ The replay disposition contract includes `management_review`. Losing a required 
 - Replay cannot pass if a required management review silently degrades to normal supplier RFQ progression.
 - Free-text historical notes do not become operational replay authority by themselves.
 - Any release containing this replay-contract change requires fresh exact-commit authorized sanitized replay evidence before real-pilot readiness can be claimed.
+
+## DEC-282 — Bulk / Liquid Special-Notes Evidence Must Survive Authorized Replay
+
+**Decision:** A bulk/liquid, tanker, tipper or silo requirement that is explicit in customer evidence must be represented by structured `bulk_liquid_equipment_review_required=true` truth in authorized sanitized replay. The replay must not depend on carrying free-form `special_notes` into operator-confirmed downstream truth.
+
+**Reason:** Live runtime excludes such cargo from the simple standard-trailer pilot and routes it to special-equipment review. A replay that drops special-notes-only evidence can otherwise produce Tenteli selection and supplier progression for a release that would correctly fail closed live.
+
+**Release evidence:** Loss of this structured fact, loss of pilot exclusion, or supplier progression when exclusion is expected is safety-critical. Any release containing this replay-contract change requires a fresh authorized sanitized replay receipt bound to the exact release commit.

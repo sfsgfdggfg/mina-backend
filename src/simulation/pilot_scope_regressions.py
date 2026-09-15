@@ -364,6 +364,18 @@ def evaluate_pilot_scope_regressions() -> dict:
     if decide_equipment(structured_top_loading).selected_equipment != "Open Trailer / Platform":
         failures.append("structured top-loading evidence did not select open trailer/platform")
 
+    structured_bulk_liquid = _road_shipment(
+        bulk_liquid_equipment_review_required=True
+    )
+    structured_bulk_scope = evaluate_pilot_scope(
+        structured_bulk_liquid,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if structured_bulk_scope.eligible:
+        failures.append("structured bulk/liquid evidence remained pilot eligible")
+    if decide_equipment(structured_bulk_liquid).selected_equipment != "Bulk / Liquid Equipment Review":
+        failures.append("structured bulk/liquid evidence did not select review equipment")
+
     explicit_special_with_top_loading = _road_shipment(
         equipment_type="Mega Trailer",
         special_notes="Tavan vinci ile üstten yükleme gereklidir.",
