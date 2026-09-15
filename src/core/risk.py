@@ -37,6 +37,54 @@ def _contains_lithium_battery_signal(shipment: Shipment) -> bool:
     return any(signal in text for signal in signals)
 
 
+def _risk_note_text(shipment: Shipment) -> str:
+    return normalize_commodity_value(shipment.special_notes)
+
+
+def _contains_contractual_transit_risk(shipment: Shipment) -> bool:
+    text = _risk_note_text(shipment)
+    signals = (
+        "transit suresi garanti",
+        "garantili transit",
+        "guaranteed transit",
+        "transit time guarantee",
+        "cezai sart",
+        "cezali sozlesme",
+        "gecikme cezasi",
+        "late delivery penalty",
+        "delay penalty",
+        "contractual penalty",
+        "penalty clause",
+    )
+    return any(signal in text for signal in signals)
+
+
+def _contains_strict_document_condition(shipment: Shipment) -> bool:
+    text = _risk_note_text(shipment)
+    signals = (
+        "akreditif",
+        "letter of credit",
+        "documentary credit",
+        "siki evrak",
+        "strict document",
+        "strict documentation",
+    )
+    return any(signal in text for signal in signals)
+
+
+def _contains_cross_docking_signal(shipment: Shipment) -> bool:
+    text = _risk_note_text(shipment)
+    signals = (
+        "cross-dock",
+        "cross dock",
+        "crossdocking",
+        "cross docking",
+        "aktarmali operasyon",
+        "aktarma yapilacak",
+    )
+    return any(signal in text for signal in signals)
+
+
 def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
     """
     Operational Risk Engine v1.
@@ -105,6 +153,28 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
     if _contains_lithium_battery_signal(shipment):
         risk_reasons.append(
             "Lityum batarya / pil operasyonu. ADR sınıflandırması ve özel taşıma şartları ayrıca kontrol edilmeli."
+        )
+        requires_human_review = True
+
+    # Contractual transit guarantees / penalties require management review.
+    if _contains_contractual_transit_risk(shipment):
+        risk_reasons.append(
+            "Transit süresi garantisi veya gecikme/cezai şart bulundu; yönetim incelemesi gerekir."
+        )
+        requires_management_review = True
+        requires_human_review = True
+
+    # Letter-of-credit / strict document conditions require documentation review.
+    if _contains_strict_document_condition(shipment):
+        risk_reasons.append(
+            "Akreditif veya sıkı evrak şartı bulundu; dokümantasyon incelemesi gerekir."
+        )
+        requires_human_review = True
+
+    # Cross-docking / transfer operations carry additional handling-damage risk.
+    if _contains_cross_docking_signal(shipment):
+        risk_reasons.append(
+            "Cross-dock / aktarmalı operasyon; ek elleçleme ve hasar riski ayrıca kontrol edilmeli."
         )
         requires_human_review = True
 

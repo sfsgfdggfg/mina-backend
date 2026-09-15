@@ -4494,3 +4494,9 @@ If the evidence establishes bulk/liquid cargo but not the exact equipment, retur
 Treat explicit lithium/lithium-ion battery evidence in the commodity or structured shipment notes as an operational risk signal. At minimum, `Lithium Battery`, `Lithium-Ion` / `Li-ion`, `Lityum Batarya` and `Lityum Pil` must trigger human review with an instruction to verify ADR classification and special handling requirements.
 
 Do not automatically set `is_adr=true`, assign ADR equipment, require management review, or exclude the job from controlled-pilot scope solely because this text is present. Explicit ADR/customer/operator evidence and the existing ADR gates remain authoritative.
+
+## RULE-293 — Explicit Contractual and Handling Terms Must Enter the Road Risk Gate
+
+Treat explicit transit-time guarantees, delay penalties, penalty clauses or equivalent contractual delivery commitments as management-review risk. This must produce red operational risk and block customer quote generation through the existing `management_review` quote-readiness state; do not infer a different equipment type or rewrite shipment facts.
+
+Treat explicit akreditif / letter-of-credit / strict-document conditions as documentation-review signals, and explicit cross-dock / cross-docking / aktarmalı-operation conditions as human operational-review signals. These are yellow review conditions unless another rule independently requires management review. Do not infer ADR, special equipment or automatic pilot-scope exclusion from these terms alone.

@@ -1834,3 +1834,9 @@ If the exact equipment is not yet authoritative, expect `Bulk / Liquid Equipment
 During extraction review, treat an explicit lithium/lithium-ion battery description as a yellow operational-review signal even when the currently confirmed ADR flag is false. Verify the actual ADR classification, packaging and special handling requirements from customer/operator evidence before relying on the load as ordinary road cargo.
 
 Do not change the ADR flag or equipment merely from the commodity wording. If independent ADR evidence is established, follow the normal ADR equipment and controlled-pilot scope gates; otherwise preserve the confirmed safety truth and the human-review warning.
+
+## Contractual Transit and Special Handling Risk Check
+
+During controlled road-pilot review, inspect shipment notes for explicit transit guarantees, late-delivery penalties, penalty clauses or equivalent contractual delivery commitments. These cases must show red risk and `management_review`; customer quote generation remains blocked until that review is resolved. Do not clear the contract term or invent a special equipment type to make the case progress.
+
+Also surface akreditif / letter-of-credit / strict-document conditions for documentation review and cross-dock / aktarmalı handling for human operational review. These review signals do not by themselves change ADR truth, equipment or pilot cargo-type scope. Do not apply a generic numeric “impossible transit” threshold until route-specific evidence and policy are separately approved.

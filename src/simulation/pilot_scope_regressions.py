@@ -8,6 +8,9 @@ from src.core.equipment import decide_equipment
 from src.core.gtip import has_gtip_commodity_conflict
 from src.core.models import Package, Shipment
 from src.core.risk import assess_risk
+from src.core.quote_readiness import decide_quote_readiness
+from src.core.missing_info import check_missing_information
+from src.core.operational_consistency import check_operational_consistency
 from src.core.pilot_scope import evaluate_pilot_scope
 from src.core.quote_approval_repository import InMemoryQuoteApprovalRepository
 from src.core.quote_case_repository import InMemoryQuoteCaseRepository
@@ -569,6 +572,60 @@ def evaluate_pilot_scope_regressions() -> dict:
             failures.append(
                 f"lithium battery risk signal invented equipment authority: {lithium_commodity}"
             )
+
+    contractual_risk_cases = (
+        "Transit süresi garanti edilmelidir.",
+        "Gecikme halinde cezai şart uygulanacaktır.",
+        "Guaranteed transit time required.",
+    )
+    for note in contractual_risk_cases:
+        shipment = _road_shipment(special_notes=note)
+        risk = assess_risk(shipment)
+        if (
+            risk.risk_level != "red"
+            or not risk.requires_human_review
+            or not risk.requires_management_review
+        ):
+            failures.append(f"contractual transit risk did not require management review: {note}")
+        equipment = decide_equipment(shipment)
+        readiness = decide_quote_readiness(
+            missing_info=check_missing_information(shipment),
+            risk_assessment=risk,
+            operational_consistency=check_operational_consistency(
+                shipment, equipment, risk, None
+            ),
+        )
+        if (
+            readiness.result_type != "management_review"
+            or readiness.can_generate_quote
+        ):
+            failures.append(f"contractual transit risk did not block quote generation: {note}")
+
+    document_risk_cases = (
+        "Akreditifli gönderi, sıkı evrak şartları var.",
+        "Shipment under letter of credit; strict document conditions apply.",
+    )
+    for note in document_risk_cases:
+        risk = assess_risk(_road_shipment(special_notes=note))
+        if (
+            risk.risk_level != "yellow"
+            or not risk.requires_human_review
+            or risk.requires_management_review
+        ):
+            failures.append(f"strict document condition did not require documentation review: {note}")
+
+    transfer_risk_cases = (
+        "Cross-docking required at transit hub.",
+        "Aktarmalı operasyon yapılacak.",
+    )
+    for note in transfer_risk_cases:
+        risk = assess_risk(_road_shipment(special_notes=note))
+        if (
+            risk.risk_level != "yellow"
+            or not risk.requires_human_review
+            or risk.requires_management_review
+        ):
+            failures.append(f"cross-dock transfer risk did not require human review: {note}")
 
     high_value_shipment = _road_shipment(
         is_high_value=True,
