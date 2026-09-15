@@ -58,6 +58,7 @@ class Shipment(BaseModel):
         Literal["road", "rail", "sea", "air", "multimodal"]
     ] = None
     equipment_type: Optional[str] = None
+    top_loading_required: bool = False
 
     cargo_ready_date: Optional[str] = None
     required_delivery_date: Optional[str] = None

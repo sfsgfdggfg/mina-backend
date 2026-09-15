@@ -52,7 +52,7 @@ def _case(
         for field_name in SCORED_FIELDS
         if field_name in data
         and not (
-            field_name == "gtip_commodity_conflict"
+            field_name in {"gtip_commodity_conflict", "top_loading_required"}
             and data.get(field_name) is not True
         )
     }
@@ -90,6 +90,10 @@ def _synthetic_parser(
 ):
     if not isinstance(safe_text, PrivacySafeText):
         raise AssertionError("parser received non-privacy-safe text")
+    if "TOP LOADING" in safe_text:
+        return _snapshot(adr=False).model_copy(
+            update={"special_notes": "Tavan vinci ile üstten yükleme gereklidir."}
+        )
     if "GTIP CONFLICT" in safe_text:
         proposal = _snapshot(adr=False).model_copy(
             update={"commodity": "Plastik Ürünler"}
@@ -216,10 +220,46 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in conflict_data
         and not (
-            field_name == "gtip_commodity_conflict"
+            field_name in {"gtip_commodity_conflict", "top_loading_required"}
             and conflict_data.get(field_name) is not True
         )
     }
+    top_loading_proposal = _snapshot(adr=False).model_copy(
+        update={"special_notes": "Tavan vinci ile üstten yükleme gereklidir."}
+    )
+    require(
+        "authorized replay derives structured top-loading evidence from proposal notes",
+        _proposal_facts(top_loading_proposal).get("top_loading_required") is True,
+    )
+    top_loading_data = top_loading_proposal.model_dump(mode="json")
+    top_loading_facts = {
+        field_name: _fact(top_loading_data.get(field_name))
+        for field_name in SCORED_FIELDS
+        if field_name in top_loading_data
+        and not (
+            field_name in {"gtip_commodity_conflict", "top_loading_required"}
+            and top_loading_data.get(field_name) is not True
+        )
+    }
+    top_loading_facts["top_loading_required"] = _fact(True)
+    top_loading_case = ReplayCase.model_validate(
+        {
+            "schema_version": "1.0",
+            "case_id": "authorized-top-loading",
+            "sender_address": "logistics@customer.invalid",
+            "sender_domain": "customer.invalid",
+            "subject": "Synthetic authorized replay top loading",
+            "body_text": "Synthetic TOP LOADING road inquiry.",
+            "expected": {
+                "facts": top_loading_facts,
+                "disposition": "pilot_scope_excluded",
+                "equipment": "Open Trailer / Platform",
+                "supplier_progression_expected": False,
+            },
+            "tags": ["synthetic", "authorized-replay-regression", "top-loading"],
+        }
+    )
+
     gtip_conflict_case = ReplayCase.model_validate(
         {
             "schema_version": "1.0",
@@ -258,6 +298,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             progression=False,
         ),
         gtip_conflict_case,
+        top_loading_case,
     ]
 
     with tempfile.TemporaryDirectory() as temporary:
@@ -280,8 +321,8 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             operational_data_sources=sources,
         )
         require(
-            "four synthetic authorized cases executed",
-            len(result.cases) == 4,
+            "five synthetic authorized cases executed",
+            len(result.cases) == 5,
         )
         require(
             "authorized synthetic replay passes",
@@ -311,6 +352,13 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             result.cases[3].actual_disposition == "pilot_scope_excluded"
             and result.cases[3].supplier_progression_correct is True
             and result.cases[3].passed_safety,
+        )
+        require(
+            "operator-confirmed top-loading requirement remains pilot-scope excluded downstream",
+            result.cases[4].actual_disposition == "pilot_scope_excluded"
+            and result.cases[4].equipment_correct is True
+            and result.cases[4].supplier_progression_correct is True
+            and result.cases[4].passed_safety,
         )
         require(
             "operational sources are read-only during replay",

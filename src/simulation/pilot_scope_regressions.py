@@ -354,6 +354,16 @@ def evaluate_pilot_scope_regressions() -> dict:
                 f"top-loading requirement did not trigger human review: {top_loading_note}"
             )
 
+    structured_top_loading = _road_shipment(top_loading_required=True)
+    structured_top_loading_scope = evaluate_pilot_scope(
+        structured_top_loading,
+        environ={"MINAI_PILOT_MODE": "1"},
+    )
+    if structured_top_loading_scope.eligible:
+        failures.append("structured top-loading evidence remained pilot eligible")
+    if decide_equipment(structured_top_loading).selected_equipment != "Open Trailer / Platform":
+        failures.append("structured top-loading evidence did not select open trailer/platform")
+
     explicit_special_with_top_loading = _road_shipment(
         equipment_type="Mega Trailer",
         special_notes="Tavan vinci ile üstten yükleme gereklidir.",
