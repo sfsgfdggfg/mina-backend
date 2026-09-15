@@ -7622,3 +7622,14 @@ Road Freight RULE-024 already classifies Lithium Battery operations as risky. A 
 The operational risk engine must mark explicit `Lithium Battery`, `Lithium-Ion` / `Li-ion`, `Lityum Batarya` and `Lityum Pil` evidence for human review and tell the operator to verify ADR classification and special handling requirements. Existing explicit ADR truth remains authoritative. Equipment selection and pilot-scope eligibility remain unchanged unless another independent rule requires them to change.
 
 This closes a fail-open where explicit lithium-battery cargo could appear green-risk while preserving the newer authority boundary that safety classifications are not invented from commodity text alone.
+
+## DEC-278 — Contractual Transit, Strict-Document and Cross-Dock Terms Must Surface as Operational Risk
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+Road Freight RULE-027, RULE-028 and RULE-029 are operational-risk authority, not shipment-fact inference. When explicit shipment notes contain a transit-time guarantee or contractual delay/penalty condition, MINAI must classify the case as management-review risk. The existing red-risk quote-readiness gate then blocks customer quote generation until management review; the shipment does not need to be reclassified as special equipment or automatically removed from cargo-type pilot scope.
+
+Explicit letter-of-credit / strict-document conditions require human documentation review, and explicit cross-dock / transfer handling requires human operational review because of added handling/damage exposure. These yellow review signals may continue through the existing reviewed workflow but must not remain invisible as green risk.
+
+RULE-023 remains separate: MINAI must not invent a universal numeric road-transit threshold from route dates alone. Impossible/tight transit timing requires a separately evidence-backed route/service-time policy before deterministic automatic classification is added.
