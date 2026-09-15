@@ -261,6 +261,38 @@ def evaluate_sanitized_replay_regressions() -> dict:
             in top_loading_result.cases[0].safety_critical_mismatches,
         )
 
+        bulk_liquid_path = root / "bulk-liquid-safety.jsonl"
+        _write(
+            bulk_liquid_path,
+            [
+                _case(
+                    "bulk-liquid-safety",
+                    {"bulk_liquid_equipment_review_required": _fact(True)},
+                    "pilot_scope_excluded",
+                    progression=False,
+                )
+            ],
+        )
+        bulk_liquid_case = load_cases(bulk_liquid_path)[0]
+        bulk_liquid_result = run_replay(
+            [bulk_liquid_case],
+            lambda _case: ReplayActual(
+                facts={"bulk_liquid_equipment_review_required": False},
+                disposition="supplier_rfq_approval_required",
+                supplier_progressed=True,
+            ),
+        )
+        require(
+            "bulk/liquid requirement loss is safety-critical replay failure",
+            not bulk_liquid_result.passed
+            and "safety_field:bulk_liquid_equipment_review_required"
+            in bulk_liquid_result.cases[0].safety_critical_mismatches
+            and "scope_exclusion_lost"
+            in bulk_liquid_result.cases[0].safety_critical_mismatches
+            and "incorrect_supplier_progression"
+            in bulk_liquid_result.cases[0].safety_critical_mismatches,
+        )
+
         contract_risk_path = root / "contract-risk-safety.jsonl"
         _write(
             contract_risk_path,
