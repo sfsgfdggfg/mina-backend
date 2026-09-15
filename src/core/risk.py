@@ -1,3 +1,5 @@
+from datetime import date
+
 from src.core.models import Shipment, RiskAssessment
 from src.core.commodity_profile import (
     get_commodity_operational_profile,
@@ -14,6 +16,10 @@ from src.core.extraction_confirmation import require_operational_shipment
 from src.core.equipment import (
     requires_bulk_or_liquid_equipment_review,
     requires_open_trailer_loading,
+)
+from src.core.business_calendar import (
+    SupplierHolidayCalendarCoverageError,
+    turkey_holiday_observance,
 )
 
 
@@ -122,6 +128,52 @@ def requires_cross_dock_review(
     return any(signal in text for signal in signals)
 
 
+def _is_turkiye(value: str | None) -> bool:
+    return normalize_commodity_value(value) in {"turkiye", "turkey"}
+
+
+def _iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError:
+        return None
+
+
+def _turkey_holiday_risk_reasons(shipment: Shipment) -> list[str]:
+    checks = (
+        ("Yükleme", shipment.pickup_country, shipment.cargo_ready_date),
+        ("Teslim", shipment.delivery_country, shipment.required_delivery_date),
+    )
+    reasons: list[str] = []
+    for label, country, raw_date in checks:
+        if not _is_turkiye(country):
+            continue
+        day = _iso_date(raw_date)
+        if day is None:
+            continue
+        try:
+            observance = turkey_holiday_observance(day)
+        except SupplierHolidayCalendarCoverageError:
+            reasons.append(
+                f"{label} tarihi {day.isoformat()} için Türkiye tatil takvimi "
+                "doğrulanmamış; operasyon takvimi kullanıcı tarafından kontrol edilmeli."
+            )
+            continue
+        if observance == "full_day":
+            reasons.append(
+                f"{label} tarihi {day.isoformat()} Türkiye tatil takviminde tam gün "
+                "kapalı; operasyon planı kullanıcı tarafından kontrol edilmeli."
+            )
+        elif observance == "half_day":
+            reasons.append(
+                f"{label} tarihi {day.isoformat()} Türkiye tatil takviminde yarım gün; "
+                "operasyon planı kullanıcı tarafından kontrol edilmeli."
+            )
+    return reasons
+
+
 def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
     """
     Operational Risk Engine v1.
@@ -213,6 +265,13 @@ def assess_risk(shipment: Shipment, customer_memory=None) -> RiskAssessment:
         risk_reasons.append(
             "Cross-dock / aktarmalı operasyon; ek elleçleme ve hasar riski ayrıca kontrol edilmeli."
         )
+        requires_human_review = True
+
+    # Turkey holiday dates are warning/review signals only. They do not
+    # decide equipment, pilot scope, or management approval by themselves.
+    holiday_reasons = _turkey_holiday_risk_reasons(shipment)
+    if holiday_reasons:
+        risk_reasons.extend(holiday_reasons)
         requires_human_review = True
 
     # Temperature controlled cargo

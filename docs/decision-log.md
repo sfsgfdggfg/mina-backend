@@ -7714,3 +7714,18 @@ These booleans remain non-authoritative proposal evidence until the normal human
 - Ordinary source text must not create any of the structured operational-review flags.
 - Lithium-battery text continues to require review without automatically asserting ADR truth.
 - Any release containing this extraction-authority change requires fresh authorized sanitized replay evidence bound to the exact release commit before real-pilot readiness can rely on it.
+
+## DEC-286 — Verified Turkey Holiday Dates Must Surface as Non-Blocking Shipment Risk
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+### Decision
+
+RULE-030 holiday risk must use the same verified Turkey public/religious holiday authority already used by supplier automation. When a confirmed shipment has a Turkey pickup with an explicit `cargo_ready_date`, or a Turkey delivery with an explicit `required_delivery_date`, a verified full-day or half-day holiday on that exact date is surfaced as `yellow` human-review risk. The warning does not by itself change equipment, pilot scope, supplier eligibility, management-review authority, or quote-generation permission.
+
+If the relevant Turkey date falls outside the verified holiday-coverage years, shipment risk fails closed to a human-review warning instead of assuming an ordinary workday. Foreign-country holiday calendars remain deferred. MINAI does not invent pre/post-holiday buffer periods or a universal "critical holiday period" window without separate evidence-backed policy.
+
+### Evidence boundary
+
+The holiday calendar is reusable through a single `turkey_holiday_observance()` authority. Authorized sanitized replay already carries ready/delivery dates and `human_review_expected`, so no new replay schema field is required. Exact-release replay evidence must still be regenerated before pilot GO.

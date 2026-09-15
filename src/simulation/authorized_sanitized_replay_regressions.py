@@ -90,6 +90,10 @@ def _synthetic_parser(
 ):
     if not isinstance(safe_text, PrivacySafeText):
         raise AssertionError("parser received non-privacy-safe text")
+    if "HOLIDAY READY" in safe_text:
+        return _snapshot(adr=False).model_copy(
+            update={"cargo_ready_date": "2026-08-30", "required_delivery_date": "2026-09-06"}
+        )
     if "LITHIUM NOTE" in safe_text:
         return _snapshot(adr=False).model_copy(
             update={"special_notes": "Lityum batarya içerir."}
@@ -462,6 +466,38 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         }
     )
 
+    holiday_proposal = _snapshot(adr=False).model_copy(
+        update={"cargo_ready_date": "2026-08-30", "required_delivery_date": "2026-09-06"}
+    )
+    holiday_data = holiday_proposal.model_dump(mode="json")
+    holiday_facts = {
+        field_name: _fact(holiday_data.get(field_name))
+        for field_name in SCORED_FIELDS
+        if field_name in holiday_data
+        and not (
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
+            and holiday_data.get(field_name) is not True
+        )
+    }
+    holiday_case = ReplayCase.model_validate(
+        {
+            "schema_version": "1.0",
+            "case_id": "authorized-turkey-holiday-ready",
+            "sender_address": "logistics@customer.invalid",
+            "sender_domain": "customer.invalid",
+            "subject": "Synthetic authorized replay Turkey holiday ready date",
+            "body_text": "Synthetic HOLIDAY READY road inquiry.",
+            "expected": {
+                "facts": holiday_facts,
+                "disposition": "supplier_rfq_approval_required",
+                "equipment": "Tenteli",
+                "supplier_progression_expected": True,
+                "human_review_expected": True,
+            },
+            "tags": ["synthetic", "authorized-replay-regression", "turkey-holiday"],
+        }
+    )
+
     gtip_conflict_case = ReplayCase.model_validate(
         {
             "schema_version": "1.0",
@@ -506,6 +542,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         strict_document_case,
         cross_dock_case,
         lithium_case,
+        holiday_case,
     ]
 
     with tempfile.TemporaryDirectory() as temporary:
@@ -528,8 +565,8 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             operational_data_sources=sources,
         )
         require(
-            "ten synthetic authorized cases executed",
-            len(result.cases) == 10,
+            "eleven synthetic authorized cases executed",
+            len(result.cases) == 11,
         )
         require(
             "authorized synthetic replay passes",
@@ -598,6 +635,13 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             and result.cases[9].equipment_correct is True
             and result.cases[9].human_review_correct is True
             and result.cases[9].passed_safety,
+        )
+        require(
+            "operator-confirmed Turkey holiday ready date remains human-review flagged downstream",
+            result.cases[10].actual_disposition == "supplier_rfq_approval_required"
+            and result.cases[10].equipment_correct is True
+            and result.cases[10].human_review_correct is True
+            and result.cases[10].passed_safety,
         )
         require(
             "operational sources are read-only during replay",

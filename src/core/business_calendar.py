@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 SUPPLIER_TIMEZONE = "Europe/Istanbul"
@@ -63,16 +64,28 @@ def _require_holiday_coverage(day: date) -> None:
         )
 
 
-def _day_window(day: date) -> tuple[time, time] | None:
-    if day.weekday() not in SUPPLIER_WEEKDAYS:
-        return None
+def turkey_holiday_observance(
+    day: date,
+) -> Literal["full_day", "half_day"] | None:
+    """Return verified Turkey public/religious holiday observance for a date."""
     _require_holiday_coverage(day)
     key = (day.month, day.day)
     if key in _FIXED_FULL_HOLIDAYS or key in _RELIGIOUS_FULL_HOLIDAYS[day.year]:
+        return "full_day"
+    if key in _FIXED_HALF_HOLIDAYS or key in _RELIGIOUS_HALF_HOLIDAYS[day.year]:
+        return "half_day"
+    return None
+
+
+def _day_window(day: date) -> tuple[time, time] | None:
+    if day.weekday() not in SUPPLIER_WEEKDAYS:
+        return None
+    observance = turkey_holiday_observance(day)
+    if observance == "full_day":
         return None
     end = (
         _clock(SUPPLIER_HALF_DAY_END)
-        if key in _FIXED_HALF_HOLIDAYS or key in _RELIGIOUS_HALF_HOLIDAYS[day.year]
+        if observance == "half_day"
         else _clock(SUPPLIER_DAY_END)
     )
     return _clock(SUPPLIER_DAY_START), end

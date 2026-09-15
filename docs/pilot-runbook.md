@@ -1880,3 +1880,9 @@ Verify that authorized replay preserves the human-review requirement without inv
 Before accepting an exact-release replay receipt, include sanitized cases for any available historical inquiry containing explicit top-loading, bulk/liquid special-equipment, lithium-battery, strict-document, cross-dock or contractual-transit/penalty language. The production extraction path must emit the corresponding structured fact even if the model does not preserve the phrase in free-form notes.
 
 Verify ordinary freight text does not invent these flags, and verify lithium source evidence does not itself establish ADR truth. A release where explicit source evidence disappears merely because optional model fields were omitted is not acceptable pilot evidence; generate a fresh authorized sanitized replay receipt after any change to this recovery logic.
+
+### Turkey Shipment Holiday Risk Check
+
+For an approved Road replay/pilot case with a Turkey loading point and explicit ready date, include a verified full-day holiday (for example 30 August or 29 October) or half-day eve when the sanitized dataset contains such evidence. The expected risk is yellow human review while quote generation and simple-pilot eligibility remain otherwise unchanged. Apply the same check to an explicit Turkey delivery date.
+
+Verify foreign-only shipments do not inherit the Turkey holiday warning. For a Turkey shipment date outside the verified holiday-calendar coverage years, expect a human-review warning that the calendar is unverified rather than a fabricated holiday/no-holiday decision. No foreign holiday calendar or pre/post-holiday buffer is authorized by this check. Generate fresh exact-release authorized sanitized replay evidence before pilot GO.
