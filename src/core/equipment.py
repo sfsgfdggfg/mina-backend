@@ -60,6 +60,32 @@ def requires_open_trailer_loading(shipment: Shipment) -> bool:
     )
     return any(signal in text for signal in signals)
 
+
+def requires_bulk_or_liquid_equipment_review(shipment: Shipment) -> bool:
+    """Detect explicit bulk/liquid cargo evidence that requires non-standard equipment review."""
+    values = [
+        getattr(shipment, "commodity", None),
+        getattr(shipment, "special_notes", None),
+        *(getattr(package, "package_type", None) for package in shipment.packages),
+    ]
+    text = _normalize_equipment_request(" ".join(str(value) for value in values if value))
+    if not text:
+        return False
+    signals = (
+        "dokme yuk",
+        "dokme urun",
+        "sivi yuk",
+        "sivi urun",
+        "bulk cargo",
+        "bulk load",
+        "liquid cargo",
+        "liquid load",
+        "tanker",
+        "damper",
+        "silobas",
+    )
+    return any(signal in text for signal in signals)
+
 def _has_meaningful_text(value):
     if value is None:
         return False
@@ -239,6 +265,23 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
                 "shipment brüt veya package-line toplam ağırlığını "
                 "güvenle ayırmıyor. Ekipman atanmadan önce paket adedi ve "
                 "parça başı ağırlıklar netleştirilmelidir."
+            ),
+        )
+
+    # Bulk / liquid cargo requires equipment review before ordinary Tenteli handling.
+    if (
+        requires_bulk_or_liquid_equipment_review(shipment)
+        and is_standard_road_equipment_request(shipment.equipment_type)
+    ):
+        return EquipmentDecision(
+            selected_equipment="Bulk / Liquid Equipment Review",
+            reason="Dökme veya sıvı yük için özel ekipman değerlendirmesi gerekir.",
+            confidence=0.85,
+            source="rule_engine",
+            explanation=(
+                "Shipment verisinde dökme/sıvı yük veya Tanker/Damper/Silobas ihtiyacı "
+                "gösteren açık bir sinyal bulundu. Uygun ekipman tipi netleştirilmeden "
+                "standart Tenteli atanmamalıdır."
             ),
         )
 

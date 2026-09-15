@@ -360,6 +360,51 @@ def evaluate_pilot_scope_regressions() -> dict:
             "top-loading rule overwrote a stronger explicit non-standard equipment request"
         )
 
+    bulk_liquid_cases = (
+        {"commodity": "Dökme ürün"},
+        {"commodity": "Sıvı ürün"},
+        {"special_notes": "Dökme yük"},
+        {"special_notes": "Bulk cargo"},
+        {"special_notes": "Liquid cargo"},
+        {"special_notes": "Tanker gerekli"},
+        {"special_notes": "Damper gerekli"},
+        {"special_notes": "Silobas gerekli"},
+    )
+    for bulk_liquid_update in bulk_liquid_cases:
+        bulk_liquid_shipment = _road_shipment(**bulk_liquid_update)
+        bulk_liquid_scope = evaluate_pilot_scope(
+            bulk_liquid_shipment,
+            environ={"MINAI_PILOT_MODE": "1"},
+        )
+        if bulk_liquid_scope.eligible:
+            failures.append(
+                f"bulk/liquid requirement remained pilot eligible: {bulk_liquid_update}"
+            )
+        if (
+            decide_equipment(bulk_liquid_shipment).selected_equipment
+            != "Bulk / Liquid Equipment Review"
+        ):
+            failures.append(
+                f"bulk/liquid requirement did not require equipment review: {bulk_liquid_update}"
+            )
+        bulk_liquid_risk = assess_risk(bulk_liquid_shipment)
+        if (
+            bulk_liquid_risk.risk_level != "yellow"
+            or not bulk_liquid_risk.requires_human_review
+        ):
+            failures.append(
+                f"bulk/liquid requirement did not trigger human review: {bulk_liquid_update}"
+            )
+
+    explicit_tanker = _road_shipment(
+        equipment_type="Tanker",
+        special_notes="Sıvı yük",
+    )
+    if decide_equipment(explicit_tanker).selected_equipment != "Tanker":
+        failures.append(
+            "bulk/liquid review rule overwrote an explicit special equipment request"
+        )
+
     overlength_shipment = _road_shipment(
         packages=[
             Package(

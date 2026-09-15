@@ -4482,3 +4482,9 @@ Do not erase or rewrite the requested equipment to make a job pilot-eligible. Ke
 Treat `Overhead Crane`, `Tavan Vinci`, `Crane Loading` and `Üstten Yükleme` as explicit loading-method evidence requiring Open Trailer / Platform evaluation. Do not require oversize dimensions, ADR, reefer or a pre-filled special `equipment_type` before honoring this evidence.
 
 For otherwise ordinary road cargo, this requirement must produce Open Trailer / Platform equipment guidance, human review and controlled-pilot scope exclusion. If a stronger explicit non-standard equipment request or project/heavy rule already applies, preserve that stronger requirement rather than downgrading it to Open Trailer.
+
+## RULE-291 — Bulk / Liquid Cargo Requires Special-Equipment Review Before Standard Road Processing
+
+Treat explicit `Dökme Yük`, `Sıvı Yük`, `Bulk Cargo`, `Liquid Cargo`, Tanker, Damper or Silobas evidence as non-standard road-equipment authority. Do not require ADR, reefer, oversize dimensions or a pre-filled special `equipment_type` before honoring this evidence.
+
+If the evidence establishes bulk/liquid cargo but not the exact equipment, return `Bulk / Liquid Equipment Review`, require human operational review and exclude the case from the simple controlled standard-trailer pilot. Preserve any explicit Tanker/Damper/Silobas or stronger project/heavy equipment request instead of downgrading it to the generic review state.
