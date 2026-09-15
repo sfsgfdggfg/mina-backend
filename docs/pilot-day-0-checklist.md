@@ -16,6 +16,8 @@ This checklist is the execution gate for the first real controlled shadow-pilot 
 - [ ] Customer trusted sender evidence and supplier contact/capability evidence have been reviewed.
 - [ ] The external pilot operational data pack is `pilot_verified`, fingerprint-current and frozen for the launch candidate.
 - [ ] The external pilot database path, data-pack path and runtime profile are outside the repository.
+- [ ] For the first-customer cloud pilot, the Railway service is single-instance in the approved region and its persistent volume is mounted at `/data`.
+- [ ] The exact cloud release commit matches the frozen Day 0 release SHA; no unreviewed auto-deploy is pending.
 - [ ] The Day 0 runtime uses a dedicated fresh pilot database; smoke/development persistence is preserved separately and is not reused.
 - [ ] The seven required approvals are prepared using `docs/pilot-approval-matrix.md`; final attestation still waits for the replay receipt.
 - [ ] Outbound mode is `shadow`; autonomous supplier/customer outbound is disabled.
@@ -44,8 +46,9 @@ Run on the exact frozen release:
 - [ ] Runtime preflight PASS.
 - [ ] Canonical controlled-pilot regression gate PASS.
 - [ ] Synthetic full pilot rehearsal PASS.
-- [ ] Pilot profile `--check-only` PASS.
+- [ ] Deployment configuration check PASS: local/private profile uses `pilot_profile_launcher --check-only`; first-customer cloud pilot uses `python -m src.cloud_pilot_launcher --check-only` in the exact deployed environment.
 - [ ] Safe launcher/profile resolves the expected external DB and data-pack paths.
+- [ ] Cloud pilot reports edge HTTPS enabled, the approved HTTPS base URL, `/data` persistence and the platform port without exposing secrets.
 - [ ] Outbound mode still reports `shadow`.
 - [ ] Customer dataset PASS.
 - [ ] Supplier dataset PASS.
@@ -112,8 +115,10 @@ Run the real readiness assessment with the final external profile and readiness-
 
 ## 7. Gate F — Start the Controlled Shadow Runtime
 
-- [ ] Start only through the approved pilot profile/safe launcher path.
+- [ ] Start only through the approved pilot profile/safe launcher path. For the first-customer cloud pilot this is the repository Docker image running `python -m src.cloud_pilot_launcher`.
 - [ ] No `--reload`, development server or alternate unvalidated startup path.
+- [ ] Public browser access is HTTPS only and the operator reaches `/app/login` through the approved cloud domain.
+- [ ] Sibel and the Pilot Owner use separate named browser credentials.
 - [ ] Health/status check succeeds.
 - [ ] Named operator authentication succeeds.
 - [ ] Browser/session access, if used, is through the approved secured pilot shell.

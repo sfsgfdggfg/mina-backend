@@ -108,6 +108,7 @@ from src.core.pilot_access import (
     authorize_pilot_request,
     authorize_pilot_transport,
     pilot_mode_enabled,
+    resolve_pilot_request_scheme,
 )
 from src.core.web_session import (
     CSRF_HEADER_NAME, SESSION_COOKIE_NAME, WebSessionConfigurationError,
@@ -546,6 +547,10 @@ async def enforce_pilot_access(request: Request, call_next):
     path = request.url.path
     client_host = request.client.host if request.client is not None else None
     authorization = request.headers.get("Authorization")
+    effective_scheme = resolve_pilot_request_scheme(
+        request_scheme=request.url.scheme,
+        forwarded_proto=request.headers.get("X-Forwarded-Proto"),
+    )
     session = None
     should_resolve_session = path.startswith("/app") or (
         not authorization and request.cookies.get(SESSION_COOKIE_NAME) is not None
@@ -563,11 +568,11 @@ async def enforce_pilot_access(request: Request, call_next):
 
     if path.startswith("/app"):
         transport = authorize_pilot_transport(
-            client_host=client_host, request_scheme=request.url.scheme
+            client_host=client_host, request_scheme=effective_scheme
         )
         if not transport.allowed:
             return JSONResponse(status_code=transport.status_code, content={"detail": transport.reason})
-        if pilot_mode_enabled() and request.url.scheme.lower() != "https":
+        if pilot_mode_enabled() and effective_scheme != "https":
             return JSONResponse(status_code=426, content={"detail": "pilot_web_https_required"})
         response = await call_next(request)
         response.headers.setdefault("X-Frame-Options", "DENY")
@@ -577,7 +582,7 @@ async def enforce_pilot_access(request: Request, call_next):
     browser_operator = None if authorization or session is None else session.operator_name
     decision = authorize_pilot_request(
         method=request.method, path=path, client_host=client_host,
-        authorization=authorization, request_scheme=request.url.scheme,
+        authorization=authorization, request_scheme=effective_scheme,
         authenticated_operator=browser_operator,
     )
     if not decision.allowed:

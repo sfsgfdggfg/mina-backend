@@ -9,6 +9,7 @@ import uvicorn
 
 from src.core.pilot_access import (
     PilotAccessConfigurationError,
+    edge_https_pilot_enabled,
     pilot_mode_enabled,
     validate_pilot_configuration,
 )
@@ -59,6 +60,9 @@ def _load_pilot_tls_configuration(
     require_tls: bool = False,
 ) -> tuple[str | None, str | None]:
     bind_ip = ipaddress.ip_address(host)
+
+    if edge_https_pilot_enabled(environ):
+        return None, None
 
     if bind_ip.is_loopback and not require_tls:
         return None, None
@@ -128,6 +132,10 @@ def validate_controlled_pilot_runtime(
         raise PilotAccessConfigurationError(
             "Controlled pilot database configuration is invalid."
         ) from exc
+    if edge_https_pilot_enabled(env) and not web_shell_enabled(env):
+        raise PilotAccessConfigurationError(
+            "Edge-HTTPS pilot requires the authenticated web shell."
+        )
     if web_shell_enabled(env):
         try:
             validate_web_session_configuration(env)

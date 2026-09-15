@@ -4,6 +4,8 @@ This runbook is for the controlled, human-operated shadow pilot. MINAI drafts
 and records workflow state; the real logistics operation remains authoritative.
 MINAI does not send supplier RFQs or customer quotes in this workflow.
 
+**First-customer deployment note (DEC-289):** the real pilot is now centrally hosted and browser-accessed. `docs/cloud-pilot-deployment.md` is authoritative for the live host, persistent volume, edge HTTPS and cloud startup path. Older localhost/private-host examples in this runbook remain valid for engineering rehearsal and legacy private deployments, but they do not override the cloud Day 0 deployment contract. Release verification/replay may still run from the dedicated clean local release worktree.
+
 ## A. Before Startup
 
 Use only the validated runtime: Python 3.12.1 (the supported family is Python

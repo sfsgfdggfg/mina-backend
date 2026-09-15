@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.core.pilot_access import PilotAccessConfigurationError
+from src.cloud_pilot_launcher import build_cloud_pilot_environment
 from src.core.web_session import hash_password
 from src.pilot_launcher import run
 from src.pilot_data_pack import verify_pack
@@ -89,6 +90,15 @@ def _write_pilot_data_pack(root: Path, *, verify: bool = True) -> Path:
 
 def evaluate_pilot_launcher_regressions() -> dict:
     failures: list[str] = []
+
+    repository_root = Path(__file__).resolve().parents[2]
+    dockerfile_text = (repository_root / "Dockerfile").read_text(encoding="utf-8")
+    if not (
+        "FROM python:3.12.1-slim" in dockerfile_text
+        and "requirements-lock.txt" in dockerfile_text
+        and 'CMD ["python", "-m", "src.cloud_pilot_launcher"]' in dockerfile_text
+    ):
+        failures.append("cloud pilot Dockerfile drifted from the locked launcher contract")
 
     with tempfile.TemporaryDirectory(
         prefix="minai-pilot-launcher-"
@@ -266,6 +276,24 @@ def evaluate_pilot_launcher_regressions() -> dict:
                         }),
                     },
                 ),
+                (
+                    "edge HTTPS without web shell",
+                    {
+                        **base_env,
+                        "MINAI_PILOT_BIND_HOST": "0.0.0.0",
+                        "MINAI_PILOT_EDGE_HTTPS": "1",
+                        "MINAI_PILOT_BASE_URL": "https://pilot.example.invalid",
+                    },
+                ),
+                (
+                    "edge HTTPS with non-HTTPS public base",
+                    {
+                        **base_env, **web_config,
+                        "MINAI_PILOT_BIND_HOST": "0.0.0.0",
+                        "MINAI_PILOT_EDGE_HTTPS": "1",
+                        "MINAI_PILOT_BASE_URL": "http://pilot.example.invalid",
+                    },
+                ),
             )
 
             for name, env in rejected_configs:
@@ -326,6 +354,20 @@ def evaluate_pilot_launcher_regressions() -> dict:
                     str(tls_cert.resolve()),
                     str(tls_key.resolve()),
                 ),
+                (
+                    "edge HTTPS web shell",
+                    {
+                        **_valid_env(data_dir), **web_config,
+                        "MINAI_PILOT_BIND_HOST": "0.0.0.0",
+                        "MINAI_PILOT_EDGE_HTTPS": "1",
+                        "MINAI_PILOT_BASE_URL": "https://pilot.example.invalid",
+                        "MINAI_PILOT_PORT": "9000",
+                    },
+                    "0.0.0.0",
+                    9000,
+                    None,
+                    None,
+                ),
             )
 
             for (
@@ -371,6 +413,48 @@ def evaluate_pilot_launcher_regressions() -> dict:
                     )
         finally:
             shutil.rmtree(repo_inside_dir, ignore_errors=True)
+
+        cloud_base = {
+            **base_env, **web_config,
+            "MINAI_PILOT_BASE_URL": "https://pilot.example.invalid",
+            "MINAI_OUTBOUND_MODE": "shadow",
+            "MINAI_PILOT_DB_PATH": "/data/state/minai_pilot.sqlite3",
+            "MINAI_PILOT_DATA_DIR": "/data/operational",
+            "MINAI_OUTLOOK_TOKEN_CACHE_PATH": "/data/auth/outlook-cache.json",
+            "PORT": "9443",
+        }
+        try:
+            cloud_env = build_cloud_pilot_environment(cloud_base)
+        except PilotAccessConfigurationError as exc:
+            failures.append(f"cloud pilot environment was rejected: {exc}")
+        else:
+            if cloud_env.get("MINAI_PILOT_BIND_HOST") != "0.0.0.0":
+                failures.append("cloud pilot did not force wildcard container bind")
+            if cloud_env.get("MINAI_PILOT_PORT") != "9443":
+                failures.append("cloud pilot did not adopt platform PORT")
+            if cloud_env.get("MINAI_PILOT_EDGE_HTTPS") != "1":
+                failures.append("cloud pilot did not enable edge HTTPS mode")
+
+        for name, override in (
+            (
+                "non-shadow outbound",
+                {"MINAI_OUTBOUND_MODE": "live"},
+            ),
+            (
+                "database outside persistent root",
+                {"MINAI_PILOT_DB_PATH": "/tmp/minai.sqlite3"},
+            ),
+            (
+                "data pack outside persistent root",
+                {"MINAI_PILOT_DATA_DIR": "/tmp/operational"},
+            ),
+        ):
+            try:
+                build_cloud_pilot_environment({**cloud_base, **override})
+            except PilotAccessConfigurationError:
+                pass
+            else:
+                failures.append(f"cloud pilot accepted {name}")
 
     return {
         "name": "Fail-closed shadow pilot launcher",
