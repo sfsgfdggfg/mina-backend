@@ -7695,3 +7695,22 @@ Authorized sanitized replay must verify not only blocking dispositions but also 
 **Safety boundary:** This fact preserves the existing yellow human-review requirement only. It does not establish ADR truth, does not select special equipment, does not require management review, and does not by itself exclude the shipment from the controlled pilot. A required human review or positive structured fact lost during replay is safety-critical.
 
 **Release evidence:** Any release containing this replay-contract change requires a fresh authorized sanitized replay receipt bound to the exact release commit.
+
+## DEC-285 — Explicit Operational Source Terms Must Survive Structured-Output Omission
+
+**Status:** Accepted
+**Date:** 2026-09-15
+
+### Decision
+
+Safety- and review-relevant customer terms must not depend solely on the AI model copying free-form text into `special_notes` or `equipment_type`. The privacy-transformed source text is also evaluated deterministically with the same operational signal helpers used by runtime rules. Explicit top-loading, bulk/liquid special-equipment, lithium-battery review, strict-document, cross-dock and contractual-transit terms are converted into their existing structured proposal booleans before extraction confirmation.
+
+These booleans remain non-authoritative proposal evidence until the normal human confirmation boundary. Source-text recovery does not infer ADR status, does not create new equipment policy, and does not bypass existing pilot-scope, risk or management-review rules.
+
+### Consequences
+
+- A valid structured model response that omits optional free-form notes cannot silently erase explicit operational review evidence from the customer source.
+- The signal vocabulary remains centralized in the existing equipment/risk helpers instead of being duplicated inside the AI parser.
+- Ordinary source text must not create any of the structured operational-review flags.
+- Lithium-battery text continues to require review without automatically asserting ADR truth.
+- Any release containing this extraction-authority change requires fresh authorized sanitized replay evidence bound to the exact release commit before real-pilot readiness can rely on it.

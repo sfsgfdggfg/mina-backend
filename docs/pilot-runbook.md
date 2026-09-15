@@ -1874,3 +1874,9 @@ For historical cases with explicit letter-of-credit / strict-document terms, rec
 For sanitized historical cases where lithium battery / lithium-ion / lityum batarya / lityum pil evidence is explicit, record operator-confirmed `lithium_battery_review_required=true` and `human_review_expected=true`. Keep `is_adr` independently confirmed; do not infer ADR from lithium text alone.
 
 Verify that authorized replay preserves the human-review requirement without inventing special equipment, management review, or pilot exclusion solely from this fact. Generate a fresh replay receipt against the exact release commit after any change to this replay evidence contract.
+
+### Explicit Source Operational Evidence Check
+
+Before accepting an exact-release replay receipt, include sanitized cases for any available historical inquiry containing explicit top-loading, bulk/liquid special-equipment, lithium-battery, strict-document, cross-dock or contractual-transit/penalty language. The production extraction path must emit the corresponding structured fact even if the model does not preserve the phrase in free-form notes.
+
+Verify ordinary freight text does not invent these flags, and verify lithium source evidence does not itself establish ADR truth. A release where explicit source evidence disappears merely because optional model fields were omitted is not acceptable pilot evidence; generate a fresh authorized sanitized replay receipt after any change to this recovery logic.

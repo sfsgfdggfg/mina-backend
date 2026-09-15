@@ -17,14 +17,18 @@ from src.core.equipment import (
 )
 
 
-def requires_lithium_battery_review(shipment: Shipment) -> bool:
+def requires_lithium_battery_review(
+    shipment: Shipment,
+    *,
+    source_text: str | None = None,
+) -> bool:
     """Return whether explicit lithium battery/pil evidence needs human review."""
     if getattr(shipment, "lithium_battery_review_required", False) is True:
         return True
     text = normalize_commodity_value(
         " ".join(
             str(value)
-            for value in (shipment.commodity, shipment.special_notes)
+            for value in (shipment.commodity, shipment.special_notes, source_text)
             if value
         )
     )
@@ -40,15 +44,28 @@ def requires_lithium_battery_review(shipment: Shipment) -> bool:
     return any(signal in text for signal in signals)
 
 
-def _risk_note_text(shipment: Shipment) -> str:
-    return normalize_commodity_value(shipment.special_notes)
+def _risk_note_text(
+    shipment: Shipment,
+    source_text: str | None = None,
+) -> str:
+    return normalize_commodity_value(
+        " ".join(
+            str(value)
+            for value in (shipment.special_notes, source_text)
+            if value
+        )
+    )
 
 
-def requires_contractual_transit_review(shipment: Shipment) -> bool:
+def requires_contractual_transit_review(
+    shipment: Shipment,
+    *,
+    source_text: str | None = None,
+) -> bool:
     """Return whether contractual transit/penalty terms require management review."""
     if getattr(shipment, "contractual_transit_risk", False) is True:
         return True
-    text = _risk_note_text(shipment)
+    text = _risk_note_text(shipment, source_text)
     signals = (
         "transit suresi garanti",
         "garantili transit",
@@ -65,11 +82,15 @@ def requires_contractual_transit_review(shipment: Shipment) -> bool:
     return any(signal in text for signal in signals)
 
 
-def requires_strict_document_review(shipment: Shipment) -> bool:
+def requires_strict_document_review(
+    shipment: Shipment,
+    *,
+    source_text: str | None = None,
+) -> bool:
     """Return whether letter-of-credit/strict-document terms need human review."""
     if getattr(shipment, "strict_document_review_required", False) is True:
         return True
-    text = _risk_note_text(shipment)
+    text = _risk_note_text(shipment, source_text)
     signals = (
         "akreditif",
         "letter of credit",
@@ -81,11 +102,15 @@ def requires_strict_document_review(shipment: Shipment) -> bool:
     return any(signal in text for signal in signals)
 
 
-def requires_cross_dock_review(shipment: Shipment) -> bool:
+def requires_cross_dock_review(
+    shipment: Shipment,
+    *,
+    source_text: str | None = None,
+) -> bool:
     """Return whether cross-dock/transfer handling needs human review."""
     if getattr(shipment, "cross_dock_review_required", False) is True:
         return True
-    text = _risk_note_text(shipment)
+    text = _risk_note_text(shipment, source_text)
     signals = (
         "cross-dock",
         "cross dock",

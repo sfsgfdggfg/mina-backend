@@ -12,6 +12,16 @@ from src.core.gtip import (
     interpret_gtip_from_email,
 )
 from src.core.commodity_profile import apply_commodity_profile_to_shipment
+from src.core.equipment import (
+    requires_bulk_or_liquid_equipment_review,
+    requires_open_trailer_loading,
+)
+from src.core.risk import (
+    requires_contractual_transit_review,
+    requires_cross_dock_review,
+    requires_lithium_battery_review,
+    requires_strict_document_review,
+)
 from src.ai.extraction_models import (
     OpenAIShipmentExtraction,
     ShipmentExtraction,
@@ -437,6 +447,30 @@ def _apply_email_text_safety_overrides(shipment, email_text: str):
     if temperature_state is False:
         shipment.is_temperature_controlled = False
         shipment.temperature_requirement = None
+
+    # Explicit operational handling/review terms must survive even when the
+    # model omits free-form special_notes. These booleans remain proposals
+    # until extraction confirmation; they do not infer ADR or other safety truth.
+    shipment.top_loading_required = requires_open_trailer_loading(
+        shipment, source_text=email_text
+    )
+    shipment.bulk_liquid_equipment_review_required = (
+        requires_bulk_or_liquid_equipment_review(
+            shipment, source_text=email_text
+        )
+    )
+    shipment.lithium_battery_review_required = requires_lithium_battery_review(
+        shipment, source_text=email_text
+    )
+    shipment.strict_document_review_required = requires_strict_document_review(
+        shipment, source_text=email_text
+    )
+    shipment.cross_dock_review_required = requires_cross_dock_review(
+        shipment, source_text=email_text
+    )
+    shipment.contractual_transit_risk = requires_contractual_transit_review(
+        shipment, source_text=email_text
+    )
 
     shipment = _apply_package_source_truth_overrides(shipment, email_text)
     shipment = _apply_commodity_safety_overrides(shipment, email_text)
