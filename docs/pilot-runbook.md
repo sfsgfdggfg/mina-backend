@@ -1868,3 +1868,9 @@ For sanitized historical cases where bulk/liquid or Tanker/Damper/Silobas need i
 ### Yellow Human-Review Replay Check
 
 For historical cases with explicit letter-of-credit / strict-document terms, record `strict_document_review_required=true`; for cross-dock / transfer handling, record `cross_dock_review_required=true`. Set `human_review_expected=true` while keeping the expected operational disposition at the actual non-blocking stage (normally `supplier_rfq_approval_required`). A replay that preserves progression but drops the required human review must FAIL safety evidence. Any release containing this replay-contract change requires a fresh authorized sanitized replay receipt for that exact release commit.
+
+### Lithium Battery Human-Review Replay Check
+
+For sanitized historical cases where lithium battery / lithium-ion / lityum batarya / lityum pil evidence is explicit, record operator-confirmed `lithium_battery_review_required=true` and `human_review_expected=true`. Keep `is_adr` independently confirmed; do not infer ADR from lithium text alone.
+
+Verify that authorized replay preserves the human-review requirement without inventing special equipment, management review, or pilot exclusion solely from this fact. Generate a fresh replay receipt against the exact release commit after any change to this replay evidence contract.

@@ -359,6 +359,38 @@ def evaluate_sanitized_replay_regressions() -> dict:
             and strict_document_result.cases[0].human_review_correct is False,
         )
 
+        lithium_review_path = root / "lithium-human-review.jsonl"
+        _write(
+            lithium_review_path,
+            [
+                _case(
+                    "lithium-human-review",
+                    {"lithium_battery_review_required": _fact(True)},
+                    "supplier_rfq_approval_required",
+                    progression=True,
+                    human_review=True,
+                )
+            ],
+        )
+        lithium_review_case = load_cases(lithium_review_path)[0]
+        lithium_review_result = run_replay(
+            [lithium_review_case],
+            lambda _case: ReplayActual(
+                facts={"lithium_battery_review_required": False},
+                disposition="supplier_rfq_approval_required",
+                supplier_progressed=True,
+                human_review_required=False,
+            ),
+        )
+        require(
+            "lithium review evidence loss is safety-critical replay failure",
+            not lithium_review_result.passed
+            and "safety_field:lithium_battery_review_required"
+            in lithium_review_result.cases[0].safety_critical_mismatches
+            and "human_review_lost"
+            in lithium_review_result.cases[0].safety_critical_mismatches,
+        )
+
         require("ordinary mismatch visible", result.grouped_mismatches["field:delivery_city"] == 1)
         require("safety mismatch fails aggregate", not result.passed and result.safety_critical_mismatches >= 1)
         require("safety mismatch produces nonzero", replay_exit_code(result) != 0)

@@ -52,7 +52,7 @@ def _case(
         for field_name in SCORED_FIELDS
         if field_name in data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "contractual_transit_risk"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
             and data.get(field_name) is not True
         )
     }
@@ -90,6 +90,10 @@ def _synthetic_parser(
 ):
     if not isinstance(safe_text, PrivacySafeText):
         raise AssertionError("parser received non-privacy-safe text")
+    if "LITHIUM NOTE" in safe_text:
+        return _snapshot(adr=False).model_copy(
+            update={"special_notes": "Lityum batarya içerir."}
+        )
     if "STRICT DOCUMENT" in safe_text:
         return _snapshot(adr=False).model_copy(
             update={"special_notes": "Akreditifli gönderi, sıkı evrak şartları var."}
@@ -236,7 +240,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in conflict_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "contractual_transit_risk"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
             and conflict_data.get(field_name) is not True
         )
     }
@@ -253,7 +257,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in top_loading_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "contractual_transit_risk"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
             and top_loading_data.get(field_name) is not True
         )
     }
@@ -289,7 +293,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in bulk_liquid_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "contractual_transit_risk"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
             and bulk_liquid_data.get(field_name) is not True
         )
     }
@@ -325,7 +329,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in strict_document_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "contractual_transit_risk"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
             and strict_document_data.get(field_name) is not True
         )
     }
@@ -362,7 +366,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in cross_dock_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "contractual_transit_risk"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
             and cross_dock_data.get(field_name) is not True
         )
     }
@@ -386,6 +390,43 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         }
     )
 
+    lithium_proposal = _snapshot(adr=False).model_copy(
+        update={"special_notes": "Lityum batarya içerir."}
+    )
+    require(
+        "authorized replay derives structured lithium battery review evidence",
+        _proposal_facts(lithium_proposal).get("lithium_battery_review_required") is True,
+    )
+    lithium_data = lithium_proposal.model_dump(mode="json")
+    lithium_facts = {
+        field_name: _fact(lithium_data.get(field_name))
+        for field_name in SCORED_FIELDS
+        if field_name in lithium_data
+        and not (
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
+            and lithium_data.get(field_name) is not True
+        )
+    }
+    lithium_facts["lithium_battery_review_required"] = _fact(True)
+    lithium_case = ReplayCase.model_validate(
+        {
+            "schema_version": "1.0",
+            "case_id": "authorized-lithium-note",
+            "sender_address": "logistics@customer.invalid",
+            "sender_domain": "customer.invalid",
+            "subject": "Synthetic authorized replay lithium note",
+            "body_text": "Synthetic LITHIUM NOTE road inquiry.",
+            "expected": {
+                "facts": lithium_facts,
+                "disposition": "supplier_rfq_approval_required",
+                "equipment": "Tenteli",
+                "supplier_progression_expected": True,
+                "human_review_expected": True,
+            },
+            "tags": ["synthetic", "authorized-replay-regression", "lithium-review"],
+        }
+    )
+
     contractual_risk_proposal = _snapshot(adr=False).model_copy(
         update={"special_notes": "Guaranteed transit time. Delay penalty applies."}
     )
@@ -399,7 +440,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         for field_name in SCORED_FIELDS
         if field_name in contractual_data
         and not (
-            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "contractual_transit_risk"}
+            field_name in {"gtip_commodity_conflict", "top_loading_required", "bulk_liquid_equipment_review_required", "strict_document_review_required", "cross_dock_review_required", "lithium_battery_review_required", "contractual_transit_risk"}
             and contractual_data.get(field_name) is not True
         )
     }
@@ -464,6 +505,7 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
         bulk_liquid_case,
         strict_document_case,
         cross_dock_case,
+        lithium_case,
     ]
 
     with tempfile.TemporaryDirectory() as temporary:
@@ -486,8 +528,8 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             operational_data_sources=sources,
         )
         require(
-            "nine synthetic authorized cases executed",
-            len(result.cases) == 9,
+            "ten synthetic authorized cases executed",
+            len(result.cases) == 10,
         )
         require(
             "authorized synthetic replay passes",
@@ -549,6 +591,13 @@ def evaluate_authorized_sanitized_replay_regressions() -> dict:
             result.cases[8].actual_disposition == "supplier_rfq_approval_required"
             and result.cases[8].human_review_correct is True
             and result.cases[8].passed_safety,
+        )
+        require(
+            "operator-confirmed lithium battery review remains human-review flagged downstream",
+            result.cases[9].actual_disposition == "supplier_rfq_approval_required"
+            and result.cases[9].equipment_correct is True
+            and result.cases[9].human_review_correct is True
+            and result.cases[9].passed_safety,
         )
         require(
             "operational sources are read-only during replay",

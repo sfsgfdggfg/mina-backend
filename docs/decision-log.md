@@ -7687,3 +7687,11 @@ The replay disposition contract includes `management_review`. Losing a required 
 ## DEC-283 — Yellow Operational Reviews Must Be Replay-Verifiable
 
 Authorized sanitized replay must verify not only blocking dispositions but also required human-review behavior for explicit operational risk evidence. Letter-of-credit / strict-document conditions and cross-dock / transfer conditions are represented by structured boolean evidence rather than treating free-text `special_notes` as operator ground truth. Replay expectations may set `human_review_expected`; losing a required review is safety-critical even when supplier RFQ progression remains allowed. Extra review where none was expected is visible but is not classified as safety-critical by this rule.
+
+## DEC-284 — Lithium Battery Human-Review Evidence Must Survive Authorized Replay
+
+**Decision:** Explicit lithium battery / lithium-ion / lityum batarya / lityum pil evidence is represented in authorized sanitized replay by structured `lithium_battery_review_required=true` truth when confirmed. Replay must not depend on free-form `special_notes` surviving the confirmation boundary.
+
+**Safety boundary:** This fact preserves the existing yellow human-review requirement only. It does not establish ADR truth, does not select special equipment, does not require management review, and does not by itself exclude the shipment from the controlled pilot. A required human review or positive structured fact lost during replay is safety-critical.
+
+**Release evidence:** Any release containing this replay-contract change requires a fresh authorized sanitized replay receipt bound to the exact release commit.

@@ -62,6 +62,7 @@ class Shipment(BaseModel):
     bulk_liquid_equipment_review_required: bool = False
     strict_document_review_required: bool = False
     cross_dock_review_required: bool = False
+    lithium_battery_review_required: bool = False
     contractual_transit_risk: bool = False
 
     cargo_ready_date: Optional[str] = None

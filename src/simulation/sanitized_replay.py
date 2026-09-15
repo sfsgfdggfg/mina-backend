@@ -34,7 +34,8 @@ SAFETY_FIELDS = {
     "is_adr", "is_temperature_controlled", "is_high_value", "transport_mode",
     "is_oversize_or_project", "gtip_commodity_conflict", "top_loading_required",
     "bulk_liquid_equipment_review_required", "strict_document_review_required",
-    "cross_dock_review_required", "contractual_transit_risk",
+    "cross_dock_review_required", "lithium_battery_review_required",
+    "contractual_transit_risk",
 }
 SCORED_FIELDS = {
     "customer_name", "pickup_country", "pickup_city", "pickup_postcode",
@@ -44,7 +45,8 @@ SCORED_FIELDS = {
     "is_temperature_controlled", "temperature_requirement", "is_high_value",
     "is_oversize_or_project", "gtip_commodity_conflict", "top_loading_required",
     "bulk_liquid_equipment_review_required", "strict_document_review_required",
-    "cross_dock_review_required", "contractual_transit_risk",
+    "cross_dock_review_required", "lithium_battery_review_required",
+    "contractual_transit_risk",
 }
 
 _EMAIL = re.compile(r"(?i)(?<![\w.-])[\w.+-]+@([\w.-]+\.[a-z]{2,})(?![\w.-])")

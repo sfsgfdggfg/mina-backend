@@ -595,6 +595,23 @@ def evaluate_pilot_scope_regressions() -> dict:
                 f"lithium battery risk signal invented equipment authority: {lithium_commodity}"
             )
 
+    structured_lithium = _road_shipment(lithium_battery_review_required=True)
+    structured_lithium_risk = assess_risk(structured_lithium)
+    structured_lithium_scope = evaluate_pilot_scope(
+        structured_lithium, environ={"MINAI_PILOT_MODE": "1"}
+    )
+    if (
+        structured_lithium_risk.risk_level != "yellow"
+        or not structured_lithium_risk.requires_human_review
+        or structured_lithium_risk.requires_management_review
+        or not structured_lithium_scope.eligible
+        or structured_lithium.is_adr is not False
+        or decide_equipment(structured_lithium).selected_equipment != "Tenteli / Curtainsider"
+    ):
+        failures.append(
+            "structured lithium review fact changed ADR, equipment, scope, or review semantics"
+        )
+
     contractual_risk_cases = (
         "Transit süresi garanti edilmelidir.",
         "Gecikme halinde cezai şart uygulanacaktır.",
