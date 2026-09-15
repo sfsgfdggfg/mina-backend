@@ -1840,3 +1840,11 @@ Do not change the ADR flag or equipment merely from the commodity wording. If in
 During controlled road-pilot review, inspect shipment notes for explicit transit guarantees, late-delivery penalties, penalty clauses or equivalent contractual delivery commitments. These cases must show red risk and `management_review`; customer quote generation remains blocked until that review is resolved. Do not clear the contract term or invent a special equipment type to make the case progress.
 
 Also surface akreditif / letter-of-credit / strict-document conditions for documentation review and cross-dock / aktarmalı handling for human operational review. These review signals do not by themselves change ADR truth, equipment or pilot cargo-type scope. Do not apply a generic numeric “impossible transit” threshold until route-specific evidence and policy are separately approved.
+
+## Authorized Replay GTIP / Commodity Conflict Check
+
+When preparing the external sanitized replay set, inspect historical inquiries that contain an explicit customer GTIP/HS code together with a conflicting commodity description. For each genuine contradiction, record `expected.facts.gtip_commodity_conflict` as a known `true` fact and expect `pilot_scope_excluded` with no supplier progression. Ordinary cases do not need an explicit false conflict fact.
+
+During replay, confirm that the production parser emits the structured conflict fact and that downstream replay preserves the operator-confirmed conflict through the confirmation boundary. A parser mismatch, lost conflict fact, lost pilot exclusion or supplier progression is safety-critical and invalidates the replay result. Do not satisfy this check by copying or editing the human-readable `[GTIP CONSISTENCY WARNING]` text into expected ground truth.
+
+This change alters authorized replay behavior while keeping JSONL schema version `1.0` backward-compatible. Generate a new replay receipt against the exact release commit; do not reuse a receipt from a build that predates structured GTIP conflict replay evidence.

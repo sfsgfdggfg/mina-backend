@@ -4500,3 +4500,11 @@ Do not automatically set `is_adr=true`, assign ADR equipment, require management
 Treat explicit transit-time guarantees, delay penalties, penalty clauses or equivalent contractual delivery commitments as management-review risk. This must produce red operational risk and block customer quote generation through the existing `management_review` quote-readiness state; do not infer a different equipment type or rewrite shipment facts.
 
 Treat explicit akreditif / letter-of-credit / strict-document conditions as documentation-review signals, and explicit cross-dock / cross-docking / aktarmalı-operation conditions as human operational-review signals. These are yellow review conditions unless another rule independently requires management review. Do not infer ADR, special equipment or automatic pilot-scope exclusion from these terms alone.
+
+## RULE-294 — GTIP / Commodity Conflict Must Survive the Authorized Replay Confirmation Boundary
+
+Represent an unresolved GTIP / commodity contradiction as structured `gtip_commodity_conflict=true` evidence in addition to the existing human-readable warning. Pilot scope and operational consistency must accept this structured evidence; legacy records that contain the prior GTIP conflict marker remain supported.
+
+Authorized sanitized replay must expose a positive conflict as a safety-critical derived extraction fact and must use operator-confirmed historical `gtip_commodity_conflict=true` truth when constructing the downstream confirmed Shipment. Do not copy an unconfirmed parser warning string into operational ground truth. If expected conflict truth is lost, replay must fail safety scoring; if the expected controlled-pilot exclusion is lost or supplier progression occurs, replay must also fail closed.
+
+Replay cases without a GTIP / commodity contradiction do not need to declare `gtip_commodity_conflict=false`. Any historical conflict case used for release evidence must declare the positive fact explicitly and must be replayed against the exact release commit before pilot GO.
