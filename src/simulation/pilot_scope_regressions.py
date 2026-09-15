@@ -687,6 +687,69 @@ def evaluate_pilot_scope_regressions() -> dict:
         ):
             failures.append(f"cross-dock transfer risk did not require human review: {note}")
 
+    for date_value, expected_text in (
+        ("2026-10-29", "tam gün"),
+        ("2026-10-28", "yarım gün"),
+        ("2026-05-27", "tam gün"),
+    ):
+        holiday_shipment = _road_shipment(cargo_ready_date=date_value)
+        holiday_risk = assess_risk(holiday_shipment)
+        holiday_scope = evaluate_pilot_scope(
+            holiday_shipment, environ={"MINAI_PILOT_MODE": "1"}
+        )
+        holiday_equipment = decide_equipment(holiday_shipment)
+        holiday_readiness = decide_quote_readiness(
+            missing_info=check_missing_information(holiday_shipment),
+            risk_assessment=holiday_risk,
+            operational_consistency=check_operational_consistency(
+                holiday_shipment, holiday_equipment, holiday_risk, None
+            ),
+        )
+        if (
+            holiday_risk.risk_level != "yellow"
+            or not holiday_risk.requires_human_review
+            or holiday_risk.requires_management_review
+            or not any(expected_text in reason for reason in holiday_risk.risk_reasons)
+            or not holiday_scope.eligible
+            or holiday_readiness.result_type != "quote_with_review"
+            or not holiday_readiness.can_generate_quote
+        ):
+            failures.append(
+                f"Turkey holiday date did not remain a non-blocking human-review warning: {date_value}"
+            )
+
+    turkey_delivery_holiday = assess_risk(
+        _road_shipment(
+            pickup_country="Almanya", pickup_city="Hamburg",
+            delivery_country="Türkiye", delivery_city="Istanbul",
+            cargo_ready_date="2026-10-20", required_delivery_date="2026-10-29",
+        )
+    )
+    if (
+        turkey_delivery_holiday.risk_level != "yellow"
+        or not turkey_delivery_holiday.requires_human_review
+        or not any("Teslim tarihi 2026-10-29" in reason for reason in turkey_delivery_holiday.risk_reasons)
+    ):
+        failures.append("Turkey delivery holiday did not surface as human-review warning")
+
+    foreign_holiday_date = assess_risk(
+        _road_shipment(
+            pickup_country="Almanya", delivery_country="Fransa",
+            cargo_ready_date="2026-10-29",
+        )
+    )
+    if foreign_holiday_date.risk_level != "green":
+        failures.append("Turkey holiday calendar leaked into foreign-only shipment risk")
+
+    uncovered_holiday_year = assess_risk(_road_shipment(cargo_ready_date="2029-10-29"))
+    if (
+        uncovered_holiday_year.risk_level != "yellow"
+        or not uncovered_holiday_year.requires_human_review
+        or uncovered_holiday_year.requires_management_review
+        or not any("doğrulanmamış" in reason for reason in uncovered_holiday_year.risk_reasons)
+    ):
+        failures.append("unverified Turkey holiday year did not fail closed to human review")
+
     high_value_shipment = _road_shipment(
         is_high_value=True,
         equipment_type="Tenteli",

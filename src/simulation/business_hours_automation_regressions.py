@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from src.core.attachment_interpretation_review_repository import (
@@ -13,6 +13,7 @@ from src.core.business_calendar import (
     add_supplier_business_minutes,
     is_supplier_business_time,
     supplier_calendar_metadata,
+    turkey_holiday_observance,
 )
 from src.core.extraction_confirmation_repository import InMemoryExtractionProposalRepository
 from src.core.mail import MailSendResult
@@ -132,6 +133,13 @@ def evaluate_business_hours_automation_regressions() -> dict:
         and not is_supplier_business_time(datetime(2026, 5, 27, 10, 0, tzinfo=ISTANBUL))
         and tuple(SUPPLIER_HOLIDAY_COVERAGE_YEARS) == (2026, 2027, 2028),
         "Turkey official holidays and half-day eves close supplier communication",
+    )
+    check(
+        turkey_holiday_observance(date(2026, 10, 29)) == "full_day"
+        and turkey_holiday_observance(date(2026, 10, 28)) == "half_day"
+        and turkey_holiday_observance(date(2026, 5, 27)) == "full_day"
+        and turkey_holiday_observance(date(2026, 9, 15)) is None,
+        "verified Turkey holiday observance is reusable outside supplier timers",
     )
     check(
         add_supplier_business_minutes(

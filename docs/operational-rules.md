@@ -4544,3 +4544,9 @@ This structured fact must not infer `is_adr=true`, must not invent a non-standar
 When the customer source explicitly states top-loading/crane loading, bulk/liquid or Tanker/Damper/Silobas need, lithium-battery/pil content, letter-of-credit/strict-document conditions, cross-dock/transfer handling, or contractual transit/penalty terms, the extraction pipeline must preserve that evidence as the corresponding structured proposal fact even if the AI structured output omits `special_notes` or `equipment_type`.
 
 The deterministic source-text recovery must reuse the canonical operational signal helpers. Recovered facts remain proposals until extraction confirmation. They must not infer ADR truth, invent a new equipment rule, or independently expand management authority beyond the existing downstream rule associated with that fact.
+
+## RULE-301 — Verified Turkey Shipment Dates Must Surface Holiday Review
+
+For confirmed Road shipments, if the Turkey pickup `cargo_ready_date` or Turkey delivery `required_delivery_date` falls on a verified Turkish full-day public/religious holiday or official/religious half-day eve, risk assessment must surface a yellow human-review warning.
+
+This warning is non-blocking by itself: it must not invent special equipment, exclude the shipment from pilot scope, require management approval, or prevent quote generation. If the relevant year is outside verified Turkey holiday-calendar coverage, require human review rather than silently assuming no holiday. Do not apply the Turkey calendar to foreign-only routes, and do not create arbitrary pre/post-holiday buffer windows without an evidence-backed policy.
