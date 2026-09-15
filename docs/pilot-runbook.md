@@ -56,6 +56,8 @@ Before any real email, confirm all required operational datasets are currently
 fingerprint-matched. Also confirm explicit organizational/legal approval for
 real-data use with OpenAI.
 
+Real Day 0 startup must use a dedicated clean release worktree and a fresh external pilot SQLite database. Do not reuse a development/smoke database containing prior extraction, RFQ, quote, learning or send-evidence state. Preserve old smoke state separately if it is still needed for engineering evidence. Prepare the seven human/organization approvals using `docs/pilot-approval-matrix.md`; the final attestation file is created only after the exact-release replay receipt exists.
+
 The three validation layers are distinct:
 
 1. Run the canonical regression gate:

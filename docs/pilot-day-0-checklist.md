@@ -16,6 +16,8 @@ This checklist is the execution gate for the first real controlled shadow-pilot 
 - [ ] Customer trusted sender evidence and supplier contact/capability evidence have been reviewed.
 - [ ] The external pilot operational data pack is `pilot_verified`, fingerprint-current and frozen for the launch candidate.
 - [ ] The external pilot database path, data-pack path and runtime profile are outside the repository.
+- [ ] The Day 0 runtime uses a dedicated fresh pilot database; smoke/development persistence is preserved separately and is not reused.
+- [ ] The seven required approvals are prepared using `docs/pilot-approval-matrix.md`; final attestation still waits for the replay receipt.
 - [ ] Outbound mode is `shadow`; autonomous supplier/customer outbound is disabled.
 - [ ] Named pilot operators are known and their authenticated access is prepared.
 - [ ] A senior Road reviewer is designated for Day 0 review/escalation.
@@ -29,7 +31,7 @@ This checklist is the execution gate for the first real controlled shadow-pilot 
 ## 2. Gate A — Freeze the Exact Release
 
 - [ ] Fetch `origin/main` and record the exact release commit SHA in the external pilot change record.
-- [ ] Confirm the release worktree is clean.
+- [ ] Confirm the release worktree is a dedicated clean pilot-release worktree, not the ordinary development checkout.
 - [ ] Confirm no unmerged pilot-blocking fix is waiting.
 - [ ] After this point, any release-code change requires restarting Gates A–E on the new exact commit.
 
@@ -49,6 +51,7 @@ Run on the exact frozen release:
 - [ ] Supplier dataset PASS.
 - [ ] Pilot customer cardinality PASS.
 - [ ] Pilot supplier cardinality PASS.
+- [ ] Dedicated Day 0 SQLite store initializes successfully and contains zero operational state/events before the first real pilot work.
 
 **STOP:** any technical/profile/data check failing is NO-GO. Do not bypass or relabel a failed check.
 
@@ -178,6 +181,7 @@ This snapshot is informative only and must be re-run on Day 0.
 - Canonical controlled-pilot suite: 204/204 PASS on the current release line.
 - Synthetic full rehearsal: PASS.
 - External pilot profile check: PASS; external DB/data-pack resolved; outbound mode `shadow`.
+- Dedicated Day 0 profile/fresh persistence preparation: prepared externally; must be rechecked on the final frozen release.
 - Real customer dataset: PASS.
 - Real supplier dataset: PASS.
 - Pilot customer coverage/cardinality: PASS.
