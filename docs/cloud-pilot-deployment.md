@@ -52,6 +52,7 @@ Use these service settings:
 - Volume mount: `/data`.
 - Public Networking: generate one Railway HTTPS domain initially; a custom MINAI domain may be added later.
 - Disable automatic production deploys during the controlled pilot. Promote/deploy only an explicitly reviewed exact release commit; a later merge must not silently replace the running release.
+- The real release must originate from the connected GitHub source so Railway supplies `RAILWAY_GIT_COMMIT_SHA` and related GitHub metadata. CLI `railway up` is acceptable for bootstrap/smoke infrastructure checks, but not as final release-identity evidence.
 - Do not expose a second raw TCP/public application port.
 
 The repository Dockerfile is the build authority. No Railway-specific config-as-code file is required.
