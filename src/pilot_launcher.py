@@ -29,6 +29,10 @@ from src.core.operational_data import (
     OperationalDataSourceConfigurationError,
     operational_data_sources_from_environment,
 )
+from src.core.mailbox_provider import (
+    MailboxProviderConfigurationError,
+    resolve_mailbox_provider_authority,
+)
 
 
 PILOT_ASGI_APP = "src.api:app"
@@ -146,7 +150,8 @@ def validate_controlled_pilot_runtime(
     try:
         resolve_supplier_dispatch_policy(env)
         resolve_outbound_runtime_policy(env)
-    except ValueError as exc:
+        resolve_mailbox_provider_authority(env)
+    except (ValueError, MailboxProviderConfigurationError) as exc:
         raise PilotAccessConfigurationError(
             "Controlled pilot runtime policy configuration is invalid."
         ) from exc

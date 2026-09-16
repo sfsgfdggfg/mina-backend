@@ -22,6 +22,7 @@ This checklist is the execution gate for the first real controlled shadow-pilot 
 - [ ] The seven required approvals are prepared using `docs/pilot-approval-matrix.md`; final attestation still waits for the replay receipt.
 - [ ] Outbound mode is `shadow`; autonomous supplier/customer outbound is disabled.
 - [ ] Named pilot operators are known and their authenticated access is prepared.
+- [ ] `MINAI_MAILBOX_PROVIDER` explicitly matches the agency mailbox provider (`imap` or `outlook`); real Day 0 does not use provider auto-fallback.
 - [ ] A senior Road reviewer is designated for Day 0 review/escalation.
 - [ ] Organization approval exists for the controlled shadow pilot.
 - [ ] Privacy/legal approval exists for the planned real-data workflow.
