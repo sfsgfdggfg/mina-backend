@@ -8,6 +8,10 @@ from unittest.mock import patch
 from cryptography.fernet import Fernet
 
 from src.integrations.imap_mail import ImapMailboxError, ImapReadClient
+from src.core.mailbox_provider import (
+    MailboxProviderConfigurationError,
+    resolve_mailbox_provider_authority,
+)
 from src.integrations.mailbox_credentials import (
     ImapMailboxCredential,
     MailboxCredentialConfigurationError,
@@ -127,6 +131,19 @@ def evaluate_imap_mailbox_regressions():
 
     def check(condition: bool, label: str) -> None:
         (passes if condition else failures).append(label)
+
+    check(
+        resolve_mailbox_provider_authority({}) == "auto"
+        and resolve_mailbox_provider_authority({"MINAI_MAILBOX_PROVIDER": " IMAP "}) == "imap"
+        and resolve_mailbox_provider_authority({"MINAI_MAILBOX_PROVIDER": "Outlook"}) == "outlook",
+        "mailbox provider authority normalizes explicit runtime selection",
+    )
+    invalid_provider_rejected = False
+    try:
+        resolve_mailbox_provider_authority({"MINAI_MAILBOX_PROVIDER": "smtp"})
+    except MailboxProviderConfigurationError:
+        invalid_provider_rejected = True
+    check(invalid_provider_rejected, "invalid mailbox provider authority fails closed")
 
     with physical_temporary_directory() as temp:
         root = Path(temp)
@@ -250,6 +267,7 @@ def evaluate_imap_mailbox_regressions():
     api_text = (root / "src" / "api.py").read_text(encoding="utf-8")
     ui_text = (root / "ui" / "web_shell" / "app.js").read_text(encoding="utf-8")
     access_text = (root / "src" / "core" / "pilot_access.py").read_text(encoding="utf-8")
+    launcher_text = (root / "src" / "pilot_launcher.py").read_text(encoding="utf-8")
     check(
         "/mailbox/imap/configure" in api_text
         and "/inbound/mailbox/pull" in api_text
@@ -258,6 +276,14 @@ def evaluate_imap_mailbox_regressions():
         and "Yeni mailleri kontrol et" in ui_text
         and "mailbox/imap/configure" in access_text,
         "browser/API controlled-pilot mailbox onboarding contract is wired",
+    )
+    check(
+        'authority == "imap"' in api_text
+        and "imap_mailbox_not_configured" in api_text
+        and "outlook_provider_not_authorized_by_runtime" in api_text
+        and "imap_provider_not_authorized_by_runtime" in api_text
+        and "resolve_mailbox_provider_authority(env)" in launcher_text,
+        "explicit mailbox provider authority blocks cross-provider fallback and is preflight-validated",
     )
 
     return {"passed": not failures, "passes": passes, "failures": failures}

@@ -85,6 +85,8 @@ MINAI_OUTLOOK_CLIENT_ID=<approved public client UUID>
 MINAI_OUTLOOK_MAILBOX_ID=<approved pilot mailbox>
 MINAI_OUTLOOK_TOKEN_CACHE_PATH=/data/auth/outlook-token-cache.json
 
+# Explicit provider authority for the agency pilot: imap or outlook.
+MINAI_MAILBOX_PROVIDER=<imap-or-outlook>
 # Required before an agency IMAP mailbox can be connected from the browser.
 # This is a deployment-owned encryption key, never the agency mailbox password.
 MINAI_MAILBOX_CREDENTIAL_KEY=<random Fernet key>
@@ -121,7 +123,7 @@ Each person gets a separate browser login. Shared credentials are not permitted.
 
 ## Agency mailbox authorization
 
-Mailbox credentials are provider-specific but the operational intake boundary is provider-neutral. Microsoft 365 / Outlook keeps the existing delegated OAuth path. For an IMAP agency, prepare `MINAI_MAILBOX_CREDENTIAL_KEY` and `MINAI_MAILBOX_CREDENTIAL_PATH` at deployment time, but do **not** put the agency mailbox password in Railway variables, local pilot files, tickets or chat.
+Mailbox credentials are provider-specific but the operational intake boundary is provider-neutral. Set `MINAI_MAILBOX_PROVIDER` explicitly to `imap` or `outlook` for a real agency pilot; `auto` is retained only for backward-compatible engineering profiles. The explicit authority prevents a configured provider from silently falling back to another provider. Microsoft 365 / Outlook keeps the existing delegated OAuth path. For an IMAP agency, prepare `MINAI_MAILBOX_CREDENTIAL_KEY` and `MINAI_MAILBOX_CREDENTIAL_PATH` at deployment time, but do **not** put the agency mailbox password in Railway variables, local pilot files, tickets or chat.
 
 On Day 0 the authorized agency operator opens **Ayarlar → E-posta** and enters the IMAP mailbox identity, server settings and password directly into MINAI. MINAI tests the connection first and only then atomically writes a Fernet-encrypted credential file under `/data/auth` with owner-only permissions. Status/read APIs never return the password. Re-entering a new credential replaces the encrypted file only after the new connection test passes.
 

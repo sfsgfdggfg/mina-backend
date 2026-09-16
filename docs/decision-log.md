@@ -7756,3 +7756,19 @@ The initial hosting target is Railway in its EU West (Amsterdam) region with a s
 Cloud deployment does not relax pilot authority. Named-user authentication, CSRF controls, route allowlisting, verified external operational data, fresh real-pilot persistence, shadow outbound mode, authorized replay, seven readiness attestations and the Day 0 GO gate remain mandatory. Secrets and customer/supplier data must not be baked into the image or committed to Git. Persistent SQLite state, the verified operational pack and Outlook delegated-auth cache remain under the attached external volume.
 
 For the first customer, operational SQLite retention is 365 days. Sanitized replay/regression corpus and release/readiness evidence are retained as long-term product-validation assets unless a legal, customer, contractual or explicit deletion requirement overrides that policy. Pilot backups use a 90-day rolling target. This retention decision does not waive applicable privacy or deletion obligations.
+
+## DEC-290 — Real Agency Pilot Mailbox Provider Is Explicit Authority
+
+**Status:** Accepted
+**Date:** 2026-09-16
+
+### Decision
+
+A real agency pilot must select its mailbox provider explicitly with `MINAI_MAILBOX_PROVIDER=imap` or `MINAI_MAILBOX_PROVIDER=outlook`. `auto` remains only for backward-compatible engineering profiles. When one provider is selected, missing credentials for that provider fail closed; MINAI must not silently fall back to another configured provider. Provider-specific legacy endpoints are rejected when their provider is not the selected runtime authority.
+
+### Consequences
+
+- Sarus Day 0 uses explicit `imap` authority, so the pre-existing Outlook smoke profile cannot become the active mailbox by fallback.
+- IMAP remains unconfigured until the agency operator enters valid credentials through the browser; before that, provider-neutral inbox/history actions return a controlled not-configured response.
+- Invalid provider-authority values fail controlled-pilot runtime preflight.
+- Changing the real agency mailbox provider is a deployment/runtime-authority change and requires controlled validation rather than opportunistic fallback.

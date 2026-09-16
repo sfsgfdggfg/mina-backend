@@ -83,6 +83,10 @@ from src.integrations.microsoft_auth import (
     acquire_silent_access_token,
 )
 from src.integrations.imap_mail import ImapMailboxError, ImapReadClient
+from src.core.mailbox_provider import (
+    MailboxProviderConfigurationError,
+    resolve_mailbox_provider_authority,
+)
 from src.integrations.mailbox_credentials import (
     ImapMailboxCredential,
     MailboxCredentialConfigurationError,
@@ -2398,6 +2402,15 @@ def _configured_imap_credential() -> ImapMailboxCredential | None:
     return store.load_imap()
 
 
+def _mailbox_provider_authority() -> str:
+    try:
+        return resolve_mailbox_provider_authority()
+    except MailboxProviderConfigurationError as exc:
+        raise HTTPException(
+            status_code=503, detail="mailbox_provider_authority_invalid"
+        ) from exc
+
+
 def _mailbox_status() -> dict:
     if demo_mode_enabled():
         return {
@@ -2410,45 +2423,65 @@ def _mailbox_status() -> dict:
             "password_exposed": False,
         }
 
+    authority = _mailbox_provider_authority()
     imap_setup_available = True
-    imap_credential = None
-    try:
-        store = MailboxCredentialStore.from_environment()
-        if store.configured():
-            imap_credential = store.load_imap()
-    except MailboxCredentialConfigurationError:
-        imap_setup_available = False
-    except MailboxCredentialStoreError:
-        return {
-            "configured": False,
-            "provider": None,
-            "mailbox_id": None,
-            "imap_setup_available": imap_setup_available,
-            "read_only_runtime": True,
-            "provider_scoped_read_only": False,
-            "password_exposed": False,
-            "status": "credential_store_invalid",
-        }
 
-    if imap_credential is not None:
-        payload = imap_credential.safe_summary()
-        payload.update(
-            {
+    if authority != "outlook":
+        imap_credential = None
+        try:
+            store = MailboxCredentialStore.from_environment()
+            if store.configured():
+                imap_credential = store.load_imap()
+        except MailboxCredentialConfigurationError:
+            imap_setup_available = False
+        except MailboxCredentialStoreError:
+            return {
+                "configured": False,
+                "provider": "imap" if authority == "imap" else None,
+                "mailbox_id": None,
                 "imap_setup_available": imap_setup_available,
                 "read_only_runtime": True,
                 "provider_scoped_read_only": False,
-                "credential_storage": "fernet_encrypted_external_file",
-                "status": "ready",
+                "password_exposed": False,
+                "status": "credential_store_invalid",
             }
-        )
-        return payload
+
+        if imap_credential is not None:
+            payload = imap_credential.safe_summary()
+            payload.update(
+                {
+                    "imap_setup_available": imap_setup_available,
+                    "read_only_runtime": True,
+                    "provider_scoped_read_only": False,
+                    "credential_storage": "fernet_encrypted_external_file",
+                    "status": "ready",
+                }
+            )
+            return payload
+
+        if authority == "imap":
+            return {
+                "configured": False,
+                "provider": "imap",
+                "mailbox_id": None,
+                "imap_setup_available": imap_setup_available,
+                "read_only_runtime": True,
+                "provider_scoped_read_only": False,
+                "password_exposed": False,
+                "status": "not_configured",
+            }
+    else:
+        try:
+            MailboxCredentialStore.from_environment()
+        except MailboxCredentialConfigurationError:
+            imap_setup_available = False
 
     try:
         outlook = MicrosoftAuthConfig.from_environment()
     except MicrosoftAuthConfigurationError:
         return {
             "configured": False,
-            "provider": None,
+            "provider": "outlook" if authority == "outlook" else None,
             "mailbox_id": None,
             "imap_setup_available": imap_setup_available,
             "read_only_runtime": True,
@@ -2485,6 +2518,10 @@ def configure_imap_mailbox(
         )
     if not _authenticated_operator(http_request):
         raise HTTPException(status_code=401, detail="mailbox_operator_required")
+    if _mailbox_provider_authority() == "outlook":
+        raise HTTPException(
+            status_code=409, detail="imap_provider_not_authorized_by_runtime"
+        )
     try:
         credential = ImapMailboxCredential(
             mailbox_id=request.mailbox_id,
@@ -2557,6 +2594,10 @@ def analyze_outlook_relationship_history(
             status_code=403,
             detail="historical_mailbox_authorization_required",
         )
+    if not demo_mode_enabled() and _mailbox_provider_authority() == "imap":
+        raise HTTPException(
+            status_code=409, detail="outlook_provider_not_authorized_by_runtime"
+        )
     try:
         if demo_mode_enabled():
             return run_demo_relationship_onboarding(
@@ -2627,20 +2668,26 @@ def analyze_mailbox_relationship_history(
             if request.include_ai_observations
             else None
         )
-        imap_credential = _configured_imap_credential()
-        if imap_credential is not None:
-            return run_imap_relationship_onboarding(
-                credential=imap_credential,
-                start_at=request.start_at,
-                end_at=request.end_at,
-                max_messages=request.max_messages,
-                authorization_confirmed=request.authorization_confirmed,
-                master_repository=master_data_repository,
-                learning_repository=learning_fact_repository,
-                created_by=_authenticated_operator(http_request),
-                ai_analyzer=ai_analyzer,
-                agency_addresses=request.agency_alias_addresses,
-            )
+        authority = _mailbox_provider_authority()
+        if authority != "outlook":
+            imap_credential = _configured_imap_credential()
+            if imap_credential is not None:
+                return run_imap_relationship_onboarding(
+                    credential=imap_credential,
+                    start_at=request.start_at,
+                    end_at=request.end_at,
+                    max_messages=request.max_messages,
+                    authorization_confirmed=request.authorization_confirmed,
+                    master_repository=master_data_repository,
+                    learning_repository=learning_fact_repository,
+                    created_by=_authenticated_operator(http_request),
+                    ai_analyzer=ai_analyzer,
+                    agency_addresses=request.agency_alias_addresses,
+                )
+            if authority == "imap":
+                raise HTTPException(
+                    status_code=503, detail="imap_mailbox_not_configured"
+                )
 
         config = MicrosoftAuthConfig.from_environment()
         return run_outlook_relationship_onboarding(
@@ -5032,6 +5079,11 @@ def pull_outlook_inbound(
             interpret_attachments=request.interpret_attachments,
         )
 
+    if _mailbox_provider_authority() == "imap":
+        raise HTTPException(
+            status_code=409, detail="outlook_provider_not_authorized_by_runtime"
+        )
+
     try:
         config = (
             MicrosoftAuthConfig.from_environment()
@@ -5102,6 +5154,9 @@ def pull_active_mailbox_inbound(
 ):
     if demo_mode_enabled():
         return pull_outlook_inbound(request)
+    authority = _mailbox_provider_authority()
+    if authority == "outlook":
+        return pull_outlook_inbound(request)
     try:
         imap_credential = _configured_imap_credential()
     except (MailboxCredentialConfigurationError, MailboxCredentialStoreError) as exc:
@@ -5111,6 +5166,10 @@ def pull_active_mailbox_inbound(
         ) from exc
 
     if imap_credential is None:
+        if authority == "imap":
+            raise HTTPException(
+                status_code=503, detail="imap_mailbox_not_configured"
+            )
         return pull_outlook_inbound(request)
 
     try:
