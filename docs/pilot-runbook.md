@@ -198,6 +198,25 @@ HTTP carries a bearer credential and is allowed only on loopback or an approved
 trusted private network/VPN. Use HTTPS where the approved deployment provides
 it.
 
+### Day 0 Agency Mailbox Setup — Outlook or IMAP
+
+The pilot mailbox provider is not assumed before agency cutover. The controlled inbound workflow consumes the provider-neutral `InboundMailEnvelope`; Outlook Graph and IMAP are provider adapters at the edge.
+
+For a Microsoft 365 / Outlook agency, continue to use the delegated OAuth procedure below. For a standard IMAP agency, deployment must first provide only the MINAI-owned encryption material:
+
+```text
+MINAI_MAILBOX_CREDENTIAL_KEY=<random Fernet key>
+MINAI_MAILBOX_CREDENTIAL_PATH=/data/auth/mailbox-credentials.enc
+```
+
+These values are **not** the agency mailbox password. Never ask the pilot owner, implementation team or support operator to obtain the agency password. On Day 0 an authorized agency operator signs into MINAI, opens **Ayarlar → E-posta**, and enters the mailbox identity, IMAP host/port, username and password directly into the password field. An optional SHA-256 certificate pin may be supplied only when the provider/agency IT has independently verified it; do not convert an unverified certificate observation into trust authority.
+
+MINAI validates the new IMAP connection before persisting it. Only after the test succeeds is the credential atomically written to the approved external credential path, encrypted with Fernet and mode `0600` on POSIX. The password is represented as a secret input, is never returned by `/mailbox/status` or the configure response, and must not appear in application logs or evidence files. Reconfiguration follows the same test-before-replace rule.
+
+The initial IMAP pilot adapter is read-only by implementation: read-only folder selection, UID search, header/MIME-structure reads and `BODY.PEEK` for safe text parts. It contains no STORE, MOVE, DELETE, EXPUNGE or send path. Attachment bytes and full MIME messages are not fetched; attachment metadata is derived from BODYSTRUCTURE and attachment-bearing messages remain fail-closed for manual review. Because an IMAP username/password may have broader provider-side rights, do not describe this runtime restriction as a provider-scoped permission equivalent to Microsoft `Mail.Read`.
+
+After the agency mailbox is connected, the browser uses the provider-neutral `/inbound/mailbox/pull` path for explicit daily intake and `/relationship-onboarding/mailbox/analyze` for bounded historical relationship analysis. Existing Outlook-specific endpoints remain available for backward compatibility. Historical replay preparation occurs after this authorized Day 0 connection; raw historical mail stays transient and the replay JSONL must still be pre-sanitized/pseudonymous before the authorized replay command is run.
+
 ### Read-Only Outlook Inbound Setup
 
 The controlled pilot may read customer inquiries directly from one approved

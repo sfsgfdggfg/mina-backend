@@ -304,12 +304,13 @@ def evaluate_relationship_history_onboarding_regressions():
     check(
         route_allowed("GET","/relationship-onboarding/status")
         and route_allowed("POST","/relationship-onboarding/outlook/analyze")
+        and route_allowed("POST","/relationship-onboarding/mailbox/analyze")
         and "authorization_confirmed" in api and "include_ai_observations" in api,
         "controlled pilot exposes explicit bounded relationship-onboarding authority",
     )
     check(
         "İlişki Hafızası" in ui and "Bu mailbox geçmişini seçilen tarih aralığında analiz etmeye yetkim var." in ui
-        and "/relationship-onboarding/outlook/analyze" in ui and "raw_messages_persisted" in ui
+        and "/relationship-onboarding/mailbox/analyze" in ui and "raw_messages_persisted" in ui
         and "AI hard guard eledi" in ui and "ai_observation_hard_rejected_count" in ui
         and "Sınırlı örnek" in ui and "Tekrarlayan patern" in ui
         and "window.prompt" not in ui and "localStorage" not in ui and "sessionStorage" not in ui,
