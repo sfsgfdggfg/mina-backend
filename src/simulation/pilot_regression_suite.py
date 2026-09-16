@@ -224,6 +224,7 @@ from src.simulation.pricing_policy_regressions import evaluate_pricing_policy_re
 from src.simulation.provenance_recovery_regressions import evaluate_provenance_recovery_regressions
 from src.simulation.regulatory_compliance_regressions import evaluate_regulatory_compliance_regressions
 from src.simulation.runtime_preflight_regressions import evaluate_runtime_preflight_regressions
+from src.simulation.runtime_release_regressions import evaluate_runtime_release_regressions
 from src.simulation.reliability_hardening_regressions import (
     evaluate_reliability_hardening_regressions,
 )
@@ -561,6 +562,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Clarification resolution", evaluate_clarification_resolution_regressions),
     Suite("Regulatory compliance", evaluate_regulatory_compliance_regressions),
     Suite("Runtime reproducibility preflight", evaluate_runtime_preflight_regressions),
+    Suite("Runtime release identity", evaluate_runtime_release_regressions),
     Suite(
         "Runtime reliability hardening",
         evaluate_reliability_hardening_regressions,
