@@ -10,6 +10,8 @@ from src.core.relationship_history import (
     analyze_relationship_history,
 )
 from src.core.supplier_history_backfill import propose_supplier_operational_backfill
+from src.integrations.imap_mail import ImapReadClient
+from src.integrations.mailbox_credentials import ImapMailboxCredential
 from src.integrations.microsoft_auth import MicrosoftAuthConfig, acquire_silent_access_token
 from src.integrations.outlook_graph import OutlookGraphReadClient
 
@@ -18,11 +20,78 @@ class RelationshipOnboardingAuthorizationError(PermissionError):
     pass
 
 
+def _run_relationship_onboarding(
+    *,
+    client,
+    mailbox_id: str,
+    source: str,
+    start_at: datetime,
+    end_at: datetime,
+    max_messages: int,
+    authorization_confirmed: bool,
+    master_repository: MasterDataRepository,
+    learning_repository: LearningFactRepository,
+    created_by: str,
+    ai_analyzer: RelationshipHistoryAIAnalyzer | None = None,
+    agency_addresses: list[str] | None = None,
+) -> dict:
+    if authorization_confirmed is not True:
+        raise RelationshipOnboardingAuthorizationError(
+            "Historical mailbox onboarding requires explicit operator authorization confirmation."
+        )
+    messages = client.list_relationship_history(
+        start_at=start_at,
+        end_at=end_at,
+        max_messages=max_messages,
+    )
+    try:
+        result = analyze_relationship_history(
+            messages=messages,
+            agency_addresses=list(
+                dict.fromkeys([mailbox_id, *(agency_addresses or [])])
+            ),
+            master_repository=master_repository,
+            learning_repository=learning_repository,
+            created_by=created_by,
+            ai_analyzer=ai_analyzer,
+        )
+        supplier_backfill = propose_supplier_operational_backfill(
+            analysis=result,
+            learning_repository=learning_repository,
+            master_repository=master_repository,
+            created_by=created_by,
+        )
+        payload = result.model_dump()
+        payload.update(
+            {
+                "supplier_operational_backfill": supplier_backfill,
+                "source": source,
+                "mailbox_message_rejection_count": len(
+                    getattr(client, "last_message_rejections", ())
+                ),
+                "history_start_at": start_at,
+                "history_end_at": end_at,
+                "max_messages": max_messages,
+                "ai_analysis_requested": ai_analyzer is not None,
+                "raw_messages_persisted": False,
+            }
+        )
+        return payload
+    finally:
+        messages.clear()
+
+
 def run_outlook_relationship_onboarding(
-    *, config: MicrosoftAuthConfig, start_at: datetime, end_at: datetime,
-    max_messages: int, authorization_confirmed: bool,
-    master_repository: MasterDataRepository, learning_repository: LearningFactRepository,
-    created_by: str, ai_analyzer: RelationshipHistoryAIAnalyzer | None = None,
+    *,
+    config: MicrosoftAuthConfig,
+    start_at: datetime,
+    end_at: datetime,
+    max_messages: int,
+    authorization_confirmed: bool,
+    master_repository: MasterDataRepository,
+    learning_repository: LearningFactRepository,
+    created_by: str,
+    ai_analyzer: RelationshipHistoryAIAnalyzer | None = None,
     agency_addresses: list[str] | None = None,
     token_provider: Callable[[MicrosoftAuthConfig], str] = acquire_silent_access_token,
     graph_client_factory: Callable[..., Any] = OutlookGraphReadClient,
@@ -32,33 +101,56 @@ def run_outlook_relationship_onboarding(
             "Historical mailbox onboarding requires explicit operator authorization confirmation."
         )
     access_token = token_provider(config)
-    client = graph_client_factory(access_token=access_token, mailbox_id=config.mailbox_id)
-    messages = client.list_relationship_history(
-        start_at=start_at, end_at=end_at, max_messages=max_messages,
+    client = graph_client_factory(
+        access_token=access_token,
+        mailbox_id=config.mailbox_id,
     )
-    try:
-        result = analyze_relationship_history(
-            messages=messages,
-            agency_addresses=list(dict.fromkeys([config.mailbox_id, *(agency_addresses or [])])),
-            master_repository=master_repository, learning_repository=learning_repository,
-            created_by=created_by, ai_analyzer=ai_analyzer,
+    return _run_relationship_onboarding(
+        client=client,
+        mailbox_id=config.mailbox_id,
+        source="authorized_outlook_history",
+        start_at=start_at,
+        end_at=end_at,
+        max_messages=max_messages,
+        authorization_confirmed=authorization_confirmed,
+        master_repository=master_repository,
+        learning_repository=learning_repository,
+        created_by=created_by,
+        ai_analyzer=ai_analyzer,
+        agency_addresses=agency_addresses,
+    )
+
+
+def run_imap_relationship_onboarding(
+    *,
+    credential: ImapMailboxCredential,
+    start_at: datetime,
+    end_at: datetime,
+    max_messages: int,
+    authorization_confirmed: bool,
+    master_repository: MasterDataRepository,
+    learning_repository: LearningFactRepository,
+    created_by: str,
+    ai_analyzer: RelationshipHistoryAIAnalyzer | None = None,
+    agency_addresses: list[str] | None = None,
+    client_factory=ImapReadClient,
+) -> dict:
+    if authorization_confirmed is not True:
+        raise RelationshipOnboardingAuthorizationError(
+            "Historical mailbox onboarding requires explicit operator authorization confirmation."
         )
-        supplier_backfill = propose_supplier_operational_backfill(
-            analysis=result, learning_repository=learning_repository,
-            master_repository=master_repository, created_by=created_by,
-        )
-        payload = result.model_dump()
-        payload.update({
-            "supplier_operational_backfill": supplier_backfill,
-            "source": "authorized_outlook_history",
-            "mailbox_message_rejection_count": len(getattr(client, "last_message_rejections", ())),
-            "history_start_at": start_at,
-            "history_end_at": end_at,
-            "max_messages": max_messages,
-            "ai_analysis_requested": ai_analyzer is not None,
-            "raw_messages_persisted": False,
-        })
-        return payload
-    finally:
-        # Keep raw historical bodies transient even if a downstream analyzer fails.
-        messages.clear()
+    client = client_factory(credential=credential)
+    return _run_relationship_onboarding(
+        client=client,
+        mailbox_id=credential.mailbox_id,
+        source="authorized_imap_history",
+        start_at=start_at,
+        end_at=end_at,
+        max_messages=max_messages,
+        authorization_confirmed=authorization_confirmed,
+        master_repository=master_repository,
+        learning_repository=learning_repository,
+        created_by=created_by,
+        ai_analyzer=ai_analyzer,
+        agency_addresses=agency_addresses,
+    )

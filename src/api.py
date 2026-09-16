@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from typing import Any, List, Literal, Optional
 from src.core.commodity_profile import get_commodity_record
 from src.core.commodity_dictionary_validator import validate_commodity_dictionary_file
@@ -64,9 +64,11 @@ from src.workflow.mail_ingestion import (
 from src.workflow.outlook_pull import (
     pull_controlled_outlook_inbox,
 )
+from src.workflow.imap_pull import pull_controlled_imap_inbox
 from src.workflow.relationship_onboarding import (
     RelationshipOnboardingAuthorizationError,
     run_outlook_relationship_onboarding,
+    run_imap_relationship_onboarding,
 )
 from src.workflow.demo_relationship_onboarding import (
     run_demo_relationship_onboarding,
@@ -79,6 +81,13 @@ from src.integrations.microsoft_auth import (
     MicrosoftAuthConfigurationError,
     MicrosoftAuthenticationError,
     acquire_silent_access_token,
+)
+from src.integrations.imap_mail import ImapMailboxError, ImapReadClient
+from src.integrations.mailbox_credentials import (
+    ImapMailboxCredential,
+    MailboxCredentialConfigurationError,
+    MailboxCredentialStore,
+    MailboxCredentialStoreError,
 )
 from src.integrations.outlook_graph import (
     MAX_PULL_MESSAGES,
@@ -822,6 +831,17 @@ class OutlookPullRequest(BaseModel):
         le=MAX_PULL_MESSAGES,
     )
     interpret_attachments: bool = False
+
+
+class ImapMailboxConfigureRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mailbox_id: str
+    host: str
+    port: int = Field(default=993, ge=1, le=65535)
+    username: str
+    password: SecretStr
+    certificate_sha256: str | None = None
+    authorization_confirmed: bool = False
 
 
 class RelationshipOnboardingOutlookRequest(BaseModel):
@@ -2368,20 +2388,153 @@ def get_reporting_section(
     return reporting_section(report, section)
 
 
+def _configured_imap_credential() -> ImapMailboxCredential | None:
+    try:
+        store = MailboxCredentialStore.from_environment()
+    except MailboxCredentialConfigurationError:
+        return None
+    if not store.configured():
+        return None
+    return store.load_imap()
+
+
+def _mailbox_status() -> dict:
+    if demo_mode_enabled():
+        return {
+            "configured": True,
+            "provider": "synthetic",
+            "mailbox_id": "demo.invalid",
+            "imap_setup_available": False,
+            "read_only_runtime": True,
+            "provider_scoped_read_only": True,
+            "password_exposed": False,
+        }
+
+    imap_setup_available = True
+    imap_credential = None
+    try:
+        store = MailboxCredentialStore.from_environment()
+        if store.configured():
+            imap_credential = store.load_imap()
+    except MailboxCredentialConfigurationError:
+        imap_setup_available = False
+    except MailboxCredentialStoreError:
+        return {
+            "configured": False,
+            "provider": None,
+            "mailbox_id": None,
+            "imap_setup_available": imap_setup_available,
+            "read_only_runtime": True,
+            "provider_scoped_read_only": False,
+            "password_exposed": False,
+            "status": "credential_store_invalid",
+        }
+
+    if imap_credential is not None:
+        payload = imap_credential.safe_summary()
+        payload.update(
+            {
+                "imap_setup_available": imap_setup_available,
+                "read_only_runtime": True,
+                "provider_scoped_read_only": False,
+                "credential_storage": "fernet_encrypted_external_file",
+                "status": "ready",
+            }
+        )
+        return payload
+
+    try:
+        outlook = MicrosoftAuthConfig.from_environment()
+    except MicrosoftAuthConfigurationError:
+        return {
+            "configured": False,
+            "provider": None,
+            "mailbox_id": None,
+            "imap_setup_available": imap_setup_available,
+            "read_only_runtime": True,
+            "provider_scoped_read_only": False,
+            "password_exposed": False,
+            "status": "not_configured",
+        }
+    return {
+        "configured": True,
+        "provider": "outlook",
+        "mailbox_id": outlook.mailbox_id,
+        "imap_setup_available": imap_setup_available,
+        "read_only_runtime": True,
+        "provider_scoped_read_only": "Mail.Send" not in outlook.scopes,
+        "password_exposed": False,
+        "status": "ready",
+    }
+
+
+@app.get("/mailbox/status")
+def get_mailbox_status():
+    return _mailbox_status()
+
+
+@app.post("/mailbox/imap/configure")
+def configure_imap_mailbox(
+    request: ImapMailboxConfigureRequest,
+    http_request: Request,
+):
+    if request.authorization_confirmed is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="mailbox_configuration_authorization_required",
+        )
+    if not _authenticated_operator(http_request):
+        raise HTTPException(status_code=401, detail="mailbox_operator_required")
+    try:
+        credential = ImapMailboxCredential(
+            mailbox_id=request.mailbox_id,
+            host=request.host,
+            port=request.port,
+            username=request.username,
+            password=request.password,
+            certificate_sha256=request.certificate_sha256,
+        )
+        ImapReadClient(credential=credential).test_connection()
+        store = MailboxCredentialStore.from_environment()
+        store.save_imap(credential)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except MailboxCredentialConfigurationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="imap_credential_storage_not_configured",
+        ) from exc
+    except MailboxCredentialStoreError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="imap_credential_storage_failed",
+        ) from exc
+    except ImapMailboxError as exc:
+        raise HTTPException(status_code=422, detail=exc.code) from exc
+
+    payload = credential.safe_summary()
+    payload.update(
+        {
+            "status": "ready",
+            "read_only_runtime": True,
+            "provider_scoped_read_only": False,
+            "credential_storage": "fernet_encrypted_external_file",
+            "password_exposed": False,
+        }
+    )
+    return payload
+
+
 @app.get("/relationship-onboarding/status")
 def get_relationship_onboarding_status():
     synthetic_mailbox = demo_mode_enabled()
-    if synthetic_mailbox:
-        outlook_configured = True
-    else:
-        try:
-            MicrosoftAuthConfig.from_environment()
-            outlook_configured = True
-        except MicrosoftAuthConfigurationError:
-            outlook_configured = False
+    mailbox = _mailbox_status()
     facts = learning_fact_repository.list_all()
     return {
-        "outlook_configured": outlook_configured,
+        "outlook_configured": mailbox.get("provider") == "outlook" and mailbox.get("configured") is True,
+        "mailbox_configured": mailbox.get("configured") is True,
+        "mailbox_provider": mailbox.get("provider"),
+        "mailbox_id": mailbox.get("mailbox_id"),
         "synthetic_mailbox": synthetic_mailbox,
         "customer_master_count": len(master_data_repository.list_customers()),
         "supplier_master_count": len(master_data_repository.list_suppliers()),
@@ -2439,6 +2592,90 @@ def analyze_outlook_relationship_history(
         raise HTTPException(status_code=503, detail=f"outlook_history_authentication_failed:{exc.code}") from exc
     except OutlookGraphReadError as exc:
         raise HTTPException(status_code=503, detail=f"outlook_history_read_failed:{exc.code}") from exc
+    except RelationshipHistoryAnalyzerUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/relationship-onboarding/mailbox/analyze")
+def analyze_mailbox_relationship_history(
+    request: RelationshipOnboardingOutlookRequest,
+    http_request: Request,
+):
+    if request.authorization_confirmed is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="historical_mailbox_authorization_required",
+        )
+    try:
+        if demo_mode_enabled():
+            return run_demo_relationship_onboarding(
+                start_at=request.start_at,
+                end_at=request.end_at,
+                max_messages=request.max_messages,
+                authorization_confirmed=request.authorization_confirmed,
+                master_repository=master_data_repository,
+                learning_repository=learning_fact_repository,
+                created_by=_authenticated_operator(http_request),
+                include_ai_observations=request.include_ai_observations,
+                agency_addresses=request.agency_alias_addresses,
+            )
+
+        ai_analyzer = (
+            OpenAIRelationshipHistoryAnalyzer()
+            if request.include_ai_observations
+            else None
+        )
+        imap_credential = _configured_imap_credential()
+        if imap_credential is not None:
+            return run_imap_relationship_onboarding(
+                credential=imap_credential,
+                start_at=request.start_at,
+                end_at=request.end_at,
+                max_messages=request.max_messages,
+                authorization_confirmed=request.authorization_confirmed,
+                master_repository=master_data_repository,
+                learning_repository=learning_fact_repository,
+                created_by=_authenticated_operator(http_request),
+                ai_analyzer=ai_analyzer,
+                agency_addresses=request.agency_alias_addresses,
+            )
+
+        config = MicrosoftAuthConfig.from_environment()
+        return run_outlook_relationship_onboarding(
+            config=config,
+            start_at=request.start_at,
+            end_at=request.end_at,
+            max_messages=request.max_messages,
+            authorization_confirmed=request.authorization_confirmed,
+            master_repository=master_data_repository,
+            learning_repository=learning_fact_repository,
+            created_by=_authenticated_operator(http_request),
+            ai_analyzer=ai_analyzer,
+            agency_addresses=request.agency_alias_addresses,
+        )
+    except RelationshipOnboardingAuthorizationError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except (MailboxCredentialConfigurationError, MailboxCredentialStoreError) as exc:
+        raise HTTPException(status_code=503, detail="mailbox_history_not_configured") from exc
+    except ImapMailboxError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"imap_history_read_failed:{exc.code}",
+        ) from exc
+    except MicrosoftAuthConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="mailbox_history_not_configured") from exc
+    except MicrosoftAuthenticationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"outlook_history_authentication_failed:{exc.code}",
+        ) from exc
+    except OutlookGraphReadError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"outlook_history_read_failed:{exc.code}",
+        ) from exc
     except RelationshipHistoryAnalyzerUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
@@ -4857,6 +5094,45 @@ def pull_outlook_inbound(
         ) from exc
 
     return result
+
+
+@app.post("/inbound/mailbox/pull")
+def pull_active_mailbox_inbound(
+    request: OutlookPullRequest,
+):
+    if demo_mode_enabled():
+        return pull_outlook_inbound(request)
+    try:
+        imap_credential = _configured_imap_credential()
+    except (MailboxCredentialConfigurationError, MailboxCredentialStoreError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="imap_credential_storage_failed",
+        ) from exc
+
+    if imap_credential is None:
+        return pull_outlook_inbound(request)
+
+    try:
+        return pull_controlled_imap_inbox(
+            credential=imap_credential,
+            limit=request.limit,
+            shipment_parser=parse_email_with_ai,
+            proposal_repository=extraction_proposal_repository,
+            operational_data_sources=operational_data_sources,
+            master_data_repository=_runtime_master_data_authority(),
+            supplier_parser=OpenAISupplierResponseParser(),
+            supplier_repository=supplier_rfq_repository,
+            attachment_review_repository=attachment_review_repository,
+            interpret_attachments=request.interpret_attachments,
+        )
+    except ImapMailboxError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"imap_read_failed:{exc.code}",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/attachment-review-queue")

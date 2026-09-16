@@ -924,6 +924,47 @@ function outlookPullResultLabel(item = {}) {
   return `${route} · ${status}`;
 }
 
+function renderLiveMailboxPullPanel(status = {}) {
+  const section=node("section","","section demo-outlook-pull-section");
+  section.append(
+    node("h2","Acenta Mailbox"),
+    node("div","Bağlı mailbox'taki yeni mesajları kontrollü read-only intake akışına alır. Ham mail gövdesi bu özet yüzeyine taşınmaz.","small muted")
+  );
+  if(!status.configured){
+    section.append(node("div","Mailbox bağlantısı henüz hazır değil. Ayarlar → E-posta bölümünden acenta yetkilisi bağlantıyı kurmalı.","warning"));
+    return section;
+  }
+  const provider=status.provider==="imap"?"IMAP":status.provider==="outlook"?"Outlook":codeLabel(status.provider);
+  section.append(node("div",`${provider} · ${status.mailbox_id||"-"} · read-only runtime`,"notice small"));
+  const actions=node("div","","actions"); const feedback=node("div","","muted settings-feedback");
+  const pull=actionButton("Yeni mailleri kontrol et","primary",async()=>{
+    pull.disabled=true; feedback.textContent="Mailbox kontrol ediliyor…";
+    try{
+      lastOutlookPullResult=await api("/inbound/mailbox/pull",{method:"POST",body:JSON.stringify({limit:10,interpret_attachments:false})});
+      feedback.textContent=`${lastOutlookPullResult.handled_message_count||0} mesaj işlendi · provider ${String(lastOutlookPullResult.provider||provider).toUpperCase()}.`;
+      await loadInbox();
+    }catch(error){feedback.textContent=error.message||String(error);setStatus("Hata",false);}finally{pull.disabled=false;}
+  });
+  actions.append(pull); section.append(actions,feedback);
+  if(lastOutlookPullResult){
+    const summary=node("div","","summary-grid outlook-pull-metrics");
+    summary.append(
+      summaryItem("Çekilen",lastOutlookPullResult.fetched_message_count??0),
+      summaryItem("Müşteri proposal",lastOutlookPullResult.proposal_count??0),
+      summaryItem("Tedarikçi yanıtı",lastOutlookPullResult.supplier_response_count??0),
+      summaryItem("Manuel inceleme",lastOutlookPullResult.manual_review_count??0)
+    ); section.append(summary);
+    const results=node("div","","outlook-pull-results");
+    (lastOutlookPullResult.results||[]).forEach(item=>{
+      const row=node("div","","outlook-pull-result-row");const copy=node("div");
+      copy.append(node("strong",outlookPullResultLabel(item)),node("div",item.external_message_id||"-","small muted"));
+      row.append(copy,node("span",item.reason_code?codeLabel(item.reason_code):"İşlendi","badge"));results.append(row);
+    });
+    section.append(results,node("div","IMAP ekleri ilk pilot diliminde içerik olarak indirilmez; ek içeren mesajlar fail-closed manuel incelemeye gider. Mailbox yazma ve otomatik gönderim yapılmaz.","small muted"));
+  }
+  return section;
+}
+
 function renderDemoOutlookPullPanel() {
   const section = node("section", "", "section demo-outlook-pull-section");
   section.append(
@@ -966,13 +1007,13 @@ function renderDemoOutlookPullPanel() {
   return section;
 }
 
-function renderInbox(proposals = [], attachmentReviews = []) {
+function renderInbox(proposals = [], attachmentReviews = [], mailboxStatus = {}) {
   setPageContext("Gelen Talepler", "Müşteri Talep Girişi");
   const root = node("div", "", "inbox-page");
   const intro = node("div", "", "notice");
   intro.textContent = "Demo ortamında aşağıdaki sentetik müşteri mailleri gerçek extraction → operatör doğrulaması → MINA işi → operasyon pipeline zincirini çalıştırır. Extraction tek başına operasyonel gerçek sayılmaz.";
   root.append(intro);
-  if (demoMode) root.append(renderDemoOutlookPullPanel());
+  if (demoMode) root.append(renderDemoOutlookPullPanel()); else root.append(renderLiveMailboxPullPanel(mailboxStatus));
 
   const composer = node("section", "", "section inbox-composer");
   composer.append(node("h2", "Yeni müşteri talebi simüle et"));
@@ -1052,9 +1093,9 @@ function renderInbox(proposals = [], attachmentReviews = []) {
 }
 
 async function loadInbox() {
-  const [proposalPayload, reviewPayload] = await Promise.all([api("/extraction-proposals"),api("/attachment-reviews")]);
+  const [proposalPayload, reviewPayload, mailboxStatus] = await Promise.all([api("/extraction-proposals"),api("/attachment-reviews"),api("/mailbox/status")]);
   const reviews = await Promise.all((reviewPayload.reviews || []).map(item => api(`/attachment-reviews/${encodeURIComponent(item.review_id)}`)));
-  renderInbox(proposalPayload.proposals || [], reviews);
+  renderInbox(proposalPayload.proposals || [], reviews, mailboxStatus);
 }
 
 function renderJobs(data) {
@@ -3876,19 +3917,68 @@ function renderRelationshipOnboardingResult(container, result) {
   container.append(list);
 }
 
+function renderMailboxSettings(status = {}) {
+  const panel=node("section","","settings-panel");
+  const h=node("div","","settings-heading");
+  h.append(
+    node("h2","E-posta Bağlantısı"),
+    node("p","Acenta mailbox'ını Outlook veya IMAP üzerinden bağlar. IMAP şifresi yalnız bağlantı testi sırasında kullanılır ve sunucuda şifreli credential olarak saklanır; ekranda geri gösterilmez.","muted")
+  ); panel.append(h);
+  const provider=status.provider==="imap"?"IMAP":status.provider==="outlook"?"Outlook":status.provider==="synthetic"?"Demo":"Bağlı değil";
+  const health=node("div","","summary-grid relationship-onboarding-health");
+  health.append(
+    summaryItem("Durum",status.configured?"Hazır":"Yapılandırma gerekli"),
+    summaryItem("Provider",provider),
+    summaryItem("Mailbox",status.mailbox_id||"-"),
+    summaryItem("Çalışma modu",status.read_only_runtime?"Read-only":"-")
+  ); panel.append(health);
+  if(status.provider==="imap" && status.configured){
+    panel.append(node("div",`IMAP bağlantısı hazır · ${status.host||"sunucu"}:${status.port||993}. Şifre UI/API cevabında gösterilmez.`,"notice"));
+  } else if(status.provider==="outlook" && status.configured){
+    panel.append(node("div","Outlook bağlantısı hazır. IMAP kullanan bir acenta için aşağıdaki formdan yeni mailbox bağlantısı kurulabilir.","notice"));
+  }
+  if(status.imap_setup_available===false){
+    panel.append(node("div","IMAP şifreli credential storage henüz deployment seviyesinde hazırlanmadı. MINAI_MAILBOX_CREDENTIAL_KEY ve external credential path ayarlanmadan IMAP şifresi kabul edilmez.","warning"));
+  }
+  panel.append(node("div","IMAP protokolünde provider ayrı bir Mail.Read scope vermeyebilir. MINAI yalnız read-only IMAP komutları kullanır; mailbox credential'ının provider tarafındaki daha geniş yetkileri otomatik olarak daraltılmış sayılmaz.","notice small"));
+
+  const form=node("div","","relationship-onboarding-form");
+  const emailLabel=node("label","Mailbox e-posta"); const email=document.createElement("input"); email.type="email"; email.autocomplete="off"; email.maxLength=254; email.value=status.provider==="imap"?(status.mailbox_id||""):""; emailLabel.append(email);
+  const hostLabel=node("label","IMAP sunucusu"); const host=document.createElement("input"); host.type="text"; host.autocomplete="off"; host.placeholder="imap.example.com"; host.maxLength=253; host.value=status.provider==="imap"?(status.host||""):""; hostLabel.append(host);
+  const port=numberField("IMAP TLS portu",status.provider==="imap"?(status.port||993):993,1,65535);
+  const userLabel=node("label","IMAP kullanıcı adı"); const username=document.createElement("input"); username.type="text"; username.autocomplete="username"; username.maxLength=320; username.value=status.provider==="imap"?(status.mailbox_id||""):""; userLabel.append(username);
+  const passwordLabel=node("label","IMAP şifresi"); const password=document.createElement("input"); password.type="password"; password.autocomplete="new-password"; password.maxLength=1024; passwordLabel.append(password);
+  const pinLabel=node("label","TLS sertifika SHA-256 pini · isteğe bağlı / ileri seviye"); const pin=document.createElement("input"); pin.type="text"; pin.autocomplete="off"; pin.placeholder="64 hex karakter"; pin.maxLength=95; pinLabel.append(pin);
+  const grid=node("div","","settings-two-col"); grid.append(emailLabel,hostLabel,port.label,userLabel,passwordLabel,pinLabel); form.append(grid);
+  const authorizedLabel=node("label","","check-label"); const authorized=document.createElement("input"); authorized.type="checkbox"; authorizedLabel.append(authorized,node("span","Bu mailbox hesabını MINAI'ye bağlamaya ve girilen credential'ın şifreli olarak pilot sunucusunda saklanmasına yetkim var.")); form.append(authorizedLabel);
+  const feedback=node("div","","muted settings-feedback");
+  const save=actionButton("IMAP Bağlantısını Test Et ve Kaydet","primary",async()=>{
+    if(!authorized.checked){feedback.textContent="Mailbox bağlantısı için yetki onayı gerekli.";return;}
+    if(!email.value.trim()||!host.value.trim()||!username.value.trim()||!password.value){feedback.textContent="Mailbox, IMAP sunucusu, kullanıcı adı ve şifre gerekli.";return;}
+    save.disabled=true; feedback.textContent="Read-only IMAP bağlantısı test ediliyor…";
+    try{
+      const result=await api("/mailbox/imap/configure",{method:"POST",body:JSON.stringify({
+        mailbox_id:email.value.trim(),host:host.value.trim(),port:port.value(),username:username.value.trim(),password:password.value,certificate_sha256:pin.value.trim()||null,authorization_confirmed:true
+      })});
+      password.value=""; pin.value=""; feedback.textContent=`Bağlantı hazır · ${result.mailbox_id} · şifre geri gösterilmez.`; setStatus("Mailbox hazır"); await loadSettings();
+    }catch(e){password.value=""; feedback.textContent=e.message||String(e); setStatus("Hata",false);}finally{save.disabled=false;}
+  });
+  form.append(save,feedback); panel.append(form); return panel;
+}
+
 function renderRelationshipOnboardingSettings(status = {}) {
   const panel=node("section","","settings-panel");
   const h=node("div","","settings-heading");
   h.append(node("h2","İlişki Hafızası"),node("p","Müşteri ve tedarikçi geçmiş e-postalarından ölçülebilir ilişki davranışları ve doğrulama bekleyen MINAI gözlemleri üretir. Normal günlük inbox pull’undan ayrıdır.","muted"));panel.append(h);
   const health=node("div","","summary-grid relationship-onboarding-health");
   health.append(
-    summaryItem("Outlook",status.synthetic_mailbox?"Demo mailbox":(status.outlook_configured?"Hazır":"Yapılandırma eksik")),
+    summaryItem("Mailbox",status.synthetic_mailbox?"Demo mailbox":(status.mailbox_configured?`${String(status.mailbox_provider||"mailbox").toUpperCase()} · Hazır`:"Yapılandırma eksik")),
     summaryItem("Müşteri master",status.customer_master_count??0),
     summaryItem("Tedarikçi master",status.supplier_master_count??0),
     summaryItem("Bekleyen müşteri gözlemi",status.proposed_customer_fact_count??0),
     summaryItem("Bekleyen tedarikçi gözlemi",status.proposed_supplier_fact_count??0)
   ); panel.append(health);
-  panel.append(node("div",status.synthetic_mailbox?"Demo modunda bu ekran gerçek Outlook yerine sentetik mailbox geçmişini kullanır. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz.":"Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz. Eşleşmeyen taraflar otomatik müşteri/tedarikçi yapılmaz.","notice"));
+  panel.append(node("div",status.synthetic_mailbox?"Demo modunda bu ekran sentetik mailbox geçmişini kullanır. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz.":"Bağlı mailbox provider üzerinden geçmiş analiz edilir. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz; eşleşmeyen taraflar otomatik müşteri/tedarikçi yapılmaz.","notice"));
 
   const form=node("div","","relationship-onboarding-form");
   const now=new Date(); const startDefault=new Date(now.getTime()-180*24*60*60*1000);
@@ -3900,12 +3990,12 @@ function renderRelationshipOnboardingSettings(status = {}) {
   const aiLabel=node("label","","check-label");const ai=document.createElement("input");ai.type="checkbox";aiLabel.append(ai,node("span",status.synthetic_mailbox?"Sentetik AI davranış gözlemlerini de üret (dış servis çağrısı yapılmaz).":"AI davranış gözlemlerini de üret (privacy transform sonrası OpenAI çağrısı yapılır)."));
   const grid=node("div","","settings-two-col");grid.append(startLabel,endLabel,limit.label,aliases.label);form.append(grid,authorizedLabel,aiLabel);
   const feedback=node("div","","muted settings-feedback");const result=node("div","","relationship-onboarding-result");
-  const run=actionButton(status.synthetic_mailbox?"Sentetik Outlook Analizini Başlat":"Geçmiş Outlook Analizini Başlat","primary",async()=>{
+  const run=actionButton(status.synthetic_mailbox?"Sentetik Mailbox Analizini Başlat":"Geçmiş Mailbox Analizini Başlat","primary",async()=>{
     if(!authorized.checked){feedback.textContent="Analiz için yetki onay kutusunu işaretlemelisin.";return;}
     if(!start.value||!end.value){feedback.textContent="Başlangıç ve bitiş tarihi gerekli.";return;}
     run.disabled=true;feedback.textContent="Geçmiş e-postalar okunuyor ve ilişki kanıtı çıkarılıyor…";result.replaceChildren();
     try{
-      const response=await api("/relationship-onboarding/outlook/analyze",{method:"POST",body:JSON.stringify({
+      const response=await api("/relationship-onboarding/mailbox/analyze",{method:"POST",body:JSON.stringify({
         start_at:new Date(start.value).toISOString(),end_at:new Date(end.value).toISOString(),max_messages:limit.value(),authorization_confirmed:true,include_ai_observations:ai.checked,agency_alias_addresses:aliases.value()
       })});
       feedback.textContent=`Analiz tamamlandı · ${response.unique_message_count??0} benzersiz mail · ${response.proposed_fact_count??0} yeni öneri.`;renderRelationshipOnboardingResult(result,response);setStatus("Analiz tamamlandı");
@@ -4276,20 +4366,20 @@ function renderDemoSandboxSettings() {
 }
 
 let settingsSelectedTab="automation";
-function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, relationshipStatus = {}, fixedRates = {}, airRates = {}, airRateValidity = {}, airRateRounding = {}, airAdditionalCosts = {}, airCostScopes = {}, airUnsupportedCosts = {}, airFx = {}, airAvailability = {}, airRateReviews = {}, airRateTables = {}, airRateSurcharges = {}, minaJobsPayload = {}, systemHealth = {}, customerMemoryBundle = null) {
+function renderSettings(branding, automationPolicy, customersPayload = {}, suppliersPayload = {}, performanceSettings = {}, mailboxStatus = {}, relationshipStatus = {}, fixedRates = {}, airRates = {}, airRateValidity = {}, airRateRounding = {}, airAdditionalCosts = {}, airCostScopes = {}, airUnsupportedCosts = {}, airFx = {}, airAvailability = {}, airRateReviews = {}, airRateTables = {}, airRateSurcharges = {}, minaJobsPayload = {}, systemHealth = {}, customerMemoryBundle = null) {
   setPageContext("Ayarlar", "Sistem Ayarları"); const page=node("div","","settings-page");const tabs=node("div","","settings-tabs");const body=node("div","","settings-tab-body");
-  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),master:()=>renderMasterDataSettings(customersPayload,suppliersPayload),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),airRates:()=>renderAirRateSourceSettings(airRates,airRateValidity,airRateRounding,airAdditionalCosts,airCostScopes,airUnsupportedCosts,airFx,airAvailability,airRateReviews,airRateTables,airRateSurcharges,customersPayload.customers||[],minaJobsPayload.jobs||[]),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding),health:()=>renderSystemHealthSettings(systemHealth),memory:()=>renderCustomerMemorySettings(customerMemoryBundle||{}),demo:()=>renderDemoSandboxSettings()};
-  function draw(){tabs.replaceChildren();const defs=[["automation","Otomasyon"],["master","Master Veri"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["airRates","Havayolu Listeleri"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"],["health","Sistem Sağlığı"]];if(customerMemoryBundle)defs.splice(4,0,["memory","Müşteri Hafızası"]);if(demoMode)defs.push(["demo","Demo"]);defs.forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));if(!panels[settingsSelectedTab])settingsSelectedTab="automation";body.replaceChildren(panels[settingsSelectedTab]());}
+  const panels={automation:()=>renderAutomationSettings(automationPolicy,customersPayload.customers||[]),mailbox:()=>renderMailboxSettings(mailboxStatus),master:()=>renderMasterDataSettings(customersPayload,suppliersPayload),suppliers:()=>renderSupplierSettings(suppliersPayload),rates:()=>renderFixedRateSettings(fixedRates,suppliersPayload),airRates:()=>renderAirRateSourceSettings(airRates,airRateValidity,airRateRounding,airAdditionalCosts,airCostScopes,airUnsupportedCosts,airFx,airAvailability,airRateReviews,airRateTables,airRateSurcharges,customersPayload.customers||[],minaJobsPayload.jobs||[]),relationship:()=>renderRelationshipOnboardingSettings(relationshipStatus),performance:()=>renderPerformanceSettings(performanceSettings),branding:()=>renderBrandingPanel(branding),health:()=>renderSystemHealthSettings(systemHealth),memory:()=>renderCustomerMemorySettings(customerMemoryBundle||{}),demo:()=>renderDemoSandboxSettings()};
+  function draw(){tabs.replaceChildren();const defs=[["automation","Otomasyon"],["mailbox","E-posta"],["master","Master Veri"],["suppliers","Tedarikçiler"],["rates","Sabit Fiyatlar"],["airRates","Havayolu Listeleri"],["relationship","İlişki Hafızası"],["performance","Performans"],["branding","Branding"],["health","Sistem Sağlığı"]];if(customerMemoryBundle)defs.splice(4,0,["memory","Müşteri Hafızası"]);if(demoMode)defs.push(["demo","Demo"]);defs.forEach(([k,l])=>tabs.append(actionButton(l,k===settingsSelectedTab?"active":"",()=>{settingsSelectedTab=k;draw();})));if(!panels[settingsSelectedTab])settingsSelectedTab="automation";body.replaceChildren(panels[settingsSelectedTab]());}
   page.append(tabs,body);content.replaceChildren(page);draw();
 }
 
 async function loadSettings() {
-  const [branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates, airRates, airRateValidity, airRateRounding, airAdditionalCosts, airCostScopes, airUnsupportedCosts, airFx, airAvailability, airRateReviews, airRateTables, airRateSurcharges, minaJobsPayload, runtime, automation, dataHealth, commodityValidation, supplierValidation, customerMemoryValidation, hsValidation] = await Promise.all([
-    api("/settings/branding"), api("/automation-policy/agency"), api("/master-data/customers"), api("/master-data/suppliers"), api("/settings/performance"), api("/relationship-onboarding/status"), api("/supplier-fixed-rates"), api("/air-rate-sources"), api("/air-rate-validity-reviews"), api("/air-rate-weight-rounding-reviews"), api("/air-additional-cost-evidence"), api("/air-cost-scope-reviews"), api("/air-unsupported-cost-semantics-reviews"), api("/air-fx-rate-evidence"), api("/air-service-availability-confirmations"), api("/air-rate-structure-reviews"), api("/air-rate-table-reviews"), api("/air-rate-surcharge-reviews"), api("/mina-jobs"), api("/runtime/release"), api("/automation/status"), api("/data-health/summary"), api("/commodity-dictionary/validation"), api("/supplier-capabilities/validation"), api("/customer-memory/validation"), api("/hs-commodity-map/validation")
+  const [branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, mailboxStatus, relationshipStatus, fixedRates, airRates, airRateValidity, airRateRounding, airAdditionalCosts, airCostScopes, airUnsupportedCosts, airFx, airAvailability, airRateReviews, airRateTables, airRateSurcharges, minaJobsPayload, runtime, automation, dataHealth, commodityValidation, supplierValidation, customerMemoryValidation, hsValidation] = await Promise.all([
+    api("/settings/branding"), api("/automation-policy/agency"), api("/master-data/customers"), api("/master-data/suppliers"), api("/settings/performance"), api("/mailbox/status"), api("/relationship-onboarding/status"), api("/supplier-fixed-rates"), api("/air-rate-sources"), api("/air-rate-validity-reviews"), api("/air-rate-weight-rounding-reviews"), api("/air-additional-cost-evidence"), api("/air-cost-scope-reviews"), api("/air-unsupported-cost-semantics-reviews"), api("/air-fx-rate-evidence"), api("/air-service-availability-confirmations"), api("/air-rate-structure-reviews"), api("/air-rate-table-reviews"), api("/air-rate-surcharge-reviews"), api("/mina-jobs"), api("/runtime/release"), api("/automation/status"), api("/data-health/summary"), api("/commodity-dictionary/validation"), api("/supplier-capabilities/validation"), api("/customer-memory/validation"), api("/hs-commodity-map/validation")
   ]);
   let customerMemoryBundle=null;
   if(demoMode){const [memory,backups]=await Promise.all([api("/customer-memory"),api("/customer-memory/backups")]);customerMemoryBundle={memory,backups};}
-  applyBranding(branding); renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, relationshipStatus, fixedRates, airRates, airRateValidity, airRateRounding, airAdditionalCosts, airCostScopes, airUnsupportedCosts, airFx, airAvailability, airRateReviews, airRateTables, airRateSurcharges, minaJobsPayload, {runtime,automation,data:dataHealth,commodity:commodityValidation,suppliers:supplierValidation,customerMemory:customerMemoryValidation,hs:hsValidation}, customerMemoryBundle);
+  applyBranding(branding); renderSettings(branding, automationPolicy, customersPayload, suppliersPayload, performanceSettings, mailboxStatus, relationshipStatus, fixedRates, airRates, airRateValidity, airRateRounding, airAdditionalCosts, airCostScopes, airUnsupportedCosts, airFx, airAvailability, airRateReviews, airRateTables, airRateSurcharges, minaJobsPayload, {runtime,automation,data:dataHealth,commodity:commodityValidation,suppliers:supplierValidation,customerMemory:customerMemoryValidation,hs:hsValidation}, customerMemoryBundle);
 }
 
 async function boot() {

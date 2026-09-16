@@ -28,7 +28,7 @@ This checklist is the execution gate for the first real controlled shadow-pilot 
 - [ ] OpenAI data-control approval exists for the authorized sanitized replay and approved pilot AI use.
 - [ ] Deployment/storage approval exists for the selected environment.
 - [ ] Retention/deletion procedure is approved and understood by the pilot operators.
-- [ ] 5–10 historical Road customer inquiries suitable for replay can be selected on Day 0; they must be sanitized before MINAI receives them.
+- [ ] The agency confirms which authorized mailbox will be connected on Day 0 and that 5–10 historical Road customer inquiries can be selected after connection. No mailbox password needs to be shared with MINAI support, the pilot owner or the implementation team.
 
 ## 2. Gate A — Freeze the Exact Release
 
@@ -58,11 +58,18 @@ Run on the exact frozen release:
 
 **STOP:** any technical/profile/data check failing is NO-GO. Do not bypass or relabel a failed check.
 
-## 4. Gate C — Authorized Historical Replay
+## 4. Gate C — Agency Mailbox Connection and Authorized Historical Replay
 
-Select a small but representative set of 5–10 prior Road customer inquiries. Prefer a mix of ordinary complete work, missing-information cases and known edge cases. Include special-equipment/risk cases when available.
+The agency mailbox is connected only now, by an authorized agency operator. Microsoft mailboxes use the approved delegated OAuth flow. IMAP mailboxes use Settings → E-posta; the agency operator enters the mailbox credential directly into MINAI. The mailbox password is never requested from or disclosed to the pilot owner, implementation team or support operator.
 
-- [ ] Raw mail is sanitized outside MINAI before replay input is created.
+- [ ] The authorized agency operator connects the intended mailbox and confirms the displayed mailbox identity/provider.
+- [ ] For IMAP, the connection test succeeds before the encrypted credential file is replaced; the password is not returned by any status/API response and the credential file is owner-only under the approved external `/data/auth` storage.
+- [ ] For Outlook, delegated authorization remains read-only for shadow/historical work (`Mail.Read` or the explicitly documented discovery scope); no `Mail.Send` is granted for this gate.
+- [ ] Daily intake remains explicit/read-only and reports `mailbox_write_performed=false` and `automated_send_performed=false`.
+
+After the connection succeeds, select a small but representative set of 5–10 prior Road customer inquiries from the authorized history. Prefer ordinary complete work, missing-information cases and known edge cases. Include special-equipment/risk cases when available.
+
+- [ ] Raw mail remains transient while the replay source is prepared; the replay JSONL contains only pre-sanitized/pseudonymous content and is stored outside the repository.
 - [ ] Real names, real email addresses, phone numbers, unnecessary company identifiers and unrelated sensitive text are removed/replaced.
 - [ ] Operational truth needed for evaluation is preserved: lane, dates, dimensions, weight, commodity, equipment, ADR/temperature facts and relevant special conditions.
 - [ ] Each replay case contains operator-confirmed historical expected truth.

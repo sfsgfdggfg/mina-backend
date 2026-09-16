@@ -96,6 +96,7 @@ from src.simulation.human_operational_flow_regressions import evaluate_human_ope
 from src.simulation.explicit_road_inference_regressions import evaluate_explicit_road_inference_regressions
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
 from src.simulation.microsoft_auth_regressions import evaluate_microsoft_auth_regressions
+from src.simulation.imap_mailbox_regressions import evaluate_imap_mailbox_regressions
 from src.simulation.outlook_graph_read_regressions import evaluate_outlook_graph_read_regressions
 from src.simulation.attachment_content_verification_regressions import (
     evaluate_attachment_content_verification_regressions,
@@ -390,6 +391,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Microsoft delegated Outlook authentication",
         evaluate_microsoft_auth_regressions,
+    ),
+    Suite(
+        "IMAP mailbox onboarding",
+        evaluate_imap_mailbox_regressions,
     ),
     Suite(
         "Read-only Outlook Graph ingestion",

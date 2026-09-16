@@ -564,7 +564,7 @@ def evaluate_demo_sandbox_regressions() -> dict:
         and route_allowed("POST", "/operational-work-items/demo-work/handoff")
         and "demo_supplier_response_unavailable" in api_text
         and not route_allowed("POST", "/demo/supplier-rfqs/demo-rfq/simulate-response")
-        and "Demo mailbox" in app_js and "Sentetik Outlook Analizini Başlat" in app_js
+        and "Demo mailbox" in app_js and "Sentetik Mailbox Analizini Başlat" in app_js
         and "Sentetik Outlook Gelen Kutusu" in app_js and "/inbound/outlook/pull" in app_js
         and "Ham mail gövdesi bu özet yüzeyine taşınmaz" in app_js
         and "run_demo_outlook_pull" in api_text
