@@ -537,3 +537,36 @@ International freight forwarding domain derinliği + supplier/customer/route ope
 Bu dosyanın amacı fikir üretmek değil, **iyi fikirlerin yanlış zamanda geliştirilmesini engellerken unutulmasını da önlemektir.**
 
 Güncel iş akışı kendi planında ilerler; gelecek burada birikir. Doğru zaman geldiğinde buradaki kayıtlar kanıtla birlikte roadmap'e taşınır.
+
+---
+
+## FUTURE-UX-001 — Agency branding should evolve from color/logo theming into a fully branded product experience
+**Tarih:** 2026-09-17
+**Durum:** PARKED
+**Kaynak:** pilot öncesi production UI karşılaştırması + daha önce hazırlanan Sarus örnek görselleri
+
+### Gözlem
+Production branding altyapısı bugün firma adı, logo, ana renk ve ikincil vurgu rengini doğru biçimde uyguluyor; ancak gerçek ekranın görsel etkisi, daha önce hazırlanan Sarus konsept görsellerine göre belirgin biçimde daha zayıf kalıyor.
+
+Mevcut uygulama işlevsel bir tenant theme seviyesinde. Referans tasarım ise acentaya gerçekten özel bir ürün hissi veriyor: daha güçlü login kompozisyonu, daha belirgin kurumsal kimlik, daha rafine sidebar/header, kart hiyerarşisi, tipografi, spacing ve genel görsel bütünlük.
+
+### MINAI için olası anlamı
+Branding uzun vadede yalnızca `logo + iki renk` ayarı olarak görülmemeli. Agency-branded deneyim şu alanları kapsayacak şekilde yeniden ele alınabilir:
+
+- login ekranının acentaya özel güçlü görsel kompozisyonu,
+- logo ölçeği/yerleşimi ve firma kimliğinin daha belirgin kullanımı,
+- ana renk ve accent renklerinin tüm UI sistemine daha dengeli yayılması,
+- sidebar, header, buton, kart ve seçili durumların ortak design-system mantığında iyileştirilmesi,
+- tipografi, boşluklar, border/radius ve görsel hiyerarşinin daha premium hale getirilmesi,
+- gerekiyorsa ajansa özel arka plan/hero görseli veya kontrollü görsel varyantlar,
+- kritik operasyonel durum renklerinin branding tarafından bozulmaması.
+
+Hedef, MINAI'nin yalnızca 'renkleri değiştirilmiş ortak bir uygulama' gibi değil, müşterinin kendi operasyon yazılımı gibi algılanmasıdır.
+
+### Neden şimdi yapılmıyor?
+Road shadow pilot öncesinde release freeze korunuyor. Mevcut branding işlevsel ve pilotun operasyonel doğruluk/safety hedefleri için yeterli. Görsel redesign bugün yapılırsa gereksiz UI değişikliği ve regresyon riski yaratır.
+
+### Roadmap'e alma tetikleyicisi
+İlk pilot stabil biçimde çalıştıktan ve gerçek kullanıcı geri bildirimi toplandıktan sonra; özellikle acenta ilk izlenimi, günlük kullanım ergonomisi ve satış/demo etkisi açısından branding/UI polish tekrarlanan ihtiyaç olarak görülürse bu madde ayrı bir UX/Design-System çalışmasına PROMOTED edilmelidir.
+
+**Referans kalite çıpası:** 2026-09-17 tarihinde karşılaştırılan Sarus konsept login + ana ekran görsellerindeki kurumsal bütünlük ve görsel kalite.
