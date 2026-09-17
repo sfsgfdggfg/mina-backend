@@ -1693,6 +1693,86 @@ function renderShipmentSection(container, data) {
   container.append(section);
 }
 
+function renderCustomerClarificationSection(container, data, jobId, refresh) {
+  const job = data.job || {};
+  const summary = data.summary || {};
+  if (summary.is_closed || summary.stage !== "inquiry_confirmed" || job.supplier_rfq_workflow_id) return;
+
+  const shipment = job.shipment || {};
+  const section = sectionBlock(
+    "Müşteri Ek Bilgisi",
+    "Müşterinin sonradan verdiği genel yük bilgilerini aynı MINA işine uygular. Güvenlik ve müşteri kimliği alanları bu ekrandan değiştirilemez."
+  );
+  const form = node("div", "", "settings-inline-editor");
+  const fieldSpecs = [
+    ["pickup_country", "Yükleme ülkesi", "text"], ["pickup_city", "Yükleme şehri", "text"],
+    ["pickup_postcode", "Yükleme posta kodu", "text"], ["pickup_address", "Yükleme adresi", "text"],
+    ["delivery_country", "Teslim ülkesi", "text"], ["delivery_city", "Teslim şehri", "text"],
+    ["delivery_postcode", "Teslim posta kodu", "text"], ["delivery_address", "Teslim adresi", "text"],
+    ["commodity", "Emtia", "text"], ["service_type", "Servis", "text"],
+    ["equipment_type", "Ekipman", "text"], ["cargo_ready_date", "Hazır tarihi", "date"],
+    ["required_delivery_date", "Beklenen teslim tarihi", "date"], ["special_notes", "Operasyonel not", "text"],
+  ];
+  const controls = {};
+  const grid = node("div", "", "settings-two-col");
+  fieldSpecs.forEach(([key, labelText, type]) => {
+    const field = inboxField(labelText, type);
+    field.input.value = shipment[key] == null ? "" : (type === "date" ? String(shipment[key]).slice(0, 10) : String(shipment[key]));
+    if (type === "text") field.input.maxLength = 500;
+    controls[key] = field.input;
+    grid.append(field.label);
+  });
+  const weight = numberField("Brüt ağırlık (kg)", shipment.gross_weight_kg ?? null, 0.01, 1000000);
+  weight.input.step = "0.01";
+  grid.append(weight.label);
+
+  const channelLabel = node("label", "Kaynak kanal");
+  const channel = document.createElement("select");
+  [["email", "E-posta"], ["phone", "Telefon"], ["whatsapp", "WhatsApp"], ["portal", "Portal"], ["face_to_face", "Yüz yüze"], ["other", "Diğer"]]
+    .forEach(([value, text]) => { const option = document.createElement("option"); option.value = value; option.textContent = text; channel.append(option); });
+  channelLabel.append(channel);
+  const sourceReference = inboxField("Kaynak referansı");
+  sourceReference.input.maxLength = 300;
+  sourceReference.input.placeholder = "Örn. e-posta Message-ID veya görüşme referansı";
+  const noteLabel = node("label", "Audit notu");
+  const note = document.createElement("textarea"); note.rows = 2; note.maxLength = 2000; noteLabel.append(note);
+  const evidenceGrid = node("div", "", "settings-two-col"); evidenceGrid.append(channelLabel, sourceReference.label);
+  const feedback = node("div", "", "muted settings-feedback");
+
+  const save = actionButton("Müşteri Bilgisini Uygula", "primary", async () => {
+    const updates = {};
+    fieldSpecs.forEach(([key]) => {
+      const value = controls[key].value.trim();
+      const current = shipment[key] == null ? "" : (controls[key].type === "date" ? String(shipment[key]).slice(0, 10) : String(shipment[key])).trim();
+      if (value && value !== current) updates[key] = value;
+    });
+    const weightValue = weight.value();
+    if (weightValue != null && weightValue !== Number(shipment.gross_weight_kg)) updates.gross_weight_kg = weightValue;
+    if (!Object.keys(updates).length) { feedback.textContent = "Değişen en az bir genel yük bilgisi gir."; return; }
+    if (!sourceReference.input.value.trim()) { feedback.textContent = "Kaynak referansı zorunlu."; return; }
+    save.disabled = true; feedback.textContent = "Uygulanıyor…";
+    try {
+      await api(`/mina-jobs/${encodeURIComponent(jobId)}/customer-clarification`, {
+        method: "POST",
+        body: JSON.stringify({
+          updates,
+          source_channel: channel.value,
+          source_reference: sourceReference.input.value.trim(),
+          note: note.value.trim() || null,
+        })
+      });
+      await refresh();
+    } catch (error) {
+      feedback.textContent = error.message || String(error);
+      save.disabled = false;
+    }
+  });
+  form.append(grid, evidenceGrid, noteLabel,
+    node("div", "Bu yol ADR, sıcaklık kontrollü taşıma, yüksek değer ve müşteri kimliği kararlarını değiştirmez.", "notice small"),
+    save, feedback);
+  section.append(form); container.append(section);
+}
+
 function renderJobResponsibilitySection(container, data, jobId, refresh) {
   const summary = data.summary || {};
   const section = sectionBlock(
@@ -3188,6 +3268,7 @@ async function renderJob(data, jobId) {
   if (next.length) root.append(node("div", `İzin verilen sonraki aşamalar: ${next.map(stageLabel).join(" · ")}`, "small job-next-stages"));
 
   renderShipmentSection(root, data);
+  renderCustomerClarificationSection(root, data, jobId, async () => loadJob(jobId));
   renderJobResponsibilitySection(root, data, jobId, async () => loadJob(jobId));
   renderJobAutomationSection(root, data, jobId, async () => loadJob(jobId));
 

@@ -43,6 +43,7 @@ from src.ai.relationship_history_analyzer import (
     RelationshipHistoryAnalyzerUnavailableError,
 )
 from src.workflow.pipeline import process_shipment
+from src.workflow.customer_clarification import apply_customer_clarification
 from src.workflow.supplier_rfq_progression import (
     SupplierRFQWorkflowProgressionError,
     SupplierRFQWorkflowNotFoundError,
@@ -926,6 +927,13 @@ class MinaJobManualCreateRequest(BaseModel):
     shipment: Shipment
     sales_owner: Optional[str] = Field(default=None, max_length=200)
     operations_owner: Optional[str] = Field(default=None, max_length=200)
+
+
+class CustomerClarificationRequest(BaseModel):
+    updates: dict[str, Any]
+    source_channel: Literal["email", "phone", "whatsapp", "portal", "face_to_face", "other"]
+    source_reference: str = Field(min_length=1, max_length=300)
+    note: Optional[str] = Field(default=None, max_length=2000)
 
 
 class SupplierFixedRateCreateRequest(BaseModel):
@@ -4252,6 +4260,35 @@ def record_mina_job_supplier_decision_outcome(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return feedback.model_dump(mode="json")
+
+
+@app.post("/mina-jobs/{job_id}/customer-clarification")
+def apply_mina_job_customer_clarification(
+    job_id: str, request: CustomerClarificationRequest, http_request: Request,
+):
+    try:
+        return apply_customer_clarification(
+            mina_repository=mina_job_repository,
+            proposal_repository=extraction_proposal_repository,
+            rfq_repository=supplier_rfq_repository,
+            approval_repository=quote_approval_repository,
+            quote_case_repository=quote_case_repository,
+            job_id=job_id,
+            actor=_authenticated_operator(http_request),
+            updates=request.updates,
+            source_channel=request.source_channel,
+            source_reference=request.source_reference,
+            note=request.note,
+            operational_data_sources=operational_data_sources,
+            master_data_repository=master_data_repository,
+            learning_fact_repository=learning_fact_repository,
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/mina-jobs/{job_id}")
