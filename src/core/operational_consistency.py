@@ -260,6 +260,9 @@ def check_operational_consistency(
         warnings.append(
             "GTIP kodu ile ürün açıklaması uyumsuz görünüyor. Lütfen müşteri veya gümrük müşaviri ile doğrulayın."
         )
+        errors.append(
+            "GTIP / ürün açıklaması çelişkisi doğrulanmadan tedarikçi RFQ veya müşteri teklif akışı başlatılmamalıdır."
+        )
 
     if is_adr and not adr_class:
         errors.append(

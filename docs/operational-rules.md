@@ -4566,3 +4566,8 @@ Self-service password change requires the current password, matching new values,
 ## RULE-305 — Current Firm Road RFQ Date Requirement
 
 For a firm Road RFQ, `cargo_ready_date` is required. `required_delivery_date` is optional when the customer did not provide it. If the customer supplied a required-delivery date, it must be parseable, coherent with cargo readiness and respected by downstream supplier timing. This rule supersedes earlier language that made required delivery date universally mandatory; do not rewrite the historical rule entries.
+
+
+## RULE-306 — GTIP / Commodity Conflict Recomputes from Current Confirmed Facts
+
+When the validated HS map can interpret the current customer-provided GTIP/HS code, compare that mapped operational commodity with the current confirmed shipment commodity on every operational evaluation. A material conflict is both a visible verification warning and a blocking operational-consistency error; supplier RFQ and customer quote progression must not begin. Current compatible facts clear the blocker even when historical structured conflict evidence or warning text remains for provenance. If current facts cannot be recomputed, preserve the existing structured/legacy conflict evidence as the backward-compatible safety fallback.
