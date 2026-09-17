@@ -154,6 +154,11 @@ def evaluate_branding_settings_regressions() -> dict:
                     headers={"X-CSRF-Token": csrf},
                 )
                 reread = client.get("/settings/branding")
+                logout = client.post(
+                    "/app/logout", data={"csrf_token": csrf}, follow_redirects=False,
+                )
+                branded_login = client.get("/app/login")
+                branding_css = client.get("/app/branding.css")
     finally:
         api_module.agency_branding_repository = original_repository
 
@@ -172,6 +177,18 @@ def evaluate_branding_settings_regressions() -> dict:
         and saved_json["updated_by"] == "Web Operator"
         and reread_json["logo_data_uri"] == PNG_URI,
         "authenticated branding update requires CSRF and records the named operator",
+    )
+    check(
+        logout.status_code == 303
+        and branded_login.status_code == 200
+        and "<h1>Pilot Agency</h1>" in branded_login.text
+        and 'class="login-brand-logo"' in branded_login.text
+        and PNG_URI in branded_login.text
+        and '/app/branding.css' in branded_login.text
+        and branding_css.status_code == 200
+        and "--accent:#112233" in branding_css.text
+        and "--secondary-accent:#445566" in branding_css.text,
+        "login screen uses durable agency name, logo, and brand colors after logout",
     )
 
     return {"passed": not failures, "passes": passes, "failures": failures}
