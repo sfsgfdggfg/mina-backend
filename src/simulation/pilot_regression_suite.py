@@ -15,6 +15,7 @@ from src.simulation.business_hours_automation_regressions import evaluate_busine
 from src.simulation.canonical_commercial_fixture_isolation_regressions import evaluate_canonical_commercial_fixture_isolation_regressions
 from src.simulation.atomic_transition_regressions import evaluate_atomic_transition_regressions
 from src.simulation.clarification_resolution_regressions import evaluate_clarification_resolution_regressions
+from src.simulation.customer_clarification_progression_regressions import evaluate_customer_clarification_progression_regressions
 from src.simulation.customer_identity_trust_regressions import evaluate_customer_identity_trust_regressions
 from src.simulation.customer_email_identity_binding_regressions import evaluate_customer_email_identity_binding_regressions
 from src.simulation.customer_quote_automated_send_regressions import evaluate_customer_quote_automated_send_regressions
@@ -289,6 +290,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Safe API entry point", evaluate_safe_api_entrypoint_regressions),
     Suite("Python source compilation", evaluate_source_compile_regressions),
     Suite("Extraction confirmation", evaluate_extraction_confirmation_regressions),
+    Suite("Customer clarification progression", evaluate_customer_clarification_progression_regressions),
     Suite("Explicit road-mode inference", evaluate_explicit_road_inference_regressions),
     Suite(
         "OpenAI structured output contract",

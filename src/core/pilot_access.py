@@ -51,6 +51,7 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("GET", re.compile(r"^/mailbox/status$")),
     ("POST", re.compile(r"^/mailbox/imap/configure$")),
     ("GET", re.compile(r"^/mina-jobs/[^/]+/automation-policy$")),
+    ("POST", re.compile(r"^/mina-jobs/[^/]+/customer-clarification$")),
     ("GET", re.compile(r"^/mina-jobs/[^/]+/operation-start$")),
     ("POST", re.compile(r"^/mina-jobs/[^/]+/operation-start$")),
     ("POST", re.compile(r"^/operation-start-messages/[^/]+/decision$")),
