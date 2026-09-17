@@ -7804,3 +7804,11 @@ Settings provides bounded `.xlsx`/`.csv` Supplier Master Data import with safe e
 **Date:** 2026-09-17
 
 For a firm Road RFQ, cargo-ready date is required. Customer required-delivery date is optional unless the customer supplied one. When supplied it must be parseable and coherent, and downstream supplier timing/availability must respect it. This decision supersedes earlier Road wording that described `required_delivery_date` as universally mandatory; historical entries remain unchanged for audit history.
+
+
+## DEC-295 — Current GTIP / Commodity Facts Are the Commercial-Stop Authority
+
+**Status:** Accepted
+**Date:** 2026-09-17
+
+An unresolved customer-provided GTIP/HS mapping that materially conflicts with the current confirmed commodity is a fail-closed commercial stop. MINAI recomputes that conflict from the current `gtip_code`, current commodity and validated HS map; a stale structured flag or warning note is not allowed to keep a genuinely corrected shipment blocked, and deleting legacy warning text cannot make an unresolved current conflict safe. Operational consistency must fail and supplier RFQ/customer quote progression must remain blocked until current confirmed facts are compatible. This does not make MINAI a legally authoritative customs-classification system.

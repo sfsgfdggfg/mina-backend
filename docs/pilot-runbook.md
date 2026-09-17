@@ -1918,3 +1918,8 @@ Verify ordinary freight text does not invent these flags, and verify lithium sou
 For an approved Road replay/pilot case with a Turkey loading point and explicit ready date, include a verified full-day holiday (for example 30 August or 29 October) or half-day eve when the sanitized dataset contains such evidence. The expected risk is yellow human review while quote generation and simple-pilot eligibility remain otherwise unchanged. Apply the same check to an explicit Turkey delivery date.
 
 Verify foreign-only shipments do not inherit the Turkey holiday warning. For a Turkey shipment date outside the verified holiday-calendar coverage years, expect a human-review warning that the calendar is unverified rather than a fabricated holiday/no-holiday decision. No foreign holiday calendar or pre/post-holiday buffer is authorized by this check. Generate fresh exact-release authorized sanitized replay evidence before pilot GO.
+
+
+### Current-Fact GTIP / Commodity Conflict Check
+
+Before freezing a Road pilot release, verify a shipment with a customer-provided GTIP/HS code and an incompatible confirmed commodity produces failed operational consistency, blocked quote readiness and no supplier RFQ draft. Verify the same shipment proceeds only after the confirmed GTIP/commodity facts are actually reconciled; editing/removing a warning note or legacy flag must not bypass the stop, and stale warning provenance must not keep a corrected shipment blocked. A release changing this authority requires fresh exact-release replay/readiness evidence before pilot GO.

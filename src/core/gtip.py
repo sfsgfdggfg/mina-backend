@@ -10,13 +10,84 @@ from src.paths import data_path
 HS_COMMODITY_MAP_PATH = data_path("hs_commodity_map.json")
 GTIP_COMMODITY_CONFLICT_MARKER = "[GTIP CONSISTENCY WARNING]"
 
+GTIP_COMPATIBLE_COMMODITIES = {
+    "İçecek / Meşrubat": ["İçecek / Meşrubat", "Gıda"],
+    "Elektrik Transformatörü": [
+        "Elektrik Transformatörü",
+        "Elektrikli Makine / Ekipman",
+        "Makine",
+    ],
+    "Elektrikli Makine / Ekipman": [
+        "Elektrikli Makine / Ekipman",
+        "Elektrik Transformatörü",
+        "Makine",
+    ],
+    "Tekstil / Hazır Giyim": ["Tekstil / Hazır Giyim", "Tekstil"],
+    "Makine": ["Makine", "Elektrikli Makine / Ekipman"],
+}
+
+
+def _normalize_commodity_text(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return (
+        str(value).strip().lower()
+        .replace("ı", "i").replace("İ", "i")
+        .replace("ü", "u").replace("Ü", "u")
+        .replace("ö", "o").replace("Ö", "o")
+        .replace("ğ", "g").replace("Ğ", "g")
+        .replace("ş", "s").replace("Ş", "s")
+        .replace("ç", "c").replace("Ç", "c")
+    )
+
+
+def is_gtip_commodity_conflict(
+    commodity: Optional[str],
+    gtip_commodity: Optional[str],
+) -> bool:
+    if not commodity or not gtip_commodity:
+        return False
+    normalized_commodity = _normalize_commodity_text(commodity)
+    normalized_gtip = _normalize_commodity_text(gtip_commodity)
+    if normalized_commodity == normalized_gtip:
+        return False
+    compatible = {
+        _normalize_commodity_text(value)
+        for value in GTIP_COMPATIBLE_COMMODITIES.get(gtip_commodity, [])
+    }
+    if normalized_commodity in compatible:
+        return False
+    return normalized_commodity not in {
+        "", "urun", "yuk", "cargo", "goods", "gida", "makine",
+        "unknown", "unknown commodity",
+    }
+
+
+def assess_gtip_commodity_consistency(
+    gtip_code: Optional[str],
+    commodity: Optional[str],
+) -> Dict[str, Any]:
+    match = map_gtip_to_commodity(gtip_code)
+    gtip_commodity = match.get("commodity_group") if isinstance(match, dict) else None
+    return {
+        "conflict": is_gtip_commodity_conflict(commodity, gtip_commodity),
+        "gtip_commodity": gtip_commodity,
+        "matched_hs_key": (match or {}).get("matched_hs_key"),
+    }
+
 
 def has_gtip_commodity_conflict(shipment: Any) -> bool:
+    gtip_code = getattr(shipment, "gtip_code", None)
+    commodity = getattr(shipment, "commodity", None)
+    current = assess_gtip_commodity_consistency(gtip_code, commodity)
+    if current["gtip_commodity"] is not None and commodity:
+        return bool(current["conflict"])
+
     if getattr(shipment, "gtip_commodity_conflict", False) is True:
         return True
 
     # Backward compatibility for snapshots produced before structured conflict
-    # evidence existed. New parser output sets gtip_commodity_conflict directly.
+    # evidence existed and where current GTIP facts cannot be recomputed.
     return bool(
         getattr(shipment, "gtip_detected_from_email", False)
         and GTIP_COMMODITY_CONFLICT_MARKER
