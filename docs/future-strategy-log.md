@@ -537,3 +537,73 @@ International freight forwarding domain derinliği + supplier/customer/route ope
 Bu dosyanın amacı fikir üretmek değil, **iyi fikirlerin yanlış zamanda geliştirilmesini engellerken unutulmasını da önlemektir.**
 
 Güncel iş akışı kendi planında ilerler; gelecek burada birikir. Doğru zaman geldiğinde buradaki kayıtlar kanıtla birlikte roadmap'e taşınır.
+
+---
+
+# 8. Legal, Compliance ve Müşteri Verisi — Gelecek Planları
+
+## LEGAL-FUTURE-001 — Commercial launch öncesi Legal & Compliance Readiness Review
+**Tarih:** 2026-09-17
+**Durum:** PARKED
+**Kaynak:** ürünün ticari SaaS aşamasına hazırlık değerlendirmesi
+
+### Gözlem
+MINAI ticari kullanıma geçtiğinde yalnızca yazılım değil; acentanın e-posta, müşteri, tedarikçi, operasyon ve zaman zaman belge verilerini işleyen bir SaaS sağlayıcısı olacaktır. Türkiye, AB ve ileride diğer ülkelerde farklı kişisel veri, veri aktarımı, güvenlik ve ticari ileti yükümlülükleri devreye girebilir.
+
+### MINAI için olası anlamı
+Commercial launch öncesinde ayrı bir **Legal & Compliance Readiness Review** yapılmalıdır. İnceleme en az şu alanları kapsamalıdır:
+
+- KVKK ve gerektiğinde GDPR kapsamındaki roller,
+- Data Processing Agreement (DPA),
+- subprocessor listesi ve değişiklik yönetimi,
+- yurtdışı veri aktarımı mekanizmaları,
+- data map / data flow map,
+- saklama, silme ve anonimleştirme kuralları,
+- tenant bazlı veri izolasyonu,
+- teknik ve organizasyonel güvenlik tedbirleri,
+- incident response ve veri ihlali süreçleri,
+- privacy notice / privacy policy,
+- SaaS/Terms of Service sözleşmeleri,
+- pazarlama ve ticari elektronik ileti kuralları,
+- hedef pazara göre ilgili AI mevzuatı ve şeffaflık yükümlülükleri.
+
+Bu çalışma yalnızca hukuki metin üretme işi olarak görülmemeli; gerekli compliance davranışları ürün ve altyapıya gömülmelidir.
+
+### Neden şimdi yapılmıyor?
+MINAI henüz pilot aşamasındadır ve ticari production veri akışı kesinleşmemiştir. Nihai cloud, şirket yapısı, subprocessor'lar ve hedef ülkeler belli olmadan hukuki seti erken dondurmak gereksiz tekrar yaratabilir.
+
+### Roadmap'e alma tetikleyicisi
+İlk ücretli ticari müşteriye geçmeden önce veya production mimarisi ve veri akışı kesinleştiğinde bu kayıt commercial-launch gate'e taşınmalıdır.
+
+---
+
+## DATA-FUTURE-001 — Export Before Delete / müşteri verisi taşınabilirliği
+**Tarih:** 2026-09-17
+**Durum:** PARKED
+**Kaynak:** ürün sahipliği / müşteri veri kaybını önleme prensibi
+
+### Gözlem
+MINAI zaman içinde bazı acentalar için fiilen ana operasyon veritabanına dönüşebilir. Müşterinin hesabını kapatması, verilerinin silinmesini istemesi veya başka bir sisteme geçmesi halinde, yasal silme hakkını yerine getirirken müşterinin yıllarca biriktirdiği operasyon bilgisini kaybetmesine neden olmak kabul edilemez.
+
+### MINAI için olası anlamı
+Tenant seviyesinde **Export Before Delete** akışı tasarlanmalıdır. Müşteri silme/hesap kapatma işlemi öncesinde kendi verisinin taşınabilir bir kopyasını oluşturup indirebilmelidir.
+
+İlk prensipler:
+
+- çıktı teknik olmayan kullanıcı tarafından da açılabilen, basit ve insan tarafından okunabilir olmalıdır,
+- en azından CSV/TXT/JSON gibi açık formatlar değerlendirilmelidir; gerekirse tek ZIP paketi altında sunulabilir,
+- işler, teklifler, müşteri/tedarikçi kayıtları, fiyat/operasyon geçmişi ve müşteriye ait diğer uygun operasyon verileri mümkün olduğunca birlikte dışa aktarılmalıdır,
+- dışa aktarılan dosya MINAI'ye bağımlı olmadan saklanabilmeli ve gerektiğinde başka sisteme taşınabilmelidir,
+- silme ekranı müşteriyi export alma konusunda açıkça uyarmalıdır,
+- uygun tasarımda müşteri export'un hazırlandığını ve indirildiğini doğruladıktan sonra nihai silme adımına geçilebilir,
+- hukuken saklanması zorunlu veriler varsa bunlar ayrı retention kurallarına tabi tutulmalı; “export var” gerekçesiyle MINAI'nin silinmesi gereken veriyi süresiz tutmasına izin verilmemelidir.
+
+**Ürün prensibi:** MINAI müşterinin verisini kilitleyen bir sistem olmamalıdır. Müşteri ayrılabilmeli, verisini yanında götürebilmeli ve veri kaybına uğramamalıdır.
+
+### Neden şimdi yapılmıyor?
+Pilot aşamasında tenant veri modeli ve uzun vadeli veri kapsamı hâlâ gelişmektedir. Export formatını bugünden dondurmak yerine, production veri modeli oturduktan sonra tasarlamak daha doğru olacaktır.
+
+### Roadmap'e alma tetikleyicisi
+Commercial launch öncesi retention/deletion çalışması başladığında veya MINAI'nin müşteri için kalıcı operasyon kayıt sistemi olarak kullanılacağı netleştiğinde bu özellik privacy/compliance backlog'una taşınmalıdır.
+
+---
