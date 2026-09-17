@@ -7,7 +7,9 @@ from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from typing import Any, Callable
 
+from src.core.agency_branding import branding_public_payload, default_branding_settings
 from src.core.pilot_access import pilot_mode_enabled
 from src.core.demo_runtime import demo_mode_enabled
 from src.core.web_session import (
@@ -20,6 +22,37 @@ from src.core.web_session import (
 
 router = APIRouter()
 _LOGIN_NONCE_COOKIE = "minai_login_nonce"
+
+
+def _default_branding_payload() -> dict[str, Any]:
+    return branding_public_payload(default_branding_settings())
+
+
+_branding_provider: Callable[[], dict[str, Any]] = _default_branding_payload
+
+
+def configure_web_shell_branding_provider(provider: Callable[[], dict[str, Any]]) -> None:
+    global _branding_provider
+    _branding_provider = provider
+
+
+def _current_branding() -> dict[str, Any]:
+    return _branding_provider()
+
+
+def _branding_css() -> str:
+    branding = _current_branding()
+    return (
+        ":root{"
+        f"--accent:{branding['primary_color']};"
+        f"--accent-contrast:{branding['primary_contrast_color']};"
+        f"--accent-soft:{branding['primary_soft_color']};"
+        f"--accent-hover:{branding['primary_hover_color']};"
+        f"--secondary-accent:{branding['secondary_accent_color']};"
+        f"--secondary-accent-contrast:{branding['secondary_contrast_color']};"
+        f"--secondary-accent-soft:{branding['secondary_soft_color']};"
+        "}"
+    )
 
 
 def _cookie_secure() -> bool:
@@ -49,13 +82,26 @@ def _session_from_request(request: Request):
 
 
 def _login_html(*, nonce: str, error: str | None = None) -> str:
+    branding = _current_branding()
+    company_name = str(branding.get("company_name") or "MINAI")
+    safe_company_name = html.escape(company_name)
+    logo_data_uri = branding.get("logo_data_uri")
+    if logo_data_uri:
+        brand_mark = (
+            '<div class="brand-mark login-brand-mark has-logo">'
+            f'<img class="login-brand-logo" src="{html.escape(str(logo_data_uri), quote=True)}" alt="">'
+            '</div>'
+        )
+    else:
+        initial = html.escape((company_name.strip()[:1] or "M").upper())
+        brand_mark = f'<div class="brand-mark login-brand-mark">{initial}</div>'
     message = "" if not error else f'<p class="login-error">{html.escape(error)}</p>'
     demo = '<p class="demo-banner">DEMO · SENTETİK VERİ</p>' if demo_mode_enabled() else ""
     return f'''<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MINAI Giriş</title><link rel="stylesheet" href="/app/assets/app.css"></head>
+<title>{safe_company_name} Giriş</title><link rel="stylesheet" href="/app/assets/app.css"><link rel="stylesheet" href="/app/branding.css"></head>
 <body class="login-page"><main class="login-card">
-<div class="brand-mark">M</div><h1>MINAI</h1><p class="muted">Freight Operations</p>{demo}{message}
+{brand_mark}<h1>{safe_company_name}</h1><p class="muted">MINAI Freight Operations</p>{demo}{message}
 <form method="post" action="/app/login" autocomplete="on">
 <input type="hidden" name="login_nonce" value="{html.escape(nonce)}">
 <label>E-posta<input type="email" name="email" autocomplete="username" required maxlength="254"></label>
@@ -91,6 +137,13 @@ async def _read_form(request: Request) -> dict[str, str]:
 
 def _redirect_login() -> RedirectResponse:
     return RedirectResponse("/app/login", status_code=303)
+
+
+@router.get("/app/branding.css")
+async def web_branding_stylesheet():
+    if not web_shell_enabled():
+        return Response(status_code=404)
+    return _secure_headers(Response(_branding_css(), media_type="text/css"))
 
 
 @router.get("/app/login")

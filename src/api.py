@@ -130,7 +130,7 @@ from src.core.web_session import (
     list_active_web_operators, resolve_active_web_operator,
     validate_web_session_configuration, web_session_store, web_shell_enabled,
 )
-from src.web_shell import router as web_shell_router
+from src.web_shell import configure_web_shell_branding_provider, router as web_shell_router
 from src.core.operational_data import (
     OperationalDataSourceConfigurationError,
     operational_data_sources_from_environment,
@@ -752,6 +752,11 @@ air_learning_feedback_repository = SQLiteAirLearningFeedbackRepository(pilot_sto
 master_data_repository = SQLiteMasterDataRepository(pilot_store)
 agency_automation_policy_repository = SQLiteAgencyAutomationPolicyRepository(pilot_store)
 agency_branding_repository = SQLiteAgencyBrandingRepository(pilot_store)
+
+def _web_shell_branding_payload():
+    return branding_public_payload(agency_branding_repository.get() or default_branding_settings())
+
+configure_web_shell_branding_provider(_web_shell_branding_payload)
 performance_settings_repository = SQLitePerformanceSettingsRepository(pilot_store)
 extraction_proposal_repository = SQLiteExtractionProposalRepository(pilot_store)
 attachment_review_repository = SQLiteAttachmentInterpretationReviewRepository(pilot_store)
