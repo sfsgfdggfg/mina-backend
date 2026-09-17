@@ -7,9 +7,10 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from src.core.master_data_repository import InMemoryMasterDataRepository
+from src.core.master_data_repository import InMemoryMasterDataRepository, SQLiteMasterDataRepository
 from src.core.master_data_service import create_supplier_master
 from src.core.pilot_access import route_allowed
+from src.core.pilot_store import SQLitePilotStore
 from src.core.runtime_release import runtime_release_payload
 from src.core.supplier_master_import import (
     SupplierImportError, apply_supplier_import, inspect_supplier_import,
@@ -130,6 +131,28 @@ def evaluate_pilot_hardening_regressions() -> dict:
     except SupplierImportError:
         stale_blocked = True
     check(stale_blocked, "supplier import apply fails closed when Master Data changed after preview")
+
+    with physical_temporary_directory() as temporary:
+        sqlite_path = Path(temporary) / "supplier-import.sqlite3"
+        sqlite_repo = SQLiteMasterDataRepository(SQLitePilotStore(sqlite_path))
+        sqlite_preview = preview_supplier_import(
+            repository=sqlite_repo, file_name="suppliers.csv", content=csv_content,
+            table_name="csv", mapping=mapping,
+        )
+        sqlite_result = apply_supplier_import(
+            repository=sqlite_repo, file_name="suppliers.csv", content=csv_content,
+            table_name="csv", mapping=mapping,
+            preview_token=sqlite_preview["preview_token"], operator="SQLite Import Operator",
+        )
+        reopened_repo = SQLiteMasterDataRepository(SQLitePilotStore(sqlite_path))
+        persisted = reopened_repo.find_supplier_by_name("Alpha")
+        check(
+            sqlite_result["applied"] == 1
+            and persisted is not None
+            and persisted.updated_by == "SQLite Import Operator"
+            and persisted.source == "excel_import",
+            "supplier import apply participates in the outer SQLite transaction and survives repository restart",
+        )
 
     with physical_temporary_directory() as temporary:
         root = Path(temporary)

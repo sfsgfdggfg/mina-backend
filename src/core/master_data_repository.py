@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from threading import Lock
 from typing import Protocol
 
@@ -117,13 +118,21 @@ class SQLiteMasterDataRepository:
     def __init__(self, store: SQLitePilotStore) -> None:
         self.store = store
 
+    @contextmanager
+    def _transaction(self):
+        if self.store.transaction_active:
+            yield
+            return
+        with self.store.transaction():
+            yield
+
     def _get_index(self, namespace, key):
         payload = self.store.get(namespace=namespace, record_key=key)
         return None if payload is None else str(payload.get("record_id") or "")
 
     def create_customer(self, profile):
         name_key = normalize_master_text(profile.customer_name)
-        with self.store.transaction():
+        with self._transaction():
             existing = self.find_customer_by_entry_id(profile.entry_id)
             if existing:
                 if _commercial_payload(existing) != _commercial_payload(profile):
@@ -145,7 +154,7 @@ class SQLiteMasterDataRepository:
         old_key = normalize_master_text(current.customer_name); new_key = normalize_master_text(profile.customer_name)
         if old_key != new_key:
             raise MasterDataConflictError("Customer rename is not allowed in P2-03; use a future controlled rename/merge flow.")
-        with self.store.transaction():
+        with self._transaction():
             self.store.upsert(namespace=self.CUSTOMER_NS, record_key=profile.customer_id, payload=profile.model_dump(mode="json"), event_type="customer_master_saved", entity_type="customer_master")
         return self.get_customer(profile.customer_id)
 
@@ -159,7 +168,7 @@ class SQLiteMasterDataRepository:
 
     def create_supplier(self, profile):
         name_key=normalize_master_text(profile.supplier_name)
-        with self.store.transaction():
+        with self._transaction():
             existing = self.find_supplier_by_entry_id(profile.entry_id)
             if existing:
                 if _commercial_payload(existing) != _commercial_payload(profile):
@@ -181,7 +190,7 @@ class SQLiteMasterDataRepository:
         old_key=normalize_master_text(current.supplier_name); new_key=normalize_master_text(profile.supplier_name)
         if old_key != new_key:
             raise MasterDataConflictError("Supplier rename is not allowed in P2-03; use a future controlled rename/merge flow.")
-        with self.store.transaction():
+        with self._transaction():
             self.store.upsert(namespace=self.SUPPLIER_NS, record_key=profile.supplier_id, payload=profile.model_dump(mode="json"), event_type="supplier_master_saved", entity_type="supplier_master")
         return self.get_supplier(profile.supplier_id)
 
