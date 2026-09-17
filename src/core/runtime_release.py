@@ -90,8 +90,17 @@ RUNTIME_RELEASE_IDENTITY = capture_runtime_release_identity()
 
 def runtime_release_payload():
     identity = RUNTIME_RELEASE_IDENTITY
+    pilot = (os.environ.get("MINAI_PILOT_MODE") or "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    explicit_air = (os.environ.get("MINAI_PILOT_AIR_WORKSPACE_ENABLED") or "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
     return {
         "available": identity.available,
         "commit_sha": identity.commit_sha,
         "clean_worktree": identity.clean_worktree,
+        "capabilities": {
+            "air_workspace_enabled": (not pilot) or explicit_air,
+        },
     }

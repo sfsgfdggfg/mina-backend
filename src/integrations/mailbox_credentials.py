@@ -14,6 +14,10 @@ from src.paths import REPO_ROOT
 
 MAILBOX_CREDENTIAL_KEY_ENV = "MINAI_MAILBOX_CREDENTIAL_KEY"
 MAILBOX_CREDENTIAL_PATH_ENV = "MINAI_MAILBOX_CREDENTIAL_PATH"
+IMAP_DEFAULT_HOST_ENV = "MINAI_IMAP_DEFAULT_HOST"
+IMAP_DEFAULT_PORT_ENV = "MINAI_IMAP_DEFAULT_PORT"
+IMAP_DEFAULT_USERNAME_ENV = "MINAI_IMAP_DEFAULT_USERNAME"
+IMAP_DEFAULT_CERTIFICATE_ENV = "MINAI_IMAP_DEFAULT_CERTIFICATE_SHA256"
 SCHEMA_VERSION = "1.0"
 _FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -24,6 +28,38 @@ class MailboxCredentialConfigurationError(RuntimeError):
 
 class MailboxCredentialStoreError(RuntimeError):
     pass
+
+
+def resolve_imap_setup_defaults(
+    mailbox_id: str | None = None, environ: Mapping[str, str] | None = None,
+) -> dict:
+    env = environ if environ is not None else os.environ
+    mailbox = (mailbox_id or "").strip().casefold()
+    host = (env.get(IMAP_DEFAULT_HOST_ENV) or "").strip().lower().rstrip(".")
+    if not host and mailbox.count("@") == 1:
+        domain = mailbox.rsplit("@", 1)[1]
+        if domain and not any(ch.isspace() for ch in domain):
+            host = f"mail.{domain}"
+    raw_port = (env.get(IMAP_DEFAULT_PORT_ENV) or "993").strip()
+    try:
+        port = int(raw_port)
+    except ValueError as exc:
+        raise MailboxCredentialConfigurationError(
+            f"{IMAP_DEFAULT_PORT_ENV} must be an integer."
+        ) from exc
+    if not 1 <= port <= 65535:
+        raise MailboxCredentialConfigurationError(
+            f"{IMAP_DEFAULT_PORT_ENV} must be between 1 and 65535."
+        )
+    username = (env.get(IMAP_DEFAULT_USERNAME_ENV) or "").strip() or mailbox
+    certificate = normalize_certificate_fingerprint(env.get(IMAP_DEFAULT_CERTIFICATE_ENV))
+    return {
+        "host": host or None, "port": port, "username": username or None,
+        "certificate_sha256": certificate,
+        "host_source": "deployment_default" if env.get(IMAP_DEFAULT_HOST_ENV) else (
+            "mailbox_domain_fallback" if host else "unavailable"
+        ),
+    }
 
 
 def normalize_certificate_fingerprint(value: str | None) -> str | None:

@@ -7,9 +7,13 @@ import json
 import os
 import secrets
 import threading
+import tempfile
+from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Mapping
+
+from src.paths import REPO_ROOT
 
 SESSION_COOKIE_NAME = "minai_session"
 CSRF_HEADER_NAME = "X-CSRF-Token"
@@ -17,6 +21,8 @@ _PASSWORD_SCHEME = "scrypt"
 _DEFAULT_TTL_MINUTES = 480
 _DEFAULT_IDLE_MINUTES = 60
 _MAX_SESSIONS = 500
+PASSWORD_OVERRIDES_PATH_ENV = "MINAI_WEB_PASSWORD_OVERRIDES_PATH"
+PASSWORD_OVERRIDE_SCHEMA_VERSION = 1
 
 
 class WebSessionConfigurationError(RuntimeError):
@@ -61,8 +67,10 @@ def _b64_decode(value: str) -> bytes:
 
 
 def hash_password(password: str, *, salt: bytes | None = None) -> str:
-    if len(password) < 12:
-        raise ValueError("Web-shell passwords must contain at least 12 characters.")
+    if len(password) < 10:
+        raise ValueError("Web-shell passwords must contain at least 10 characters.")
+    if len(password) > 128:
+        raise ValueError("Web-shell passwords must not exceed 128 characters.")
     salt_bytes = salt or secrets.token_bytes(16)
     digest = hashlib.scrypt(
         password.encode("utf-8"), salt=salt_bytes,
@@ -130,6 +138,148 @@ def _load_web_users(env: Mapping[str, str]) -> dict[str, WebUser]:
     return users
 
 
+def _password_override_path(env: Mapping[str, str], *, create_parent: bool = False) -> Path | None:
+    raw = (env.get(PASSWORD_OVERRIDES_PATH_ENV) or "").strip()
+    if not raw:
+        return None
+    path = Path(raw).expanduser()
+    pilot = _env_truthy(env.get("MINAI_PILOT_MODE"))
+    if pilot and not path.is_absolute():
+        raise WebSessionConfigurationError(
+            f"{PASSWORD_OVERRIDES_PATH_ENV} must be absolute in pilot mode."
+        )
+    path = path.absolute()
+    if path.exists() and (path.is_symlink() or not path.is_file()):
+        raise WebSessionConfigurationError("Password override path must be a regular non-symlink file.")
+    current = Path(path.anchor)
+    for part in path.parts[1:-1]:
+        current = current / part
+        if current.is_symlink():
+            raise WebSessionConfigurationError("Password override path must not contain symlinks.")
+    if pilot:
+        try:
+            path.resolve().relative_to(REPO_ROOT.resolve())
+        except ValueError:
+            pass
+        else:
+            raise WebSessionConfigurationError("Password overrides must be outside the repository in pilot mode.")
+    parent = path.parent
+    if not parent.exists() and create_parent:
+        try:
+            parent.mkdir(mode=0o700, parents=True)
+            if os.name == "posix":
+                os.chmod(parent, 0o700)
+        except OSError as exc:
+            raise WebSessionConfigurationError("Password override directory could not be created.") from exc
+    if not parent.is_dir():
+        raise WebSessionConfigurationError("Password override directory is unavailable.")
+    return path
+
+
+def _load_password_overrides(env: Mapping[str, str], users: dict[str, WebUser]) -> dict[str, str]:
+    path = _password_override_path(env)
+    if path is None or not path.exists():
+        return {}
+    try:
+        if os.name == "posix" and path.stat().st_mode & 0o077:
+            raise WebSessionConfigurationError("Password override file permissions must be owner-only.")
+        if path.stat().st_size > 256 * 1024:
+            raise WebSessionConfigurationError("Password override file exceeds its size limit.")
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise WebSessionConfigurationError("Password override file is invalid.") from exc
+    if not isinstance(payload, dict) or set(payload) != {"schema_version", "users"}:
+        raise WebSessionConfigurationError("Password override schema is invalid.")
+    if payload["schema_version"] != PASSWORD_OVERRIDE_SCHEMA_VERSION or not isinstance(payload["users"], dict):
+        raise WebSessionConfigurationError("Password override schema is unsupported.")
+    if len(payload["users"]) > 500:
+        raise WebSessionConfigurationError("Password override user count exceeds its limit.")
+    result: dict[str, str] = {}
+    for raw_email, raw_entry in payload["users"].items():
+        email = str(raw_email).strip().casefold()
+        if email not in users or not isinstance(raw_entry, dict) or set(raw_entry) != {"password_hash", "updated_at"}:
+            raise WebSessionConfigurationError("Password override contains an unknown user or invalid metadata.")
+        encoded = raw_entry.get("password_hash")
+        updated_at = raw_entry.get("updated_at")
+        if not isinstance(encoded, str) or not password_hash_supported(encoded):
+            raise WebSessionConfigurationError("Password override contains an unsupported hash.")
+        if not isinstance(updated_at, str) or not 10 <= len(updated_at) <= 40:
+            raise WebSessionConfigurationError("Password override metadata is invalid.")
+        try:
+            parsed = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise WebSessionConfigurationError("Password override metadata is invalid.") from exc
+        if parsed.tzinfo is None:
+            raise WebSessionConfigurationError("Password override timestamps must be timezone-aware.")
+        result[email] = encoded
+    return result
+
+
+def password_change_available(environ: Mapping[str, str] | None = None) -> bool:
+    env = environ if environ is not None else os.environ
+    return _password_override_path(env) is not None
+
+
+def change_web_user_password(
+    *, email: str, current_password: str, new_password: str,
+    environ: Mapping[str, str] | None = None,
+) -> None:
+    env = environ if environ is not None else os.environ
+    users = _load_web_users(env)
+    normalized = email.strip().casefold()
+    user = users.get(normalized)
+    if user is None or not user.active:
+        raise ValueError("Authenticated web user is not active.")
+    path = _password_override_path(env, create_parent=True)
+    if path is None:
+        raise WebSessionConfigurationError("Password changing is not configured.")
+    overrides = _load_password_overrides(env, users)
+    effective = overrides.get(normalized, user.password_hash)
+    if not verify_password(current_password, effective):
+        raise ValueError("Current password is incorrect.")
+    if len(new_password) < 10:
+        raise ValueError("New password must contain at least 10 characters.")
+    if len(new_password) > 128:
+        raise ValueError("New password must not exceed 128 characters.")
+    if verify_password(new_password, effective):
+        raise ValueError("New password must be different from the current password.")
+    new_hash = hash_password(new_password)
+    entries = {
+        key: {"password_hash": value, "updated_at": datetime.now(timezone.utc).isoformat()}
+        for key, value in overrides.items()
+    }
+    entries[normalized] = {
+        "password_hash": new_hash,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    encoded = json.dumps(
+        {"schema_version": PASSWORD_OVERRIDE_SCHEMA_VERSION, "users": entries},
+        ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+    ).encode("utf-8")
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent, prefix=".minai-passwords-", delete=False) as handle:
+            temp_path = Path(handle.name)
+            if os.name == "posix":
+                os.fchmod(handle.fileno(), 0o600)
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if path.exists() and path.is_symlink():
+            raise WebSessionConfigurationError("Password override path must not be a symlink.")
+        os.replace(temp_path, path)
+        if os.name == "posix":
+            os.chmod(path, 0o600)
+    except OSError as exc:
+        raise WebSessionConfigurationError("Password override file could not be written.") from exc
+    finally:
+        if temp_path is not None and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+
+
 def _session_secret(env: Mapping[str, str]) -> bytes:
     secret = (env.get("MINAI_WEB_SESSION_SECRET") or "").strip()
     if len(secret) < 32:
@@ -152,7 +302,8 @@ def validate_web_session_configuration(environ: Mapping[str, str] | None = None)
     env = environ if environ is not None else os.environ
     if not web_shell_enabled(env):
         return
-    _load_web_users(env)
+    users = _load_web_users(env)
+    _load_password_overrides(env, users)
     _session_secret(env)
     ttl = _bounded_minutes(env, "MINAI_WEB_SESSION_TTL_MINUTES", _DEFAULT_TTL_MINUTES, 1440)
     idle = _bounded_minutes(env, "MINAI_WEB_SESSION_IDLE_MINUTES", _DEFAULT_IDLE_MINUTES, 720)
@@ -194,7 +345,11 @@ def authenticate_web_user(
     users = _load_web_users(env)
     normalized = (email or "").strip().lower()
     user = users.get(normalized)
-    candidate_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    overrides = _load_password_overrides(env, users)
+    candidate_hash = (
+        overrides.get(normalized, user.password_hash)
+        if user is not None else _DUMMY_PASSWORD_HASH
+    )
     valid = verify_password(password or "", candidate_hash)
     return user if user is not None and user.active and valid else None
 
@@ -266,6 +421,15 @@ class InMemoryWebSessionStore:
     def invalidate(self, session_id: str) -> None:
         with self._lock:
             self._sessions.pop(session_id, None)
+
+    def invalidate_email(self, email: str) -> None:
+        normalized = email.strip().casefold()
+        with self._lock:
+            for session_id in [
+                key for key, value in self._sessions.items()
+                if value.email == normalized
+            ]:
+                self._sessions.pop(session_id, None)
 
     def verify_csrf(self, session: WebSession, token: str | None) -> bool:
         return bool(token) and hmac.compare_digest(session.csrf_token, str(token))

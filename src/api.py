@@ -92,6 +92,7 @@ from src.integrations.mailbox_credentials import (
     MailboxCredentialConfigurationError,
     MailboxCredentialStore,
     MailboxCredentialStoreError,
+    resolve_imap_setup_defaults,
 )
 from src.integrations.outlook_graph import (
     MAX_PULL_MESSAGES,
@@ -125,6 +126,7 @@ from src.core.pilot_access import (
 )
 from src.core.web_session import (
     CSRF_HEADER_NAME, SESSION_COOKIE_NAME, WebSessionConfigurationError,
+    change_web_user_password, password_change_available,
     list_active_web_operators, resolve_active_web_operator,
     validate_web_session_configuration, web_session_store, web_shell_enabled,
 )
@@ -257,6 +259,11 @@ from src.core.supplier_price_service import (
     create_supplier_fixed_rate,
     set_supplier_fixed_rate_active,
     use_fixed_rate_for_job,
+)
+from src.core.supplier_award_repository import SQLiteSupplierAwardRepository
+from src.core.supplier_award_service import (
+    select_approved_job_supplier_offer,
+    supplier_award_view,
 )
 from src.core.air_shadow_repository import (
     AirShadowConflictError,
@@ -485,6 +492,14 @@ from src.core.master_data_service import (
     update_customer_master,
     update_supplier_master,
 )
+from src.core.supplier_master_import import (
+    SupplierImportError,
+    apply_supplier_import,
+    inspect_supplier_import,
+    preview_supplier_import,
+)
+from src.core.attachment_content_verification import AttachmentContentVerificationError
+from src.core.attachment_safe_extraction import AttachmentSafeExtractionError
 from src.core.automation_policy_repository import (
     SQLiteAgencyAutomationPolicyRepository,
 )
@@ -637,7 +652,9 @@ def _authenticated_operator(
     return normalized
 
 
-async def _read_bounded_air_rate_pdf_body(request: Request) -> bytes:
+async def _read_bounded_upload_body(
+    request: Request, *, size_error_detail: str,
+) -> bytes:
     declared = (request.headers.get("content-length") or "").strip()
     if declared:
         try:
@@ -647,12 +664,12 @@ async def _read_bounded_air_rate_pdf_body(request: Request) -> bytes:
         if declared_size < 0:
             raise HTTPException(status_code=400, detail="invalid_content_length")
         if declared_size > MAX_ATTACHMENT_FILE_BYTES:
-            raise HTTPException(status_code=413, detail="air_rate_pdf_size_exceeds_limit")
+            raise HTTPException(status_code=413, detail=size_error_detail)
     body = bytearray()
     async for chunk in request.stream():
         body.extend(chunk)
         if len(body) > MAX_ATTACHMENT_FILE_BYTES:
-            raise HTTPException(status_code=413, detail="air_rate_pdf_size_exceeds_limit")
+            raise HTTPException(status_code=413, detail=size_error_detail)
     return bytes(body)
 
 
@@ -714,6 +731,7 @@ quote_case_repository = SQLiteQuoteCaseRepository(pilot_store)
 mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
+supplier_award_repository = SQLiteSupplierAwardRepository(pilot_store)
 operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
 operation_start_message_repository = SQLiteOperationStartMessageRepository(pilot_store)
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
@@ -840,12 +858,19 @@ class OutlookPullRequest(BaseModel):
 class ImapMailboxConfigureRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mailbox_id: str
-    host: str
-    port: int = Field(default=993, ge=1, le=65535)
-    username: str
+    host: str | None = None
+    port: int | None = Field(default=None, ge=1, le=65535)
+    username: str | None = None
     password: SecretStr
     certificate_sha256: str | None = None
     authorization_confirmed: bool = False
+
+
+class WebPasswordChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: SecretStr
+    new_password: SecretStr
+    new_password_confirmation: SecretStr
 
 
 class RelationshipOnboardingOutlookRequest(BaseModel):
@@ -955,6 +980,10 @@ class SupplierFixedRateUseRequest(BaseModel):
 
 class SupplierFixedRateStatusRequest(BaseModel):
     active: bool
+
+
+class SupplierAwardSelectRequest(BaseModel):
+    offer_id: str = Field(min_length=1, max_length=300)
 
 
 class MinaJobAutomationOverrideRequest(BaseModel):
@@ -2092,6 +2121,65 @@ def update_supplier_master_profile(
     return profile.model_dump()
 
 
+def _supplier_import_mapping(raw: str) -> dict[str, str]:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail="supplier_import_mapping_invalid") from exc
+    if not isinstance(payload, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in payload.items()
+    ):
+        raise HTTPException(status_code=422, detail="supplier_import_mapping_invalid")
+    return payload
+
+
+@app.post("/master-data/suppliers/import/inspect")
+async def inspect_supplier_master_file(http_request: Request, file_name: str):
+    content = await _read_bounded_upload_body(http_request, size_error_detail="supplier_import_file_size_exceeds_limit")
+    try:
+        return inspect_supplier_import(file_name=file_name, content=content)
+    except (SupplierImportError, AttachmentContentVerificationError, AttachmentSafeExtractionError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/master-data/suppliers/import/preview")
+async def preview_supplier_master_file(
+    http_request: Request, file_name: str, table_name: str, mapping_json: str,
+):
+    content = await _read_bounded_upload_body(http_request, size_error_detail="supplier_import_file_size_exceeds_limit")
+    try:
+        result = preview_supplier_import(
+            repository=master_data_repository, file_name=file_name, content=content,
+            table_name=table_name, mapping=_supplier_import_mapping(mapping_json),
+        )
+        result.pop("_valid_payloads", None)
+        return result
+    except (SupplierImportError, AttachmentContentVerificationError, AttachmentSafeExtractionError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/master-data/suppliers/import/apply")
+async def apply_supplier_master_file(
+    http_request: Request, file_name: str, table_name: str,
+    mapping_json: str, preview_token: str,
+):
+    content = await _read_bounded_upload_body(http_request, size_error_detail="supplier_import_file_size_exceeds_limit")
+    try:
+        return apply_supplier_import(
+            repository=master_data_repository, file_name=file_name, content=content,
+            table_name=table_name, mapping=_supplier_import_mapping(mapping_json),
+            preview_token=preview_token,
+            operator=_authenticated_operator(http_request),
+        )
+    except SupplierImportError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (AttachmentContentVerificationError, AttachmentSafeExtractionError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (MasterDataConflictError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @app.get("/master-data/suppliers/{supplier_id}/geography")
 def get_supplier_master_geography(supplier_id: str, destination_country: str):
     profile = master_data_repository.get_supplier(supplier_id)
@@ -2421,10 +2509,16 @@ def _mailbox_status() -> dict:
             "read_only_runtime": True,
             "provider_scoped_read_only": True,
             "password_exposed": False,
+            "imap_setup_defaults": None,
         }
 
     authority = _mailbox_provider_authority()
     imap_setup_available = True
+    try:
+        setup_defaults = resolve_imap_setup_defaults()
+    except (MailboxCredentialConfigurationError, ValueError):
+        setup_defaults = {"host": None, "port": 993, "username": None,
+                          "certificate_sha256": None, "host_source": "invalid"}
 
     if authority != "outlook":
         imap_credential = None
@@ -2444,6 +2538,7 @@ def _mailbox_status() -> dict:
                 "provider_scoped_read_only": False,
                 "password_exposed": False,
                 "status": "credential_store_invalid",
+                "imap_setup_defaults": setup_defaults,
             }
 
         if imap_credential is not None:
@@ -2455,6 +2550,7 @@ def _mailbox_status() -> dict:
                     "provider_scoped_read_only": False,
                     "credential_storage": "fernet_encrypted_external_file",
                     "status": "ready",
+                    "imap_setup_defaults": setup_defaults,
                 }
             )
             return payload
@@ -2469,6 +2565,7 @@ def _mailbox_status() -> dict:
                 "provider_scoped_read_only": False,
                 "password_exposed": False,
                 "status": "not_configured",
+                "imap_setup_defaults": setup_defaults,
             }
     else:
         try:
@@ -2488,6 +2585,7 @@ def _mailbox_status() -> dict:
             "provider_scoped_read_only": False,
             "password_exposed": False,
             "status": "not_configured",
+            "imap_setup_defaults": setup_defaults,
         }
     return {
         "configured": True,
@@ -2498,12 +2596,54 @@ def _mailbox_status() -> dict:
         "provider_scoped_read_only": "Mail.Send" not in outlook.scopes,
         "password_exposed": False,
         "status": "ready",
+        "imap_setup_defaults": setup_defaults,
     }
 
 
 @app.get("/mailbox/status")
 def get_mailbox_status():
     return _mailbox_status()
+
+
+@app.get("/settings/password")
+def get_password_change_status(http_request: Request):
+    session = getattr(http_request.state, "web_session", None)
+    if session is None:
+        raise HTTPException(status_code=401, detail="browser_session_required")
+    try:
+        available = password_change_available()
+    except WebSessionConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "available": available,
+        "reason": None if available else "password_override_path_not_configured",
+        "minimum_length": 10,
+        "maximum_length": 128,
+    }
+
+
+@app.post("/settings/password/change")
+def change_current_web_password(
+    request: WebPasswordChangeRequest, http_request: Request,
+):
+    session = getattr(http_request.state, "web_session", None)
+    if session is None:
+        raise HTTPException(status_code=401, detail="browser_session_required")
+    current = request.current_password.get_secret_value()
+    new = request.new_password.get_secret_value()
+    confirmation = request.new_password_confirmation.get_secret_value()
+    if new != confirmation:
+        raise HTTPException(status_code=422, detail="new_password_confirmation_mismatch")
+    try:
+        change_web_user_password(
+            email=session.email, current_password=current, new_password=new,
+        )
+    except WebSessionConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    web_session_store.invalidate_email(session.email)
+    return {"changed": True, "all_sessions_invalidated": True}
 
 
 @app.post("/mailbox/imap/configure")
@@ -2523,13 +2663,18 @@ def configure_imap_mailbox(
             status_code=409, detail="imap_provider_not_authorized_by_runtime"
         )
     try:
+        defaults = resolve_imap_setup_defaults(request.mailbox_id)
         credential = ImapMailboxCredential(
             mailbox_id=request.mailbox_id,
-            host=request.host,
-            port=request.port,
-            username=request.username,
+            host=request.host or defaults["host"],
+            port=request.port or defaults["port"],
+            username=request.username or defaults["username"],
             password=request.password,
-            certificate_sha256=request.certificate_sha256,
+            certificate_sha256=(
+                request.certificate_sha256
+                if request.certificate_sha256 is not None
+                else defaults["certificate_sha256"]
+            ),
         )
         ImapReadClient(credential=credential).test_connection()
         store = MailboxCredentialStore.from_environment()
@@ -2983,7 +3128,7 @@ async def upload_air_rate_source(
     valid_to: Optional[date] = None,
     notes: Optional[str] = None,
 ):
-    content = await _read_bounded_air_rate_pdf_body(http_request)
+    content = await _read_bounded_upload_body(http_request, size_error_detail="air_rate_pdf_size_exceeds_limit")
     try:
         source, created = register_commercial_air_rate_pdf(
             repository=air_shadow_repository,
@@ -3932,6 +4077,41 @@ def get_mina_job_supplier_prices(job_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@app.get("/mina-jobs/{job_id}/supplier-award")
+def get_mina_job_supplier_award(job_id: str):
+    if mina_job_repository.get(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"MINA job not found: {job_id}")
+    return supplier_award_view(
+        award_repository=supplier_award_repository,
+        price_repository=supplier_price_repository,
+        mina_repository=mina_job_repository,
+        supplier_repository=supplier_rfq_repository,
+        job_id=job_id,
+    )
+
+
+@app.post("/mina-jobs/{job_id}/supplier-award")
+def select_mina_job_supplier_award(
+    job_id: str, request: SupplierAwardSelectRequest, http_request: Request,
+):
+    try:
+        selection = select_approved_job_supplier_offer(
+            award_repository=supplier_award_repository,
+            price_repository=supplier_price_repository,
+            mina_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            job_id=job_id, offer_id=request.offer_id,
+            selected_by=_authenticated_operator(http_request),
+        )
+    except MinaJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MinaJobTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return selection.model_dump(mode="json")
+
+
 @app.post("/mina-jobs/{job_id}/supplier-prices/manual")
 def create_mina_job_supplier_price(
     job_id: str, request: SupplierDirectPriceCreateRequest, http_request: Request,
@@ -4072,7 +4252,7 @@ def record_mina_job_supplier_decision_outcome(
 @app.get("/mina-jobs/{job_id}")
 def get_mina_job(job_id: str):
     try:
-        return build_mina_job_detail(
+        payload = build_mina_job_detail(
             repository=mina_job_repository,
             supplier_repository=supplier_rfq_repository,
             quote_case_repository=quote_case_repository,
@@ -4088,6 +4268,14 @@ def get_mina_job(job_id: str):
             learning_fact_repository=learning_fact_repository,
             job_id=job_id,
         )
+        payload["supplier_award"] = supplier_award_view(
+            award_repository=supplier_award_repository,
+            price_repository=supplier_price_repository,
+            mina_repository=mina_job_repository,
+            supplier_repository=supplier_rfq_repository,
+            job_id=job_id,
+        )
+        return payload
     except MinaJobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -4483,6 +4671,9 @@ def update_mina_job_stage(
             reason=request.reason,
             operation_execution_repository=operation_execution_repository,
             air_operation_handoff_repository=air_operation_handoff_repository,
+            supplier_award_repository=supplier_award_repository,
+            supplier_price_repository=supplier_price_repository,
+            supplier_rfq_repository=supplier_rfq_repository,
         )
     except MinaJobTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
