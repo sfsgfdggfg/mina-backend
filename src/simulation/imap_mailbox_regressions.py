@@ -17,6 +17,7 @@ from src.integrations.mailbox_credentials import (
     MailboxCredentialConfigurationError,
     MailboxCredentialStore,
     MailboxCredentialStoreError,
+    resolve_imap_setup_defaults,
 )
 from src.paths import REPO_ROOT
 from src.simulation.physical_temp import physical_temporary_directory
@@ -131,6 +132,33 @@ def evaluate_imap_mailbox_regressions():
 
     def check(condition: bool, label: str) -> None:
         (passes if condition else failures).append(label)
+
+    defaults = resolve_imap_setup_defaults(
+        "ops@example.com", {"MINAI_IMAP_DEFAULT_PORT": "993"}
+    )
+    check(
+        defaults["host"] == "mail.example.com"
+        and defaults["username"] == "ops@example.com"
+        and defaults["port"] == 993
+        and defaults["certificate_sha256"] is None
+        and defaults["host_source"] == "mailbox_domain_fallback",
+        "IMAP simple setup derives conservative host and username defaults without inventing a certificate pin",
+    )
+    explicit = resolve_imap_setup_defaults(
+        "ops@example.com",
+        {
+            "MINAI_IMAP_DEFAULT_HOST": "imap.example.net",
+            "MINAI_IMAP_DEFAULT_PORT": "1993",
+            "MINAI_IMAP_DEFAULT_USERNAME": "mail-user",
+        },
+    )
+    check(
+        explicit["host"] == "imap.example.net"
+        and explicit["port"] == 1993
+        and explicit["username"] == "mail-user"
+        and explicit["host_source"] == "deployment_default",
+        "deployment IMAP defaults override mailbox-domain fallback without exposing secrets",
+    )
 
     check(
         resolve_mailbox_provider_authority({}) == "auto"

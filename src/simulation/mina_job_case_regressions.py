@@ -25,6 +25,11 @@ from src.core.mina_job_service import (
     set_mina_job_owners,
     transition_mina_job_stage,
 )
+from src.core.supplier_award_repository import InMemorySupplierAwardRepository
+from src.core.supplier_award_service import select_approved_job_supplier_offer
+from src.core.supplier_price_repository import InMemorySupplierPriceRepository
+from src.core.supplier_price_service import create_direct_supplier_price_offer
+from src.core.supplier_rfq_repository import InMemorySupplierRFQRepository
 from src.core.mina_job_view import build_mina_job_detail
 from src.core.models import Shipment
 from src.core.pilot_access import route_allowed
@@ -149,9 +154,25 @@ def evaluate_mina_job_case_regressions() -> dict:
         shipment=_shipment("Approved Job Customer"), opened_by="Operator One",
         opened_at=NOW, sales_owner="Sales One", operations_owner="Ops One",
     )
+    manual_prices = InMemorySupplierPriceRepository()
+    manual_suppliers = InMemorySupplierRFQRepository()
+    manual_awards = InMemorySupplierAwardRepository()
     manual_job = transition_mina_job_stage(
         repository=manual_repo, mina_code=manual_job.mina_code, target_stage="pricing",
         actor="Operator One", occurred_at=NOW + timedelta(minutes=1),
+    )
+    manual_offer = create_direct_supplier_price_offer(
+        price_repository=manual_prices, mina_repository=manual_repo,
+        job_id=manual_job.job_id, entry_id="case-approved-price",
+        supplier_name="Case Supplier", source_type="phone", cost=1000,
+        currency="EUR", recorded_by="Operator One",
+        recorded_at=NOW + timedelta(minutes=1),
+    )
+    select_approved_job_supplier_offer(
+        award_repository=manual_awards, price_repository=manual_prices,
+        mina_repository=manual_repo, supplier_repository=manual_suppliers,
+        job_id=manual_job.job_id, offer_id=manual_offer.offer_id,
+        selected_by="Operator One", selected_at=NOW + timedelta(minutes=2),
     )
     approved_allowed = allowed_next_stages(manual_job)
     try:
@@ -166,6 +187,9 @@ def evaluate_mina_job_case_regressions() -> dict:
         repository=manual_repo, mina_code=manual_job.mina_code,
         target_stage="operation_opened", actor="Operator One",
         occurred_at=NOW + timedelta(minutes=2),
+        supplier_award_repository=manual_awards,
+        supplier_price_repository=manual_prices,
+        supplier_rfq_repository=manual_suppliers,
     )
     manual_job = set_mina_job_owners(
         repository=manual_repo, mina_code=manual_job.mina_code, actor="Manager One",

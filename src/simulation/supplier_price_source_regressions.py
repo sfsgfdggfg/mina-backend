@@ -38,6 +38,8 @@ from src.core.supplier_quote_selection import (
 )
 from src.core.supplier_rfq import SupplierRFQDraft, SupplierRFQResponse, SupplierRFQWorkflow
 from src.core.supplier_rfq_repository import InMemorySupplierRFQRepository
+from src.core.supplier_award_repository import InMemorySupplierAwardRepository
+from src.core.supplier_award_service import select_approved_job_supplier_offer
 
 NOW = datetime(2026, 9, 4, 9, 0, tzinfo=timezone.utc)
 
@@ -75,6 +77,7 @@ def evaluate_supplier_price_source_regressions() -> dict:
         opened_by="Operator One",
         opened_at=NOW,
     )
+    awards = InMemorySupplierAwardRepository()
     job = transition_mina_job_stage(
         repository=jobs,
         mina_code=job.mina_code,
@@ -82,6 +85,16 @@ def evaluate_supplier_price_source_regressions() -> dict:
         actor="Operator One",
         occurred_at=NOW + timedelta(minutes=1),
     )
+    try:
+        transition_mina_job_stage(
+            repository=jobs, mina_code=job.mina_code, target_stage="operation_opened",
+            actor="Operator One", supplier_award_repository=awards,
+            supplier_price_repository=prices, supplier_rfq_repository=suppliers,
+        )
+        no_offer_blocked = False
+    except MinaJobTransitionError:
+        no_offer_blocked = True
+    check(no_offer_blocked, "approved job cannot open operation without supplier price and selection")
 
     rate = create_supplier_fixed_rate(
         repository=prices,
@@ -254,6 +267,16 @@ def evaluate_supplier_price_source_regressions() -> dict:
         and sum(e.event_type == "supplier_price_recorded" for e in jobs.list_events(job.job_id)) == 1,
         "direct supplier price entry is idempotent and creates one job audit event",
     )
+    try:
+        transition_mina_job_stage(
+            repository=jobs, mina_code=job.mina_code, target_stage="operation_opened",
+            actor="Operator One", supplier_award_repository=awards,
+            supplier_price_repository=prices, supplier_rfq_repository=suppliers,
+        )
+        unselected_offer_blocked = False
+    except MinaJobTransitionError:
+        unselected_offer_blocked = True
+    check(unselected_offer_blocked, "usable supplier offer does not replace explicit approved-job selection")
 
     fixed_offer = use_fixed_rate_for_job(
         price_repository=prices,
@@ -370,12 +393,44 @@ def evaluate_supplier_price_source_regressions() -> dict:
         "RFQ direct and fixed offers share the same multi-criteria comparison and preserve source",
     )
 
+    select_approved_job_supplier_offer(
+        award_repository=awards, price_repository=prices, mina_repository=jobs,
+        supplier_repository=suppliers, job_id=job.job_id,
+        offer_id=rfq_offer.offer_id, selected_by="Operator One",
+        selected_at=NOW + timedelta(minutes=7),
+    )
+    suppliers.save_responses([SupplierRFQResponse(
+        rfq_id=draft.rfq_id, supplier_name="RFQTrans", rfq_priority=3,
+        status="quoted", cost=1990, currency="EUR", transit_time="4 days",
+        equipment_type="Tenteli", source="email",
+        received_at=NOW + timedelta(minutes=8),
+    )])
+    try:
+        transition_mina_job_stage(
+            repository=jobs, mina_code=job.mina_code, target_stage="operation_opened",
+            actor="Operator One", occurred_at=NOW + timedelta(minutes=8),
+            supplier_award_repository=awards, supplier_price_repository=prices,
+            supplier_rfq_repository=suppliers,
+        )
+        superseded_selection_blocked = False
+    except MinaJobTransitionError:
+        superseded_selection_blocked = True
+    check(superseded_selection_blocked, "later RFQ response makes an earlier supplier award stale")
+    select_approved_job_supplier_offer(
+        award_repository=awards, price_repository=prices, mina_repository=jobs,
+        supplier_repository=suppliers, job_id=job.job_id,
+        offer_id=fixed_offer.offer_id, selected_by="Operator One",
+        selected_at=NOW + timedelta(minutes=9),
+    )
     job = transition_mina_job_stage(
         repository=jobs,
         mina_code=job.mina_code,
         target_stage="operation_opened",
         actor="Operator One",
-        occurred_at=NOW + timedelta(minutes=8),
+        occurred_at=NOW + timedelta(minutes=10),
+        supplier_award_repository=awards,
+        supplier_price_repository=prices,
+        supplier_rfq_repository=suppliers,
     )
     try:
         create_direct_supplier_price_offer(

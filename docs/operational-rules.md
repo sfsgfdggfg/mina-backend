@@ -4550,3 +4550,19 @@ The deterministic source-text recovery must reuse the canonical operational sign
 For confirmed Road shipments, if the Turkey pickup `cargo_ready_date` or Turkey delivery `required_delivery_date` falls on a verified Turkish full-day public/religious holiday or official/religious half-day eve, risk assessment must surface a yellow human-review warning.
 
 This warning is non-blocking by itself: it must not invent special equipment, exclude the shipment from pilot scope, require management approval, or prevent quote generation. If the relevant year is outside verified Turkey holiday-calendar coverage, require human review rather than silently assuming no holiday. Do not apply the Turkey calendar to foreign-only routes, and do not create arbitrary pre/post-holiday buffer windows without an evidence-backed policy.
+
+## RULE-302 — Approved-Job Operation Opening Requires Current Supplier Award Evidence
+
+An `approved_job` may never enter customer quote stages. It may open operation only from pricing after an authenticated operator has explicitly selected a current usable source-neutral supplier price offer. Preserve exact supplier, offer ID, cost, currency, source/provenance, operator and selection time in append-only evidence. A newer offer for that supplier or invalid/inapplicable underlying evidence makes the selection stale; fail closed until re-selection. All operation-opening entry points, including the generic stage endpoint, apply this rule.
+
+## RULE-303 — Supplier Spreadsheet Import Is Preview-Bound and Non-Destructive
+
+Supplier `.xlsx`/`.csv` import uses bounded safe extraction and never executes formulas or macros. `supplier_name` mapping is mandatory. Duplicate names and active contact emails are detected within the file and against current Master Data; duplicate and invalid rows are skipped, never overwritten. Apply must reprocess the identical file, mapping and current Master Data state against the server-authoritative preview token. Countries create country geography; non-deterministic region tags remain `legacy_region_tags`. Raw upload bytes are transient.
+
+## RULE-304 — Web Password Overrides Stay External and Fail Closed
+
+Self-service password change requires the current password, matching new values, a different 10–128-character password, normal authenticated browser session and CSRF protection. Store only supported scrypt hashes in the external owner-only `MINAI_WEB_PASSWORD_OVERRIDES_PATH`; in pilot it is absolute, outside the repository, non-symlink and atomically replaced at mode 0600. Unknown users, unsupported hashes or unbounded/invalid metadata invalidate the override store. Success invalidates every session for the user.
+
+## RULE-305 — Current Firm Road RFQ Date Requirement
+
+For a firm Road RFQ, `cargo_ready_date` is required. `required_delivery_date` is optional when the customer did not provide it. If the customer supplied a required-delivery date, it must be parseable, coherent with cargo readiness and respected by downstream supplier timing. This rule supersedes earlier language that made required delivery date universally mandatory; do not rewrite the historical rule entries.

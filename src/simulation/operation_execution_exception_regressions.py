@@ -30,8 +30,12 @@ from src.core.operation_execution_service import (
 from src.core.pilot_access import route_allowed
 from src.core.pilot_store import SQLitePilotStore
 from src.core.quote_case_repository import InMemoryQuoteCaseRepository
-from src.core.sqlite_repositories import SQLiteMinaJobRepository
+from src.core.sqlite_repositories import SQLiteMinaJobRepository, SQLiteSupplierRFQRepository
 from src.core.supplier_rfq_repository import InMemorySupplierRFQRepository
+from src.core.supplier_price_repository import InMemorySupplierPriceRepository, SQLiteSupplierPriceRepository
+from src.core.supplier_price_service import create_direct_supplier_price_offer
+from src.core.supplier_award_repository import InMemorySupplierAwardRepository, SQLiteSupplierAwardRepository
+from src.core.supplier_award_service import select_approved_job_supplier_offer
 
 NOW = datetime(2026, 9, 4, 13, 0, tzinfo=timezone.utc)
 
@@ -57,13 +61,35 @@ def _operation_job(repository, *, intake_id: str = "op-case", opened_at=NOW - ti
         intake_channel="phone", job_kind="approved_job", shipment=_shipment(),
         opened_by="Operator", opened_at=opened_at,
     )
+    if isinstance(repository, SQLiteMinaJobRepository):
+        prices = SQLiteSupplierPriceRepository(repository.store)
+        suppliers = SQLiteSupplierRFQRepository(repository.store)
+        awards = SQLiteSupplierAwardRepository(repository.store)
+    else:
+        prices = InMemorySupplierPriceRepository()
+        suppliers = InMemorySupplierRFQRepository()
+        awards = InMemorySupplierAwardRepository()
     job = transition_mina_job_stage(
         repository=repository, mina_code=job.mina_code, target_stage="pricing",
         actor="Operator", occurred_at=opened_at + timedelta(minutes=1),
     )
+    offer = create_direct_supplier_price_offer(
+        price_repository=prices, mina_repository=repository, job_id=job.job_id,
+        entry_id=f"{intake_id}:price", supplier_name="Operation Supplier",
+        source_type="phone", cost=1000, currency="EUR", recorded_by="Operator",
+        recorded_at=opened_at + timedelta(minutes=1),
+    )
+    select_approved_job_supplier_offer(
+        award_repository=awards, price_repository=prices,
+        mina_repository=repository, supplier_repository=suppliers,
+        job_id=job.job_id, offer_id=offer.offer_id, selected_by="Operator",
+        selected_at=opened_at + timedelta(minutes=2),
+    )
     job = transition_mina_job_stage(
         repository=repository, mina_code=job.mina_code, target_stage="operation_opened",
         actor="Operator", occurred_at=opened_at + timedelta(minutes=2),
+        supplier_award_repository=awards, supplier_price_repository=prices,
+        supplier_rfq_repository=suppliers,
     )
     return job
 

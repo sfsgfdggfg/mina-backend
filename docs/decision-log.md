@@ -7772,3 +7772,35 @@ A real agency pilot must select its mailbox provider explicitly with `MINAI_MAIL
 - IMAP remains unconfigured until the agency operator enters valid credentials through the browser; before that, provider-neutral inbox/history actions return a controlled not-configured response.
 - Invalid provider-authority values fail controlled-pilot runtime preflight.
 - Changing the real agency mailbox provider is a deployment/runtime-authority change and requires controlled validation rather than opportunistic fallback.
+
+## DEC-291 — Approved Jobs Require a Current Explicit Supplier Award
+
+**Status:** Accepted
+**Date:** 2026-09-17
+
+An `approved_job` skips the customer quote lifecycle but does not skip supplier pricing. Before `pricing -> operation_opened`, an authenticated operator must select one current usable source-neutral `SupplierPriceOffer`. The append-only award evidence freezes supplier, offer ID, cost, currency, price source/reference, RFQ/fixed-rate provenance, operator and timestamp. A later superseding price response, inactive/inapplicable fixed rate, missing offer, or changed evidence makes the award stale and blocks operation opening until a new selection supersedes it. The generic stage API enforces the same gate. No fresh email RFQ is required when a valid direct, portal, phone, WhatsApp, manual, API or fixed-rate offer exists.
+
+## DEC-292 — Pilot Setup Surfaces Simple Mailbox and Password Controls
+
+**Status:** Accepted
+**Date:** 2026-09-17
+
+Normal IMAP onboarding asks for mailbox email, password and authorization; host, port, username and optional certificate pin live under advanced settings. Omitted technical values resolve from `MINAI_IMAP_DEFAULT_*`, with port 993, mailbox-email username and conservative `mail.<domain>` host fallback. Existing explicit configuration and all read-only/TLS/credential-storage boundaries remain unchanged.
+
+Authenticated web users may change their own password only when `MINAI_WEB_PASSWORD_OVERRIDES_PATH` is configured. Current-password verification, 10–128-character policy, confirmation, supported scrypt-only external owner-only persistence, atomic non-symlink writes and all-session invalidation are mandatory. The environment registry remains identity/name/active authority; a validated per-user override controls only password verification.
+
+## DEC-293 — Road Pilot Capability and Supplier Import Surface
+
+**Status:** Accepted
+**Date:** 2026-09-17
+
+Controlled pilot runtime hides the Air workspace by default. Only `MINAI_PILOT_AIR_WORKSPACE_ENABLED=1` enables it; non-pilot development remains visible. Disabled UI must neither show the Air settings tab nor call Air settings APIs. This is UI capability gating, not new authorization.
+
+Settings provides bounded `.xlsx`/`.csv` Supplier Master Data import with safe extraction, explicit mapping, duplicate/invalid preview, exact file/mapping/state-bound apply, no silent overwrite, `source=excel_import` and authenticated operator provenance. Raw bytes remain transient. Customer-document upload is deferred and is not needed in the current pilot.
+
+## DEC-294 — Current Road Delivery-Date Contract Supersedes Mandatory-Deadline Wording
+
+**Status:** Accepted
+**Date:** 2026-09-17
+
+For a firm Road RFQ, cargo-ready date is required. Customer required-delivery date is optional unless the customer supplied one. When supplied it must be parseable and coherent, and downstream supplier timing/availability must respect it. This decision supersedes earlier Road wording that described `required_delivery_date` as universally mandatory; historical entries remain unchanged for audit history.

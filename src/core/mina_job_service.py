@@ -409,6 +409,8 @@ def transition_mina_job_stage(
     target_stage: MinaJobStage, actor: str, reason: str | None = None,
     occurred_at: datetime | None = None, operation_execution_repository=None,
     air_operation_handoff_repository=None,
+    supplier_award_repository=None, supplier_price_repository=None,
+    supplier_rfq_repository=None,
 ) -> MinaJob:
     timestamp = aware_utc(occurred_at)
     normalized_actor = _normalized_actor(actor)
@@ -423,6 +425,21 @@ def transition_mina_job_stage(
         if target_stage not in allowed:
             raise MinaJobTransitionError(
                 f"MINA job cannot transition from {job.stage} to {target_stage}."
+            )
+        if target_stage == "operation_opened" and job.job_kind == "approved_job":
+            if any(item is None for item in (
+                supplier_award_repository, supplier_price_repository,
+                supplier_rfq_repository,
+            )):
+                raise MinaJobTransitionError(
+                    "Approved job operation opening requires supplier-award authority."
+                )
+            from src.core.supplier_award_service import require_current_approved_job_supplier_award
+            require_current_approved_job_supplier_award(
+                job=job, award_repository=supplier_award_repository,
+                price_repository=supplier_price_repository,
+                mina_repository=repository,
+                supplier_repository=supplier_rfq_repository,
             )
         if (
             target_stage == "operation_opened"

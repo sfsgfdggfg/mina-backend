@@ -97,6 +97,7 @@ from src.simulation.explicit_road_inference_regressions import evaluate_explicit
 from src.simulation.mail_adapter_regressions import evaluate_mail_adapter_regressions
 from src.simulation.microsoft_auth_regressions import evaluate_microsoft_auth_regressions
 from src.simulation.imap_mailbox_regressions import evaluate_imap_mailbox_regressions
+from src.simulation.pilot_hardening_regressions import evaluate_pilot_hardening_regressions
 from src.simulation.outlook_graph_read_regressions import evaluate_outlook_graph_read_regressions
 from src.simulation.attachment_content_verification_regressions import (
     evaluate_attachment_content_verification_regressions,
@@ -395,6 +396,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "IMAP mailbox onboarding",
         evaluate_imap_mailbox_regressions,
+    ),
+    Suite(
+        "Pilot hardening product controls",
+        evaluate_pilot_hardening_regressions,
     ),
     Suite(
         "Read-only Outlook Graph ingestion",
