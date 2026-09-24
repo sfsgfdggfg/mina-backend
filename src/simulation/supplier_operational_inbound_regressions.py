@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from src.core.extraction_confirmation_repository import InMemoryExtractionProposalRepository
-from src.core.mail import InboundMailEnvelope
+from src.core.mail import InboundAttachmentMetadata, InboundMailEnvelope
 from src.core.master_data_repository import InMemoryMasterDataRepository
 from src.core.master_data_service import create_supplier_master
 from src.core.supplier_operational_inbound import (
@@ -88,6 +88,34 @@ def evaluate_supplier_operational_inbound_regressions():
         sea_first.get("notification_id") == sea_duplicate.get("notification_id")
         and len(notifications.list_all()) == 2,
         "supplier operational queue is idempotent by provider mailbox message identity",
+    )
+
+    attached_operation = InboundMailEnvelope(
+        external_message_id="attached-op-1",
+        sender_address="ops@nmtgrup.com",
+        subject="Ordino İhbarı - denizyolu operasyonu",
+        body_text="Varış ihbarı. Konşimento ve ordino bilgileri ektedir.",
+        has_attachments=True,
+        attachment_manifest=[
+            InboundAttachmentMetadata(
+                name="signature-logo.png",
+                content_type="image/png",
+                size_bytes=2048,
+                kind="file",
+                is_inline=True,
+            )
+        ],
+        **common,
+    )
+    attached_result = route(attached_operation)
+    check(
+        attached_result.get("result_type") == "supplier_operational_notification"
+        and attached_result.get("inbound_route") == "supplier_operation"
+        and attached_result.get("attachment_intake_status") == "manual_review"
+        and attached_result.get("attachment_intake_reason_code")
+        == "attachment_inline_not_allowed"
+        and len(notifications.list_all()) == 3,
+        "unsupported or inline attachments do not hide a trusted supplier operation",
     )
 
     return {

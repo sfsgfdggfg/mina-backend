@@ -466,6 +466,37 @@ def process_controlled_outlook_inbound_mail(
     if mail.has_attachments:
         assessment = assess_attachment_intake(mail)
         if assessment.status != "metadata_allowlisted":
+            customer_matches, customer_error = _customer_matches(
+                mail=mail,
+                operational_data_sources=operational_data_sources,
+                master_data_repository=master_data_repository,
+            )
+            supplier_profiles = matching_supplier_masters(
+                master_data_repository,
+                mail.sender_address,
+            )
+            supplier_correlation = correlate_supplier_reply(
+                mail,
+                supplier_repository,
+            )
+            operational_assessment = assess_supplier_operational_mail(mail)
+            if (
+                customer_error is None
+                and len(customer_matches or []) == 0
+                and len(supplier_profiles) == 1
+                and supplier_correlation.status not in {"matched", "ambiguous_rfq"}
+                and operational_assessment.operational
+            ):
+                return _with_attachment_intake(
+                    _supplier_operational_result(
+                        mail,
+                        supplier_profiles[0],
+                        repository=supplier_operational_repository,
+                        mina_job_repository=mina_job_repository,
+                        with_attachment=True,
+                    ),
+                    assessment,
+                )
             return _with_attachment_intake(
                 _blocked_result(
                     result_type="inbound_mail_manual_review_required",
