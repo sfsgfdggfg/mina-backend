@@ -5876,7 +5876,13 @@ def process_email(request: ProcessEmailRequest):
 @app.get("/extraction-proposals")
 def list_extraction_proposals():
     proposals = extraction_proposal_repository.list_all()
-    proposals.sort(key=lambda item: item.created_at, reverse=True)
+    proposals.sort(
+        key=lambda item: (
+            item.inbound_mail.received_at
+            or datetime.min.replace(tzinfo=timezone.utc)
+        ),
+        reverse=True,
+    )
     return {"proposals": [item.model_dump() for item in proposals]}
 
 
