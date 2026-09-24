@@ -168,6 +168,7 @@ _ALLOWED_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("POST", re.compile(r"^/inbound/outlook/pull$")),
     ("POST", re.compile(r"^/inbound/mailbox/pull$")),
     ("GET", re.compile(r"^/attachment-review-queue$")),
+    ("GET", re.compile(r"^/supplier-operational-notifications$")),
     ("GET", re.compile(r"^/operators$")),
     ("GET", re.compile(r"^/operational-work-queue$")),
     ("GET", re.compile(r"^/operational-work-my$")),

@@ -56,33 +56,43 @@ def _validate_customer_identity_uniqueness(
             )
 
 
+def _supplier_sender_identity(profile: SupplierMasterProfile) -> tuple[set[str], set[str]]:
+    addresses = {
+        c.email.strip().casefold()
+        for c in profile.contacts
+        if c.active and c.email and c.email.strip()
+    }
+    addresses.update(profile.trusted_sender_addresses)
+    return addresses, set(profile.trusted_sender_domains)
+
+
 def _validate_supplier_contact_uniqueness(
     repository: MasterDataRepository,
     profile: SupplierMasterProfile,
     *,
     excluding_supplier_id: str | None = None,
 ) -> None:
-    own = {
+    active_contact_emails = [
         c.email.strip().casefold()
         for c in profile.contacts
         if c.active and c.email and c.email.strip()
-    }
-    if len(own) != len([
-        c for c in profile.contacts if c.active and c.email and c.email.strip()
-    ]):
+    ]
+    if len(set(active_contact_emails)) != len(active_contact_emails):
         raise MasterDataConflictError("Supplier profile contains duplicate active contact email.")
+    own_addresses, own_domains = _supplier_sender_identity(profile)
     for existing in repository.list_suppliers():
         if existing.supplier_id == excluding_supplier_id:
             continue
-        other = {
-            c.email.strip().casefold()
-            for c in existing.contacts
-            if c.active and c.email and c.email.strip()
-        }
-        overlap = own & other
+        other_addresses, other_domains = _supplier_sender_identity(existing)
+        overlap = own_addresses & other_addresses
         if overlap:
             raise MasterDataConflictError(
-                f"Supplier contact email already belongs to {existing.supplier_name}: {sorted(overlap)[0]}"
+                f"Supplier sender address already belongs to {existing.supplier_name}: {sorted(overlap)[0]}"
+            )
+        domain_overlap = own_domains & other_domains
+        if domain_overlap:
+            raise MasterDataConflictError(
+                f"Supplier sender domain already belongs to {existing.supplier_name}: {sorted(domain_overlap)[0]}"
             )
 
 

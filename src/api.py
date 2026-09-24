@@ -262,6 +262,9 @@ from src.core.supplier_price_service import (
     use_fixed_rate_for_job,
 )
 from src.core.supplier_award_repository import SQLiteSupplierAwardRepository
+from src.core.supplier_operational_inbound import (
+    SQLiteSupplierOperationalNotificationRepository,
+)
 from src.core.supplier_award_service import (
     select_approved_job_supplier_offer,
     supplier_award_view,
@@ -733,6 +736,9 @@ mina_job_repository = SQLiteMinaJobRepository(pilot_store)
 supplier_rfq_repository = SQLiteSupplierRFQRepository(pilot_store)
 supplier_price_repository = SQLiteSupplierPriceRepository(pilot_store)
 supplier_award_repository = SQLiteSupplierAwardRepository(pilot_store)
+supplier_operational_notification_repository = (
+    SQLiteSupplierOperationalNotificationRepository(pilot_store)
+)
 operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
 operation_start_message_repository = SQLiteOperationStartMessageRepository(pilot_store)
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
@@ -1604,6 +1610,8 @@ class SupplierMasterCreateRequest(BaseModel):
     supplier_name: str = Field(min_length=1, max_length=240)
     active: bool = True
     role: Literal["primary", "backup", "specialist"] = "backup"
+    trusted_sender_addresses: list[str] = Field(default_factory=list)
+    trusted_sender_domains: list[str] = Field(default_factory=list)
     contacts: list[MasterContact] = Field(default_factory=list)
     geographies: list[SupplierGeographyCapability] = Field(default_factory=list)
     service_types: list[str] = Field(default_factory=list)
@@ -1622,6 +1630,8 @@ class SupplierMasterUpdateRequest(BaseModel):
     supplier_name: str = Field(min_length=1, max_length=240)
     active: bool = True
     role: Literal["primary", "backup", "specialist"] = "backup"
+    trusted_sender_addresses: list[str] | None = None
+    trusted_sender_domains: list[str] | None = None
     contacts: list[MasterContact] = Field(default_factory=list)
     geographies: list[SupplierGeographyCapability] = Field(default_factory=list)
     service_types: list[str] = Field(default_factory=list)
@@ -2123,7 +2133,8 @@ def update_supplier_master_profile(
     try:
         profile = update_supplier_master(
             repository=master_data_repository, supplier_id=supplier_id,
-            updated_by=_authenticated_operator(http_request), **request.model_dump(),
+            updated_by=_authenticated_operator(http_request),
+            **request.model_dump(exclude_none=True),
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Supplier master not found: {supplier_id}") from exc
@@ -5345,6 +5356,10 @@ def pull_outlook_inbound(
                 attachment_review_repository=(
                     attachment_review_repository
                 ),
+                supplier_operational_repository=(
+                    supplier_operational_notification_repository
+                ),
+                mina_job_repository=mina_job_repository,
                 interpret_attachments=(
                     request.interpret_attachments
                 ),
@@ -5425,6 +5440,18 @@ def pull_active_mailbox_inbound(
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/supplier-operational-notifications")
+def list_supplier_operational_notifications():
+    items = supplier_operational_notification_repository.list_all()
+    return {
+        "count": len(items),
+        "notifications": [
+            item.model_dump(mode="json")
+            for item in items
+        ],
+    }
 
 
 @app.get("/attachment-review-queue")

@@ -27,6 +27,11 @@ from src.core.extraction_confirmation_repository import (
 from src.core.mail import InboundMailEnvelope
 from src.core.master_data_repository import MasterDataRepository
 from src.core.master_data_service import customer_to_legacy_memory
+from src.core.supplier_operational_inbound import (
+    assess_supplier_operational_mail,
+    matching_supplier_masters,
+    persist_supplier_operational_notification,
+)
 from src.core.operational_data import (
     OperationalDataSources,
 )
@@ -131,6 +136,66 @@ def _with_attachment_intake(
     return result
 
 
+def _supplier_operational_result(
+    mail,
+    supplier_profile,
+    *,
+    repository=None,
+    mina_job_repository=None,
+    with_attachment: bool = False,
+) -> dict:
+    assessment = assess_supplier_operational_mail(mail)
+    notification = persist_supplier_operational_notification(
+        repository=repository,
+        mail=mail,
+        supplier_profile=supplier_profile,
+        assessment=assessment,
+        mina_job_repository=mina_job_repository,
+    )
+    return {
+        "result_type": "supplier_operational_notification",
+        "ingestion_status": (
+            notification.status
+            if notification is not None
+            else "review_required"
+        ),
+        "reason_code": (
+            "supplier_operational_notification_with_attachment"
+            if with_attachment
+            else "supplier_operational_notification_detected"
+        ),
+        "inbound_route": "supplier_operation",
+        "supplier_id": supplier_profile.supplier_id,
+        "supplier_name": supplier_profile.supplier_name,
+        "notification_id": (
+            notification.notification_id
+            if notification is not None
+            else None
+        ),
+        "job_id": (
+            notification.job_id
+            if notification is not None
+            else None
+        ),
+        "mina_code": (
+            notification.mina_code
+            if notification is not None
+            else None
+        ),
+        "correlation_method": (
+            "mina_code_reference"
+            if notification is not None and notification.job_id
+            else None
+        ),
+        "transport_mode": assessment.transport_mode,
+        "operational_event_types": assessment.event_types,
+        "operational_reference_tokens": assessment.reference_tokens,
+        "operational_evidence_terms": assessment.evidence_terms,
+        "extraction_proposal": None,
+        "supplier_response": None,
+    }
+
+
 def _process_allowlisted_attachment_mail(
     *,
     mail: InboundMailEnvelope,
@@ -143,6 +208,8 @@ def _process_allowlisted_attachment_mail(
     attachment_review_repository,
     shipment_parser,
     supplier_parser,
+    supplier_operational_repository=None,
+    mina_job_repository=None,
 ) -> dict:
     customer_matches, customer_error = _customer_matches(
         mail=mail,
@@ -162,7 +229,12 @@ def _process_allowlisted_attachment_mail(
         mail,
         supplier_repository,
     )
+    supplier_profiles = matching_supplier_masters(
+        master_data_repository,
+        mail.sender_address,
+    )
     customer_count = len(customer_matches or [])
+    supplier_master_count = len(supplier_profiles)
     supplier_matched = supplier_correlation.status == "matched"
 
     if customer_count > 1:
@@ -173,7 +245,15 @@ def _process_allowlisted_attachment_mail(
             ),
             assessment,
         )
-    if customer_count == 1 and supplier_matched:
+    if supplier_master_count > 1:
+        return _with_attachment_intake(
+            _blocked_result(
+                result_type="inbound_sender_verification_required",
+                reason_code="sender_matches_multiple_pilot_suppliers",
+            ),
+            assessment,
+        )
+    if customer_count == 1 and (supplier_matched or supplier_master_count == 1):
         return _with_attachment_intake(
             _blocked_result(
                 result_type="inbound_mail_manual_review_required",
@@ -181,6 +261,29 @@ def _process_allowlisted_attachment_mail(
             ),
             assessment,
         )
+
+    operational_assessment = assess_supplier_operational_mail(mail)
+    explicit_rfq_signal = bool(
+        mail.explicit_rfq_reference
+        or "minai-rfq:" in (mail.subject or "").casefold()
+    )
+    if (
+        supplier_master_count == 1
+        and operational_assessment.operational
+        and not (supplier_correlation.status == "ambiguous_rfq" and explicit_rfq_signal)
+        and not supplier_matched
+    ):
+        return _with_attachment_intake(
+            _supplier_operational_result(
+                mail,
+                supplier_profiles[0],
+                repository=supplier_operational_repository,
+                mina_job_repository=mina_job_repository,
+                with_attachment=True,
+            ),
+            assessment,
+        )
+
     if supplier_correlation.status == "ambiguous_rfq":
         return _with_attachment_intake(
             _blocked_result(
@@ -194,6 +297,16 @@ def _process_allowlisted_attachment_mail(
         trusted_route = "supplier"
     elif customer_count == 1:
         trusted_route = "customer"
+    elif supplier_master_count == 1:
+        result = _blocked_result(
+            result_type="inbound_mail_manual_review_required",
+            reason_code="trusted_supplier_sender_unclassified",
+        )
+        result.update({
+            "supplier_id": supplier_profiles[0].supplier_id,
+            "supplier_name": supplier_profiles[0].supplier_name,
+        })
+        return _with_attachment_intake(result, assessment)
     else:
         return _with_attachment_intake(
             _blocked_result(
@@ -337,6 +450,8 @@ def process_controlled_outlook_inbound_mail(
     ) = None,
     attachment_interpreter: Callable[..., Any] | None = None,
     attachment_review_repository=None,
+    supplier_operational_repository=None,
+    mina_job_repository=None,
 ) -> dict:
     """Route Outlook mail deterministically before any AI parser."""
 
@@ -369,6 +484,8 @@ def process_controlled_outlook_inbound_mail(
             attachment_review_repository=attachment_review_repository,
             shipment_parser=shipment_parser,
             supplier_parser=supplier_parser,
+            supplier_operational_repository=supplier_operational_repository,
+            mina_job_repository=mina_job_repository,
         )
 
     supplier_replay = (
@@ -451,10 +568,15 @@ def process_controlled_outlook_inbound_mail(
             supplier_repository,
         )
     )
+    supplier_profiles = matching_supplier_masters(
+        master_data_repository,
+        mail.sender_address,
+    )
 
     customer_count = len(
         customer_matches or []
     )
+    supplier_master_count = len(supplier_profiles)
 
     supplier_matched = (
         supplier_correlation.status
@@ -471,7 +593,13 @@ def process_controlled_outlook_inbound_mail(
             ),
         )
 
-    if customer_count == 1 and supplier_matched:
+    if supplier_master_count > 1:
+        return _blocked_result(
+            result_type="inbound_sender_verification_required",
+            reason_code="sender_matches_multiple_pilot_suppliers",
+        )
+
+    if customer_count == 1 and (supplier_matched or supplier_master_count == 1):
         return _blocked_result(
             result_type=(
                 "inbound_mail_manual_review_required"
@@ -512,6 +640,26 @@ def process_controlled_outlook_inbound_mail(
             "extraction_proposal": None,
         }
 
+    operational_assessment = assess_supplier_operational_mail(mail)
+    explicit_rfq_signal = bool(
+        mail.explicit_rfq_reference
+        or "minai-rfq:" in (mail.subject or "").casefold()
+    )
+    if (
+        supplier_master_count == 1
+        and operational_assessment.operational
+        and not (
+            supplier_correlation.status == "ambiguous_rfq"
+            and explicit_rfq_signal
+        )
+    ):
+        return _supplier_operational_result(
+            mail,
+            supplier_profiles[0],
+            repository=supplier_operational_repository,
+            mina_job_repository=mina_job_repository,
+        )
+
     if customer_count == 1:
         customer_result = (
             process_controlled_outlook_customer_mail(
@@ -548,6 +696,17 @@ def process_controlled_outlook_inbound_mail(
                 "supplier_rfq_correlation_ambiguous"
             ),
         )
+
+    if supplier_master_count == 1:
+        result = _blocked_result(
+            result_type="inbound_mail_manual_review_required",
+            reason_code="trusted_supplier_sender_unclassified",
+        )
+        result.update({
+            "supplier_id": supplier_profiles[0].supplier_id,
+            "supplier_name": supplier_profiles[0].supplier_name,
+        })
+        return result
 
     return _blocked_result(
         result_type=(

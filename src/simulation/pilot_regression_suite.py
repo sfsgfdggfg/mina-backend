@@ -191,6 +191,9 @@ from src.simulation.outlook_attachment_review_gate_regressions import (
 from src.simulation.outlook_graph_send_regressions import evaluate_outlook_graph_send_regressions
 from src.simulation.outlook_inbound_gate_regressions import evaluate_outlook_inbound_gate_regressions
 from src.simulation.outlook_inbound_router_regressions import evaluate_outlook_inbound_router_regressions
+from src.simulation.supplier_operational_inbound_regressions import (
+    evaluate_supplier_operational_inbound_regressions,
+)
 from src.simulation.outlook_supplier_pull_regressions import evaluate_outlook_supplier_pull_regressions
 from src.simulation.outlook_live_smoke_receipt_regressions import (
     evaluate_outlook_live_smoke_receipt_regressions,
@@ -540,6 +543,10 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite(
         "Deterministic Outlook inbound router",
         evaluate_outlook_inbound_router_regressions,
+    ),
+    Suite(
+        "Supplier operational inbound routing",
+        evaluate_supplier_operational_inbound_regressions,
     ),
     Suite(
         "Controlled Outlook supplier reply pull",
