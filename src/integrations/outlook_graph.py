@@ -51,7 +51,8 @@ _GRAPH_SELECT_FIELDS = (
     "receivedDateTime,hasAttachments,isDraft"
 )
 _HISTORY_GRAPH_SELECT_FIELDS = (
-    "id,subject,body,from,toRecipients,receivedDateTime,sentDateTime,isDraft"
+    "id,subject,body,from,toRecipients,ccRecipients,bccRecipients,"
+    "receivedDateTime,sentDateTime,isDraft"
 )
 _COUNTERPARTY_DISCOVERY_SELECT_FIELDS = (
     "id,conversationId,from,toRecipients,ccRecipients,bccRecipients,"
@@ -372,22 +373,37 @@ def normalize_graph_history_message(
     if not isinstance(body_text, str):
         raise OutlookGraphMessageError("graph_message_body_missing")
     sender_address, _ = _graph_email_address(raw_message.get("from"), code="graph_sender_missing")
-    raw_recipients = raw_message.get("toRecipients")
-    if not isinstance(raw_recipients, list):
-        raise OutlookGraphMessageError("graph_recipients_missing")
-    recipients = [
-        _graph_email_address(item, code="graph_recipient_invalid")[0]
-        for item in raw_recipients
-    ]
+    normalized_mailbox = _required_text(
+        mailbox_id, code="graph_mailbox_id_missing"
+    ).lower()
+    recipients: list[str] = []
+    for field_name in ("toRecipients", "ccRecipients", "bccRecipients"):
+        raw_recipients = raw_message.get(field_name)
+        if raw_recipients is None:
+            raw_recipients = []
+        if not isinstance(raw_recipients, list):
+            raise OutlookGraphMessageError("graph_recipients_invalid")
+        for item in raw_recipients:
+            recipients.append(
+                _graph_email_address(item, code="graph_recipient_invalid")[0]
+            )
+    recipients = list(dict.fromkeys(recipients))
+    if not recipients:
+        if folder == "inbox":
+            recipients = [normalized_mailbox]
+        else:
+            raise OutlookGraphMessageError("graph_history_recipients_missing")
     timestamp_field = "receivedDateTime" if folder == "inbox" else "sentDateTime"
     sent_at = _required_text(raw_message.get(timestamp_field), code="graph_history_time_missing")
     subject = _optional_text(raw_message.get("subject"), code="graph_subject_invalid") or ""
-    normalized_mailbox = _required_text(mailbox_id, code="graph_mailbox_id_missing").lower()
-    return HistoricalMailMessage(
-        source_reference=f"microsoft_graph:{normalized_mailbox}:{message_id}",
-        sent_at=sent_at, sender_address=sender_address, recipient_addresses=recipients,
-        subject=subject, body_text=body_text.strip(), source="authorized_mailbox",
-    )
+    try:
+        return HistoricalMailMessage(
+            source_reference=f"microsoft_graph:{normalized_mailbox}:{message_id}",
+            sent_at=sent_at, sender_address=sender_address, recipient_addresses=recipients,
+            subject=subject, body_text=body_text.strip(), source="authorized_mailbox",
+        )
+    except (ValidationError, ValueError) as exc:
+        raise OutlookGraphMessageError("graph_history_message_contract_invalid") from exc
 
 
 def normalize_graph_counterparty_discovery_message(

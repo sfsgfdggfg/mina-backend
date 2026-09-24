@@ -154,6 +154,29 @@ class _Session:
         return _Response({"value":[sent]})
 
 
+class _SparseRecipientSession:
+    def __init__(self): self.calls=[]; self.trust_env=True
+    def request(self,method,url,**kwargs):
+        self.calls.append((method,url,kwargs.get("params")))
+        base={
+            "subject":"Legacy","body":{"contentType":"text","content":"Body"},
+            "isDraft":False,"toRecipients":[],"ccRecipients":[],"bccRecipients":[],
+            "receivedDateTime":"2026-09-01T09:00:00Z","sentDateTime":"2026-09-01T08:59:00Z",
+        }
+        if "/inbox/" in url:
+            inbox=dict(base); inbox.update({
+                "id":"legacy-inbox",
+                "from":{"emailAddress":{"address":"pricing@supplier.invalid"}},
+            })
+            return _Response({"value":[inbox]})
+        sent=dict(base); sent.update({
+            "id":"legacy-sent",
+            "from":{"emailAddress":{"address":AGENCY}},
+            "sentDateTime":"2026-09-01T08:00:00Z",
+        })
+        return _Response({"value":[sent]})
+
+
 def evaluate_relationship_history_onboarding_regressions():
     failures=[]; passes=[]
     def check(condition,label): (passes if condition else failures).append(label)
@@ -282,6 +305,23 @@ def evaluate_relationship_history_onboarding_regressions():
         and any("receivedDateTime ge" in value for value in filters)
         and any("sentDateTime ge" in value for value in filters),
         "Outlook history reader scans bounded inbox and sent-items ranges without changing daily pull semantics",
+    )
+
+    sparse_session=_SparseRecipientSession()
+    sparse_client=OutlookGraphReadClient(
+        access_token="token",mailbox_id=AGENCY,session=sparse_session,
+    )
+    sparse_history=sparse_client.list_relationship_history(
+        start_at=datetime(2026,9,1,tzinfo=UTC),
+        end_at=datetime(2026,9,2,tzinfo=UTC),
+        max_messages=10,
+    )
+    check(
+        len(sparse_history)==1
+        and sparse_history[0].recipient_addresses==[AGENCY]
+        and len(sparse_client.last_message_rejections)==1
+        and sparse_client.last_message_rejections[0].reason_code=="graph_history_recipients_missing",
+        "Outlook history reader tolerates legacy inbox mail with no visible recipient and skips malformed sent mail without aborting the scan",
     )
 
     token_calls=[]
