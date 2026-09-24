@@ -302,6 +302,8 @@ def evaluate_imap_mailbox_regressions():
         and "/relationship-onboarding/mailbox/analyze" in api_text
         and "E-posta Bağlantısı" in ui_text
         and "Yeni mailleri kontrol et" in ui_text
+        and 'status.provider==="outlook"' in ui_text
+        and "IMAP parola formu gösterilmez" in ui_text
         and "mailbox/imap/configure" in access_text,
         "browser/API controlled-pilot mailbox onboarding contract is wired",
     )

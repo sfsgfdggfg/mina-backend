@@ -4030,8 +4030,10 @@ function renderMailboxSettings(status = {}) {
   ); panel.append(health);
   if(status.provider==="imap" && status.configured){
     panel.append(node("div",`IMAP bağlantısı hazır · ${status.host||"sunucu"}:${status.port||993}. Şifre UI/API cevabında gösterilmez.`,"notice"));
-  } else if(status.provider==="outlook" && status.configured){
-    panel.append(node("div","Outlook bağlantısı hazır. IMAP kullanan bir acenta için aşağıdaki formdan yeni mailbox bağlantısı kurulabilir.","notice"));
+  } else if(status.provider==="outlook"){
+    panel.append(node("div","Microsoft 365 / Outlook bu pilot için yapılandırıldı. E-posta parolası MINAI'ye girilmez; bağlantı Microsoft cihaz kodu/OAuth yetkilendirmesi ile tamamlanır.","notice"));
+    panel.append(node("div","Bu runtime Outlook'a kilitli olduğu için IMAP parola formu gösterilmez.","notice small"));
+    return panel;
   }
   if(status.imap_setup_available===false){
     panel.append(node("div","IMAP şifreli credential storage henüz deployment seviyesinde hazırlanmadı. MINAI_MAILBOX_CREDENTIAL_KEY ve external credential path ayarlanmadan IMAP şifresi kabul edilmez.","warning"));
