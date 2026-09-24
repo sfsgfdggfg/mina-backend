@@ -89,6 +89,14 @@ def _safe_result_summary(
             "correlation_method"
         ),
         "proposal_id": proposal_id,
+        "notification_id": result.get("notification_id"),
+        "job_id": result.get("job_id"),
+        "mina_code": result.get("mina_code"),
+        "supplier_id": result.get("supplier_id"),
+        "supplier_name": result.get("supplier_name"),
+        "transport_mode": result.get("transport_mode"),
+        "operational_event_types": result.get("operational_event_types"),
+        "operational_reference_tokens": result.get("operational_reference_tokens"),
         "attachment_intake_status": result.get(
             "attachment_intake_status"
         ),
@@ -184,6 +192,8 @@ def pull_controlled_outlook_inbox(
     supplier_parser=None,
     supplier_repository=None,
     attachment_review_repository=None,
+    supplier_operational_repository=None,
+    mina_job_repository=None,
     interpret_attachments: bool = False,
     token_provider: Callable[
         [MicrosoftAuthConfig],
@@ -262,6 +272,8 @@ def pull_controlled_outlook_inbox(
                     if interpret_attachments
                     else None
                 ),
+                supplier_operational_repository=supplier_operational_repository,
+                mina_job_repository=mina_job_repository,
             )
 
         except (
@@ -341,7 +353,13 @@ def pull_controlled_outlook_inbox(
             item.get("inbound_route") == "manual_review"
             or item.get("result_type")
             == "inbound_mail_manual_review_required"
+            or item.get("ingestion_status") == "review_required"
         )
+    )
+    supplier_operational_count = sum(
+        1
+        for item in summaries
+        if item.get("result_type") == "supplier_operational_notification"
     )
     attachment_review_count = sum(
         1 for item in summaries if item.get("attachment_review_id")
@@ -364,6 +382,7 @@ def pull_controlled_outlook_inbox(
         "manual_review_count": (
             manual_review_count
         ),
+        "supplier_operational_count": supplier_operational_count,
         "attachment_review_count": attachment_review_count,
         "pull_status": (
             "partial_parser_unavailable"

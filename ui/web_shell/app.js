@@ -919,7 +919,7 @@ function attachmentReviewCard(review, refresh) {
 let lastOutlookPullResult = null;
 
 function outlookPullResultLabel(item = {}) {
-  const route = ({ customer: "Müşteri", supplier: "Tedarikçi", manual_review: "Manuel inceleme" })[item.inbound_route] || codeLabel(item.inbound_route);
+  const route = ({ customer: "Müşteri", supplier: "Tedarikçi", supplier_operation: "Tedarikçi operasyonu", manual_review: "Manuel inceleme" })[item.inbound_route] || codeLabel(item.inbound_route);
   const status = codeLabel(item.ingestion_status || item.result_type);
   return `${route} · ${status}`;
 }
@@ -952,6 +952,7 @@ function renderLiveMailboxPullPanel(status = {}) {
       summaryItem("Çekilen",lastOutlookPullResult.fetched_message_count??0),
       summaryItem("Müşteri proposal",lastOutlookPullResult.proposal_count??0),
       summaryItem("Tedarikçi yanıtı",lastOutlookPullResult.supplier_response_count??0),
+      summaryItem("Operasyon bildirimi",lastOutlookPullResult.supplier_operational_count??0),
       summaryItem("Manuel inceleme",lastOutlookPullResult.manual_review_count??0)
     ); section.append(summary);
     const results=node("div","","outlook-pull-results");
@@ -1007,7 +1008,24 @@ function renderDemoOutlookPullPanel() {
   return section;
 }
 
-function renderInbox(proposals = [], attachmentReviews = [], mailboxStatus = {}) {
+function supplierOperationalCard(item = {}) {
+  const card=node("div","","inbox-proposal-card");
+  const head=node("div","","inbox-proposal-head");
+  head.append(
+    node("strong",item.supplier_name||"Tedarikçi operasyonu"),
+    node("span",codeLabel(item.transport_mode||"unknown"),"badge")
+  );
+  card.append(
+    head,
+    node("div",item.subject||"Operasyon bildirimi","inbox-proposal-subject"),
+    node("div","Olay: "+((item.event_types||[]).map(codeLabel).join(", ")||"-"),"small"),
+    node("div","Referans: "+((item.reference_tokens||[]).join(", ")||"-"),"small muted"),
+    node("div",formatDate(item.received_at),"small muted")
+  );
+  return card;
+}
+
+function renderInbox(proposals = [], attachmentReviews = [], mailboxStatus = {}, supplierOperations = []) {
   setPageContext("Gelen Talepler", "Müşteri Talep Girişi");
   const root = node("div", "", "inbox-page");
   const intro = node("div", "", "notice");
@@ -1075,6 +1093,17 @@ function renderInbox(proposals = [], attachmentReviews = [], mailboxStatus = {})
   });
   manual.append(manualGrid,createManual,manualFeedback); root.append(manual);
 
+  const supplierOps = node("section", "", "section supplier-operational-section");
+  const pendingSupplierOps = supplierOperations.filter(item => item.status === "review_required").length;
+  supplierOps.append(
+    node("h2", "Tedarikçi Operasyon Bildirimleri · "+supplierOperations.length),
+    node("div", pendingSupplierOps+" bildirim operatör incelemesi bekliyor. Yeni müşteri işi veya RFQ cevabı olarak işlenmez.", "small muted")
+  );
+  const supplierOpsList=node("div","","inbox-proposal-list");
+  supplierOperations.forEach(item=>supplierOpsList.append(supplierOperationalCard(item)));
+  if(!supplierOperations.length) supplierOpsList.append(emptyState("Henüz tedarikçi operasyon bildirimi yok"));
+  supplierOps.append(supplierOpsList); root.append(supplierOps);
+
   const attachments = node("section", "", "section attachment-review-section");
   const pendingAttachments = attachmentReviews.filter(item => item.status === "pending").length;
   attachments.append(node("h2", `Ek İnceleme · ${attachmentReviews.length}`), node("div", `${pendingAttachments} ek operatör incelemesi bekliyor.`, "small muted"));
@@ -1093,9 +1122,19 @@ function renderInbox(proposals = [], attachmentReviews = [], mailboxStatus = {})
 }
 
 async function loadInbox() {
-  const [proposalPayload, reviewPayload, mailboxStatus] = await Promise.all([api("/extraction-proposals"),api("/attachment-reviews"),api("/mailbox/status")]);
+  const [proposalPayload, reviewPayload, mailboxStatus, supplierOpsPayload] = await Promise.all([
+    api("/extraction-proposals"),
+    api("/attachment-reviews"),
+    api("/mailbox/status"),
+    api("/supplier-operational-notifications")
+  ]);
   const reviews = await Promise.all((reviewPayload.reviews || []).map(item => api(`/attachment-reviews/${encodeURIComponent(item.review_id)}`)));
-  renderInbox(proposalPayload.proposals || [], reviews, mailboxStatus);
+  renderInbox(
+    proposalPayload.proposals || [],
+    reviews,
+    mailboxStatus,
+    supplierOpsPayload.notifications || []
+  );
 }
 
 function renderJobs(data) {

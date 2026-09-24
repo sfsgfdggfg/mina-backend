@@ -22,6 +22,8 @@ def pull_controlled_imap_inbox(
     supplier_parser=None,
     supplier_repository=None,
     attachment_review_repository=None,
+    supplier_operational_repository=None,
+    mina_job_repository=None,
     interpret_attachments: bool = False,
     client_factory=ImapReadClient,
     inbound_processor=process_controlled_outlook_inbound_mail,
@@ -49,6 +51,8 @@ def pull_controlled_imap_inbox(
                 # intentionally unavailable and therefore remains manual-review.
                 attachment_interpreter=None,
                 attachment_review_repository=None,
+                supplier_operational_repository=supplier_operational_repository,
+                mina_job_repository=mina_job_repository,
             )
         except InboundMailIdempotencyConflictError:
             result = {
@@ -91,6 +95,12 @@ def pull_controlled_imap_inbox(
         for item in summaries
         if item.get("inbound_route") == "manual_review"
         or item.get("result_type") == "inbound_mail_manual_review_required"
+        or item.get("ingestion_status") == "review_required"
+    )
+    supplier_operational_count = sum(
+        1
+        for item in summaries
+        if item.get("result_type") == "supplier_operational_notification"
     )
     attachment_review_count = sum(
         1 for item in summaries if item.get("attachment_review_id")
@@ -105,6 +115,7 @@ def pull_controlled_imap_inbox(
         "proposal_count": proposal_count,
         "supplier_response_count": supplier_response_count,
         "manual_review_count": manual_review_count,
+        "supplier_operational_count": supplier_operational_count,
         "attachment_review_count": attachment_review_count,
         "pull_status": (
             "partial_parser_unavailable" if parser_unavailable else "complete"

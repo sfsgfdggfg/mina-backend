@@ -198,6 +198,8 @@ class SupplierMasterProfile(BaseModel):
     supplier_name: str = Field(min_length=1, max_length=240)
     active: bool = True
     role: SupplierRole = "backup"
+    trusted_sender_addresses: list[str] = Field(default_factory=list)
+    trusted_sender_domains: list[str] = Field(default_factory=list)
     contacts: list[MasterContact] = Field(default_factory=list)
     geographies: list[SupplierGeographyCapability] = Field(default_factory=list)
     service_types: list[str] = Field(default_factory=list)
@@ -214,6 +216,32 @@ class SupplierMasterProfile(BaseModel):
     created_at: datetime
     updated_at: datetime
     updated_by: str = Field(min_length=1, max_length=200)
+
+    @field_validator("trusted_sender_addresses", mode="before")
+    @classmethod
+    def normalize_trusted_sender_addresses(cls, value):
+        items = []
+        for raw in value or []:
+            address = str(raw).strip().casefold()
+            if not address:
+                continue
+            if address.count("@") != 1 or any(ch.isspace() for ch in address):
+                raise ValueError("Trusted supplier sender address must be a valid email address.")
+            if address not in items:
+                items.append(address)
+        return items
+
+    @field_validator("trusted_sender_domains", mode="before")
+    @classmethod
+    def normalize_trusted_sender_domains(cls, value):
+        items = []
+        for raw in value or []:
+            domain = str(raw).strip().casefold().lstrip("@")
+            if not domain or "@" in domain or any(ch.isspace() for ch in domain):
+                raise ValueError("Trusted supplier sender domain must be a valid domain.")
+            if domain not in items:
+                items.append(domain)
+        return items
 
     @model_validator(mode="after")
     def validate_times(self):
