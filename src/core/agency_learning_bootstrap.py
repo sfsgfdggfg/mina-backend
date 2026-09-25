@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -84,6 +85,10 @@ _SUPPLIER_INBOUND_PATTERNS = (
     "ordino ihbarı",
     "ordino ihbari",
 )
+
+
+def source_reference_hash(source_reference: str) -> str:
+    return hashlib.sha256(source_reference.encode("utf-8")).hexdigest()
 
 
 def _fold(value: str) -> str:
@@ -179,8 +184,21 @@ class AgencyLearningBootstrapSnapshot(BaseModel):
     candidates: list[AgencyCounterpartyLearningCandidate] = Field(
         default_factory=list, max_length=300
     )
+    recent_source_hashes: list[str] = Field(default_factory=list, max_length=10000)
     raw_messages_persisted: bool = False
     error_code: str | None = Field(default=None, max_length=300)
+
+    @field_validator("recent_source_hashes")
+    @classmethod
+    def validate_source_hashes(cls, values):
+        normalized = []
+        for value in values:
+            item = str(value).strip().casefold()
+            if len(item) != 64 or any(ch not in "0123456789abcdef" for ch in item):
+                raise ValueError("Agency learning source hashes must be SHA-256 hex digests.")
+            if item not in normalized:
+                normalized.append(item)
+        return normalized
 
     @field_validator(
         "started_at", "completed_at", "history_start_at", "history_end_at"

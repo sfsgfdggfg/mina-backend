@@ -12,6 +12,7 @@ from src.core.agency_learning_bootstrap import (
     SQLiteAgencyLearningBootstrapRepository,
     build_candidate_snapshot,
     count_mail_directions,
+    source_reference_hash,
     summarize_agency_workflow_patterns,
 )
 from src.core.learning_fact_repository import LearningFactRepository
@@ -145,6 +146,13 @@ def _run_bootstrap(
             proposed_fact_count=relationship.proposed_fact_count,
             matched_subject_count=len(relationship.subjects),
             candidates=candidates,
+            recent_source_hashes=[
+                source_reference_hash(item.source_reference)
+                for item in sorted(
+                    messages,
+                    key=lambda item: (item.sent_at, item.source_reference),
+                )[-10000:]
+            ],
             raw_messages_persisted=False,
         )
         state_repository.save(snapshot)

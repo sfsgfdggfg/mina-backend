@@ -4109,20 +4109,29 @@ function renderRelationshipOnboardingSettings(status = {}) {
   const h=node("div","","settings-heading");
   h.append(node("h2","Acenta Öğrenimi"),node("p","MINAI mailbox bağlandığında gelen ve giden geçmişi otomatik tarar; müşteri/tedarikçi adaylarını, ilişki davranışlarını ve çalışma kalıplarını provenance ile çıkarır. Kullanıcının ayrıca tarama komutu vermesi gerekmez.","muted"));panel.append(h);
   const auto=status.automatic_agency_learning||{};
+  const incremental=status.incremental_agency_learning||{};
   const autoLabel=({not_started:"Başlamadı",running:"Taranıyor",completed:"Tamamlandı",failed:"Tekrar denenecek"})[auto.status]||codeLabel(auto.status||"not_started");
+  const incrementalLabel=({not_started:"Başlamadı",waiting_bootstrap:"Bootstrap bekleniyor",running:"Yeni mailler taranıyor",healthy:"Sağlıklı",failed:"Tekrar denenecek"})[incremental.status]||codeLabel(incremental.status||"not_started");
   const health=node("div","","summary-grid relationship-onboarding-health");
   health.append(
     summaryItem("Mailbox",status.synthetic_mailbox?"Demo mailbox":(status.mailbox_configured?`${String(status.mailbox_provider||"mailbox").toUpperCase()} · Hazır`:"Yapılandırma eksik")),
-    summaryItem("Otomatik öğrenme",status.automatic_agency_learning_enabled===false?"Kapalı":autoLabel),
-    summaryItem("Taranan mail",auto.scanned_message_count??0),
-    summaryItem("Gelen / Giden",`${auto.inbound_message_count??0} / ${auto.outbound_message_count??0}`),
+    summaryItem("Bootstrap",status.automatic_agency_learning_enabled===false?"Kapalı":autoLabel),
+    summaryItem("Sürekli öğrenme",status.incremental_agency_learning_enabled===false?"Kapalı":incrementalLabel),
+    summaryItem("Bootstrap mail",auto.scanned_message_count??0),
+    summaryItem("Toplam Gelen / Giden",`${auto.inbound_message_count??0} / ${auto.outbound_message_count??0}`),
+    summaryItem("Son tur yeni mail",incremental.last_new_message_count??0),
+    summaryItem("Bootstrap sonrası yeni mail",incremental.total_new_message_count??0),
+    summaryItem("Son structured öneri",incremental.last_structured_proposed_fact_count??0),
+    summaryItem("Structured öneri toplamı",incremental.total_structured_proposed_fact_count??0),
     summaryItem("Taraf adayı",auto.candidate_count??0),
     summaryItem("Yüksek güvenli aday",auto.high_confidence_candidate_count??0),
     summaryItem("Bekleyen öğrenim",Number(status.proposed_customer_fact_count??0)+Number(status.proposed_supplier_fact_count??0)),
     summaryItem("AI gözlemi",status.automatic_agency_learning_ai_enabled?"Etkin":"Tenant onayı gerekli")
   ); panel.append(health);
-  panel.append(node("div",status.synthetic_mailbox?"Demo modunda bu ekran sentetik mailbox geçmişini kullanır. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz.":"Otomatik bootstrap hem Gelen Kutusu hem Gönderilmiş Öğeler'i kullanır. Aynı ajans domainindeki iç adresleri dış taraf saymaz. Ham mail gövdeleri kalıcı öğrenme state’ine yazılmaz; belirsiz taraflar güven eşiğini geçmeden master otoritesi kazanmaz.","notice"));
-  if(auto.error_code) panel.append(node("div",`Son otomatik tarama tamamlanamadı: ${codeLabel(auto.error_code)}. MINAI bağlantı hazır olduğunda yeniden dener.`,"warning"));
+  panel.append(node("div",status.synthetic_mailbox?"Demo modunda bu ekran sentetik mailbox geçmişini kullanır. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz.":"Bootstrap hem Gelen Kutusu hem Gönderilmiş Öğeler'i öğrenir; ardından sürekli öğrenme döngüsü yeni gelen ve giden mailleri komut beklemeden takip eder. Aynı ajans domainindeki iç adresler dış taraf sayılmaz. Ham mail gövdeleri kalıcı öğrenme state’ine yazılmaz; yalnız provenance, sayaç, hash ve öğrenim önerileri tutulur.","notice"));
+  if(auto.error_code) panel.append(node("div",`Son bootstrap tamamlanamadı: ${codeLabel(auto.error_code)}. MINAI bağlantı hazır olduğunda yeniden dener.`,"warning"));
+  if(incremental.error_code) panel.append(node("div",`Son sürekli öğrenme turu tamamlanamadı: ${codeLabel(incremental.error_code)}. Cursor ilerletilmedi; sonraki tur aynı aralığı güvenli biçimde yeniden dener.`,"warning"));
+  if(incremental.last_completed_at) panel.append(node("div",`Sürekli öğrenme son tamamlanma: ${new Date(incremental.last_completed_at).toLocaleString("tr-TR")} · mailbox taraması yaklaşık her ${Math.round(Number(status.incremental_agency_learning_poll_seconds||300)/60)} dk · structured kanıt türetimi yaklaşık her ${Number(status.structured_learning_interval_hours||1)} saat.`,"muted small"));
   const patterns=auto.workflow_patterns||{};
   if((patterns.supplier_rfq_message_count||0)+(patterns.customer_quote_message_count||0)+(patterns.operational_update_message_count||0)>0){
     const learned=node("div","","relationship-subject-card");
