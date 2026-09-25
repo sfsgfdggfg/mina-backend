@@ -127,6 +127,7 @@ from src.core.agency_incremental_learning import (
     SQLiteAgencyIncrementalLearningRepository,
 )
 from src.core.agency_copy_receipt import SQLiteAgencyCopyReceiptRepository
+from src.core.inbound_auto_poll import SQLiteInboundAutoPollStateRepository
 from src.core.continuous_structured_learning import (
     derive_review_safe_structured_learning,
 )
@@ -766,6 +767,7 @@ learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
 agency_learning_bootstrap_repository = SQLiteAgencyLearningBootstrapRepository(pilot_store)
 agency_incremental_learning_repository = SQLiteAgencyIncrementalLearningRepository(pilot_store)
 agency_copy_receipt_repository = SQLiteAgencyCopyReceiptRepository(pilot_store)
+inbound_auto_poll_state_repository = SQLiteInboundAutoPollStateRepository(pilot_store)
 _agency_learning_bootstrap_lock = Lock()
 _agency_learning_bootstrap_thread: Thread | None = None
 _agency_incremental_learning_lock = Lock()
@@ -2724,6 +2726,12 @@ def _safe_inbound_poll_summary(result: dict) -> dict:
         "mailbox_id": result.get("mailbox_id"),
         "fetched_message_count": int(result.get("fetched_message_count") or 0),
         "handled_message_count": int(result.get("handled_message_count") or 0),
+        "baseline_initialized": bool(
+            result.get("auto_poll_baseline_initialized")
+        ),
+        "new_message_count": int(
+            result.get("auto_poll_new_message_count") or 0
+        ),
         "proposal_count": int(result.get("proposal_count") or 0),
         "supplier_response_count": int(result.get("supplier_response_count") or 0),
         "supplier_operational_count": int(
@@ -2747,6 +2755,60 @@ def _safe_inbound_poll_summary(result: dict) -> dict:
     }
 
 
+
+
+def _pull_active_mailbox_inbound_auto(limit: int) -> dict:
+    authority = _mailbox_provider_authority()
+    if authority == "outlook":
+        config = MicrosoftAuthConfig.from_environment()
+        return pull_controlled_outlook_inbox(
+            config=config,
+            limit=limit,
+            shipment_parser=parse_email_with_ai,
+            proposal_repository=extraction_proposal_repository,
+            operational_data_sources=operational_data_sources,
+            master_data_repository=_runtime_master_data_authority(),
+            supplier_parser=OpenAISupplierResponseParser(),
+            supplier_repository=supplier_rfq_repository,
+            attachment_review_repository=attachment_review_repository,
+            supplier_operational_repository=(
+                supplier_operational_notification_repository
+            ),
+            mina_job_repository=mina_job_repository,
+            quote_case_repository=quote_case_repository,
+            approval_repository=quote_approval_repository,
+            agency_copy_receipt_repository=agency_copy_receipt_repository,
+            agency_addresses=_runtime_agency_addresses(config.mailbox_id),
+            auto_poll_state_repository=inbound_auto_poll_state_repository,
+            interpret_attachments=False,
+        )
+
+    credential = _configured_imap_credential()
+    if credential is None:
+        raise ImapMailboxError("imap_mailbox_not_configured")
+    return pull_controlled_imap_inbox(
+        credential=credential,
+        limit=limit,
+        shipment_parser=parse_email_with_ai,
+        proposal_repository=extraction_proposal_repository,
+        operational_data_sources=operational_data_sources,
+        master_data_repository=_runtime_master_data_authority(),
+        supplier_parser=OpenAISupplierResponseParser(),
+        supplier_repository=supplier_rfq_repository,
+        attachment_review_repository=attachment_review_repository,
+        supplier_operational_repository=(
+            supplier_operational_notification_repository
+        ),
+        mina_job_repository=mina_job_repository,
+        quote_case_repository=quote_case_repository,
+        approval_repository=quote_approval_repository,
+        agency_copy_receipt_repository=agency_copy_receipt_repository,
+        agency_addresses=_runtime_agency_addresses(credential.mailbox_id),
+        auto_poll_state_repository=inbound_auto_poll_state_repository,
+        interpret_attachments=False,
+    )
+
+
 def _run_inbound_mailbox_poll_once() -> dict:
     global _inbound_mailbox_poll_last_at
     global _inbound_mailbox_poll_last_error
@@ -2763,12 +2825,7 @@ def _run_inbound_mailbox_poll_once() -> dict:
             return {"status": "mailbox_not_configured"}
         _poll_seconds, limit = _inbound_mailbox_poll_settings()
         try:
-            result = pull_active_mailbox_inbound(
-                OutlookPullRequest(
-                    limit=limit,
-                    interpret_attachments=False,
-                )
-            )
+            result = _pull_active_mailbox_inbound_auto(limit)
             summary = _safe_inbound_poll_summary(result)
             _inbound_mailbox_poll_last_at = datetime.now(timezone.utc)
             _inbound_mailbox_poll_last_error = None

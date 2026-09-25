@@ -15,6 +15,7 @@ from src.core.agency_learning_bootstrap import build_candidate_snapshot
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
 from src.core.extraction_confirmation_repository import InMemoryExtractionProposalRepository
 from src.core.mail import InboundMailEnvelope
+from src.core.inbound_auto_poll import InMemoryInboundAutoPollStateRepository
 from src.core.master_data_repository import InMemoryMasterDataRepository
 from src.core.master_data_service import create_customer_master, create_supplier_master
 from src.core.mina_job_repository import InMemoryMinaJobRepository
@@ -27,6 +28,7 @@ from src.core.supplier_rfq_repository import InMemorySupplierRFQRepository
 from src.integrations.outlook_graph import normalize_graph_message
 from src.workflow.agency_copy_ingestion import is_agency_copied_mail
 from src.workflow.outlook_inbound_router import process_controlled_outlook_inbound_mail
+from src.workflow.outlook_pull import pull_controlled_outlook_inbox
 
 
 UTC = timezone.utc
@@ -585,6 +587,89 @@ def evaluate_agency_copy_mailbox_regressions():
         "explicit different-domain agency aliases are excluded from continuous-learning counterparty discovery instead of becoming customer or supplier candidates",
     )
 
+
+    class _PollGraphClient:
+        def __init__(self, messages):
+            self.messages = list(messages)
+            self.last_message_rejections = []
+
+        def list_inbox_messages(self, *, limit):
+            return list(self.messages)[:limit]
+
+    class _PollConfig:
+        mailbox_id = MAILBOX
+
+    poll_old = _mail(
+        message_id="poll-old",
+        sender=CUSTOMER,
+        to=[MAILBOX],
+        subject="Old inbox mail",
+        body="Adana pickup Munich delivery 10 ton tenteli",
+    )
+    poll_new = _mail(
+        message_id="poll-new",
+        sender=CUSTOMER,
+        to=[MAILBOX],
+        subject="New inbox mail",
+        body="Adana pickup Munich delivery 11 ton tenteli",
+    )
+    poll_client = _PollGraphClient([poll_old])
+    poll_state = InMemoryInboundAutoPollStateRepository()
+    processed_message_ids = []
+
+    def _poll_processor(*, mail, **_kwargs):
+        processed_message_ids.append(mail.external_message_id)
+        return {
+            "result_type": "test_inbound_processed",
+            "ingestion_status": "processed",
+            "reason_code": "test",
+            "inbound_route": "customer",
+            "extraction_proposal": None,
+            "supplier_response": None,
+        }
+
+    def _run_auto_poll():
+        return pull_controlled_outlook_inbox(
+            config=_PollConfig(),
+            limit=50,
+            shipment_parser=lambda _text: None,
+            proposal_repository=None,
+            operational_data_sources=None,
+            auto_poll_state_repository=poll_state,
+            token_provider=lambda _config: "test-token",
+            graph_client_factory=lambda **_kwargs: poll_client,
+            inbound_processor=_poll_processor,
+        )
+
+    first_auto_poll = _run_auto_poll()
+    check(
+        first_auto_poll["auto_poll_baseline_initialized"] is True
+        and first_auto_poll["auto_poll_new_message_count"] == 0
+        and first_auto_poll["handled_message_count"] == 0
+        and processed_message_ids == []
+        and len(poll_state.get().recent_message_hashes) == 1,
+        "automatic inbound first run establishes a durable provider-message baseline without replaying pre-existing Inbox mail",
+    )
+
+    poll_client.messages = [poll_new, poll_old]
+    second_auto_poll = _run_auto_poll()
+    check(
+        second_auto_poll["auto_poll_baseline_initialized"] is False
+        and second_auto_poll["auto_poll_new_message_count"] == 1
+        and second_auto_poll["handled_message_count"] == 1
+        and processed_message_ids == ["poll-new"]
+        and len(poll_state.get().recent_message_hashes) == 2,
+        "automatic inbound polling processes only provider messages that appeared after the durable baseline",
+    )
+
+    third_auto_poll = _run_auto_poll()
+    check(
+        third_auto_poll["auto_poll_new_message_count"] == 0
+        and third_auto_poll["handled_message_count"] == 0
+        and processed_message_ids == ["poll-new"],
+        "automatic inbound polling does not reprocess an already handled provider message on later ticks",
+    )
+
     import src.api as api
 
     poll_payload = {
@@ -617,7 +702,7 @@ def evaluate_agency_copy_mailbox_regressions():
                 "mailbox_id": MAILBOX,
             }
         ), patch.object(
-            api, "pull_active_mailbox_inbound", return_value=poll_payload
+            api, "_pull_active_mailbox_inbound_auto", return_value=poll_payload
         ), patch.dict(
             os.environ,
             {
