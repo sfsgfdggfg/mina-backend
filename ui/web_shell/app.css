@@ -408,11 +408,18 @@ nav a.active { background: rgba(255,255,255,.12); color: white; font-weight: 700
 .performance-setting-row { display: grid; grid-template-columns: minmax(220px,.8fr) minmax(220px,1fr); gap: 14px; align-items: end; max-width: 760px; }
 .direct-assign { display: flex; gap: 7px; margin-top: 10px; }
 .direct-assign select { min-width: 0; }
+.inbound-review-context { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft, #f8fafc); }
+.inbound-review-controls { margin-top: 10px; display: grid; gap: 8px; }
+.inbound-review-resolution-row { display: grid; grid-template-columns: minmax(110px,.7fr) minmax(180px,1.2fr) minmax(180px,1.2fr) auto; gap: 8px; align-items: center; }
+.inbound-review-resolution-row select, .inbound-review-resolution-row input { min-width: 0; }
+.inbound-review-dismiss-row { display: grid; grid-template-columns: minmax(220px,1fr) auto; gap: 8px; align-items: center; }
+.inbound-review-dismiss-row input { min-width: 0; }
 .operation-start-message, .operation-start-launch { border: 1px solid var(--line); border-radius: 13px; padding: 15px; margin-top: 11px; }
 .operation-start-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 8px; }
 @media (max-width: 720px) {
   .settings-two-col, .performance-setting-row, .supplier-profile-summary, .operation-editor-grid { grid-template-columns: 1fr; }
   .direct-assign { flex-direction: column; }
+  .inbound-review-resolution-row, .inbound-review-dismiss-row { grid-template-columns: 1fr; }
   .operation-start-head { align-items: flex-start; flex-direction: column; }
   .operation-control-card.compact { grid-template-columns: 1fr; }
 }

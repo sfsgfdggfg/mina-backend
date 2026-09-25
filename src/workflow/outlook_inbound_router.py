@@ -48,6 +48,7 @@ from src.workflow.mail_ingestion import (
 )
 from src.workflow.agency_copy_ingestion import process_agency_copied_mail
 from src.workflow.outlook_inbound_ingestion import (
+    CONTROLLED_INBOUND_PROVIDERS,
     OUTLOOK_GRAPH_PROVIDER,
     process_controlled_outlook_customer_mail,
 )
@@ -78,7 +79,7 @@ def _provider_metadata_valid(
     return bool(
         mail.source == "email"
         and mail.provider_name
-        == OUTLOOK_GRAPH_PROVIDER
+        in CONTROLLED_INBOUND_PROVIDERS
         and mail.external_message_id
         and mail.mailbox_id
         and mail.sender_address

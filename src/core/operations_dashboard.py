@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from src.core.inbound_sender_review_repository import InboundSenderReviewRepository
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.operation_execution_repository import OperationExecutionRepository
 
@@ -68,6 +69,7 @@ def build_operations_dashboard(
     *,
     mina_repository: MinaJobRepository,
     operation_repository: OperationExecutionRepository,
+    inbound_sender_review_repository: InboundSenderReviewRepository | None = None,
     anchor_date: date | None = None,
     days: int = 5,
     now: datetime | None = None,
@@ -88,7 +90,27 @@ def build_operations_dashboard(
 
     calendar_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
     attention: list[dict[str, Any]] = []
+    inbound_attention: list[dict[str, Any]] = []
     unscheduled: list[dict[str, Any]] = []
+    if inbound_sender_review_repository is not None:
+        for review in inbound_sender_review_repository.list_all():
+            if review.status != "pending":
+                continue
+            inbound_attention.append(
+                {
+                    "work_id": f"inbound_sender_verification:{review.review_id}",
+                    "work_type": "inbound_sender_verification",
+                    "review_id": review.review_id,
+                    "severity": "critical",
+                    "sender_address": review.sender_address,
+                    "sender_name": review.sender_name,
+                    "subject": review.subject,
+                    "received_at": review.received_at.isoformat(),
+                    "reason_code": review.reason_code,
+                    "reasons": ["Yeni gönderen doğrulaması gerekiyor"],
+                }
+            )
+        inbound_attention.sort(key=lambda item: item["received_at"])
     active_jobs = [job for job in mina_repository.list_all() if not job.is_closed]
 
     for job in active_jobs:
@@ -167,11 +189,14 @@ def build_operations_dashboard(
         "window_end_date": end_date.isoformat(),
         "days": day_rows,
         "attention": attention,
+        "inbound_attention": inbound_attention,
         "unscheduled": unscheduled,
         "summary": {
             "active_jobs": len(active_jobs),
             "calendar_entries": calendar_entries,
             "attention_jobs": len(attention),
+            "inbound_review_count": len(inbound_attention),
+            "attention_total": len(attention) + len(inbound_attention),
             "unscheduled_jobs": len(unscheduled),
         },
     }

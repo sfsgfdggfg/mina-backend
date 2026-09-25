@@ -634,6 +634,50 @@ class ImapReadClient:
                 fallbacks.append(name)
         return fallbacks[0] if fallbacks else None
 
+
+    def get_message(
+        self,
+        external_message_id: str,
+    ) -> InboundMailEnvelope:
+        external_id = str(external_message_id or "").strip()
+        if not external_id:
+            raise ValueError("IMAP message id is required.")
+        client = self._connect()
+        try:
+            status, _ = client.select("INBOX", readonly=True)
+            if status != "OK":
+                raise ImapMailboxError("imap_inbox_readonly_select_failed")
+            uid_validity = self._uid_validity(client)
+            uid: bytes | None = None
+            if external_id.startswith("uid:"):
+                parts = external_id.split(":", 2)
+                if len(parts) != 3 or parts[1] != uid_validity or not parts[2]:
+                    raise ImapMailboxError("imap_message_identity_stale")
+                uid = parts[2].encode("ascii", errors="strict")
+            else:
+                status, rows = client.uid(
+                    "search", None, "HEADER", "Message-ID", external_id
+                )
+                if status != "OK" or not rows:
+                    raise ImapMailboxError("imap_message_search_failed")
+                matches = [item for item in rows[0].split() if item]
+                if len(matches) != 1:
+                    raise ImapMailboxError("imap_message_identity_ambiguous")
+                uid = matches[0]
+
+            header = self._fetch_header(client, uid)
+            parts, body = self._fetch_body_parts(client, uid)
+            return self._normalize_inbound(
+                header=header,
+                parts=parts,
+                body=body,
+                uid=uid,
+                folder="INBOX",
+                uid_validity=uid_validity,
+            )
+        finally:
+            self._close(client)
+
     def list_inbox_messages(self, *, limit: int) -> list[InboundMailEnvelope]:
         if isinstance(limit, bool) or not isinstance(limit, int) or not (1 <= limit <= 100):
             raise ValueError("IMAP inbox limit must be between 1 and 100.")

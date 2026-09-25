@@ -157,6 +157,16 @@ function attentionCard(item, unscheduled = false) {
   return card;
 }
 
+function inboundReviewAttentionCard(item) {
+  const card = node("button", "", "attention-card critical");
+  card.type = "button";
+  const sender = item.sender_name ? (item.sender_name + " · " + item.sender_address) : (item.sender_address || "Tanımsız gönderen");
+  card.append(node("strong", "Yeni gönderen doğrulaması · " + sender));
+  card.append(node("div", item.subject || "Konu yok", "small"));
+  card.append(node("div", "Müşteri/taraf kimliği doğrulanmadan bu mail iş akışına alınmadı.", "attention-reason"));
+  card.addEventListener("click", () => window.location.assign("/app/work"));
+  return card;
+}
 function appendDashboardEntries(column, entries, selectedDays) {
   const visibleLimit = selectedDays === 5 ? 2 : 4;
   const cards = entries.map(dashboardEntry);
@@ -182,17 +192,19 @@ function renderDashboard(data, selectedDays = 5) {
   metrics.append(
     metric("Aktif iş", summary.active_jobs ?? 0),
     metric("Takvim olayı", summary.calendar_entries ?? 0),
-    metric("Dikkat gereken", summary.attention_jobs ?? 0),
+    metric("Dikkat gereken", summary.attention_total ?? summary.attention_jobs ?? 0),
     metric("Tarihi net değil", summary.unscheduled_jobs ?? 0)
   );
   root.append(metrics);
 
   const attention = data.attention || [];
+  const inboundAttention = data.inbound_attention || [];
   const unscheduled = data.unscheduled || [];
   const attentionSection = node("section", "", "dashboard-attention");
-  if (attention.length || unscheduled.length) {
+  if (attention.length || inboundAttention.length || unscheduled.length) {
     attentionSection.append(node("h2", "Dikkat Gerekenler"));
     const attentionGrid = node("div", "", "attention-grid dashboard-attention-grid");
+    inboundAttention.forEach(item => attentionGrid.append(inboundReviewAttentionCard(item)));
     const unscheduledByJob = new Map(unscheduled.map(item => [item.job_id, item]));
     attention.forEach(item => {
       const missing = unscheduledByJob.get(item.job_id);
@@ -255,6 +267,7 @@ async function loadDashboard(days = 5) {
 
 
 const WORK_TYPE_LABELS = {
+  inbound_sender_verification: "Yeni gönderen doğrulama",
   attachment_review: "Ek inceleme",
   customer_extraction_confirmation: "Talep doğrulama",
   supplier_follow_up: "Tedarikçi takip",
@@ -266,6 +279,7 @@ const WORK_TYPE_LABELS = {
 };
 
 const WORK_ACTION_LABELS = {
+  verify_inbound_sender: "Göndereni doğrula ve maili devam ettir",
   inspect_attachment_review: "Eki incele",
   confirm_extraction: "Talebi doğrula",
   approve_supplier_follow_up: "Tedarikçi takibini onayla",
@@ -300,6 +314,7 @@ const WORK_ACTION_LABELS = {
 };
 
 const APPROVAL_WORK_ACTIONS = new Set([
+  "verify_inbound_sender",
   "confirm_extraction",
   "approve_supplier_follow_up",
   "review_and_approve_supplier_reminder",
@@ -392,6 +407,8 @@ function workReasonLabel(code) {
     quote_approval_case_state_stale: "Teklif vakası ile onay durumu eşleşmiyor.",
     quote_sent_while_approval_pending: "Onay bekleyen teklif için gönderim kanıtı var.",
     customer_safety_fields_unknown: "Müşteri talebinde güvenlik alanları belirsiz.",
+    inbound_sender_verification_pending: "Yeni gönderenin müşteri/tedarikçi kimliği operatör tarafından doğrulanmalı.",
+    human_action_pending: "İnsan kararı bekleniyor.",
   })[code] || codeLabel(code);
 }
 
@@ -424,12 +441,15 @@ function recoveryPurposeLabel(value) {
     inspect_approval: "Teklif onay kaydını incele",
     approve_after_review: "İnceleme sonrası teklifi onayla",
     reject_after_review: "İnceleme sonrası teklifi gerekçeyle reddet",
+    inspect_inbound_sender_review: "Yeni gönderen incelemesini aç",
+    verify_sender_and_reprocess_mail: "Göndereni doğrula ve aynı maili yeniden işle",
+    dismiss_inbound_sender_review: "İlgisiz mail olarak kapat",
   })[value] || codeLabel(value);
 }
 
 function stateCheckLabel(key) {
   return ({
-    resource_present: "Kaynak mevcut", review_status: "İnceleme durumu", extraction_status: "Extraction durumu",
+    resource_present: "Kaynak mevcut", extraction_status: "Extraction durumu",
     resume_status: "Devam durumu", unknown_field_count: "Belirsiz alan", unknown_safety_field_count: "Belirsiz güvenlik alanı",
     unknown_fields: "Belirsiz alanlar", unknown_safety_fields: "Belirsiz güvenlik alanları", follow_up_status: "Takip durumu",
     parent_rfq_present: "Ana RFQ mevcut", parent_rfq_status: "Ana RFQ durumu", active_sibling_count: "Aktif kardeş takip",
@@ -438,6 +458,8 @@ function stateCheckLabel(key) {
     customer_recipient_configured: "Müşteri alıcısı tanımlı", explicit_quote_deadline_present: "Açık teklif deadline'ı",
     approval_status: "Onay durumu", linked_case_count: "Bağlı teklif vakası", case_state_synced: "Vaka/onay uyumlu",
     prior_send_evidence_present: "Önceki gönderim kanıtı",
+    review_status: "İnceleme durumu", sender_address: "Gönderen", sender_name: "Gönderen adı",
+    subject: "Konu", reason_code: "Doğrulama nedeni", received_at: "Alınma zamanı",
   })[key] || codeLabel(key);
 }
 
@@ -501,7 +523,75 @@ async function toggleWorkDetail(item, card) {
   }
 }
 
-function workCard(item, myIds, refresh, operators = []) {
+function inboundSenderResolutionControls(item, refresh, masters = {}) {
+  const wrap = node("div", "", "inbound-review-controls");
+  wrap.append(node("div", "Bu göndereni mevcut bir firmaya bağlayabilir, yeni master oluşturabilir veya ilgisiz olarak kapatabilirsin.", "small muted"));
+  const row = node("div", "", "inbound-review-resolution-row");
+  const role = document.createElement("select");
+  [["customer","Müşteri"],["supplier","Tedarikçi"]].forEach(([value,label]) => {
+    const option=document.createElement("option"); option.value=value; option.textContent=label; role.append(option);
+  });
+  const existing = document.createElement("select");
+  const name = document.createElement("input");
+  name.type = "text";
+  name.placeholder = "Yeni firma adı";
+  const rebuild = () => {
+    existing.replaceChildren();
+    const placeholder=document.createElement("option");
+    placeholder.value=""; placeholder.textContent="Mevcut firmaya bağla…"; existing.append(placeholder);
+    const source = role.value === "customer" ? (masters.customers || []) : (masters.suppliers || []);
+    source.filter(x => x.active !== false).forEach(entry => {
+      const option=document.createElement("option");
+      option.value = role.value === "customer" ? entry.customer_id : entry.supplier_id;
+      option.textContent = role.value === "customer" ? entry.customer_name : entry.supplier_name;
+      existing.append(option);
+    });
+  };
+  role.addEventListener("change", rebuild); rebuild();
+  const resolve = actionButton("Doğrula ve maili işle", "approve", async () => {
+    const subjectId = existing.value || null;
+    const subjectName = subjectId ? null : name.value.trim();
+    if (!subjectId && !subjectName) {
+      window.alert("Mevcut bir firma seç veya yeni firma adını yaz.");
+      return;
+    }
+    resolve.disabled = true;
+    try {
+      const result = await api("/inbound-sender-reviews/" + encodeURIComponent(item.resource_id) + "/resolve", {
+        method: "POST",
+        body: JSON.stringify({ subject_type: role.value, subject_id: subjectId, subject_name: subjectName }),
+      });
+      const resumed = result.reprocess_result || {};
+      setStatus(resumed.proposal_id ? "Gönderen doğrulandı; taşıma talebi doğrulama kuyruğuna alındı." : "Gönderen doğrulandı; mail yeniden işlendi.");
+      await refresh();
+    } catch (error) { showError(error); }
+    finally { resolve.disabled = false; }
+  });
+  const dismissRow = node("div", "", "inbound-review-dismiss-row");
+  const dismissReason = document.createElement("input");
+  dismissReason.type = "text";
+  dismissReason.placeholder = "İlgisizse gerekçe (örn. taşıma talebi değil)";
+  const dismiss = actionButton("İlgisiz / iş değil", "", async () => {
+    const reason = dismissReason.value.trim();
+    if (!reason) {
+      dismissReason.focus();
+      return;
+    }
+    dismiss.disabled = true;
+    try {
+      await api("/inbound-sender-reviews/" + encodeURIComponent(item.resource_id) + "/dismiss", {
+        method: "POST", body: JSON.stringify({ reason }),
+      });
+      await refresh();
+    } catch (error) { showError(error); }
+    finally { dismiss.disabled = false; }
+  });
+  row.append(role, existing, name, resolve);
+  dismissRow.append(dismissReason, dismiss);
+  wrap.append(row, dismissRow);
+  return wrap;
+}
+function workCard(item, myIds, refresh, operators = [], masters = {}) {
   const isMine = myIds.has(item.work_id);
   const card = node("article", "", `work-card ${item.priority_band || "normal"}`);
   const heading = node("div", "", "work-card-heading");
@@ -523,6 +613,14 @@ function workCard(item, myIds, refresh, operators = []) {
   if ((item.blocker_count || 0) > 0) meta.append(node("span", `${item.blocker_count} blocker`, "work-blocker"));
   if ((item.warning_count || 0) > 0) meta.append(node("span", `${item.warning_count} uyarı`, "work-warning"));
   card.append(meta);
+
+  if (item.work_type === "inbound_sender_verification") {
+    const context = node("div", "", "inbound-review-context");
+    const sender = item.sender_name ? `${item.sender_name} · ${item.sender_address}` : (item.sender_address || "Tanımsız gönderen");
+    context.append(node("strong", sender), node("div", item.subject || "Konu yok", "small"));
+    card.append(context);
+    card.append(inboundSenderResolutionControls(item, refresh, masters));
+  }
 
   const assignment = node("div", "", "work-assignment");
   assignment.append(node("strong", "Atama"), node("span", workAssignmentSummary(item, isMine)));
@@ -676,7 +774,7 @@ function renderShiftContinuityPanel(payload, refresh) {
   return section;
 }
 
-function renderOperationalWork(queue, mine, operatorsPayload = {}, shiftPayload = {}) {
+function renderOperationalWork(queue, mine, operatorsPayload = {}, shiftPayload = {}, masters = {}) {
   title.textContent = "İş Kuyruğu";
   const root = node("div", "", "work-page");
   const items = queue.items || [];
@@ -714,7 +812,7 @@ function renderOperationalWork(queue, mine, operatorsPayload = {}, shiftPayload 
     const count = items.filter(predicate).length;
     tabs.append(actionButton(`${label} · ${count}`, key === operationalWorkView ? "active" : "", () => {
       operationalWorkView = key;
-      renderOperationalWork(queue, mine, operatorsPayload, shiftPayload);
+      renderOperationalWork(queue, mine, operatorsPayload, shiftPayload, masters);
     }));
   }
   root.append(tabs);
@@ -723,7 +821,7 @@ function renderOperationalWork(queue, mine, operatorsPayload = {}, shiftPayload 
   const visible = items.filter(activeFilter[2]);
   const list = node("div", "", "work-list");
   const refresh = () => loadOperationalWork(operationalWorkView);
-  visible.forEach(item => list.append(workCard(item, myIds, refresh, operators)));
+  visible.forEach(item => list.append(workCard(item, myIds, refresh, operators, masters)));
   if (!visible.length) list.append(node("div", "Bu görünümde bekleyen iş yok.", "work-empty"));
   root.append(list);
   content.replaceChildren(root);
@@ -731,13 +829,20 @@ function renderOperationalWork(queue, mine, operatorsPayload = {}, shiftPayload 
 
 async function loadOperationalWork(view = operationalWorkView) {
   operationalWorkView = view;
-  const [queue, mine, operatorsPayload, summary, close, open, ledger, receipts, acceptances] = await Promise.all([
+  const [queue, mine, operatorsPayload, summary, close, open, ledger, receipts, acceptances, customerPayload, supplierPayload] = await Promise.all([
     api("/operational-work-queue"), api("/operational-work-my"), api("/operators"),
     api("/operational-work-shift-summary"), api("/operational-work-shift-close-readiness"),
     api("/operational-work-shift-open-reconciliation"), api("/operational-work-shift-continuity"),
     api("/operational-work-shift-close-receipts"), api("/operational-work-shift-open-acceptances"),
+    api("/master-data/customers"), api("/master-data/suppliers"),
   ]);
-  renderOperationalWork(queue, mine, operatorsPayload, {summary, close, open, ledger, receipts, acceptances});
+  renderOperationalWork(
+    queue,
+    mine,
+    operatorsPayload,
+    {summary, close, open, ledger, receipts, acceptances},
+    {customers: customerPayload.customers || [], suppliers: supplierPayload.suppliers || []},
+  );
   setStatus("Güncel");
 }
 

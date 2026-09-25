@@ -896,6 +896,32 @@ class OutlookGraphReadClient:
         truncated = _validated_next_link(payload.get("@odata.nextLink")) is not None
         return manifest, truncated
 
+    def get_message(
+        self,
+        external_message_id: str,
+    ) -> InboundMailEnvelope:
+        message_id = str(external_message_id or "").strip()
+        if not message_id:
+            raise ValueError("Microsoft Graph message id is required.")
+        encoded = quote(message_id, safe="")
+        raw_item = self._get_json(
+            f"{GRAPH_API_BASE_URL}/me/messages/{encoded}",
+            params={"$select": _GRAPH_SELECT_FIELDS},
+        )
+        attachment_manifest: list[InboundAttachmentMetadata] = []
+        attachment_manifest_truncated = False
+        if raw_item.get("hasAttachments") is True:
+            (
+                attachment_manifest,
+                attachment_manifest_truncated,
+            ) = self._attachment_manifest_for_message(message_id)
+        return normalize_graph_message(
+            raw_item,
+            mailbox_id=self.mailbox_id,
+            attachment_manifest=attachment_manifest,
+            attachment_manifest_truncated=attachment_manifest_truncated,
+        )
+
     def list_inbox_messages(
         self,
         *,

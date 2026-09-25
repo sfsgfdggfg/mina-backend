@@ -5,6 +5,7 @@ from typing import Any
 
 from src.core.attachment_interpretation_review_repository import AttachmentInterpretationReviewRepository
 from src.core.extraction_confirmation_repository import ExtractionProposalRepository
+from src.core.inbound_sender_review_repository import SQLiteInboundSenderReviewRepository
 from src.core.operational_work_queue import build_operational_work_queue
 from src.core.operational_work_assignment_repository import OperationalWorkAssignmentRepository
 from src.core.operational_work_assignment_service import assignment_public_payload
@@ -34,6 +35,7 @@ _BLOCKER_REASON_CODES = {
     "quote_approval_multiple_cases",
     "quote_approval_case_state_stale",
     "quote_sent_while_approval_pending",
+    "inbound_sender_verification_pending",
 }
 
 
@@ -53,6 +55,7 @@ def _safe_common(item: dict[str, Any]) -> dict[str, Any]:
         "next_action", "created_at", "age_hours", "priority_band", "priority_score",
         "priority_reasons", "critical_attention_count", "blocker_count", "warning_count",
         "nearest_deadline_kind", "days_until_nearest_deadline",
+        "sender_address", "sender_name", "subject", "review_reason_code", "received_at",
     )
     return {key: item[key] for key in keys if key in item}
 
@@ -73,6 +76,50 @@ def _attachment_detail(item, repository):
         "state_checks": {"resource_present": True, "review_status": review.status},
         "recovery_mode": "inspect_then_preview",
     }, commands
+
+
+
+def _inbound_sender_review_detail(item, supplier_repository):
+    store = getattr(supplier_repository, "store", None)
+    if store is None:
+        return {
+            "state_checks": {"resource_present": False},
+            "recovery_mode": "human_confirmation_required",
+        }, []
+    repository = SQLiteInboundSenderReviewRepository(store)
+    review = repository.get(item["resource_id"])
+    if review is None:
+        return {
+            "state_checks": {"resource_present": False},
+            "recovery_mode": "inspect_state",
+        }, []
+    return {
+        "state_checks": {
+            "resource_present": True,
+            "review_status": review.status,
+            "sender_address": review.sender_address,
+            "sender_name": review.sender_name,
+            "subject": review.subject,
+            "reason_code": review.reason_code,
+            "received_at": review.received_at,
+        },
+        "recovery_mode": "human_confirmation_required",
+    }, [
+        _cmd(
+            "inbound-review", "get", review.review_id,
+            purpose="inspect_inbound_sender_review",
+        ),
+        _cmd(
+            "inbound-review", "resolve-customer", review.review_id,
+            purpose="verify_sender_and_reprocess_mail",
+            requires=["existing_customer_id_or_new_customer_name"],
+        ),
+        _cmd(
+            "inbound-review", "dismiss", review.review_id,
+            purpose="dismiss_inbound_sender_review",
+            requires=["dismissal_reason"],
+        ),
+    ]
 
 
 def _proposal_detail(item, repository):
@@ -269,6 +316,8 @@ def build_operational_work_item_detail(
 
     if item["work_type"] == "attachment_review":
         detail, commands = _attachment_detail(item, attachment_repository)
+    elif item["work_type"] == "inbound_sender_verification":
+        detail, commands = _inbound_sender_review_detail(item, supplier_repository)
     elif item["work_type"] == "customer_extraction_confirmation":
         detail, commands = _proposal_detail(item, proposal_repository)
     elif item["work_type"] == "supplier_follow_up":
