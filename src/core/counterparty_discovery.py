@@ -137,9 +137,20 @@ def _master_indexes(
 
     for supplier in repository.list_suppliers():
         owner = ("supplier", supplier.supplier_id, supplier.supplier_name)
-        for contact in supplier.contacts:
-            if contact.active and contact.email:
-                address_owners[_address(contact.email)].add(owner)
+        addresses = set(supplier.trusted_sender_addresses)
+        addresses.update(
+            contact.email
+            for contact in supplier.contacts
+            if contact.active and contact.email
+        )
+        for address in addresses:
+            address_owners[_address(address)].add(owner)
+        for domain in supplier.trusted_sender_domains:
+            normalized = str(domain).strip().casefold().lstrip("@")
+            if normalized and "." in normalized and not any(
+                character.isspace() for character in normalized
+            ):
+                domain_owners[normalized].add(owner)
 
     address_index, ambiguous_addresses = _collapse_owners(address_owners)
     domain_index, ambiguous_domains = _collapse_owners(domain_owners)

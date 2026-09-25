@@ -300,11 +300,14 @@ def evaluate_relationship_history_onboarding_regressions():
         start_at=datetime(2026,9,1,tzinfo=UTC),end_at=datetime(2026,9,2,tzinfo=UTC),max_messages=10,
     )
     filters=[call[2].get("$filter") for call in session.calls if call[2]]
+    history_scan=client.last_relationship_history_scan
     check(
         len(graph_history)==2 and all(item.source=="authorized_mailbox" for item in graph_history)
         and any("receivedDateTime ge" in value for value in filters)
-        and any("sentDateTime ge" in value for value in filters),
-        "Outlook history reader scans bounded inbox and sent-items ranges without changing daily pull semantics",
+        and any("sentDateTime ge" in value for value in filters)
+        and history_scan["folder_quotas"]=={"inbox":5,"sentitems":5}
+        and history_scan["folder_examined_counts"]=={"inbox":1,"sentitems":1},
+        "Outlook history reader balances bounded inbox and sent-items ranges without changing daily pull semantics",
     )
 
     sparse_session=_SparseRecipientSession()
