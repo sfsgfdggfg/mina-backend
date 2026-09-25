@@ -331,8 +331,20 @@ def _propose_fact(
     # is one immutable proposal identity; reruns must neither duplicate nor drift it.
     if learning_repository.find_by_entry_id(entry_id) is not None:
         return None
+    all_facts = learning_repository.list_all()
+    pending = [
+        item for item in all_facts
+        if item.status == "proposed" and item.subject_type == subject_type
+        and item.subject_id == subject_id and item.fact_key == fact_key
+        and item.context_key is None
+    ]
+    if pending:
+        # Continuous mailbox learning must not create an ever-growing queue of
+        # proposals for the same relationship fact while an operator decision is
+        # still pending. New evidence is reconsidered after review.
+        return None
     confirmed = [
-        item for item in learning_repository.list_all()
+        item for item in all_facts
         if item.status == "confirmed" and item.subject_type == subject_type
         and item.subject_id == subject_id and item.fact_key == fact_key and item.context_key is None
     ]
@@ -430,6 +442,7 @@ def analyze_relationship_history(
     master_repository: MasterDataRepository, learning_repository: LearningFactRepository,
     created_by: str, ai_analyzer: RelationshipHistoryAIAnalyzer | None = None,
     occurred_at: datetime | None = None,
+    propose_deterministic_metrics: bool = True,
 ) -> RelationshipHistoryAnalysisResult:
     timestamp = occurred_at or datetime.now(timezone.utc)
     timestamp = _aware(timestamp)
@@ -527,15 +540,16 @@ def analyze_relationship_history(
             metrics.append(("history.email.last_observed_at", max(item.sent_at for item in items).isoformat(), None, 0.99))
 
         proposed_ids: list[str] = []
-        for fact_key, value, unit, confidence in metrics:
-            fact = _propose_fact(
-                learning_repository=learning_repository, master_repository=master_repository,
-                subject_type=subject_type, subject_id=subject_id, subject_label=label,
-                fact_key=fact_key, value=value, value_unit=unit, confidence=confidence,
-                evidence=evidence, digest=digest, created_by=created_by, occurred_at=timestamp,
-            )
-            if fact is not None:
-                proposed_ids.append(fact.fact_id); proposed_total += 1
+        if propose_deterministic_metrics:
+            for fact_key, value, unit, confidence in metrics:
+                fact = _propose_fact(
+                    learning_repository=learning_repository, master_repository=master_repository,
+                    subject_type=subject_type, subject_id=subject_id, subject_label=label,
+                    fact_key=fact_key, value=value, value_unit=unit, confidence=confidence,
+                    evidence=evidence, digest=digest, created_by=created_by, occurred_at=timestamp,
+                )
+                if fact is not None:
+                    proposed_ids.append(fact.fact_id); proposed_total += 1
 
         ai_sample = _ai_sample(items)
         if ai_analyzer is not None and any(item.direction == "inbound" for item in ai_sample):

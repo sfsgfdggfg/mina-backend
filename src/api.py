@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 import json
 import os
 from fastapi import FastAPI, HTTPException, Request
@@ -76,6 +76,10 @@ from src.workflow.agency_learning_bootstrap import (
     run_outlook_agency_learning_bootstrap,
     run_imap_agency_learning_bootstrap,
 )
+from src.workflow.agency_incremental_learning import (
+    run_outlook_incremental_agency_learning,
+    run_imap_incremental_agency_learning,
+)
 from src.workflow.demo_relationship_onboarding import (
     run_demo_relationship_onboarding,
 )
@@ -117,6 +121,13 @@ from src.core.pilot_store import SQLitePilotStore
 from src.core.agency_learning_bootstrap import (
     AgencyLearningBootstrapSnapshot,
     SQLiteAgencyLearningBootstrapRepository,
+)
+from src.core.agency_incremental_learning import (
+    AgencyIncrementalLearningState,
+    SQLiteAgencyIncrementalLearningRepository,
+)
+from src.core.continuous_structured_learning import (
+    derive_review_safe_structured_learning,
 )
 from src.pilot_launcher import validate_controlled_pilot_runtime
 from src.core.outbound_runtime import resolve_outbound_runtime_policy
@@ -752,8 +763,12 @@ operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
 operation_start_message_repository = SQLiteOperationStartMessageRepository(pilot_store)
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
 agency_learning_bootstrap_repository = SQLiteAgencyLearningBootstrapRepository(pilot_store)
+agency_incremental_learning_repository = SQLiteAgencyIncrementalLearningRepository(pilot_store)
 _agency_learning_bootstrap_lock = Lock()
 _agency_learning_bootstrap_thread: Thread | None = None
+_agency_incremental_learning_lock = Lock()
+_agency_incremental_learning_stop = Event()
+_agency_incremental_learning_thread: Thread | None = None
 air_shadow_repository = SQLiteAirShadowRepository(pilot_store)
 air_rate_document_store = AirRateDocumentStore()
 air_rate_structure_review_repository = SQLiteAirRateStructureReviewRepository(pilot_store)
@@ -834,8 +849,14 @@ def start_agency_learning_bootstrap():
     _maybe_start_agency_learning_bootstrap()
 
 
+@app.on_event("startup")
+def start_agency_incremental_learning():
+    _start_agency_incremental_learning_scheduler()
+
+
 @app.on_event("shutdown")
 def stop_controlled_automation_scheduler():
+    _stop_agency_incremental_learning_scheduler()
     automation_scheduler.stop()
 
 
@@ -2716,6 +2737,7 @@ def _run_agency_learning_bootstrap_worker(provider: str, mailbox_id: str) -> Non
                 max_messages=max_messages,
                 include_ai_observations=include_ai,
             )
+        _run_agency_incremental_learning_once()
     except Exception as exc:
         error_code = getattr(exc, "code", None) or type(exc).__name__
         agency_learning_bootstrap_repository.save(
@@ -2782,12 +2804,245 @@ def _maybe_start_agency_learning_bootstrap(
         return True
 
 
+
+
+def _agency_incremental_learning_settings() -> tuple[int, int, int, bool, int, int]:
+    poll_seconds = int(
+        os.environ.get("MINAI_AGENCY_INCREMENTAL_POLL_SECONDS", "300")
+    )
+    max_messages = int(
+        os.environ.get("MINAI_AGENCY_INCREMENTAL_MAX_MESSAGES", "1000")
+    )
+    overlap_hours = int(
+        os.environ.get("MINAI_AGENCY_INCREMENTAL_OVERLAP_HOURS", "48")
+    )
+    include_ai = _agency_learning_env_flag("MINAI_AGENCY_LEARNING_AI", False)
+    ai_min_messages = int(
+        os.environ.get("MINAI_AGENCY_INCREMENTAL_AI_MIN_MESSAGES", "3")
+    )
+    ai_interval_hours = int(
+        os.environ.get("MINAI_AGENCY_INCREMENTAL_AI_INTERVAL_HOURS", "6")
+    )
+    if poll_seconds < 60 or poll_seconds > 86400:
+        raise ValueError("MINAI_AGENCY_INCREMENTAL_POLL_SECONDS must be 60-86400.")
+    if max_messages < 1 or max_messages > 10000:
+        raise ValueError("MINAI_AGENCY_INCREMENTAL_MAX_MESSAGES must be 1-10000.")
+    if overlap_hours < 1 or overlap_hours > 168:
+        raise ValueError("MINAI_AGENCY_INCREMENTAL_OVERLAP_HOURS must be 1-168.")
+    if ai_min_messages < 1 or ai_min_messages > 100:
+        raise ValueError("MINAI_AGENCY_INCREMENTAL_AI_MIN_MESSAGES must be 1-100.")
+    if ai_interval_hours < 1 or ai_interval_hours > 168:
+        raise ValueError(
+            "MINAI_AGENCY_INCREMENTAL_AI_INTERVAL_HOURS must be 1-168."
+        )
+    return (
+        poll_seconds,
+        max_messages,
+        overlap_hours,
+        include_ai,
+        ai_min_messages,
+        ai_interval_hours,
+    )
+
+
+
+
+def _agency_structured_learning_interval_hours() -> int:
+    interval = int(
+        os.environ.get("MINAI_AGENCY_STRUCTURED_LEARNING_INTERVAL_HOURS", "1")
+    )
+    if interval < 1 or interval > 168:
+        raise ValueError(
+            "MINAI_AGENCY_STRUCTURED_LEARNING_INTERVAL_HOURS must be 1-168."
+        )
+    return interval
+
+
+def _maybe_run_continuous_structured_learning(
+    mailbox_result: dict,
+) -> dict:
+    if mailbox_result.get("status") not in {"healthy", "waiting_bootstrap"}:
+        return mailbox_result
+    state = agency_incremental_learning_repository.get()
+    if state.status != "healthy":
+        return mailbox_result
+    now = datetime.now(timezone.utc)
+    interval = _agency_structured_learning_interval_hours()
+    if (
+        state.last_structured_derivation_at is not None
+        and now - state.last_structured_derivation_at < timedelta(hours=interval)
+    ):
+        mailbox_result["structured_learning"] = {
+            "status": "not_due",
+            "last_structured_derivation_at": (
+                state.last_structured_derivation_at.isoformat()
+            ),
+        }
+        return mailbox_result
+
+    summary = derive_review_safe_structured_learning(
+        master_repository=master_data_repository,
+        learning_repository=learning_fact_repository,
+        mina_repository=mina_job_repository,
+        supplier_repository=supplier_rfq_repository,
+        supplier_price_repository=supplier_price_repository,
+        quote_case_repository=quote_case_repository,
+        occurred_at=now,
+    )
+    proposed_count = int(summary.get("supplier_proposed_fact_count") or 0) + int(
+        summary.get("customer_proposed_fact_count") or 0
+    )
+    updated = AgencyIncrementalLearningState.model_validate(
+        state.model_copy(
+            update={
+                "last_structured_derivation_at": now,
+                "last_structured_proposed_fact_count": proposed_count,
+                "total_structured_proposed_fact_count": (
+                    state.total_structured_proposed_fact_count + proposed_count
+                ),
+            }
+        ).model_dump(mode="json")
+    )
+    agency_incremental_learning_repository.save(updated)
+    mailbox_result["structured_learning"] = {
+        "status": "completed",
+        **summary,
+    }
+    return mailbox_result
+
+def _agency_incremental_failure_state(
+    *, error_code: str, provider: str | None, mailbox_id: str | None,
+) -> AgencyIncrementalLearningState:
+    current = agency_incremental_learning_repository.get()
+    return AgencyIncrementalLearningState.model_validate(
+        current.model_copy(
+            update={
+                "status": "failed",
+                "provider": provider or current.provider,
+                "mailbox_id": mailbox_id or current.mailbox_id,
+                "last_completed_at": datetime.now(timezone.utc),
+                "error_code": error_code[:300],
+            }
+        ).model_dump(mode="json")
+    )
+
+
+def _run_agency_incremental_learning_once() -> dict:
+    if demo_mode_enabled() or not _agency_learning_env_flag(
+        "MINAI_AGENCY_INCREMENTAL_LEARNING_AUTO", True
+    ):
+        return {"status": "disabled"}
+    if not _agency_incremental_learning_lock.acquire(blocking=False):
+        return {"status": "already_running"}
+
+    try:
+        mailbox = _mailbox_status()
+        if mailbox.get("configured") is not True:
+            return {"status": "mailbox_not_configured"}
+        provider = str(mailbox.get("provider") or "")
+        if provider not in {"outlook", "imap"}:
+            return {"status": "provider_not_supported"}
+
+        (
+            _poll_seconds,
+            max_messages,
+            overlap_hours,
+            include_ai,
+            ai_min_messages,
+            ai_interval_hours,
+        ) = _agency_incremental_learning_settings()
+        try:
+            if provider == "outlook":
+                mailbox_result = run_outlook_incremental_agency_learning(
+                    config=MicrosoftAuthConfig.from_environment(),
+                    master_repository=master_data_repository,
+                    learning_repository=learning_fact_repository,
+                    bootstrap_repository=agency_learning_bootstrap_repository,
+                    incremental_repository=agency_incremental_learning_repository,
+                    max_messages=max_messages,
+                    overlap_hours=overlap_hours,
+                    include_ai_observations=include_ai,
+                    ai_min_new_messages=ai_min_messages,
+                    ai_interval_hours=ai_interval_hours,
+                )
+            else:
+                credential = _configured_imap_credential()
+                if credential is None:
+                    return {"status": "imap_mailbox_not_configured"}
+                mailbox_result = run_imap_incremental_agency_learning(
+                    credential=credential,
+                    master_repository=master_data_repository,
+                    learning_repository=learning_fact_repository,
+                    bootstrap_repository=agency_learning_bootstrap_repository,
+                    incremental_repository=agency_incremental_learning_repository,
+                    max_messages=max_messages,
+                    overlap_hours=overlap_hours,
+                    include_ai_observations=include_ai,
+                    ai_min_new_messages=ai_min_messages,
+                    ai_interval_hours=ai_interval_hours,
+                )
+            return _maybe_run_continuous_structured_learning(mailbox_result)
+        except Exception as exc:
+            error_code = str(getattr(exc, "code", None) or type(exc).__name__)
+            agency_incremental_learning_repository.save(
+                _agency_incremental_failure_state(
+                    error_code=error_code,
+                    provider=provider,
+                    mailbox_id=str(mailbox.get("mailbox_id") or "").strip().casefold() or None,
+                )
+            )
+            return {"status": "failed", "error_code": error_code}
+    finally:
+        _agency_incremental_learning_lock.release()
+
+
+def _agency_incremental_learning_loop() -> None:
+    while not _agency_incremental_learning_stop.is_set():
+        _run_agency_incremental_learning_once()
+        try:
+            poll_seconds = _agency_incremental_learning_settings()[0]
+        except ValueError:
+            poll_seconds = 300
+        if _agency_incremental_learning_stop.wait(poll_seconds):
+            break
+
+
+def _start_agency_incremental_learning_scheduler() -> bool:
+    global _agency_incremental_learning_thread
+    if demo_mode_enabled() or not _agency_learning_env_flag(
+        "MINAI_AGENCY_INCREMENTAL_LEARNING_AUTO", True
+    ):
+        return False
+    if (
+        _agency_incremental_learning_thread is not None
+        and _agency_incremental_learning_thread.is_alive()
+    ):
+        return False
+    _agency_incremental_learning_stop.clear()
+    _agency_incremental_learning_thread = Thread(
+        target=_agency_incremental_learning_loop,
+        daemon=True,
+        name="minai-agency-incremental-learning",
+    )
+    _agency_incremental_learning_thread.start()
+    return True
+
+
+def _stop_agency_incremental_learning_scheduler() -> None:
+    _agency_incremental_learning_stop.set()
+    thread = _agency_incremental_learning_thread
+    if thread is not None and thread.is_alive():
+        thread.join(timeout=2.0)
+
 @app.get("/mailbox/status")
 def get_mailbox_status():
     status = _mailbox_status()
     _maybe_start_agency_learning_bootstrap(status)
     status["agency_learning_status"] = (
         agency_learning_bootstrap_repository.get().status
+    )
+    status["agency_incremental_learning_status"] = (
+        agency_incremental_learning_repository.get().status
     )
     return status
 
@@ -2909,6 +3164,17 @@ def get_relationship_onboarding_status():
     facts = learning_fact_repository.list_all()
     _maybe_start_agency_learning_bootstrap(mailbox)
     automatic_learning = agency_learning_bootstrap_repository.get()
+    incremental_learning = agency_incremental_learning_repository.get()
+    try:
+        incremental_poll_seconds = _agency_incremental_learning_settings()[0]
+    except ValueError:
+        incremental_poll_seconds = None
+    try:
+        structured_learning_interval_hours = (
+            _agency_structured_learning_interval_hours()
+        )
+    except ValueError:
+        structured_learning_interval_hours = None
     return {
         "outlook_configured": mailbox.get("provider") == "outlook" and mailbox.get("configured") is True,
         "mailbox_configured": mailbox.get("configured") is True,
@@ -2931,6 +3197,12 @@ def get_relationship_onboarding_status():
             "MINAI_AGENCY_LEARNING_AI", False
         ),
         "automatic_agency_learning": automatic_learning.model_dump(mode="json"),
+        "incremental_agency_learning_enabled": _agency_learning_env_flag(
+            "MINAI_AGENCY_INCREMENTAL_LEARNING_AUTO", True
+        ),
+        "incremental_agency_learning_poll_seconds": incremental_poll_seconds,
+        "structured_learning_interval_hours": structured_learning_interval_hours,
+        "incremental_agency_learning": incremental_learning.model_dump(mode="json"),
     }
 
 
