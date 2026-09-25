@@ -4130,6 +4130,7 @@ function renderRelationshipOnboardingSettings(status = {}) {
     summaryItem("Bootstrap sonrası yeni mail",incremental.total_new_message_count??0),
     summaryItem("Son structured öneri",incremental.last_structured_proposed_fact_count??0),
     summaryItem("Structured öneri toplamı",incremental.total_structured_proposed_fact_count??0),
+    summaryItem("Operasyonel yeni mail",inboundSummary.new_message_count??0),
     summaryItem("Son CC kopyası",inboundSummary.agency_copy_count??0),
     summaryItem("CC yeni iş / güncelleme",`${inboundSummary.agency_copy_new_work_count??0} / ${inboundSummary.agency_copy_job_update_count??0}`),
     summaryItem("Taraf adayı",auto.candidate_count??0),
@@ -4141,7 +4142,7 @@ function renderRelationshipOnboardingSettings(status = {}) {
   if(auto.error_code) panel.append(node("div",`Son bootstrap tamamlanamadı: ${codeLabel(auto.error_code)}. MINAI bağlantı hazır olduğunda yeniden dener.`,"warning"));
   if(incremental.error_code) panel.append(node("div",`Son sürekli öğrenme turu tamamlanamadı: ${codeLabel(incremental.error_code)}. Cursor ilerletilmedi; sonraki tur aynı aralığı güvenli biçimde yeniden dener.`,"warning"));
   if(incremental.last_completed_at) panel.append(node("div",`Sürekli öğrenme son tamamlanma: ${new Date(incremental.last_completed_at).toLocaleString("tr-TR")} · ilişki öğrenimi yaklaşık her ${Math.round(Number(status.incremental_agency_learning_poll_seconds||300)/60)} dk · structured kanıt türetimi yaklaşık her ${Number(status.structured_learning_interval_hours||1)} saat.`,"muted small"));
-  if(inboundPoll.last_poll_at) panel.append(node("div",`Operasyonel Inbox son tarama: ${new Date(inboundPoll.last_poll_at).toLocaleString("tr-TR")} · yaklaşık her ${Math.round(Number(inboundPoll.poll_seconds||60)/60)} dk · mailbox üzerinde yazma yapılmaz.`,"muted small"));
+  if(inboundPoll.last_poll_at) panel.append(node("div",`Operasyonel Inbox son tarama: ${new Date(inboundPoll.last_poll_at).toLocaleString("tr-TR")} · yaklaşık her ${Math.round(Number(inboundPoll.poll_seconds||60)/60)} dk · ${inboundSummary.baseline_initialized?"mevcut Inbox güvenli başlangıç noktası olarak kaydedildi; eski mailler yeniden işlenmedi":"yalnız yeni provider mesajları işlendi"} · mailbox üzerinde yazma yapılmaz.`,"muted small"));
   if(inboundPoll.last_error) panel.append(node("div",`Otomatik Inbox son turu tamamlanamadı: ${codeLabel(inboundPoll.last_error)}.`,"warning"));
   const patterns=auto.workflow_patterns||{};
   if((patterns.supplier_rfq_message_count||0)+(patterns.customer_quote_message_count||0)+(patterns.operational_update_message_count||0)>0){

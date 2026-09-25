@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import Any
 
 from src.ai.email_parser import (
@@ -17,6 +18,12 @@ from src.core.attachment_safe_interpretation import (
 )
 from src.core.operational_data import (
     OperationalDataSources,
+)
+from src.core.inbound_auto_poll import (
+    initialize_baseline,
+    mark_message_seen,
+    reset_for_mailbox,
+    unseen_messages,
 )
 from src.integrations.microsoft_auth import (
     MicrosoftAuthConfig,
@@ -203,6 +210,7 @@ def pull_controlled_outlook_inbox(
     approval_repository=None,
     agency_copy_receipt_repository=None,
     agency_addresses=(),
+    auto_poll_state_repository=None,
     interpret_attachments: bool = False,
     token_provider: Callable[
         [MicrosoftAuthConfig],
@@ -235,13 +243,38 @@ def pull_controlled_outlook_inbox(
         )
     )
 
+    auto_poll_state = None
+    auto_poll_baseline_initialized = False
+    mails_to_process = list(mails)
+    if auto_poll_state_repository is not None:
+        now = datetime.now(timezone.utc)
+        auto_poll_state = reset_for_mailbox(
+            state=auto_poll_state_repository.get(),
+            provider=GRAPH_PROVIDER_NAME,
+            mailbox_id=config.mailbox_id.strip().casefold(),
+        )
+        if auto_poll_state.initialized_at is None:
+            auto_poll_state = initialize_baseline(
+                state=auto_poll_state,
+                messages=mails,
+                initialized_at=now,
+            )
+            auto_poll_state_repository.save(auto_poll_state)
+            mails_to_process = []
+            auto_poll_baseline_initialized = True
+        else:
+            mails_to_process = unseen_messages(
+                state=auto_poll_state,
+                messages=mails,
+            )
+
     summaries: list[dict] = [
         _safe_rejection_summary(rejection)
         for rejection in rejections
     ]
     parser_unavailable = False
 
-    for mail in mails:
+    for mail in mails_to_process:
         try:
             result = inbound_processor(
                 mail=mail,
@@ -337,6 +370,14 @@ def pull_controlled_outlook_inbox(
             )
         )
 
+        if auto_poll_state_repository is not None and not parser_unavailable:
+            auto_poll_state = mark_message_seen(
+                state=auto_poll_state,
+                mail=mail,
+                completed_at=datetime.now(timezone.utc),
+            )
+            auto_poll_state_repository.save(auto_poll_state)
+
         if parser_unavailable:
             break
 
@@ -388,6 +429,8 @@ def pull_controlled_outlook_inbox(
         "handled_message_count": (
             len(summaries)
         ),
+        "auto_poll_baseline_initialized": auto_poll_baseline_initialized,
+        "auto_poll_new_message_count": len(mails_to_process),
         "proposal_count": proposal_count,
         "supplier_response_count": (
             supplier_response_count

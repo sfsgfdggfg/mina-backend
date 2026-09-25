@@ -67,6 +67,7 @@ PERSISTENT_STATE_NAMESPACES = (
     "learning_fact_by_entry",
     "agency_learning_bootstrap",
     "agency_copy_mail_receipts",
+    "inbound_auto_poll_state",
     "air_rate_sources",
     "air_rate_source_by_entry",
     "air_mode_observations",
