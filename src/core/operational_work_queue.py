@@ -14,6 +14,10 @@ from src.core.attachment_interpretation_review_repository import (
 from src.core.attachment_review_queue import build_attachment_review_queue
 from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.extraction_confirmation_repository import ExtractionProposalRepository
+from src.core.inbound_sender_review_repository import (
+    InboundSenderReviewRepository,
+    SQLiteInboundSenderReviewRepository,
+)
 from src.core.mina_job_repository import MinaJobRepository
 from src.core.master_data_repository import MasterDataRepository
 from src.core.learning_fact_repository import LearningFactRepository
@@ -162,6 +166,47 @@ def _attachment_items(
                 days_until_nearest_deadline=source.get("days_until_nearest_deadline"),
             )
         )
+    return items
+
+
+
+def _inbound_sender_review_items(
+    *,
+    repository: InboundSenderReviewRepository,
+    now: datetime,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for review in repository.list_all():
+        if review.status != "pending":
+            continue
+        age_hours = _age_hours(review.created_at, now=now)
+        score = _HUMAN_ACTION_BASE_SCORE + 35
+        reasons = ["inbound_sender_verification_pending", "human_action_pending"]
+        score = _add_age(score, reasons, age_hours)
+        item = _final_item(
+            work_type="inbound_sender_verification",
+            resource_type="inbound_sender_review",
+            resource_id=review.review_id,
+            route="inbound",
+            status=review.status,
+            next_action="verify_inbound_sender",
+            created_at=review.created_at,
+            age_hours=age_hours,
+            score=score,
+            reasons=reasons,
+            blocker_count=1,
+            warning_count=1,
+        )
+        item.update(
+            {
+                "sender_address": review.sender_address,
+                "sender_name": review.sender_name,
+                "subject": review.subject,
+                "review_reason_code": review.reason_code,
+                "received_at": review.received_at,
+            }
+        )
+        items.append(item)
     return items
 
 
@@ -643,6 +688,7 @@ def build_operational_work_queue(
     master_data_repository: MasterDataRepository | None = None,
     agency_policy_repository: AgencyAutomationPolicyRepository | None = None,
     operation_start_repository: OperationStartMessageRepository | None = None,
+    inbound_sender_review_repository: InboundSenderReviewRepository | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = aware_utc(now or datetime.now(timezone.utc))
@@ -665,6 +711,7 @@ def build_operational_work_queue(
     resolved_master_data_repository = master_data_repository
     resolved_agency_policy_repository = agency_policy_repository
     resolved_operation_start_repository = operation_start_repository
+    resolved_inbound_sender_review_repository = inbound_sender_review_repository
     resolved_learning_fact_repository = None
     if getattr(supplier_repository, "store", None) is not None:
         from src.core.sqlite_repositories import (
@@ -695,7 +742,19 @@ def build_operational_work_queue(
             resolved_operation_start_repository = SQLiteOperationStartMessageRepository(
                 supplier_repository.store
             )
+        if resolved_inbound_sender_review_repository is None:
+            resolved_inbound_sender_review_repository = SQLiteInboundSenderReviewRepository(
+                supplier_repository.store
+            )
         resolved_learning_fact_repository = SQLiteLearningFactRepository(supplier_repository.store)
+    if resolved_inbound_sender_review_repository is not None:
+        items.extend(
+            _inbound_sender_review_items(
+                repository=resolved_inbound_sender_review_repository,
+                now=current,
+            )
+        )
+
     if resolved_automation_repository is not None:
         items.extend(_automation_attention_items(
             supplier_repository=supplier_repository,

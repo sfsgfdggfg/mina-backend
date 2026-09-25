@@ -31,6 +31,7 @@ from src.workflow.mail_ingestion import (
 
 
 OUTLOOK_GRAPH_PROVIDER = "microsoft_graph"
+CONTROLLED_INBOUND_PROVIDERS = {"microsoft_graph", "imap"}
 
 
 def _blocked_result(
@@ -53,7 +54,7 @@ def _provider_metadata_valid(
     return bool(
         mail.source == "email"
         and mail.provider_name
-        == OUTLOOK_GRAPH_PROVIDER
+        in CONTROLLED_INBOUND_PROVIDERS
         and mail.external_message_id
         and mail.mailbox_id
         and mail.sender_address

@@ -15,6 +15,7 @@ from src.core.inbound_auto_poll import (
 from src.integrations.imap_mail import IMAP_PROVIDER_NAME, ImapReadClient
 from src.integrations.mailbox_credentials import ImapMailboxCredential
 from src.workflow.mail_ingestion import InboundMailIdempotencyConflictError
+from src.workflow.inbound_sender_review import capture_inbound_sender_review
 from src.workflow.outlook_inbound_router import process_controlled_outlook_inbound_mail
 from src.workflow.outlook_pull import _safe_rejection_summary, _safe_result_summary
 
@@ -35,6 +36,7 @@ def pull_controlled_imap_inbox(
     quote_case_repository=None,
     approval_repository=None,
     agency_copy_receipt_repository=None,
+    inbound_sender_review_repository=None,
     agency_addresses=(),
     auto_poll_state_repository=None,
     interpret_attachments: bool = False,
@@ -122,6 +124,14 @@ def pull_controlled_imap_inbox(
             }
             parser_unavailable = True
 
+        review = capture_inbound_sender_review(
+            mail=mail,
+            result=result,
+            repository=inbound_sender_review_repository,
+        )
+        if review is not None:
+            result["inbound_sender_review_id"] = review.review_id
+            result["inbound_sender_review_status"] = review.status
         summaries.append(_safe_result_summary(mail, result))
         if auto_poll_state_repository is not None and not parser_unavailable:
             auto_poll_state = mark_message_seen(

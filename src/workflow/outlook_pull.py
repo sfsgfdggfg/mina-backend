@@ -37,6 +37,7 @@ from src.integrations.outlook_graph import (
 from src.workflow.mail_ingestion import (
     InboundMailIdempotencyConflictError,
 )
+from src.workflow.inbound_sender_review import capture_inbound_sender_review
 from src.workflow.outlook_inbound_router import (
     process_controlled_outlook_inbound_mail,
 )
@@ -106,6 +107,8 @@ def _safe_result_summary(
         "evidence_origin": result.get("evidence_origin"),
         "changed_fields": result.get("changed_fields"),
         "quote_case_id": result.get("quote_case_id"),
+        "inbound_sender_review_id": result.get("inbound_sender_review_id"),
+        "inbound_sender_review_status": result.get("inbound_sender_review_status"),
         "transport_mode": result.get("transport_mode"),
         "operational_event_types": result.get("operational_event_types"),
         "operational_reference_tokens": result.get("operational_reference_tokens"),
@@ -209,6 +212,7 @@ def pull_controlled_outlook_inbox(
     quote_case_repository=None,
     approval_repository=None,
     agency_copy_receipt_repository=None,
+    inbound_sender_review_repository=None,
     agency_addresses=(),
     auto_poll_state_repository=None,
     interpret_attachments: bool = False,
@@ -362,6 +366,15 @@ def pull_controlled_outlook_inbox(
                 "extraction_proposal": None,
             }
             parser_unavailable = True
+
+        review = capture_inbound_sender_review(
+            mail=mail,
+            result=result,
+            repository=inbound_sender_review_repository,
+        )
+        if review is not None:
+            result["inbound_sender_review_id"] = review.review_id
+            result["inbound_sender_review_status"] = review.status
 
         summaries.append(
             _safe_result_summary(

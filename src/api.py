@@ -66,6 +66,8 @@ from src.workflow.mail_ingestion import (
 from src.workflow.outlook_pull import (
     pull_controlled_outlook_inbox,
 )
+from src.workflow.outlook_inbound_router import process_controlled_outlook_inbound_mail
+from src.workflow.inbound_sender_review import resolve_inbound_sender_review
 from src.workflow.imap_pull import pull_controlled_imap_inbox
 from src.workflow.relationship_onboarding import (
     RelationshipOnboardingAuthorizationError,
@@ -107,6 +109,7 @@ from src.integrations.mailbox_credentials import (
 from src.integrations.outlook_graph import (
     MAX_PULL_MESSAGES,
     OutlookGraphMessageError,
+    OutlookGraphReadClient,
     OutlookGraphReadError,
     outlook_graph_sender_from_environment,
 )
@@ -128,6 +131,7 @@ from src.core.agency_incremental_learning import (
 )
 from src.core.agency_copy_receipt import SQLiteAgencyCopyReceiptRepository
 from src.core.inbound_auto_poll import SQLiteInboundAutoPollStateRepository
+from src.core.inbound_sender_review_repository import SQLiteInboundSenderReviewRepository
 from src.core.continuous_structured_learning import (
     derive_review_safe_structured_learning,
 )
@@ -286,6 +290,7 @@ from src.core.supplier_price_service import (
 from src.core.supplier_award_repository import SQLiteSupplierAwardRepository
 from src.core.supplier_operational_inbound import (
     SQLiteSupplierOperationalNotificationRepository,
+    matching_supplier_masters,
 )
 from src.core.supplier_award_service import (
     select_approved_job_supplier_offer,
@@ -768,6 +773,7 @@ agency_learning_bootstrap_repository = SQLiteAgencyLearningBootstrapRepository(p
 agency_incremental_learning_repository = SQLiteAgencyIncrementalLearningRepository(pilot_store)
 agency_copy_receipt_repository = SQLiteAgencyCopyReceiptRepository(pilot_store)
 inbound_auto_poll_state_repository = SQLiteInboundAutoPollStateRepository(pilot_store)
+inbound_sender_review_repository = SQLiteInboundSenderReviewRepository(pilot_store)
 _agency_learning_bootstrap_lock = Lock()
 _agency_learning_bootstrap_thread: Thread | None = None
 _agency_incremental_learning_lock = Lock()
@@ -1610,6 +1616,30 @@ class ResumeSupplierQuoteRequest(BaseModel):
         "price", "capacity_certainty", "relationship_loyalty", "customer_preference",
         "operational_experience", "timing_transit", "management_decision", "other",
     ]] = None
+
+
+
+class InboundSenderResolveRequest(BaseModel):
+    subject_type: Literal["customer", "supplier"]
+    subject_id: Optional[str] = Field(default=None, max_length=120)
+    subject_name: Optional[str] = Field(default=None, max_length=240)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        subject_id = (self.subject_id or "").strip()
+        subject_name = (self.subject_name or "").strip()
+        if bool(subject_id) == bool(subject_name):
+            raise ValueError(
+                "Provide exactly one of subject_id (existing master) or subject_name (new master)."
+            )
+        self.subject_id = subject_id or None
+        self.subject_name = subject_name or None
+        return self
+
+
+class InboundSenderDismissRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=1000)
 
 
 class CustomerMasterCreateRequest(BaseModel):
@@ -2505,6 +2535,7 @@ def get_operations_dashboard(
         return build_operations_dashboard(
             mina_repository=mina_job_repository,
             operation_repository=operation_execution_repository,
+            inbound_sender_review_repository=inbound_sender_review_repository,
             anchor_date=anchor_date, days=days,
         )
     except ValueError as exc:
@@ -2566,6 +2597,67 @@ def _configured_imap_credential() -> ImapMailboxCredential | None:
     if not store.configured():
         return None
     return store.load_imap()
+
+
+
+def _fetch_review_source_mail(review):
+    provider = review.provider
+    if provider == "microsoft_graph":
+        if _mailbox_provider_authority() != "outlook":
+            raise HTTPException(status_code=409, detail="review_mailbox_provider_changed")
+        config = MicrosoftAuthConfig.from_environment()
+        if config.mailbox_id.strip().casefold() != review.mailbox_id:
+            raise HTTPException(status_code=409, detail="review_mailbox_identity_changed")
+        client = OutlookGraphReadClient(
+            access_token=acquire_silent_access_token(config),
+            mailbox_id=config.mailbox_id,
+        )
+        mail = client.get_message(review.external_message_id)
+        attachment_retriever = client.retrieve_and_extract_allowlisted_attachments
+    elif provider == "imap":
+        if _mailbox_provider_authority() != "imap":
+            raise HTTPException(status_code=409, detail="review_mailbox_provider_changed")
+        credential = _configured_imap_credential()
+        if credential is None:
+            raise HTTPException(status_code=503, detail="imap_mailbox_not_configured")
+        if credential.mailbox_id.strip().casefold() != review.mailbox_id:
+            raise HTTPException(status_code=409, detail="review_mailbox_identity_changed")
+        client = ImapReadClient(credential=credential)
+        mail = client.get_message(review.external_message_id)
+        attachment_retriever = None
+    else:
+        raise HTTPException(status_code=409, detail="review_mailbox_provider_unsupported")
+
+    if (
+        mail.provider_name != review.provider
+        or (mail.mailbox_id or "").strip().casefold() != review.mailbox_id
+        or mail.external_message_id != review.external_message_id
+        or mail.sender_address.strip().casefold() != review.sender_address
+    ):
+        raise HTTPException(status_code=409, detail="review_source_message_identity_mismatch")
+    return mail, attachment_retriever
+
+
+def _reprocess_verified_review_mail(review) -> dict:
+    mail, attachment_retriever = _fetch_review_source_mail(review)
+    return process_controlled_outlook_inbound_mail(
+        mail=mail,
+        shipment_parser=parse_email_with_ai,
+        proposal_repository=extraction_proposal_repository,
+        operational_data_sources=operational_data_sources,
+        master_data_repository=_runtime_master_data_authority(),
+        supplier_parser=OpenAISupplierResponseParser(),
+        supplier_repository=supplier_rfq_repository,
+        attachment_retriever=attachment_retriever,
+        attachment_interpreter=None,
+        attachment_review_repository=None,
+        supplier_operational_repository=supplier_operational_notification_repository,
+        mina_job_repository=mina_job_repository,
+        quote_case_repository=quote_case_repository,
+        approval_repository=quote_approval_repository,
+        agency_copy_receipt_repository=agency_copy_receipt_repository,
+        agency_addresses=_runtime_agency_addresses(review.mailbox_id),
+    )
 
 
 def _mailbox_provider_authority() -> str:
@@ -2778,6 +2870,7 @@ def _pull_active_mailbox_inbound_auto(limit: int) -> dict:
             quote_case_repository=quote_case_repository,
             approval_repository=quote_approval_repository,
             agency_copy_receipt_repository=agency_copy_receipt_repository,
+            inbound_sender_review_repository=inbound_sender_review_repository,
             agency_addresses=_runtime_agency_addresses(config.mailbox_id),
             auto_poll_state_repository=inbound_auto_poll_state_repository,
             interpret_attachments=False,
@@ -2803,6 +2896,7 @@ def _pull_active_mailbox_inbound_auto(limit: int) -> dict:
         quote_case_repository=quote_case_repository,
         approval_repository=quote_approval_repository,
         agency_copy_receipt_repository=agency_copy_receipt_repository,
+        inbound_sender_review_repository=inbound_sender_review_repository,
         agency_addresses=_runtime_agency_addresses(credential.mailbox_id),
         auto_poll_state_repository=inbound_auto_poll_state_repository,
         interpret_attachments=False,
@@ -3306,6 +3400,268 @@ def get_mailbox_status():
         _runtime_agency_addresses(status.get("mailbox_id"))
     )
     return status
+
+
+
+def _review_sender_customer_matches(sender_address: str):
+    return [
+        customer
+        for customer in master_data_repository.list_customers()
+        if customer.active
+        and sender_matches_profile(
+            customer_to_legacy_memory(customer),
+            sender_address,
+        )
+    ]
+
+
+def _resolve_review_master(
+    *,
+    review,
+    request: InboundSenderResolveRequest,
+    operator_name: str,
+):
+    sender = review.sender_address
+    customer_matches = _review_sender_customer_matches(sender)
+    supplier_matches = matching_supplier_masters(
+        master_data_repository,
+        sender,
+    )
+
+    if request.subject_type == "customer":
+        if supplier_matches:
+            raise HTTPException(
+                status_code=409,
+                detail="review_sender_already_matches_supplier_master",
+            )
+        if request.subject_id is not None:
+            customer = master_data_repository.get_customer(request.subject_id)
+            if customer is None:
+                raise HTTPException(status_code=404, detail="customer_master_not_found")
+            other_matches = [
+                item for item in customer_matches
+                if item.customer_id != customer.customer_id
+            ]
+            if other_matches:
+                raise HTTPException(
+                    status_code=409,
+                    detail="review_sender_matches_different_customer_master",
+                )
+            contacts = list(customer.contacts)
+            if not any(
+                (contact.email or "").casefold() == sender
+                for contact in contacts
+            ):
+                contacts.append(
+                    MasterContact(
+                        contact_name=review.sender_name,
+                        email=sender,
+                        roles=["other"],
+                    )
+                )
+            customer = update_customer_master(
+                repository=master_data_repository,
+                customer_id=customer.customer_id,
+                updated_by=operator_name,
+                trusted_sender_addresses=list(
+                    dict.fromkeys([*customer.trusted_sender_addresses, sender])
+                ),
+                contacts=contacts,
+            )
+            return "existing_customer", "customer", customer.customer_id, customer.customer_name
+
+        if customer_matches:
+            raise HTTPException(
+                status_code=409,
+                detail="review_sender_already_matches_customer_master",
+            )
+        customer = create_customer_master(
+            repository=master_data_repository,
+            entry_id=f"inbound-review:{review.review_id}:customer",
+            customer_name=request.subject_name,
+            updated_by=operator_name,
+            source="manual",
+            trusted_sender_addresses=[sender],
+            contacts=[
+                MasterContact(
+                    contact_name=review.sender_name,
+                    email=sender,
+                    roles=["other"],
+                )
+            ],
+            operational_notes=[
+                "Customer master created from operator-confirmed inbound sender review."
+            ],
+        )
+        return "new_customer", "customer", customer.customer_id, customer.customer_name
+
+    if customer_matches:
+        raise HTTPException(
+            status_code=409,
+            detail="review_sender_already_matches_customer_master",
+        )
+    if request.subject_id is not None:
+        supplier = master_data_repository.get_supplier(request.subject_id)
+        if supplier is None:
+            raise HTTPException(status_code=404, detail="supplier_master_not_found")
+        other_matches = [
+            item for item in supplier_matches
+            if item.supplier_id != supplier.supplier_id
+        ]
+        if other_matches:
+            raise HTTPException(
+                status_code=409,
+                detail="review_sender_matches_different_supplier_master",
+            )
+        contacts = list(supplier.contacts)
+        if not any(
+            (contact.email or "").casefold() == sender
+            for contact in contacts
+        ):
+            contacts.append(
+                MasterContact(
+                    contact_name=review.sender_name,
+                    email=sender,
+                    roles=["other"],
+                )
+            )
+        supplier = update_supplier_master(
+            repository=master_data_repository,
+            supplier_id=supplier.supplier_id,
+            updated_by=operator_name,
+            trusted_sender_addresses=list(
+                dict.fromkeys([*supplier.trusted_sender_addresses, sender])
+            ),
+            contacts=contacts,
+        )
+        return "existing_supplier", "supplier", supplier.supplier_id, supplier.supplier_name
+
+    if supplier_matches:
+        raise HTTPException(
+            status_code=409,
+            detail="review_sender_already_matches_supplier_master",
+        )
+    supplier = create_supplier_master(
+        repository=master_data_repository,
+        entry_id=f"inbound-review:{review.review_id}:supplier",
+        supplier_name=request.subject_name,
+        updated_by=operator_name,
+        source="manual",
+        trusted_sender_addresses=[sender],
+        contacts=[
+            MasterContact(
+                contact_name=review.sender_name,
+                email=sender,
+                roles=["other"],
+            )
+        ],
+        notes="Supplier master created from operator-confirmed inbound sender review.",
+    )
+    return "new_supplier", "supplier", supplier.supplier_id, supplier.supplier_name
+
+
+@app.get("/inbound-sender-reviews")
+def list_inbound_sender_reviews(include_resolved: bool = False):
+    reviews = inbound_sender_review_repository.list_all()
+    if not include_resolved:
+        reviews = [review for review in reviews if review.status == "pending"]
+    reviews.sort(key=lambda review: review.created_at, reverse=True)
+    return {
+        "reviews": [review.model_dump(mode="json") for review in reviews],
+        "pending_count": sum(1 for review in reviews if review.status == "pending"),
+    }
+
+
+@app.post("/inbound-sender-reviews/{review_id}/resolve")
+def resolve_inbound_sender_review_endpoint(
+    review_id: str,
+    request: InboundSenderResolveRequest,
+    http_request: Request,
+):
+    review = inbound_sender_review_repository.get(review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail="inbound_sender_review_not_found")
+    if review.status != "pending":
+        return review.model_dump(mode="json")
+
+    operator_name = _authenticated_operator(http_request)
+    try:
+        (
+            resolution,
+            subject_type,
+            subject_id,
+            subject_label,
+        ) = _resolve_review_master(
+            review=review,
+            request=request,
+            operator_name=operator_name,
+        )
+        reprocess_result = _reprocess_verified_review_mail(review)
+    except MasterDataConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (
+        MicrosoftAuthConfigurationError,
+        MicrosoftAuthenticationError,
+        OutlookGraphReadError,
+        ImapMailboxError,
+    ) as exc:
+        detail = getattr(exc, "code", None) or str(exc) or exc.__class__.__name__
+        raise HTTPException(status_code=503, detail=f"review_reprocess_unavailable:{detail}") from exc
+
+    if reprocess_result.get("result_type") == "inbound_sender_verification_required":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "review_identity_resolution_did_not_clear_sender_gate",
+                "reason_code": reprocess_result.get("reason_code"),
+            },
+        )
+
+    resolved = resolve_inbound_sender_review(
+        review=review,
+        repository=inbound_sender_review_repository,
+        resolution=resolution,
+        resolved_by=operator_name,
+        resolved_subject_type=subject_type,
+        resolved_subject_id=subject_id,
+        resolved_subject_label=subject_label,
+        resolution_note=request.note,
+        reprocess_result=reprocess_result,
+    )
+    return {
+        "review": resolved.model_dump(mode="json"),
+        "reprocess_result": {
+            "result_type": reprocess_result.get("result_type"),
+            "ingestion_status": reprocess_result.get("ingestion_status"),
+            "reason_code": reprocess_result.get("reason_code"),
+            "proposal_id": (
+                getattr(reprocess_result.get("extraction_proposal"), "proposal_id", None)
+                if reprocess_result.get("extraction_proposal") is not None
+                else None
+            ),
+            "job_id": reprocess_result.get("job_id"),
+            "mina_code": reprocess_result.get("mina_code"),
+        },
+    }
+
+
+@app.post("/inbound-sender-reviews/{review_id}/dismiss")
+def dismiss_inbound_sender_review_endpoint(
+    review_id: str,
+    request: InboundSenderDismissRequest,
+    http_request: Request,
+):
+    review = inbound_sender_review_repository.get(review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail="inbound_sender_review_not_found")
+    resolved = resolve_inbound_sender_review(
+        review=review,
+        repository=inbound_sender_review_repository,
+        resolution="irrelevant",
+        resolved_by=_authenticated_operator(http_request),
+        resolution_note=request.reason,
+    )
+    return resolved.model_dump(mode="json")
 
 
 @app.get("/settings/password")
@@ -6080,6 +6436,7 @@ def pull_outlook_inbound(
                 quote_case_repository=quote_case_repository,
                 approval_repository=quote_approval_repository,
                 agency_copy_receipt_repository=agency_copy_receipt_repository,
+                inbound_sender_review_repository=inbound_sender_review_repository,
                 agency_addresses=_runtime_agency_addresses(config.mailbox_id),
                 interpret_attachments=(
                     request.interpret_attachments
@@ -6161,6 +6518,7 @@ def pull_active_mailbox_inbound(
             quote_case_repository=quote_case_repository,
             approval_repository=quote_approval_repository,
             agency_copy_receipt_repository=agency_copy_receipt_repository,
+            inbound_sender_review_repository=inbound_sender_review_repository,
             agency_addresses=_runtime_agency_addresses(
                 imap_credential.mailbox_id
             ),
