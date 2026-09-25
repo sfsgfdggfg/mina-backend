@@ -143,6 +143,76 @@ def existing_proposal_for_mail(
     )
 
 
+
+def extract_shipment_proposal_from_mail(
+    *,
+    mail: InboundMailEnvelope,
+    shipment_parser: Callable[
+        [PrivacySafeText],
+        ShipmentProposalSnapshot,
+    ],
+    trusted_customer_name: str | None = None,
+) -> tuple[InboundMailEnvelope, ShipmentProposalSnapshot]:
+    """Privacy-transform and parse one mail without persisting a proposal."""
+
+    safe_mail, safe_text = prepare_inbound_mail_for_processing(mail)
+    proposed_shipment = shipment_parser(safe_text)
+    proposal_updates = {}
+    if trusted_customer_name and trusted_customer_name.strip():
+        proposal_updates["customer_name"] = trusted_customer_name.strip()
+    if not proposed_shipment.cargo_ready_date:
+        inferred_ready = infer_customer_cargo_ready_date(
+            str(safe_text), mail.received_at
+        )
+        if inferred_ready is not None:
+            proposal_updates["cargo_ready_date"] = inferred_ready
+    if proposed_shipment.customer_quote_deadline_at is None:
+        inferred_quote_deadline = infer_customer_quote_deadline(
+            str(safe_text), mail.received_at
+        )
+        if inferred_quote_deadline is not None:
+            proposal_updates["customer_quote_deadline_at"] = inferred_quote_deadline
+    if proposal_updates:
+        proposed_shipment = proposed_shipment.model_copy(update=proposal_updates)
+    return safe_mail, proposed_shipment
+
+
+
+def save_preparsed_shipment_proposal(
+    *,
+    original_mail: InboundMailEnvelope,
+    safe_mail: InboundMailEnvelope,
+    proposed_shipment: ShipmentProposalSnapshot,
+    proposal_repository: ExtractionProposalRepository,
+    trusted_customer_name: str | None = None,
+    evidence_origin: str = "customer_authored",
+) -> dict:
+    """Persist one already-parsed proposal with the normal message idempotency gate."""
+
+    message_key = original_mail.message_deduplication_key
+    with _message_ingestion_lock(message_key):
+        existing = _existing_proposal_for_mail(
+            mail=original_mail,
+            repository=proposal_repository,
+        )
+        if existing is not None:
+            return _extraction_required_result(
+                proposal=existing,
+                ingestion_status="duplicate_existing_proposal",
+            )
+        proposal = create_extraction_proposal(
+            mail=safe_mail,
+            proposed_shipment=proposed_shipment,
+            repository=proposal_repository,
+            trusted_customer_name=trusted_customer_name,
+            evidence_origin=evidence_origin,
+        )
+        return _extraction_required_result(
+            proposal=proposal,
+            ingestion_status="created",
+        )
+
+
 def process_customer_inquiry_mail(
     *,
     mail: InboundMailEnvelope,
@@ -152,6 +222,7 @@ def process_customer_inquiry_mail(
     ],
     proposal_repository: ExtractionProposalRepository,
     trusted_customer_name: str | None = None,
+    evidence_origin: str = "customer_authored",
 ) -> dict:
     """Stop customer mail at a non-authoritative extraction proposal."""
 
@@ -171,40 +242,17 @@ def process_customer_inquiry_mail(
                 ),
             )
 
-        safe_mail, safe_text = (
-            prepare_inbound_mail_for_processing(
-                mail
-            )
+        safe_mail, proposed_shipment = extract_shipment_proposal_from_mail(
+            mail=mail,
+            shipment_parser=shipment_parser,
+            trusted_customer_name=trusted_customer_name,
         )
-        proposed_shipment = shipment_parser(
-            safe_text
-        )
-        proposal_updates = {}
-        if trusted_customer_name and trusted_customer_name.strip():
-            proposal_updates["customer_name"] = trusted_customer_name.strip()
-        if not proposed_shipment.cargo_ready_date:
-            inferred_ready = infer_customer_cargo_ready_date(
-                str(safe_text), mail.received_at
-            )
-            if inferred_ready is not None:
-                proposal_updates["cargo_ready_date"] = inferred_ready
-        if proposed_shipment.customer_quote_deadline_at is None:
-            inferred_quote_deadline = infer_customer_quote_deadline(
-                str(safe_text), mail.received_at
-            )
-            if inferred_quote_deadline is not None:
-                proposal_updates["customer_quote_deadline_at"] = (
-                    inferred_quote_deadline
-                )
-        if proposal_updates:
-            proposed_shipment = proposed_shipment.model_copy(
-                update=proposal_updates
-            )
         proposal = create_extraction_proposal(
             mail=safe_mail,
             proposed_shipment=proposed_shipment,
             repository=proposal_repository,
             trusted_customer_name=trusted_customer_name,
+            evidence_origin=evidence_origin,
         )
 
         return _extraction_required_result(

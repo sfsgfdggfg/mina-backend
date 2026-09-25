@@ -570,7 +570,12 @@ class ImapReadClient:
         except Exception as exc:
             raise ImapMailboxError("imap_message_header_parse_failed") from exc
         sender_address, sender_name = _sender(message)
-        recipients = _addresses(message, ("To", "Cc"))
+        to_addresses = _addresses(message, ("To",))
+        cc_addresses = _addresses(message, ("Cc",))
+        bcc_addresses = _addresses(message, ("Bcc",))
+        recipients = list(
+            dict.fromkeys([*to_addresses, *cc_addresses, *bcc_addresses])
+        )
         attachments = [
             InboundAttachmentMetadata(
                 name=(part.filename or "attachment")[:512],
@@ -592,6 +597,9 @@ class ImapReadClient:
             sender_address=sender_address,
             sender_name=sender_name,
             recipient_addresses=recipients,
+            to_addresses=to_addresses,
+            cc_addresses=cc_addresses,
+            bcc_addresses=bcc_addresses,
             subject=str(message.get("Subject") or "").strip() or None,
             body_text=body,
             raw_body_sha256=(

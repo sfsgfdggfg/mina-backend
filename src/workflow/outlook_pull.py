@@ -43,7 +43,7 @@ def _safe_result_summary(
         "extraction_proposal"
     )
 
-    proposal_id = None
+    proposal_id = result.get("proposal_id")
 
     if proposal is not None:
         proposal_id = getattr(
@@ -94,6 +94,11 @@ def _safe_result_summary(
         "mina_code": result.get("mina_code"),
         "supplier_id": result.get("supplier_id"),
         "supplier_name": result.get("supplier_name"),
+        "counterparty_type": result.get("counterparty_type"),
+        "counterparty_name": result.get("counterparty_name"),
+        "evidence_origin": result.get("evidence_origin"),
+        "changed_fields": result.get("changed_fields"),
+        "quote_case_id": result.get("quote_case_id"),
         "transport_mode": result.get("transport_mode"),
         "operational_event_types": result.get("operational_event_types"),
         "operational_reference_tokens": result.get("operational_reference_tokens"),
@@ -194,6 +199,10 @@ def pull_controlled_outlook_inbox(
     attachment_review_repository=None,
     supplier_operational_repository=None,
     mina_job_repository=None,
+    quote_case_repository=None,
+    approval_repository=None,
+    agency_copy_receipt_repository=None,
+    agency_addresses=(),
     interpret_attachments: bool = False,
     token_provider: Callable[
         [MicrosoftAuthConfig],
@@ -274,6 +283,10 @@ def pull_controlled_outlook_inbox(
                 ),
                 supplier_operational_repository=supplier_operational_repository,
                 mina_job_repository=mina_job_repository,
+                quote_case_repository=quote_case_repository,
+                approval_repository=approval_repository,
+                agency_copy_receipt_repository=agency_copy_receipt_repository,
+                agency_addresses=agency_addresses,
             )
 
         except (

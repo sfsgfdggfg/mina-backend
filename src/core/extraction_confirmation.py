@@ -22,6 +22,7 @@ SafetySensitiveField = Literal[
     "is_temperature_controlled",
     "is_high_value",
 ]
+ExtractionEvidenceOrigin = Literal["customer_authored", "agency_copied"]
 ExtractionStatus = Literal["proposed", "confirmed"]
 ExtractionResumeStatus = Literal[
     "not_started",
@@ -63,6 +64,7 @@ class ShipmentExtractionProposal(BaseModel):
     inbound_mail: InboundMailEnvelope
     proposed_shipment: ShipmentProposalSnapshot
     trusted_customer_name: Optional[str] = Field(default=None, max_length=240)
+    evidence_origin: ExtractionEvidenceOrigin = "customer_authored"
     source_attachment_review_id: Optional[str] = None
     extraction_status: ExtractionStatus = "proposed"
 

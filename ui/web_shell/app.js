@@ -792,6 +792,9 @@ function inboxProposalCard(proposal, refresh) {
   const status = proposal.extraction_status === "confirmed" ? (proposal.resume_status === "completed" ? "Akış başladı" : "Doğrulandı") : "Doğrulama bekliyor";
   head.append(htext, node("span", status, `badge ${proposal.extraction_status === "confirmed" ? "open" : ""}`));
   card.append(head, shipmentSummary(shipment));
+  if(proposal.evidence_origin==="agency_copied"){
+    card.append(node("div","Bu iş adayı, acentanın başka bir e-posta adresinden gönderilip MINAI mailbox'ına kopyalanan yazışmadan çıkarıldı. İçerik müşteri-authored kabul edilmez; doğrulama yine operatördedir.","notice"));
+  }
 
   const unknown = proposal.unknown_fields || [];
   if (unknown.length) card.append(node("div", `Eksik/Belirsiz alanlar: ${unknown.join(", ")}`, "notice inbox-unknown"));
@@ -4110,6 +4113,8 @@ function renderRelationshipOnboardingSettings(status = {}) {
   h.append(node("h2","Acenta Öğrenimi"),node("p","MINAI mailbox bağlandığında gelen ve giden geçmişi otomatik tarar; müşteri/tedarikçi adaylarını, ilişki davranışlarını ve çalışma kalıplarını provenance ile çıkarır. Kullanıcının ayrıca tarama komutu vermesi gerekmez.","muted"));panel.append(h);
   const auto=status.automatic_agency_learning||{};
   const incremental=status.incremental_agency_learning||{};
+  const inboundPoll=status.inbound_auto_poll||{};
+  const inboundSummary=inboundPoll.last_summary||{};
   const autoLabel=({not_started:"Başlamadı",running:"Taranıyor",completed:"Tamamlandı",failed:"Tekrar denenecek"})[auto.status]||codeLabel(auto.status||"not_started");
   const incrementalLabel=({not_started:"Başlamadı",waiting_bootstrap:"Bootstrap bekleniyor",running:"Yeni mailler taranıyor",healthy:"Sağlıklı",failed:"Tekrar denenecek"})[incremental.status]||codeLabel(incremental.status||"not_started");
   const health=node("div","","summary-grid relationship-onboarding-health");
@@ -4117,12 +4122,16 @@ function renderRelationshipOnboardingSettings(status = {}) {
     summaryItem("Mailbox",status.synthetic_mailbox?"Demo mailbox":(status.mailbox_configured?`${String(status.mailbox_provider||"mailbox").toUpperCase()} · Hazır`:"Yapılandırma eksik")),
     summaryItem("Bootstrap",status.automatic_agency_learning_enabled===false?"Kapalı":autoLabel),
     summaryItem("Sürekli öğrenme",status.incremental_agency_learning_enabled===false?"Kapalı":incrementalLabel),
+    summaryItem("Otomatik Inbox",inboundPoll.enabled===false?"Kapalı":(inboundPoll.last_error?"Hata":(inboundPoll.running?"Çalışıyor":"Hazır"))),
+    summaryItem("Acenta mail adresi",status.agency_address_count??0),
     summaryItem("Bootstrap mail",auto.scanned_message_count??0),
     summaryItem("Toplam Gelen / Giden",`${auto.inbound_message_count??0} / ${auto.outbound_message_count??0}`),
     summaryItem("Son tur yeni mail",incremental.last_new_message_count??0),
     summaryItem("Bootstrap sonrası yeni mail",incremental.total_new_message_count??0),
     summaryItem("Son structured öneri",incremental.last_structured_proposed_fact_count??0),
     summaryItem("Structured öneri toplamı",incremental.total_structured_proposed_fact_count??0),
+    summaryItem("Son CC kopyası",inboundSummary.agency_copy_count??0),
+    summaryItem("CC yeni iş / güncelleme",`${inboundSummary.agency_copy_new_work_count??0} / ${inboundSummary.agency_copy_job_update_count??0}`),
     summaryItem("Taraf adayı",auto.candidate_count??0),
     summaryItem("Yüksek güvenli aday",auto.high_confidence_candidate_count??0),
     summaryItem("Bekleyen öğrenim",Number(status.proposed_customer_fact_count??0)+Number(status.proposed_supplier_fact_count??0)),
@@ -4131,7 +4140,9 @@ function renderRelationshipOnboardingSettings(status = {}) {
   panel.append(node("div",status.synthetic_mailbox?"Demo modunda bu ekran sentetik mailbox geçmişini kullanır. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz.":"Bootstrap hem Gelen Kutusu hem Gönderilmiş Öğeler'i öğrenir; ardından sürekli öğrenme döngüsü yeni gelen ve giden mailleri komut beklemeden takip eder. Aynı ajans domainindeki iç adresler dış taraf sayılmaz. Ham mail gövdeleri kalıcı öğrenme state’ine yazılmaz; yalnız provenance, sayaç, hash ve öğrenim önerileri tutulur.","notice"));
   if(auto.error_code) panel.append(node("div",`Son bootstrap tamamlanamadı: ${codeLabel(auto.error_code)}. MINAI bağlantı hazır olduğunda yeniden dener.`,"warning"));
   if(incremental.error_code) panel.append(node("div",`Son sürekli öğrenme turu tamamlanamadı: ${codeLabel(incremental.error_code)}. Cursor ilerletilmedi; sonraki tur aynı aralığı güvenli biçimde yeniden dener.`,"warning"));
-  if(incremental.last_completed_at) panel.append(node("div",`Sürekli öğrenme son tamamlanma: ${new Date(incremental.last_completed_at).toLocaleString("tr-TR")} · mailbox taraması yaklaşık her ${Math.round(Number(status.incremental_agency_learning_poll_seconds||300)/60)} dk · structured kanıt türetimi yaklaşık her ${Number(status.structured_learning_interval_hours||1)} saat.`,"muted small"));
+  if(incremental.last_completed_at) panel.append(node("div",`Sürekli öğrenme son tamamlanma: ${new Date(incremental.last_completed_at).toLocaleString("tr-TR")} · ilişki öğrenimi yaklaşık her ${Math.round(Number(status.incremental_agency_learning_poll_seconds||300)/60)} dk · structured kanıt türetimi yaklaşık her ${Number(status.structured_learning_interval_hours||1)} saat.`,"muted small"));
+  if(inboundPoll.last_poll_at) panel.append(node("div",`Operasyonel Inbox son tarama: ${new Date(inboundPoll.last_poll_at).toLocaleString("tr-TR")} · yaklaşık her ${Math.round(Number(inboundPoll.poll_seconds||60)/60)} dk · mailbox üzerinde yazma yapılmaz.`,"muted small"));
+  if(inboundPoll.last_error) panel.append(node("div",`Otomatik Inbox son turu tamamlanamadı: ${codeLabel(inboundPoll.last_error)}.`,"warning"));
   const patterns=auto.workflow_patterns||{};
   if((patterns.supplier_rfq_message_count||0)+(patterns.customer_quote_message_count||0)+(patterns.operational_update_message_count||0)>0){
     const learned=node("div","","relationship-subject-card");
