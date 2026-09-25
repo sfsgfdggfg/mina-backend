@@ -4107,16 +4107,42 @@ function renderMailboxSettings(status = {}) {
 function renderRelationshipOnboardingSettings(status = {}) {
   const panel=node("section","","settings-panel");
   const h=node("div","","settings-heading");
-  h.append(node("h2","İlişki Hafızası"),node("p","Müşteri ve tedarikçi geçmiş e-postalarından ölçülebilir ilişki davranışları ve doğrulama bekleyen MINAI gözlemleri üretir. Normal günlük inbox pull’undan ayrıdır.","muted"));panel.append(h);
+  h.append(node("h2","Acenta Öğrenimi"),node("p","MINAI mailbox bağlandığında gelen ve giden geçmişi otomatik tarar; müşteri/tedarikçi adaylarını, ilişki davranışlarını ve çalışma kalıplarını provenance ile çıkarır. Kullanıcının ayrıca tarama komutu vermesi gerekmez.","muted"));panel.append(h);
+  const auto=status.automatic_agency_learning||{};
+  const autoLabel=({not_started:"Başlamadı",running:"Taranıyor",completed:"Tamamlandı",failed:"Tekrar denenecek"})[auto.status]||codeLabel(auto.status||"not_started");
   const health=node("div","","summary-grid relationship-onboarding-health");
   health.append(
     summaryItem("Mailbox",status.synthetic_mailbox?"Demo mailbox":(status.mailbox_configured?`${String(status.mailbox_provider||"mailbox").toUpperCase()} · Hazır`:"Yapılandırma eksik")),
-    summaryItem("Müşteri master",status.customer_master_count??0),
-    summaryItem("Tedarikçi master",status.supplier_master_count??0),
-    summaryItem("Bekleyen müşteri gözlemi",status.proposed_customer_fact_count??0),
-    summaryItem("Bekleyen tedarikçi gözlemi",status.proposed_supplier_fact_count??0)
+    summaryItem("Otomatik öğrenme",status.automatic_agency_learning_enabled===false?"Kapalı":autoLabel),
+    summaryItem("Taranan mail",auto.scanned_message_count??0),
+    summaryItem("Gelen / Giden",`${auto.inbound_message_count??0} / ${auto.outbound_message_count??0}`),
+    summaryItem("Taraf adayı",auto.candidate_count??0),
+    summaryItem("Yüksek güvenli aday",auto.high_confidence_candidate_count??0),
+    summaryItem("Bekleyen öğrenim",Number(status.proposed_customer_fact_count??0)+Number(status.proposed_supplier_fact_count??0)),
+    summaryItem("AI gözlemi",status.automatic_agency_learning_ai_enabled?"Etkin":"Tenant onayı gerekli")
   ); panel.append(health);
-  panel.append(node("div",status.synthetic_mailbox?"Demo modunda bu ekran sentetik mailbox geçmişini kullanır. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz.":"Bağlı mailbox provider üzerinden geçmiş analiz edilir. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz; eşleşmeyen taraflar otomatik müşteri/tedarikçi yapılmaz.","notice"));
+  panel.append(node("div",status.synthetic_mailbox?"Demo modunda bu ekran sentetik mailbox geçmişini kullanır. Ham mail gövdeleri kalıcı onboarding state’ine yazılmaz.":"Otomatik bootstrap hem Gelen Kutusu hem Gönderilmiş Öğeler'i kullanır. Aynı ajans domainindeki iç adresleri dış taraf saymaz. Ham mail gövdeleri kalıcı öğrenme state’ine yazılmaz; belirsiz taraflar güven eşiğini geçmeden master otoritesi kazanmaz.","notice"));
+  if(auto.error_code) panel.append(node("div",`Son otomatik tarama tamamlanamadı: ${codeLabel(auto.error_code)}. MINAI bağlantı hazır olduğunda yeniden dener.`,"warning"));
+  const patterns=auto.workflow_patterns||{};
+  if((patterns.supplier_rfq_message_count||0)+(patterns.customer_quote_message_count||0)+(patterns.operational_update_message_count||0)>0){
+    const learned=node("div","","relationship-subject-card");
+    learned.append(
+      node("h3","Ajans çalışma kalıpları"),
+      node("div",`Tedarikçi RFQ: ${patterns.supplier_rfq_message_count||0} · Müşteri teklif: ${patterns.customer_quote_message_count||0} · Teklif follow-up: ${patterns.customer_quote_followup_count||0} · Pazarlık: ${patterns.supplier_negotiation_message_count||0} · Operasyon bilgilendirme: ${patterns.operational_update_message_count||0} · Finans: ${patterns.finance_message_count||0}`,"small muted")
+    );
+    const rfqFields=Object.entries(patterns.rfq_field_frequencies||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const quoteTerms=Object.entries(patterns.quote_term_frequencies||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    if(rfqFields.length) learned.append(node("div",`RFQ'da tekrarlanan alanlar: ${rfqFields.map(([k,v])=>`${codeLabel(k)} (${v})`).join(" · ")}`,"small"));
+    if(quoteTerms.length) learned.append(node("div",`Müşteri teklifinde tekrarlanan şartlar: ${quoteTerms.map(([k,v])=>`${codeLabel(k)} (${v})`).join(" · ")}`,"small"));
+    panel.append(learned);
+  }
+  const candidatePreview=(auto.candidates||[]).filter(item=>item.subject_type==null&&item.inferred_role!=="unknown").slice(0,8);
+  if(candidatePreview.length){
+    const preview=node("div","","relationship-subject-list");
+    preview.append(node("h3","Otomatik bulunan taraf adayları"));
+    candidatePreview.forEach(item=>preview.append(node("div",`${item.email_address} · ${item.inferred_role==="supplier"?"Tedarikçi adayı":"Müşteri adayı"} · güven %${Math.round(Number(item.confidence||0)*100)} · ${item.message_count} mail`,"small muted")));
+    panel.append(preview);
+  }
 
   const form=node("div","","relationship-onboarding-form");
   const now=new Date(); const startDefault=new Date(now.getTime()-180*24*60*60*1000);
@@ -4128,7 +4154,7 @@ function renderRelationshipOnboardingSettings(status = {}) {
   const aiLabel=node("label","","check-label");const ai=document.createElement("input");ai.type="checkbox";aiLabel.append(ai,node("span",status.synthetic_mailbox?"Sentetik AI davranış gözlemlerini de üret (dış servis çağrısı yapılmaz).":"AI davranış gözlemlerini de üret (privacy transform sonrası OpenAI çağrısı yapılır)."));
   const grid=node("div","","settings-two-col");grid.append(startLabel,endLabel,limit.label,aliases.label);form.append(grid,authorizedLabel,aiLabel);
   const feedback=node("div","","muted settings-feedback");const result=node("div","","relationship-onboarding-result");
-  const run=actionButton(status.synthetic_mailbox?"Sentetik Mailbox Analizini Başlat":"Geçmiş Mailbox Analizini Başlat","primary",async()=>{
+  const run=actionButton(status.synthetic_mailbox?"Sentetik Mailbox Analizini Başlat":"Geçmişi Şimdi Yeniden Tara","primary",async()=>{
     if(!authorized.checked){feedback.textContent="Analiz için yetki onay kutusunu işaretlemelisin.";return;}
     if(!start.value||!end.value){feedback.textContent="Başlangıç ve bitiş tarihi gerekli.";return;}
     run.disabled=true;feedback.textContent="Geçmiş e-postalar okunuyor ve ilişki kanıtı çıkarılıyor…";result.replaceChildren();

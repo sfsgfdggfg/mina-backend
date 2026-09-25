@@ -1092,29 +1092,41 @@ class OutlookGraphReadClient:
         if isinstance(max_messages, bool) or not isinstance(max_messages, int) or not (1 <= max_messages <= MAX_HISTORY_MESSAGES):
             raise ValueError(f"Historical Graph max_messages must be between 1 and {MAX_HISTORY_MESSAGES}.")
 
+        folder_quotas = {
+            "inbox": (max_messages + 1) // 2,
+            "sentitems": max_messages // 2,
+        }
+        folder_examined = {"inbox": 0, "sentitems": 0}
+        folder_accepted = {"inbox": 0, "sentitems": 0}
+        folder_truncated = {"inbox": False, "sentitems": False}
         collected: dict[str, HistoricalMailMessage] = {}
         self.last_message_rejections = []
         for folder, time_field in (("inbox", "receivedDateTime"), ("sentitems", "sentDateTime")):
-            if len(collected) >= max_messages:
-                break
+            quota = folder_quotas[folder]
+            if quota <= 0:
+                continue
             url = f"{GRAPH_API_BASE_URL}/me/mailFolders/{folder}/messages"
             params: dict[str, Any] | None = {
                 "$select": _HISTORY_GRAPH_SELECT_FIELDS,
-                "$orderby": f"{time_field} asc",
+                "$orderby": f"{time_field} desc",
                 "$filter": (
                     f"{time_field} ge {start.isoformat().replace('+00:00','Z')} and "
                     f"{time_field} lt {end.isoformat().replace('+00:00','Z')}"
                 ),
-                "$top": min(_HISTORY_PAGE_SIZE, max_messages - len(collected)),
+                "$top": min(_HISTORY_PAGE_SIZE, quota),
             }
-            while url and len(collected) < max_messages:
+            while url and folder_examined[folder] < quota:
                 payload = self._get_json(url, params=params)
                 raw_items = payload.get("value")
                 if not isinstance(raw_items, list):
                     raise OutlookGraphReadError("microsoft_graph_messages_missing")
-                for raw_item in raw_items:
-                    if len(collected) >= max_messages:
-                        break
+                remaining = quota - folder_examined[folder]
+                page_items = raw_items[:remaining]
+                next_link = _validated_next_link(payload.get("@odata.nextLink"))
+                if len(raw_items) > len(page_items):
+                    folder_truncated[folder] = True
+                for raw_item in page_items:
+                    folder_examined[folder] += 1
                     try:
                         message = normalize_graph_history_message(
                             raw_item, mailbox_id=self.mailbox_id, folder=folder,
@@ -1127,10 +1139,27 @@ class OutlookGraphReadClient:
                             received_at=str(raw_time or "unavailable"), reason_code=exc.code,
                         ))
                         continue
-                    collected[message.source_reference] = message
-                next_link = _validated_next_link(payload.get("@odata.nextLink"))
+                    if message.source_reference not in collected:
+                        collected[message.source_reference] = message
+                        folder_accepted[folder] += 1
+                if folder_examined[folder] >= quota:
+                    if next_link is not None:
+                        folder_truncated[folder] = True
+                    break
                 url = next_link
                 params = None
+        self.last_relationship_history_scan = {
+            "requested_max_messages": max_messages,
+            "examined_message_count": sum(folder_examined.values()),
+            "accepted_message_count": len(collected),
+            "rejected_message_count": len(self.last_message_rejections),
+            "folder_examined_counts": dict(folder_examined),
+            "folder_accepted_counts": dict(folder_accepted),
+            "folder_quotas": dict(folder_quotas),
+            "folder_truncated": dict(folder_truncated),
+            "truncated": any(folder_truncated.values()),
+            "newest_first": True,
+        }
         return sorted(collected.values(), key=lambda item: (item.sent_at, item.source_reference))
 
 

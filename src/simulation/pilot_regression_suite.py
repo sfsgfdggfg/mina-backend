@@ -44,6 +44,9 @@ from src.simulation.learning_fact_provenance_regressions import evaluate_learnin
 from src.simulation.relationship_history_onboarding_regressions import (
     evaluate_relationship_history_onboarding_regressions,
 )
+from src.simulation.agency_learning_bootstrap_regressions import (
+    evaluate_agency_learning_bootstrap_regressions,
+)
 from src.simulation.supplier_history_backfill_regressions import evaluate_supplier_history_backfill_regressions
 from src.simulation.supplier_contextual_intelligence_regressions import evaluate_supplier_contextual_intelligence_regressions
 from src.simulation.supplier_selection_explainability_regressions import evaluate_supplier_selection_explainability_regressions
@@ -339,6 +342,7 @@ CANONICAL_SUITES: tuple[Suite, ...] = (
     Suite("Operation execution and exception layer", evaluate_operation_execution_exception_regressions),
     Suite("Learning fact and provenance authority", evaluate_learning_fact_provenance_regressions),
     Suite("Historical relationship onboarding", evaluate_relationship_history_onboarding_regressions),
+    Suite("Automatic agency learning bootstrap", evaluate_agency_learning_bootstrap_regressions),
     Suite("Supplier Outlook history operational backfill", evaluate_supplier_history_backfill_regressions),
     Suite("Supplier selection explainability", evaluate_supplier_selection_explainability_regressions),
     Suite("Supplier selection override evidence", evaluate_supplier_selection_override_regressions),

@@ -200,9 +200,20 @@ def _master_indexes(
                 domain_owners[normalized].add(owner)
     for supplier in repository.list_suppliers():
         owner = ("supplier", supplier.supplier_id, supplier.supplier_name)
-        for contact in supplier.contacts:
-            if contact.active and contact.email:
-                owners[_address(contact.email)].add(owner)
+        addresses = set(supplier.trusted_sender_addresses)
+        addresses.update(
+            contact.email
+            for contact in supplier.contacts
+            if contact.active and contact.email
+        )
+        for address in addresses:
+            owners[_address(address)].add(owner)
+        for domain in supplier.trusted_sender_domains:
+            normalized = str(domain).strip().casefold().lstrip("@")
+            if normalized and "." in normalized and not any(
+                character.isspace() for character in normalized
+            ):
+                domain_owners[normalized].add(owner)
 
     def collapse(source):
         index, ambiguous = {}, set()

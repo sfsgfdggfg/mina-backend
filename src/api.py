@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
+from threading import Lock, Thread
 import json
 import os
 from fastapi import FastAPI, HTTPException, Request
@@ -71,6 +72,10 @@ from src.workflow.relationship_onboarding import (
     run_outlook_relationship_onboarding,
     run_imap_relationship_onboarding,
 )
+from src.workflow.agency_learning_bootstrap import (
+    run_outlook_agency_learning_bootstrap,
+    run_imap_agency_learning_bootstrap,
+)
 from src.workflow.demo_relationship_onboarding import (
     run_demo_relationship_onboarding,
 )
@@ -109,6 +114,10 @@ from src.workflow.extraction_confirmation import (
     resume_confirmed_extraction,
 )
 from src.core.pilot_store import SQLitePilotStore
+from src.core.agency_learning_bootstrap import (
+    AgencyLearningBootstrapSnapshot,
+    SQLiteAgencyLearningBootstrapRepository,
+)
 from src.pilot_launcher import validate_controlled_pilot_runtime
 from src.core.outbound_runtime import resolve_outbound_runtime_policy
 from src.core.demo_runtime import (
@@ -742,6 +751,9 @@ supplier_operational_notification_repository = (
 operation_execution_repository = SQLiteOperationExecutionRepository(pilot_store)
 operation_start_message_repository = SQLiteOperationStartMessageRepository(pilot_store)
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
+agency_learning_bootstrap_repository = SQLiteAgencyLearningBootstrapRepository(pilot_store)
+_agency_learning_bootstrap_lock = Lock()
+_agency_learning_bootstrap_thread: Thread | None = None
 air_shadow_repository = SQLiteAirShadowRepository(pilot_store)
 air_rate_document_store = AirRateDocumentStore()
 air_rate_structure_review_repository = SQLiteAirRateStructureReviewRepository(pilot_store)
@@ -815,6 +827,11 @@ def start_controlled_automation_scheduler():
         outbound_mail_sender = _build_outbound_mail_sender_if_enabled()
         automation_scheduler.sender = outbound_mail_sender
         automation_scheduler.start()
+
+
+@app.on_event("startup")
+def start_agency_learning_bootstrap():
+    _maybe_start_agency_learning_bootstrap()
 
 
 @app.on_event("shutdown")
@@ -2624,9 +2641,155 @@ def _mailbox_status() -> dict:
     }
 
 
+def _agency_learning_env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _agency_learning_settings() -> tuple[int, int, bool]:
+    history_days = int(os.environ.get("MINAI_AGENCY_LEARNING_HISTORY_DAYS", "180"))
+    max_messages = int(os.environ.get("MINAI_AGENCY_LEARNING_MAX_MESSAGES", "5000"))
+    include_ai = _agency_learning_env_flag("MINAI_AGENCY_LEARNING_AI", False)
+    if history_days < 30 or history_days > 370:
+        raise ValueError("MINAI_AGENCY_LEARNING_HISTORY_DAYS must be 30-370.")
+    if max_messages < 1 or max_messages > 10000:
+        raise ValueError("MINAI_AGENCY_LEARNING_MAX_MESSAGES must be 1-10000.")
+    return history_days, max_messages, include_ai
+
+
+def _agency_learning_failure_snapshot(
+    *, provider: str | None, mailbox_id: str | None, error_code: str,
+) -> AgencyLearningBootstrapSnapshot:
+    current = agency_learning_bootstrap_repository.get()
+    now = datetime.now(timezone.utc)
+    return AgencyLearningBootstrapSnapshot(
+        status="failed",
+        provider=provider or current.provider,
+        mailbox_id=mailbox_id or current.mailbox_id,
+        started_at=current.started_at or now,
+        completed_at=now,
+        history_start_at=current.history_start_at,
+        history_end_at=current.history_end_at,
+        scanned_message_count=current.scanned_message_count,
+        inbound_message_count=current.inbound_message_count,
+        outbound_message_count=current.outbound_message_count,
+        rejected_message_count=current.rejected_message_count,
+        inferred_agency_addresses=current.inferred_agency_addresses,
+        workflow_patterns=current.workflow_patterns,
+        candidate_count=current.candidate_count,
+        known_candidate_count=current.known_candidate_count,
+        high_confidence_candidate_count=current.high_confidence_candidate_count,
+        proposed_fact_count=current.proposed_fact_count,
+        matched_subject_count=current.matched_subject_count,
+        candidates=current.candidates,
+        raw_messages_persisted=False,
+        error_code=error_code[:300],
+    )
+
+
+def _run_agency_learning_bootstrap_worker(provider: str, mailbox_id: str) -> None:
+    try:
+        history_days, max_messages, include_ai = _agency_learning_settings()
+        if provider == "outlook":
+            config = MicrosoftAuthConfig.from_environment()
+            run_outlook_agency_learning_bootstrap(
+                config=config,
+                master_repository=master_data_repository,
+                learning_repository=learning_fact_repository,
+                state_repository=agency_learning_bootstrap_repository,
+                history_days=history_days,
+                max_messages=max_messages,
+                include_ai_observations=include_ai,
+            )
+        elif provider == "imap":
+            credential = _configured_imap_credential()
+            if credential is None:
+                raise RuntimeError("imap_mailbox_not_configured")
+            run_imap_agency_learning_bootstrap(
+                credential=credential,
+                master_repository=master_data_repository,
+                learning_repository=learning_fact_repository,
+                state_repository=agency_learning_bootstrap_repository,
+                history_days=history_days,
+                max_messages=max_messages,
+                include_ai_observations=include_ai,
+            )
+    except Exception as exc:
+        error_code = getattr(exc, "code", None) or type(exc).__name__
+        agency_learning_bootstrap_repository.save(
+            _agency_learning_failure_snapshot(
+                provider=provider,
+                mailbox_id=mailbox_id,
+                error_code=str(error_code),
+            )
+        )
+
+
+def _maybe_start_agency_learning_bootstrap(
+    mailbox_status: dict | None = None,
+    *,
+    force: bool = False,
+) -> bool:
+    global _agency_learning_bootstrap_thread
+
+    if demo_mode_enabled() or not _agency_learning_env_flag(
+        "MINAI_AGENCY_LEARNING_AUTO", True
+    ):
+        return False
+    status = mailbox_status or _mailbox_status()
+    if status.get("configured") is not True:
+        return False
+    provider = str(status.get("provider") or "")
+    mailbox_id = str(status.get("mailbox_id") or "").strip().casefold()
+    if provider not in {"outlook", "imap"} or not mailbox_id:
+        return False
+
+    current = agency_learning_bootstrap_repository.get()
+    now = datetime.now(timezone.utc)
+    same_mailbox = (
+        current.mailbox_id == mailbox_id and current.provider == provider
+    )
+    if not force and same_mailbox and current.status == "completed":
+        return False
+    if not force and same_mailbox and current.status == "failed":
+        completed_at = current.completed_at
+        if completed_at is not None and now - completed_at < timedelta(seconds=60):
+            return False
+
+    with _agency_learning_bootstrap_lock:
+        if (
+            _agency_learning_bootstrap_thread is not None
+            and _agency_learning_bootstrap_thread.is_alive()
+        ):
+            return False
+        agency_learning_bootstrap_repository.save(
+            AgencyLearningBootstrapSnapshot(
+                status="running",
+                provider=provider,
+                mailbox_id=mailbox_id,
+                started_at=now,
+            )
+        )
+        _agency_learning_bootstrap_thread = Thread(
+            target=_run_agency_learning_bootstrap_worker,
+            args=(provider, mailbox_id),
+            daemon=True,
+            name="minai-agency-learning-bootstrap",
+        )
+        _agency_learning_bootstrap_thread.start()
+        return True
+
+
 @app.get("/mailbox/status")
 def get_mailbox_status():
-    return _mailbox_status()
+    status = _mailbox_status()
+    _maybe_start_agency_learning_bootstrap(status)
+    status["agency_learning_status"] = (
+        agency_learning_bootstrap_repository.get().status
+    )
+    return status
 
 
 @app.get("/settings/password")
@@ -2728,6 +2891,14 @@ def configure_imap_mailbox(
             "password_exposed": False,
         }
     )
+    _maybe_start_agency_learning_bootstrap(
+        {
+            "configured": True,
+            "provider": "imap",
+            "mailbox_id": credential.mailbox_id,
+        },
+        force=True,
+    )
     return payload
 
 
@@ -2736,6 +2907,8 @@ def get_relationship_onboarding_status():
     synthetic_mailbox = demo_mode_enabled()
     mailbox = _mailbox_status()
     facts = learning_fact_repository.list_all()
+    _maybe_start_agency_learning_bootstrap(mailbox)
+    automatic_learning = agency_learning_bootstrap_repository.get()
     return {
         "outlook_configured": mailbox.get("provider") == "outlook" and mailbox.get("configured") is True,
         "mailbox_configured": mailbox.get("configured") is True,
@@ -2751,6 +2924,13 @@ def get_relationship_onboarding_status():
         "max_history_messages": 10000,
         "supplier_operational_backfill_supported": True,
         "supplier_backfill_target_fact_key": "response.median_minutes",
+        "automatic_agency_learning_enabled": _agency_learning_env_flag(
+            "MINAI_AGENCY_LEARNING_AUTO", True
+        ),
+        "automatic_agency_learning_ai_enabled": _agency_learning_env_flag(
+            "MINAI_AGENCY_LEARNING_AI", False
+        ),
+        "automatic_agency_learning": automatic_learning.model_dump(mode="json"),
     }
 
 
@@ -5400,6 +5580,8 @@ def pull_outlook_inbound(
 def pull_active_mailbox_inbound(
     request: OutlookPullRequest,
 ):
+    if not demo_mode_enabled():
+        _maybe_start_agency_learning_bootstrap(_mailbox_status())
     if demo_mode_enabled():
         return pull_outlook_inbound(request)
     authority = _mailbox_provider_authority()
