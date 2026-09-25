@@ -437,8 +437,16 @@ def build_candidate_snapshot(
     messages: list[HistoricalMailMessage],
     mailbox_id: str,
     master_repository: MasterDataRepository,
+    agency_alias_addresses: list[str] | tuple[str, ...] | set[str] = (),
 ) -> tuple[list[str], list[AgencyCounterpartyLearningCandidate], CounterpartyDiscoveryResult]:
-    agency_addresses = infer_agency_addresses(messages, mailbox_id)
+    agency_addresses = sorted({
+        *infer_agency_addresses(messages, mailbox_id),
+        *(
+            str(item).strip().casefold()
+            for item in agency_alias_addresses
+            if str(item).strip() and "@" in str(item)
+        ),
+    })
     discovery = discover_historical_counterparties(
         messages=messages,
         agency_addresses=agency_addresses,

@@ -110,6 +110,9 @@ class InboundMailEnvelope(BaseModel):
     sender_address: Optional[str] = None
     sender_name: Optional[str] = None
     recipient_addresses: list[str] = Field(default_factory=list)
+    to_addresses: list[str] = Field(default_factory=list)
+    cc_addresses: list[str] = Field(default_factory=list)
+    bcc_addresses: list[str] = Field(default_factory=list)
     subject: Optional[str] = None
     body_text: str
     raw_body_sha256: Optional[str] = None
@@ -147,7 +150,9 @@ class InboundMailEnvelope(BaseModel):
             return None
         return _normalize_address(value)
 
-    @field_validator("recipient_addresses")
+    @field_validator(
+        "recipient_addresses", "to_addresses", "cc_addresses", "bcc_addresses"
+    )
     @classmethod
     def normalize_recipient_addresses(cls, value: list[str]) -> list[str]:
         normalized = [_normalize_address(address) for address in value]

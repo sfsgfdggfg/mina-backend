@@ -46,6 +46,7 @@ from src.workflow.mail_ingestion import (
     InboundMailIdempotencyConflictError,
     existing_proposal_for_mail,
 )
+from src.workflow.agency_copy_ingestion import process_agency_copied_mail
 from src.workflow.outlook_inbound_ingestion import (
     OUTLOOK_GRAPH_PROVIDER,
     process_controlled_outlook_customer_mail,
@@ -452,6 +453,10 @@ def process_controlled_outlook_inbound_mail(
     attachment_review_repository=None,
     supplier_operational_repository=None,
     mina_job_repository=None,
+    quote_case_repository=None,
+    approval_repository=None,
+    agency_copy_receipt_repository=None,
+    agency_addresses=(),
 ) -> dict:
     """Route Outlook mail deterministically before any AI parser."""
 
@@ -559,7 +564,14 @@ def process_controlled_outlook_inbound_mail(
             "supplier_response": None,
         }
 
-    if existing_customer_proposal is not None:
+    if (
+        existing_customer_proposal is not None
+        and getattr(
+            existing_customer_proposal,
+            "evidence_origin",
+            "customer_authored",
+        ) != "agency_copied"
+    ):
         return {
             "result_type": (
                 "extraction_confirmation_required"
@@ -576,6 +588,21 @@ def process_controlled_outlook_inbound_mail(
             ),
             "supplier_response": None,
         }
+
+    agency_copy_result = process_agency_copied_mail(
+        mail=mail,
+        shipment_parser=shipment_parser,
+        proposal_repository=proposal_repository,
+        master_repository=master_data_repository,
+        mina_repository=mina_job_repository,
+        supplier_repository=supplier_repository,
+        quote_case_repository=quote_case_repository,
+        approval_repository=approval_repository,
+        receipt_repository=agency_copy_receipt_repository,
+        configured_agency_addresses=agency_addresses,
+    )
+    if agency_copy_result is not None:
+        return agency_copy_result
 
     customer_matches, customer_error = (
         _customer_matches(

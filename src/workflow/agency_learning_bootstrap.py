@@ -44,6 +44,7 @@ def _run_bootstrap(
     history_days: int = DEFAULT_BOOTSTRAP_HISTORY_DAYS,
     max_messages: int = DEFAULT_BOOTSTRAP_MAX_MESSAGES,
     include_ai_observations: bool = False,
+    agency_alias_addresses: list[str] | tuple[str, ...] | set[str] = (),
     ai_analyzer_factory: Callable[[], Any] = OpenAIRelationshipHistoryAnalyzer,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -76,6 +77,7 @@ def _run_bootstrap(
             messages=messages,
             mailbox_id=mailbox_id,
             master_repository=master_repository,
+            agency_alias_addresses=agency_alias_addresses,
         )
         inbound_count, outbound_count = count_mail_directions(
             messages=messages,
@@ -187,6 +189,7 @@ def run_outlook_agency_learning_bootstrap(
     history_days: int = DEFAULT_BOOTSTRAP_HISTORY_DAYS,
     max_messages: int = DEFAULT_BOOTSTRAP_MAX_MESSAGES,
     include_ai_observations: bool = False,
+    agency_alias_addresses: list[str] | tuple[str, ...] | set[str] = (),
     token_provider=acquire_silent_access_token,
     graph_client_factory=OutlookGraphReadClient,
 ) -> dict[str, Any]:
@@ -206,6 +209,7 @@ def run_outlook_agency_learning_bootstrap(
         history_days=history_days,
         max_messages=max_messages,
         include_ai_observations=include_ai_observations,
+        agency_alias_addresses=agency_alias_addresses,
     )
 
 
@@ -219,6 +223,7 @@ def run_imap_agency_learning_bootstrap(
     history_days: int = DEFAULT_BOOTSTRAP_HISTORY_DAYS,
     max_messages: int = DEFAULT_BOOTSTRAP_MAX_MESSAGES,
     include_ai_observations: bool = False,
+    agency_alias_addresses: list[str] | tuple[str, ...] | set[str] = (),
     client_factory=ImapReadClient,
 ) -> dict[str, Any]:
     client = client_factory(credential=credential)
@@ -233,4 +238,5 @@ def run_imap_agency_learning_bootstrap(
         history_days=history_days,
         max_messages=max_messages,
         include_ai_observations=include_ai_observations,
+        agency_alias_addresses=agency_alias_addresses,
     )

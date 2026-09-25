@@ -47,7 +47,7 @@ _ATTACHMENT_SELECT_FIELDS = "name,contentType,size,isInline"
 _ATTACHMENT_RETRIEVAL_SELECT_FIELDS = "id,name,contentType,size,isInline"
 
 _GRAPH_SELECT_FIELDS = (
-    "id,subject,body,from,toRecipients,"
+    "id,subject,body,from,toRecipients,ccRecipients,bccRecipients,"
     "receivedDateTime,hasAttachments,isDraft"
 )
 _HISTORY_GRAPH_SELECT_FIELDS = (
@@ -298,21 +298,40 @@ def normalize_graph_message(
         )
     )
 
-    raw_recipients = raw_message.get(
-        "toRecipients"
-    )
-    if not isinstance(raw_recipients, list):
-        raise OutlookGraphMessageError(
-            "graph_recipients_missing"
-        )
+    recipient_groups: dict[str, list[str]] = {}
+    for field_name, target_name in (
+        ("toRecipients", "to"),
+        ("ccRecipients", "cc"),
+        ("bccRecipients", "bcc"),
+    ):
+        raw_recipients = raw_message.get(field_name)
+        if raw_recipients is None and field_name != "toRecipients":
+            raw_recipients = []
+        if not isinstance(raw_recipients, list):
+            raise OutlookGraphMessageError(
+                "graph_recipients_missing"
+                if field_name == "toRecipients"
+                else "graph_recipients_invalid"
+            )
+        addresses: list[str] = []
+        for recipient in raw_recipients:
+            address, _ = _graph_email_address(
+                recipient,
+                code="graph_recipient_invalid",
+            )
+            if address not in addresses:
+                addresses.append(address)
+        recipient_groups[target_name] = addresses
 
-    recipient_addresses: list[str] = []
-    for recipient in raw_recipients:
-        address, _ = _graph_email_address(
-            recipient,
-            code="graph_recipient_invalid",
+    recipient_addresses = list(
+        dict.fromkeys(
+            [
+                *recipient_groups["to"],
+                *recipient_groups["cc"],
+                *recipient_groups["bcc"],
+            ]
         )
-        recipient_addresses.append(address)
+    )
 
     subject = _optional_text(
         raw_message.get("subject"),
@@ -337,6 +356,9 @@ def normalize_graph_message(
             sender_address=sender_address,
             sender_name=sender_name,
             recipient_addresses=recipient_addresses,
+            to_addresses=recipient_groups["to"],
+            cc_addresses=recipient_groups["cc"],
+            bcc_addresses=recipient_groups["bcc"],
             subject=subject,
             body_text=body_text,
             received_at=received_at,

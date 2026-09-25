@@ -96,6 +96,7 @@ def create_extraction_proposal(
     proposed_shipment: ShipmentProposalSnapshot,
     repository: ExtractionProposalRepository,
     trusted_customer_name: str | None = None,
+    evidence_origin: str = "customer_authored",
 ) -> ShipmentExtractionProposal:
     if not isinstance(proposed_shipment, ShipmentProposalSnapshot):
         raise TypeError(
@@ -110,6 +111,7 @@ def create_extraction_proposal(
                 if trusted_customer_name and trusted_customer_name.strip()
                 else None
             ),
+            evidence_origin=evidence_origin,
         )
     )
 

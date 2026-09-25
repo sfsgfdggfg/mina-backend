@@ -168,6 +168,7 @@ def run_incremental_agency_learning(
     include_ai_observations: bool = False,
     ai_min_new_messages: int = DEFAULT_INCREMENTAL_AI_MIN_NEW_MESSAGES,
     ai_interval_hours: int = DEFAULT_INCREMENTAL_AI_INTERVAL_HOURS,
+    agency_alias_addresses: list[str] | tuple[str, ...] | set[str] = (),
     ai_analyzer_factory: Callable[[], Any] = OpenAIRelationshipHistoryAnalyzer,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -261,6 +262,11 @@ def run_incremental_agency_learning(
             {
                 *bootstrap.inferred_agency_addresses,
                 *infer_agency_addresses(messages, mailbox_id),
+                *(
+                    str(item).strip().casefold()
+                    for item in agency_alias_addresses
+                    if str(item).strip() and "@" in str(item)
+                ),
             }
         )
         inbound_delta, outbound_delta = count_mail_directions(
@@ -276,6 +282,7 @@ def run_incremental_agency_learning(
                 messages=new_messages,
                 mailbox_id=mailbox_id,
                 master_repository=master_repository,
+                agency_alias_addresses=agency_addresses,
             )
         else:
             candidate_delta = []

@@ -24,6 +24,10 @@ def pull_controlled_imap_inbox(
     attachment_review_repository=None,
     supplier_operational_repository=None,
     mina_job_repository=None,
+    quote_case_repository=None,
+    approval_repository=None,
+    agency_copy_receipt_repository=None,
+    agency_addresses=(),
     interpret_attachments: bool = False,
     client_factory=ImapReadClient,
     inbound_processor=process_controlled_outlook_inbound_mail,
@@ -53,6 +57,10 @@ def pull_controlled_imap_inbox(
                 attachment_review_repository=None,
                 supplier_operational_repository=supplier_operational_repository,
                 mina_job_repository=mina_job_repository,
+                quote_case_repository=quote_case_repository,
+                approval_repository=approval_repository,
+                agency_copy_receipt_repository=agency_copy_receipt_repository,
+                agency_addresses=agency_addresses,
             )
         except InboundMailIdempotencyConflictError:
             result = {

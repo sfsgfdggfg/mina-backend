@@ -126,6 +126,7 @@ from src.core.agency_incremental_learning import (
     AgencyIncrementalLearningState,
     SQLiteAgencyIncrementalLearningRepository,
 )
+from src.core.agency_copy_receipt import SQLiteAgencyCopyReceiptRepository
 from src.core.continuous_structured_learning import (
     derive_review_safe_structured_learning,
 )
@@ -764,11 +765,18 @@ operation_start_message_repository = SQLiteOperationStartMessageRepository(pilot
 learning_fact_repository = SQLiteLearningFactRepository(pilot_store)
 agency_learning_bootstrap_repository = SQLiteAgencyLearningBootstrapRepository(pilot_store)
 agency_incremental_learning_repository = SQLiteAgencyIncrementalLearningRepository(pilot_store)
+agency_copy_receipt_repository = SQLiteAgencyCopyReceiptRepository(pilot_store)
 _agency_learning_bootstrap_lock = Lock()
 _agency_learning_bootstrap_thread: Thread | None = None
 _agency_incremental_learning_lock = Lock()
 _agency_incremental_learning_stop = Event()
 _agency_incremental_learning_thread: Thread | None = None
+_inbound_mailbox_poll_lock = Lock()
+_inbound_mailbox_poll_stop = Event()
+_inbound_mailbox_poll_thread: Thread | None = None
+_inbound_mailbox_poll_last_at: datetime | None = None
+_inbound_mailbox_poll_last_error: str | None = None
+_inbound_mailbox_poll_last_summary: dict | None = None
 air_shadow_repository = SQLiteAirShadowRepository(pilot_store)
 air_rate_document_store = AirRateDocumentStore()
 air_rate_structure_review_repository = SQLiteAirRateStructureReviewRepository(pilot_store)
@@ -854,8 +862,14 @@ def start_agency_incremental_learning():
     _start_agency_incremental_learning_scheduler()
 
 
+@app.on_event("startup")
+def start_inbound_mailbox_polling():
+    _start_inbound_mailbox_poll_scheduler()
+
+
 @app.on_event("shutdown")
 def stop_controlled_automation_scheduler():
+    _stop_inbound_mailbox_poll_scheduler()
     _stop_agency_incremental_learning_scheduler()
     automation_scheduler.stop()
 
@@ -2662,6 +2676,184 @@ def _mailbox_status() -> dict:
     }
 
 
+
+def _runtime_agency_addresses(mailbox_id: str | None = None) -> list[str]:
+    mailbox = (mailbox_id or "").strip().casefold()
+    addresses: set[str] = set()
+    if mailbox:
+        addresses.add(mailbox)
+    snapshot = agency_learning_bootstrap_repository.get()
+    if not mailbox or snapshot.mailbox_id == mailbox:
+        addresses.update(
+            str(item).strip().casefold()
+            for item in snapshot.inferred_agency_addresses
+            if str(item).strip()
+        )
+    raw_aliases = os.environ.get("MINAI_AGENCY_ALIAS_ADDRESSES", "")
+    for item in raw_aliases.replace(";", ",").split(","):
+        normalized = item.strip().casefold()
+        if normalized and "@" in normalized:
+            addresses.add(normalized)
+    return sorted(addresses)
+
+
+
+def _inbound_mailbox_poll_settings() -> tuple[int, int]:
+    poll_seconds = int(os.environ.get("MINAI_INBOUND_POLL_SECONDS", "60"))
+    limit = int(os.environ.get("MINAI_INBOUND_POLL_LIMIT", "50"))
+    if poll_seconds < 30 or poll_seconds > 3600:
+        raise ValueError("MINAI_INBOUND_POLL_SECONDS must be 30-3600.")
+    if limit < 1 or limit > MAX_PULL_MESSAGES:
+        raise ValueError(
+            f"MINAI_INBOUND_POLL_LIMIT must be 1-{MAX_PULL_MESSAGES}."
+        )
+    return poll_seconds, limit
+
+
+def _inbound_mailbox_poll_enabled() -> bool:
+    return (
+        not demo_mode_enabled()
+        and _agency_learning_env_flag("MINAI_INBOUND_AUTO_POLL", True)
+    )
+
+
+def _safe_inbound_poll_summary(result: dict) -> dict:
+    rows = list(result.get("results") or [])
+    return {
+        "provider": result.get("provider"),
+        "mailbox_id": result.get("mailbox_id"),
+        "fetched_message_count": int(result.get("fetched_message_count") or 0),
+        "handled_message_count": int(result.get("handled_message_count") or 0),
+        "proposal_count": int(result.get("proposal_count") or 0),
+        "supplier_response_count": int(result.get("supplier_response_count") or 0),
+        "supplier_operational_count": int(
+            result.get("supplier_operational_count") or 0
+        ),
+        "manual_review_count": int(result.get("manual_review_count") or 0),
+        "agency_copy_count": sum(
+            item.get("inbound_route") == "agency_copy" for item in rows
+        ),
+        "agency_copy_new_work_count": sum(
+            item.get("result_type") == "agency_copy_new_work_candidate"
+            for item in rows
+        ),
+        "agency_copy_job_update_count": sum(
+            item.get("result_type") == "agency_copy_job_observation"
+            for item in rows
+        ),
+        "pull_status": result.get("pull_status"),
+        "mailbox_write_performed": bool(result.get("mailbox_write_performed")),
+        "automated_send_performed": bool(result.get("automated_send_performed")),
+    }
+
+
+def _run_inbound_mailbox_poll_once() -> dict:
+    global _inbound_mailbox_poll_last_at
+    global _inbound_mailbox_poll_last_error
+    global _inbound_mailbox_poll_last_summary
+
+    if not _inbound_mailbox_poll_enabled():
+        return {"status": "disabled"}
+    if not _inbound_mailbox_poll_lock.acquire(blocking=False):
+        return {"status": "already_running"}
+
+    try:
+        status = _mailbox_status()
+        if status.get("configured") is not True:
+            return {"status": "mailbox_not_configured"}
+        _poll_seconds, limit = _inbound_mailbox_poll_settings()
+        try:
+            result = pull_active_mailbox_inbound(
+                OutlookPullRequest(
+                    limit=limit,
+                    interpret_attachments=False,
+                )
+            )
+            summary = _safe_inbound_poll_summary(result)
+            _inbound_mailbox_poll_last_at = datetime.now(timezone.utc)
+            _inbound_mailbox_poll_last_error = None
+            _inbound_mailbox_poll_last_summary = summary
+            return {"status": "healthy", **summary}
+        except HTTPException as exc:
+            _inbound_mailbox_poll_last_at = datetime.now(timezone.utc)
+            _inbound_mailbox_poll_last_error = str(exc.detail)[:300]
+            return {
+                "status": "failed",
+                "error_code": _inbound_mailbox_poll_last_error,
+            }
+        except Exception as exc:
+            _inbound_mailbox_poll_last_at = datetime.now(timezone.utc)
+            _inbound_mailbox_poll_last_error = str(
+                getattr(exc, "code", None) or type(exc).__name__
+            )[:300]
+            return {
+                "status": "failed",
+                "error_code": _inbound_mailbox_poll_last_error,
+            }
+    finally:
+        _inbound_mailbox_poll_lock.release()
+
+
+def _inbound_mailbox_poll_loop() -> None:
+    while not _inbound_mailbox_poll_stop.is_set():
+        _run_inbound_mailbox_poll_once()
+        try:
+            poll_seconds = _inbound_mailbox_poll_settings()[0]
+        except ValueError:
+            poll_seconds = 60
+        if _inbound_mailbox_poll_stop.wait(poll_seconds):
+            break
+
+
+def _start_inbound_mailbox_poll_scheduler() -> bool:
+    global _inbound_mailbox_poll_thread
+    if not _inbound_mailbox_poll_enabled():
+        return False
+    if (
+        _inbound_mailbox_poll_thread is not None
+        and _inbound_mailbox_poll_thread.is_alive()
+    ):
+        return False
+    _inbound_mailbox_poll_stop.clear()
+    _inbound_mailbox_poll_thread = Thread(
+        target=_inbound_mailbox_poll_loop,
+        daemon=True,
+        name="minai-inbound-mailbox-poll",
+    )
+    _inbound_mailbox_poll_thread.start()
+    return True
+
+
+def _stop_inbound_mailbox_poll_scheduler() -> None:
+    _inbound_mailbox_poll_stop.set()
+    thread = _inbound_mailbox_poll_thread
+    if thread is not None and thread.is_alive():
+        thread.join(timeout=2.0)
+
+
+def _inbound_mailbox_poll_status() -> dict:
+    try:
+        poll_seconds, limit = _inbound_mailbox_poll_settings()
+    except ValueError:
+        poll_seconds, limit = None, None
+    return {
+        "enabled": _inbound_mailbox_poll_enabled(),
+        "running": bool(
+            _inbound_mailbox_poll_thread is not None
+            and _inbound_mailbox_poll_thread.is_alive()
+        ),
+        "poll_seconds": poll_seconds,
+        "limit": limit,
+        "last_poll_at": (
+            None
+            if _inbound_mailbox_poll_last_at is None
+            else _inbound_mailbox_poll_last_at.isoformat()
+        ),
+        "last_error": _inbound_mailbox_poll_last_error,
+        "last_summary": _inbound_mailbox_poll_last_summary,
+    }
+
+
 def _agency_learning_env_flag(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
@@ -2723,6 +2915,7 @@ def _run_agency_learning_bootstrap_worker(provider: str, mailbox_id: str) -> Non
                 history_days=history_days,
                 max_messages=max_messages,
                 include_ai_observations=include_ai,
+                agency_alias_addresses=_runtime_agency_addresses(mailbox_id),
             )
         elif provider == "imap":
             credential = _configured_imap_credential()
@@ -2736,6 +2929,7 @@ def _run_agency_learning_bootstrap_worker(provider: str, mailbox_id: str) -> Non
                 history_days=history_days,
                 max_messages=max_messages,
                 include_ai_observations=include_ai,
+                agency_alias_addresses=_runtime_agency_addresses(mailbox_id),
             )
         _run_agency_incremental_learning_once()
     except Exception as exc:
@@ -2964,6 +3158,9 @@ def _run_agency_incremental_learning_once() -> dict:
                     include_ai_observations=include_ai,
                     ai_min_new_messages=ai_min_messages,
                     ai_interval_hours=ai_interval_hours,
+                    agency_alias_addresses=_runtime_agency_addresses(
+                        str(mailbox.get("mailbox_id") or "")
+                    ),
                 )
             else:
                 credential = _configured_imap_credential()
@@ -2980,6 +3177,9 @@ def _run_agency_incremental_learning_once() -> dict:
                     include_ai_observations=include_ai,
                     ai_min_new_messages=ai_min_messages,
                     ai_interval_hours=ai_interval_hours,
+                    agency_alias_addresses=_runtime_agency_addresses(
+                        str(mailbox.get("mailbox_id") or "")
+                    ),
                 )
             return _maybe_run_continuous_structured_learning(mailbox_result)
         except Exception as exc:
@@ -3043,6 +3243,10 @@ def get_mailbox_status():
     )
     status["agency_incremental_learning_status"] = (
         agency_incremental_learning_repository.get().status
+    )
+    status["inbound_auto_poll"] = _inbound_mailbox_poll_status()
+    status["agency_address_count"] = len(
+        _runtime_agency_addresses(status.get("mailbox_id"))
     )
     return status
 
@@ -3165,6 +3369,8 @@ def get_relationship_onboarding_status():
     _maybe_start_agency_learning_bootstrap(mailbox)
     automatic_learning = agency_learning_bootstrap_repository.get()
     incremental_learning = agency_incremental_learning_repository.get()
+    inbound_auto_poll = _inbound_mailbox_poll_status()
+    agency_addresses = _runtime_agency_addresses(mailbox.get("mailbox_id"))
     try:
         incremental_poll_seconds = _agency_incremental_learning_settings()[0]
     except ValueError:
@@ -3203,6 +3409,8 @@ def get_relationship_onboarding_status():
         "incremental_agency_learning_poll_seconds": incremental_poll_seconds,
         "structured_learning_interval_hours": structured_learning_interval_hours,
         "incremental_agency_learning": incremental_learning.model_dump(mode="json"),
+        "inbound_auto_poll": inbound_auto_poll,
+        "agency_address_count": len(agency_addresses),
     }
 
 
@@ -5812,6 +6020,10 @@ def pull_outlook_inbound(
                     supplier_operational_notification_repository
                 ),
                 mina_job_repository=mina_job_repository,
+                quote_case_repository=quote_case_repository,
+                approval_repository=quote_approval_repository,
+                agency_copy_receipt_repository=agency_copy_receipt_repository,
+                agency_addresses=_runtime_agency_addresses(config.mailbox_id),
                 interpret_attachments=(
                     request.interpret_attachments
                 ),
@@ -5885,6 +6097,16 @@ def pull_active_mailbox_inbound(
             supplier_parser=OpenAISupplierResponseParser(),
             supplier_repository=supplier_rfq_repository,
             attachment_review_repository=attachment_review_repository,
+            supplier_operational_repository=(
+                supplier_operational_notification_repository
+            ),
+            mina_job_repository=mina_job_repository,
+            quote_case_repository=quote_case_repository,
+            approval_repository=quote_approval_repository,
+            agency_copy_receipt_repository=agency_copy_receipt_repository,
+            agency_addresses=_runtime_agency_addresses(
+                imap_credential.mailbox_id
+            ),
             interpret_attachments=request.interpret_attachments,
         )
     except ImapMailboxError as exc:
