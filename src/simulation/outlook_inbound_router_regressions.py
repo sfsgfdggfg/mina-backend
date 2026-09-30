@@ -19,7 +19,7 @@ from src.core.mail import (
     MailSendResult,
 )
 from src.core.master_data_repository import InMemoryMasterDataRepository
-from src.core.master_data_service import create_supplier_master
+from src.core.master_data_service import create_customer_master, create_supplier_master
 from src.core.mina_job_repository import InMemoryMinaJobRepository
 from src.core.models import Package, Shipment
 from src.core.operational_data import (
@@ -461,9 +461,11 @@ def evaluate_outlook_inbound_router_regressions():
     def dual_role_customer_parser(safe_text):
         return ShipmentProposalSnapshot.model_validate(
             _shipment().model_copy(update={
-                "customer_name": "Barsan Global Logistics",
+                "customer_name": "Beytullah Bülbül",
                 "pickup_city": "Adana", "delivery_city": "Zagreb",
                 "service_type": "LTL", "gross_weight_kg": 200,
+                "pickup_contact_name": "Beytullah Bülbül",
+                "delivery_address": "Slavonska avenija 1c, 10000 Zagreb Croatia",
             }).model_dump()
         )
 
@@ -473,8 +475,13 @@ def evaluate_outlook_inbound_router_regressions():
             message_id="barsan-price-request-1",
             subject="Barsan Global Lojistik/ ADANA ZAGREB/ parsiyel yükleme",
             body=(
-                "Aşağıda detaylarını ilettiğim parsiyel yük için yaklaşık bir maliyet "
-                "teklifi iletebilir misiniz? Yüreğir Adana - Zagreb, toplam 200 kg."
+                "Barsan Global Lojistik Hırvatistan ofisinde size ulaşıyorum.\n"
+                "Parsiyel yük için maliyet teklifi iletebilir misiniz? "
+                "Yüreğir Adana - Zagreb, toplam 200 kg.\n\n"
+                "Srdacan pozdrav / Kind regards/ Saygılarımla\n"
+                "Beytullah Bülbül\nRegional Director\n"
+                "Barsan Global Logistics d.o.o.\n"
+                "Address : Slavonska avenija 1c\n10 000 Zagreb Croatia"
             ),
         ),
         shipment_parser=dual_role_customer_parser,
@@ -492,8 +499,90 @@ def evaluate_outlook_inbound_router_regressions():
         and dual_role.get("known_supplier_name") == "Barsan Global Logistics"
         and dual_role_job is not None
         and dual_role_job.stage == "inquiry_received"
-        and dual_role_job.mina_code == "MINA2026/1",
-        "known supplier asking the agency for a quote opens a new customer-side intake job",
+        and dual_role_job.mina_code == "MINA2026/1"
+        and dual_role_job.shipment.customer_name == "Barsan Global Logistics"
+        and dual_role_job.shipment.pickup_contact_name is None
+        and dual_role_job.shipment.delivery_address is None,
+        "known supplier quote request uses company identity and rejects signature-only shipment contacts",
+    )
+
+    unknown_masters = InMemoryMasterDataRepository()
+    unknown_jobs = InMemoryMinaJobRepository()
+    unknown_proposals = InMemoryExtractionProposalRepository()
+    unknown_company = process_controlled_outlook_inbound_mail(
+        mail=_mail(
+            sender="jane.doe@atlasfreight.example",
+            message_id="unknown-company-price-request-1",
+            subject="Mersin Vienna freight quote",
+            body=(
+                "Mersin - Vienna 2 palet için navlun teklifi rica ederiz.\n\n"
+                "Kind regards / Saygılarımla\nJane Doe\nSales Manager\n"
+                "Atlas Freight GmbH\nAddress: Ringstrasse 10, Vienna"
+            ),
+        ),
+        shipment_parser=lambda _safe: ShipmentProposalSnapshot.model_validate(
+            _shipment().model_copy(update={
+                "customer_name": "Jane Doe", "pickup_city": "Mersin",
+                "delivery_city": "Vienna", "gross_weight_kg": 500,
+                "pickup_contact_name": "Jane Doe",
+                "delivery_address": "Ringstrasse 10, Vienna",
+            }).model_dump()
+        ),
+        supplier_parser=RecordingSupplierParser(),
+        proposal_repository=unknown_proposals,
+        supplier_repository=InMemorySupplierRFQRepository(),
+        operational_data_sources=None,
+        master_data_repository=unknown_masters,
+        mina_job_repository=unknown_jobs,
+    )
+    unknown_job = unknown_jobs.get(unknown_company.get("job_id"))
+    check(
+        unknown_job is not None
+        and unknown_job.shipment.customer_name == "Atlas Freight GmbH"
+        and unknown_job.shipment.pickup_contact_name is None
+        and unknown_job.shipment.delivery_address is None
+        and unknown_company.get("counterparty_verification_required") is True,
+        "unknown quote requester derives organization from signature without treating signature as shipment evidence",
+    )
+
+    create_customer_master(
+        repository=unknown_masters, entry_id="atlas-customer",
+        customer_name="Atlas Freight Customer", updated_by="Regression",
+        trusted_sender_addresses=["jane.doe@atlasfreight.example"],
+    )
+    reverified_company = process_controlled_outlook_inbound_mail(
+        mail=_mail(
+            sender="jane.doe@atlasfreight.example",
+            message_id="unknown-company-price-request-1",
+            subject="Mersin Vienna freight quote",
+            body=(
+                "Mersin - Vienna 2 palet için navlun teklifi rica ederiz.\n\n"
+                "Kind regards / Saygılarımla\nJane Doe\nSales Manager\n"
+                "Atlas Freight GmbH\nAddress: Ringstrasse 10, Vienna"
+            ),
+        ),
+        shipment_parser=lambda _safe: (_ for _ in ()).throw(
+            AssertionError("duplicate verified intake must not re-run AI parser")
+        ),
+        supplier_parser=RecordingSupplierParser(),
+        proposal_repository=unknown_proposals,
+        supplier_repository=InMemorySupplierRFQRepository(),
+        operational_data_sources=None,
+        master_data_repository=unknown_masters,
+        mina_job_repository=unknown_jobs,
+    )
+    verified_proposal = reverified_company.get("extraction_proposal")
+    verified_job = unknown_jobs.get(reverified_company.get("job_id"))
+    check(
+        verified_proposal is not None
+        and verified_proposal.trusted_customer_name == "Atlas Freight Customer"
+        and verified_proposal.proposed_shipment.customer_name == "Atlas Freight Customer"
+        and verified_job is not None
+        and verified_job.job_id == unknown_job.job_id
+        and verified_job.mina_code == unknown_job.mina_code
+        and verified_job.shipment.customer_name == "Atlas Freight Customer"
+        and verified_job.stage == "inquiry_received",
+        "later customer verification binds the existing proposal and same MINA job without re-running AI",
     )
 
     ambiguous_repository = (

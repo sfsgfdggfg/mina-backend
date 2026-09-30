@@ -69,22 +69,22 @@ class ExtractedPackage(BaseModel):
 class _ShipmentExtractionFields(BaseModel):
     customer_name: str = Field(
         default="Unknown Customer",
-        description="Customer name if known from the email",
+        description="Organization/company requesting the freight quote; do not use the signatory person when an organization is visible",
     )
     pickup_country: Optional[str] = None
     pickup_city: Optional[str] = None
     pickup_area: Optional[str] = None
     pickup_postcode: Optional[str] = None
-    pickup_address: Optional[str] = Field(default=None, description="Exact pickup/loading address when explicitly present")
-    pickup_contact_name: Optional[str] = Field(default=None, description="Pickup contact name when explicitly present")
+    pickup_address: Optional[str] = Field(default=None, description="Exact shipment pickup/loading address when explicitly present; never use an email-signature office address unless explicitly tied to pickup")
+    pickup_contact_name: Optional[str] = Field(default=None, description="Shipment pickup-site contact when explicitly present; do not use the email signatory merely because they signed the message")
     pickup_contact_phone: Optional[str] = Field(default=None, description="Pickup contact phone when explicitly present")
 
     delivery_country: Optional[str] = None
     delivery_city: Optional[str] = None
     delivery_area: Optional[str] = None
     delivery_postcode: Optional[str] = None
-    delivery_address: Optional[str] = Field(default=None, description="Exact delivery address when explicitly present")
-    delivery_contact_name: Optional[str] = Field(default=None, description="Delivery contact name when explicitly present")
+    delivery_address: Optional[str] = Field(default=None, description="Exact shipment delivery address when explicitly present; never use an email-signature office address unless explicitly tied to delivery")
+    delivery_contact_name: Optional[str] = Field(default=None, description="Shipment delivery-site contact when explicitly present; do not use the email signatory merely because they signed the message")
     delivery_contact_phone: Optional[str] = Field(default=None, description="Delivery contact phone when explicitly present")
 
     commodity: Optional[str] = Field(

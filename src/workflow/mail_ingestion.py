@@ -13,8 +13,15 @@ from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
 from src.core.mail import InboundMailEnvelope
+from src.core.inbound_counterparty_identity import (
+    infer_sender_organization_name,
+    value_supported_before_signature,
+)
 from src.core.mina_job_repository import MinaJobRepository
-from src.core.mina_job_service import create_mina_job_for_inbound_proposal
+from src.core.mina_job_service import (
+    create_mina_job_for_inbound_proposal,
+    refine_mina_job_inbound_intake,
+)
 from src.core.models import Shipment
 from src.core.relative_dates import (
     infer_customer_cargo_ready_date,
@@ -148,6 +155,37 @@ def existing_proposal_for_mail(
 
 
 
+_SIGNATURE_GUARDED_FIELDS = (
+    "pickup_address", "pickup_postcode", "pickup_contact_name",
+    "pickup_contact_phone", "delivery_address", "delivery_postcode",
+    "delivery_contact_name", "delivery_contact_phone",
+)
+
+
+def _refine_inbound_shipment(
+    *, mail: InboundMailEnvelope, proposed: ShipmentProposalSnapshot,
+    trusted_customer_name: str | None = None,
+    counterparty_name_hint: str | None = None,
+) -> tuple[ShipmentProposalSnapshot, list[str]]:
+    updates = {}
+    resolved_name = (
+        (trusted_customer_name or "").strip()
+        or (counterparty_name_hint or "").strip()
+        or (infer_sender_organization_name(mail.body_text) or "").strip()
+    )
+    if resolved_name and proposed.customer_name != resolved_name:
+        updates["customer_name"] = resolved_name
+
+    for field_name in _SIGNATURE_GUARDED_FIELDS:
+        value = getattr(proposed, field_name, None)
+        if value and not value_supported_before_signature(str(value), mail.body_text):
+            updates[field_name] = None
+
+    if not updates:
+        return proposed, []
+    return proposed.model_copy(update=updates), sorted(updates)
+
+
 def extract_shipment_proposal_from_mail(
     *,
     mail: InboundMailEnvelope,
@@ -156,14 +194,18 @@ def extract_shipment_proposal_from_mail(
         ShipmentProposalSnapshot,
     ],
     trusted_customer_name: str | None = None,
+    counterparty_name_hint: str | None = None,
 ) -> tuple[InboundMailEnvelope, ShipmentProposalSnapshot]:
     """Privacy-transform and parse one mail without persisting a proposal."""
 
     safe_mail, safe_text = prepare_inbound_mail_for_processing(mail)
     proposed_shipment = shipment_parser(safe_text)
+    proposed_shipment, _ = _refine_inbound_shipment(
+        mail=mail, proposed=proposed_shipment,
+        trusted_customer_name=trusted_customer_name,
+        counterparty_name_hint=counterparty_name_hint,
+    )
     proposal_updates = {}
-    if trusted_customer_name and trusted_customer_name.strip():
-        proposal_updates["customer_name"] = trusted_customer_name.strip()
     if not proposed_shipment.cargo_ready_date:
         inferred_ready = infer_customer_cargo_ready_date(
             str(safe_text), mail.received_at
@@ -217,6 +259,41 @@ def save_preparsed_shipment_proposal(
         )
 
 
+def _refine_existing_inbound_proposal(
+    *, existing: ShipmentExtractionProposal, mail: InboundMailEnvelope,
+    repository: ExtractionProposalRepository,
+    trusted_customer_name: str | None = None,
+    counterparty_name_hint: str | None = None,
+) -> tuple[ShipmentExtractionProposal, list[str]]:
+    if existing.extraction_status != "proposed":
+        return existing, []
+    effective_trusted = (
+        (trusted_customer_name or "").strip()
+        or (existing.trusted_customer_name or "").strip()
+        or None
+    )
+    refined, changed_fields = _refine_inbound_shipment(
+        mail=mail, proposed=existing.proposed_shipment,
+        trusted_customer_name=effective_trusted,
+        counterparty_name_hint=counterparty_name_hint,
+    )
+    trusted_changed = (
+        effective_trusted is not None
+        and existing.trusted_customer_name != effective_trusted
+    )
+    if not changed_fields and not trusted_changed:
+        return existing, []
+    payload = existing.model_dump(
+        exclude={"unknown_fields", "unknown_safety_fields"}
+    )
+    payload["proposed_shipment"] = refined
+    payload["trusted_customer_name"] = effective_trusted
+    updated = repository.save(ShipmentExtractionProposal.model_validate(payload))
+    if trusted_changed:
+        changed_fields = sorted({*changed_fields, "trusted_customer_name"})
+    return updated, changed_fields
+
+
 def process_customer_inquiry_mail(
     *,
     mail: InboundMailEnvelope,
@@ -226,6 +303,7 @@ def process_customer_inquiry_mail(
     ],
     proposal_repository: ExtractionProposalRepository,
     trusted_customer_name: str | None = None,
+    counterparty_name_hint: str | None = None,
     evidence_origin: str = "customer_authored",
     mina_job_repository: MinaJobRepository | None = None,
 ) -> dict:
@@ -240,22 +318,39 @@ def process_customer_inquiry_mail(
         )
 
         if existing is not None:
+            existing, refined_fields = _refine_existing_inbound_proposal(
+                existing=existing, mail=mail, repository=proposal_repository,
+                trusted_customer_name=trusted_customer_name,
+                counterparty_name_hint=counterparty_name_hint,
+            )
             result = _extraction_required_result(
                 proposal=existing,
-                ingestion_status=(
-                    "duplicate_existing_proposal"
-                ),
+                ingestion_status="duplicate_existing_proposal",
             )
             if mina_job_repository is not None:
                 job = mina_job_repository.find_by_proposal_id(existing.proposal_id)
+                if job is not None and refined_fields and job.stage == "inquiry_received":
+                    job = refine_mina_job_inbound_intake(
+                        repository=mina_job_repository,
+                        proposal_id=existing.proposal_id,
+                        shipment=Shipment.model_validate(
+                            existing.proposed_shipment.model_dump()
+                        ),
+                        changed_fields=refined_fields,
+                        occurred_at=datetime.now(timezone.utc),
+                    )
                 if job is not None:
-                    result.update({"mina_job": job, "job_id": job.job_id, "mina_code": job.mina_code})
+                    result.update({
+                        "mina_job": job, "job_id": job.job_id,
+                        "mina_code": job.mina_code,
+                    })
             return result
 
         safe_mail, proposed_shipment = extract_shipment_proposal_from_mail(
             mail=mail,
             shipment_parser=shipment_parser,
             trusted_customer_name=trusted_customer_name,
+            counterparty_name_hint=counterparty_name_hint,
         )
         proposal = create_extraction_proposal(
             mail=safe_mail,

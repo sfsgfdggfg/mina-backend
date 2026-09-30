@@ -171,6 +171,34 @@ def create_mina_job_for_inbound_proposal(
         return job
 
 
+def refine_mina_job_inbound_intake(
+    *, repository: MinaJobRepository, proposal_id: str, shipment: Shipment,
+    changed_fields: list[str], occurred_at: datetime | None = None,
+    actor: str = "MINAI inbound",
+) -> MinaJob | None:
+    """Refine only the non-authoritative inbound snapshot before confirmation."""
+    timestamp = aware_utc(occurred_at)
+    normalized_actor = _normalized_actor(actor)
+    with atomic_repository_transaction(repository):
+        job = repository.find_by_proposal_id(proposal_id)
+        if job is None:
+            return None
+        if job.stage != "inquiry_received":
+            return job
+        updated = MinaJob.model_validate(job.model_copy(update={
+            "shipment": shipment.model_copy(deep=True),
+            "updated_at": timestamp,
+        }).model_dump())
+        updated = repository.save(updated)
+        _append_event(
+            repository, updated, event_type="inbound_intake_refined",
+            occurred_at=timestamp, actor=normalized_actor,
+            resource_type="extraction_proposal", resource_id=proposal_id,
+            metadata={"changed_fields": sorted(set(changed_fields))},
+        )
+        return updated
+
+
 def create_mina_job_for_confirmed_proposal(
     *, repository: MinaJobRepository, proposal_id: str,
     shipment: Shipment, opened_by: str, opened_at: datetime,
