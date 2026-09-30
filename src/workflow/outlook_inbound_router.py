@@ -47,6 +47,7 @@ from src.workflow.mail_ingestion import (
     existing_proposal_for_mail,
 )
 from src.workflow.agency_copy_ingestion import process_agency_copied_mail
+from src.workflow.inbound_transaction_intent import looks_like_freight_quote_request
 from src.workflow.outlook_inbound_ingestion import (
     CONTROLLED_INBOUND_PROVIDERS,
     OUTLOOK_GRAPH_PROVIDER,
@@ -573,7 +574,7 @@ def process_controlled_outlook_inbound_mail(
             "customer_authored",
         ) != "agency_copied"
     ):
-        return {
+        result = {
             "result_type": (
                 "extraction_confirmation_required"
             ),
@@ -589,6 +590,11 @@ def process_controlled_outlook_inbound_mail(
             ),
             "supplier_response": None,
         }
+        if mina_job_repository is not None:
+            job = mina_job_repository.find_by_proposal_id(existing_customer_proposal.proposal_id)
+            if job is not None:
+                result.update({"mina_job": job, "job_id": job.job_id, "mina_code": job.mina_code})
+        return result
 
     agency_copy_result = process_agency_copied_mail(
         mail=mail,
@@ -642,32 +648,6 @@ def process_controlled_outlook_inbound_mail(
         == "matched"
     )
 
-    if customer_count > 1:
-        return _blocked_result(
-            result_type=(
-                "inbound_sender_verification_required"
-            ),
-            reason_code=(
-                "sender_matches_multiple_pilot_customers"
-            ),
-        )
-
-    if supplier_master_count > 1:
-        return _blocked_result(
-            result_type="inbound_sender_verification_required",
-            reason_code="sender_matches_multiple_pilot_suppliers",
-        )
-
-    if customer_count == 1 and (supplier_matched or supplier_master_count == 1):
-        return _blocked_result(
-            result_type=(
-                "inbound_mail_manual_review_required"
-            ),
-            reason_code=(
-                "sender_matches_customer_and_supplier"
-            ),
-        )
-
     if supplier_matched:
         supplier_result = ingest_supplier_reply(
             reply=mail,
@@ -676,72 +656,87 @@ def process_controlled_outlook_inbound_mail(
         )
 
         return {
-            "result_type": (
-                "supplier_response_ingestion"
-            ),
-            "ingestion_status": (
-                supplier_result.status
-            ),
-            "reason_code": (
-                supplier_result.status
-            ),
+            "result_type": "supplier_response_ingestion",
+            "ingestion_status": supplier_result.status,
+            "reason_code": supplier_result.status,
             "inbound_route": "supplier",
+            "transactional_role": "supplier_response",
             "rfq_id": supplier_result.rfq_id,
-            "correlation_method": (
-                supplier_result.correlation_method
-            ),
-            "supplier_response": (
-                supplier_result.response
-            ),
-            "supplier_rfq": (
-                supplier_result.supplier_rfq
-            ),
+            "correlation_method": supplier_result.correlation_method,
+            "supplier_response": supplier_result.response,
+            "supplier_rfq": supplier_result.supplier_rfq,
             "extraction_proposal": None,
         }
 
-    operational_assessment = assess_supplier_operational_mail(mail)
     explicit_rfq_signal = bool(
         mail.explicit_rfq_reference
         or "minai-rfq:" in (mail.subject or "").casefold()
     )
-    if (
-        supplier_master_count == 1
-        and operational_assessment.operational
-        and not (
-            supplier_correlation.status == "ambiguous_rfq"
-            and explicit_rfq_signal
+    if supplier_correlation.status == "ambiguous_rfq" and explicit_rfq_signal:
+        return _blocked_result(
+            result_type="inbound_mail_manual_review_required",
+            reason_code="supplier_rfq_correlation_ambiguous",
         )
-    ):
-        return _supplier_operational_result(
+
+    if looks_like_freight_quote_request(mail):
+        customer_result = process_controlled_outlook_customer_mail(
+            mail=mail,
+            shipment_parser=shipment_parser,
+            proposal_repository=proposal_repository,
+            operational_data_sources=operational_data_sources,
+            master_data_repository=master_data_repository,
+            mina_job_repository=mina_job_repository,
+            allow_unverified_sender_request=True,
+        )
+        customer_result["inbound_route"] = "customer"
+        customer_result["transactional_role"] = "customer_request"
+        customer_result["supplier_response"] = None
+        if supplier_master_count == 1:
+            customer_result["known_supplier_id"] = supplier_profiles[0].supplier_id
+            customer_result["known_supplier_name"] = supplier_profiles[0].supplier_name
+        return customer_result
+
+    if customer_count > 1:
+        return _blocked_result(
+            result_type="inbound_sender_verification_required",
+            reason_code="sender_matches_multiple_pilot_customers",
+        )
+
+    if supplier_master_count > 1:
+        return _blocked_result(
+            result_type="inbound_sender_verification_required",
+            reason_code="sender_matches_multiple_pilot_suppliers",
+        )
+
+    if customer_count == 1 and supplier_master_count == 1:
+        return _blocked_result(
+            result_type="inbound_mail_manual_review_required",
+            reason_code="sender_matches_customer_and_supplier",
+        )
+
+    operational_assessment = assess_supplier_operational_mail(mail)
+    if supplier_master_count == 1 and operational_assessment.operational:
+        result = _supplier_operational_result(
             mail,
             supplier_profiles[0],
             repository=supplier_operational_repository,
             mina_job_repository=mina_job_repository,
         )
+        result["transactional_role"] = "supplier_operation"
+        return result
 
     if customer_count == 1:
-        customer_result = (
-            process_controlled_outlook_customer_mail(
-                mail=mail,
-                shipment_parser=shipment_parser,
-                proposal_repository=(
-                    proposal_repository
-                ),
-                operational_data_sources=(
-                    operational_data_sources
-                ),
-                master_data_repository=master_data_repository,
-            )
+        customer_result = process_controlled_outlook_customer_mail(
+            mail=mail,
+            shipment_parser=shipment_parser,
+            proposal_repository=proposal_repository,
+            operational_data_sources=operational_data_sources,
+            master_data_repository=master_data_repository,
+            mina_job_repository=mina_job_repository,
         )
-
-        customer_result[
-            "inbound_route"
-        ] = "customer"
-
-        customer_result[
-            "supplier_response"
-        ] = None
-
+        customer_result["inbound_route"] = "customer"
+        customer_result["transactional_role"] = "customer_request"
+        customer_result["supplier_response"] = None
         return customer_result
 
     if supplier_correlation.status == (

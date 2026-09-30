@@ -18,6 +18,7 @@ from src.core.mina_job_service import (
     allowed_next_stages,
     create_manual_mina_job,
     create_mina_job_for_confirmed_proposal,
+    create_mina_job_for_inbound_proposal,
     link_mina_job_quote_case,
     link_mina_job_workflow,
     record_mina_job_quote_revision,
@@ -112,6 +113,34 @@ def evaluate_mina_job_case_regressions() -> dict:
         and confirmed.mina_code == "MINA2026/1"
         and first_job.source_proposal_id == proposed.proposal_id,
         "confirmed genuine inquiry creates MINA2026/1 and links extraction",
+    )
+
+    intake_proposal_repo = InMemoryExtractionProposalRepository()
+    intake_job_repo = InMemoryMinaJobRepository()
+    intake_proposal = create_extraction_proposal(
+        mail=mail.model_copy(update={"external_message_id": "mina-intake-1"}),
+        proposed_shipment=ShipmentProposalSnapshot.model_validate(_shipment("Dual Role Logistics").model_dump()),
+        repository=intake_proposal_repo,
+    )
+    intake_job = create_mina_job_for_inbound_proposal(
+        repository=intake_job_repo, proposal_id=intake_proposal.proposal_id,
+        shipment=Shipment.model_validate(intake_proposal.proposed_shipment.model_dump()),
+        opened_at=NOW - timedelta(minutes=4),
+    )
+    intake_confirmed = confirm_extraction_proposal(
+        repository=intake_proposal_repo, proposal_id=intake_proposal.proposal_id,
+        operator_identity="Operator One", confirmed_at=NOW,
+        mina_job_repository=intake_job_repo,
+    )
+    intake_same_job = intake_job_repo.get(intake_confirmed.mina_job_id)
+    check(
+        intake_job.stage == "inquiry_received"
+        and intake_job.mina_code == "MINA2026/1"
+        and intake_same_job is not None
+        and intake_same_job.job_id == intake_job.job_id
+        and intake_same_job.mina_code == intake_job.mina_code
+        and intake_same_job.stage == "inquiry_confirmed",
+        "inbound intake consumes one MINA number and confirmation continues the same job",
     )
     same_job = create_mina_job_for_confirmed_proposal(
         repository=job_repo,

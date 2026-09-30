@@ -43,6 +43,7 @@ _V1_ALLOWED_STAGE_TRANSITIONS: dict[str, set[str]] = {
 }
 
 _V2_BASE_STAGE_TRANSITIONS: dict[str, set[str]] = {
+    "inquiry_received": {"inquiry_confirmed", "cancelled"},
     "inquiry_confirmed": {"pricing", "lost", "cancelled"},
     "pricing": set(),
     "quote_ready": {"quote_sent", "lost", "cancelled"},
@@ -67,7 +68,7 @@ _V2_BASE_STAGE_TRANSITIONS: dict[str, set[str]] = {
 }
 
 _STAGE_ORDER = [
-    "inquiry_confirmed", "pricing", "quote_ready", "quote_sent", "negotiation",
+    "inquiry_received", "inquiry_confirmed", "pricing", "quote_ready", "quote_sent", "negotiation",
     "accepted", "operations", "operation_opened", "supplier_confirmation_pending",
     "vehicle_details_pending", "vehicle_assigned", "pre_loading_check",
     "ready_for_loading", "loaded", "in_transit", "delivery", "delivered",
@@ -143,6 +144,33 @@ def _append_event(
     )
 
 
+def create_mina_job_for_inbound_proposal(
+    *, repository: MinaJobRepository, proposal_id: str, shipment: Shipment,
+    opened_at: datetime, opened_by: str = "MINAI inbound",
+) -> MinaJob:
+    """Create a visible intake job before extraction/customer confirmation."""
+    timestamp = aware_utc(opened_at)
+    sequence_year = timestamp.astimezone(ISTANBUL).year
+    actor = _normalized_actor(opened_by)
+    with atomic_repository_transaction(repository):
+        job, created = repository.create_for_proposal(
+            proposal_id=proposal_id, shipment=shipment, opened_by=actor,
+            opened_at=timestamp, sequence_year=sequence_year, lifecycle_version=2,
+            job_kind="price_request", initial_stage="inquiry_received",
+        )
+        if created:
+            _append_event(
+                repository, job, event_type="job_created", occurred_at=timestamp,
+                actor=actor, resource_type="extraction_proposal", resource_id=proposal_id,
+                metadata={
+                    "stage": job.stage, "lifecycle_version": job.lifecycle_version,
+                    "job_kind": job.job_kind, "intake_channel": job.intake_channel,
+                    "intake_confirmation_required": True,
+                },
+            )
+        return job
+
+
 def create_mina_job_for_confirmed_proposal(
     *, repository: MinaJobRepository, proposal_id: str,
     shipment: Shipment, opened_by: str, opened_at: datetime,
@@ -180,6 +208,19 @@ def create_mina_job_for_confirmed_proposal(
                     "job_kind": job.job_kind,
                     "intake_channel": job.intake_channel,
                 },
+            )
+        elif job.stage == "inquiry_received":
+            job = repository.save(
+                MinaJob.model_validate(job.model_copy(update={
+                    "shipment": shipment.model_copy(deep=True),
+                    "stage": "inquiry_confirmed",
+                    "updated_at": timestamp,
+                }).model_dump())
+            )
+            _append_event(
+                repository, job, event_type="inquiry_confirmed",
+                occurred_at=timestamp, actor=actor, resource_type="extraction_proposal",
+                resource_id=proposal_id, metadata={"stage": job.stage},
             )
         return job
 

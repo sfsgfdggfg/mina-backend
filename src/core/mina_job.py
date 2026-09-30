@@ -17,6 +17,7 @@ MinaJobIntakeChannel = Literal[
     "email", "phone", "whatsapp", "portal", "face_to_face", "other"
 ]
 MinaJobStage = Literal[
+    "inquiry_received",
     "inquiry_confirmed",
     "pricing",
     "quote_ready",
@@ -46,7 +47,7 @@ V1_MINA_JOB_STAGES = {
     "accepted", "operations", "in_transit", "delivered", "lost", "cancelled",
 }
 V2_MINA_JOB_STAGES = {
-    "inquiry_confirmed", "pricing", "quote_ready", "quote_sent", "negotiation",
+    "inquiry_received", "inquiry_confirmed", "pricing", "quote_ready", "quote_sent", "negotiation",
     "accepted", "operation_opened", "supplier_confirmation_pending",
     "vehicle_details_pending", "vehicle_assigned", "pre_loading_check",
     "ready_for_loading", "loaded", "in_transit", "delivery", "delivered",

@@ -7812,3 +7812,18 @@ For a firm Road RFQ, cargo-ready date is required. Customer required-delivery da
 **Date:** 2026-09-17
 
 An unresolved customer-provided GTIP/HS mapping that materially conflicts with the current confirmed commodity is a fail-closed commercial stop. MINAI recomputes that conflict from the current `gtip_code`, current commodity and validated HS map; a stale structured flag or warning note is not allowed to keep a genuinely corrected shipment blocked, and deleting legacy warning text cannot make an unresolved current conflict safe. Operational consistency must fail and supplier RFQ/customer quote progression must remain blocked until current confirmed facts are compatible. This does not make MINAI a legally authoritative customs-classification system.
+
+## DEC-296 — Inbound Transaction Role Overrides Static Counterparty Role for New Freight Requests
+
+**Status:** Accepted
+**Date:** 2026-09-30
+
+A logistics counterparty is not permanently constrained to one commercial role. The same company may buy transport from the agency in one transaction and supply transport capacity or pricing in another. Inbound routing therefore determines the role expressed by the current message before treating a customer/supplier master label as decisive.
+
+An exact supplier-RFQ correlation remains authoritative for a supplier response. Without such a correlation, a clear inbound request asking MINAI's agency to quote a freight movement is treated as a customer-side price request even when the sender is already known as a supplier. The sender's supplier master identity is retained as context; it does not suppress the new request.
+
+A clear freight quote request creates its MINA job immediately in `inquiry_received` state and consumes its `MINAYYYY/N` number. Extraction/customer verification may remain pending. Confirmation continues the same job and number, updates the confirmed shipment snapshot, and moves the job to `inquiry_confirmed`; it must not create a second job.
+
+If the sender is not yet a verified customer relationship, job intake is still allowed but sender verification remains first-class operator work. Counterparty verification is an automation boundary, not a job-creation boundary. During the current shadow pilot no automatic outbound mail is enabled; before outbound automation is enabled, unresolved counterparty verification must remain a hard prerequisite for automated external action.
+
+False-positive intake is resolved by explicitly cancelling/closing the created job with a reason rather than recycling or deleting its MINA number. This preserves auditability and gives MINAI evidence for improving future intent classification.

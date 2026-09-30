@@ -16,6 +16,7 @@ REVIEWABLE_RESULT_TYPES = {
 REVIEWABLE_REASON_CODES = {
     "sender_not_in_verified_inbound_scope",
     "sender_not_in_verified_pilot_scope",
+    "sender_not_in_verified_customer_scope",
     "sender_matches_multiple_pilot_customers",
     "sender_matches_multiple_verified_customers",
 }
@@ -32,7 +33,8 @@ def capture_inbound_sender_review(
         return None
     result_type = str(result.get("result_type") or "")
     reason_code = str(result.get("reason_code") or "")
-    if result_type not in REVIEWABLE_RESULT_TYPES:
+    review_flag = bool(result.get("counterparty_verification_required"))
+    if result_type not in REVIEWABLE_RESULT_TYPES and not review_flag:
         return None
     if reason_code not in REVIEWABLE_REASON_CODES:
         return None

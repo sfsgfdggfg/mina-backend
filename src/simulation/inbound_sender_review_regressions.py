@@ -78,6 +78,25 @@ def evaluate_inbound_sender_review_regressions():
     def check(condition, message):
         (passes if condition else failures).append(message)
 
+    captured_reviews = InMemoryInboundSenderReviewRepository()
+    captured_mail = _mail("captured-unverified-request-001")
+    captured_review = capture_inbound_sender_review(
+        mail=captured_mail,
+        result={
+            "result_type": "extraction_confirmation_required",
+            "ingestion_status": "created",
+            "reason_code": "sender_not_in_verified_customer_scope",
+            "inbound_route": "customer",
+            "counterparty_verification_required": True,
+        },
+        repository=captured_reviews,
+        now=NOW,
+    )
+    check(
+        captured_review is not None and captured_review.status == "pending",
+        "captured freight request still creates sender verification work without blocking job intake",
+    )
+
     reviews = InMemoryInboundSenderReviewRepository()
     mail = _mail()
     blocked = {

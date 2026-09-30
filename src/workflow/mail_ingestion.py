@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from contextlib import contextmanager
 from threading import Lock
 
@@ -12,6 +13,9 @@ from src.core.extraction_confirmation_repository import (
     ExtractionProposalRepository,
 )
 from src.core.mail import InboundMailEnvelope
+from src.core.mina_job_repository import MinaJobRepository
+from src.core.mina_job_service import create_mina_job_for_inbound_proposal
+from src.core.models import Shipment
 from src.core.relative_dates import (
     infer_customer_cargo_ready_date,
     infer_customer_quote_deadline,
@@ -223,6 +227,7 @@ def process_customer_inquiry_mail(
     proposal_repository: ExtractionProposalRepository,
     trusted_customer_name: str | None = None,
     evidence_origin: str = "customer_authored",
+    mina_job_repository: MinaJobRepository | None = None,
 ) -> dict:
     """Stop customer mail at a non-authoritative extraction proposal."""
 
@@ -235,12 +240,17 @@ def process_customer_inquiry_mail(
         )
 
         if existing is not None:
-            return _extraction_required_result(
+            result = _extraction_required_result(
                 proposal=existing,
                 ingestion_status=(
                     "duplicate_existing_proposal"
                 ),
             )
+            if mina_job_repository is not None:
+                job = mina_job_repository.find_by_proposal_id(existing.proposal_id)
+                if job is not None:
+                    result.update({"mina_job": job, "job_id": job.job_id, "mina_code": job.mina_code})
+            return result
 
         safe_mail, proposed_shipment = extract_shipment_proposal_from_mail(
             mail=mail,
@@ -255,7 +265,17 @@ def process_customer_inquiry_mail(
             evidence_origin=evidence_origin,
         )
 
-        return _extraction_required_result(
+        result = _extraction_required_result(
             proposal=proposal,
             ingestion_status="created",
         )
+        if mina_job_repository is not None:
+            provisional_shipment = Shipment.model_validate(proposed_shipment.model_dump())
+            job = create_mina_job_for_inbound_proposal(
+                repository=mina_job_repository,
+                proposal_id=proposal.proposal_id,
+                shipment=provisional_shipment,
+                opened_at=mail.received_at or datetime.now(timezone.utc),
+            )
+            result.update({"mina_job": job, "job_id": job.job_id, "mina_code": job.mina_code})
+        return result

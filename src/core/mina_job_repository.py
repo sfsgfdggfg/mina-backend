@@ -9,6 +9,7 @@ from src.core.mina_job import (
     MinaJobEvent,
     MinaJobIntakeChannel,
     MinaJobKind,
+    MinaJobStage,
 )
 from src.core.models import Shipment
 
@@ -24,6 +25,7 @@ class MinaJobRepository(Protocol):
         sequence_year: int,
         lifecycle_version: int,
         job_kind: MinaJobKind,
+        initial_stage: MinaJobStage = "inquiry_confirmed",
         sales_owner: str | None = None,
         operations_owner: str | None = None,
     ) -> tuple[MinaJob, bool]: ...
@@ -80,7 +82,8 @@ class InMemoryMinaJobRepository:
         self,
         *, proposal_id: str, shipment: Shipment, opened_by: str,
         opened_at: datetime, sequence_year: int, lifecycle_version: int,
-        job_kind: MinaJobKind, sales_owner: str | None = None,
+        job_kind: MinaJobKind, initial_stage: MinaJobStage = "inquiry_confirmed",
+        sales_owner: str | None = None,
         operations_owner: str | None = None,
     ) -> tuple[MinaJob, bool]:
         with self._lock:
@@ -97,6 +100,7 @@ class InMemoryMinaJobRepository:
                 intake_channel="email",
                 source_proposal_id=proposal_id,
                 shipment=shipment.model_copy(deep=True),
+                stage=initial_stage,
                 sales_owner=sales_owner,
                 operations_owner=operations_owner,
                 opened_by=opened_by,

@@ -35,7 +35,7 @@ function setStatus(text, ok = true) {
 }
 
 const STAGE_LABELS = {
-  intake: "Talep", inquiry_confirmed: "Talep Doğrulandı", pricing: "Fiyatlama",
+  intake: "Talep", inquiry_received: "Yeni Talep", inquiry_confirmed: "Talep Doğrulandı", pricing: "Fiyatlama",
   quote_ready: "Teklif Hazır", quote_sent: "Teklif Gönderildi", negotiation: "Müzakere",
   accepted: "Kabul Edildi", operations: "Operasyon", operation_opened: "Operasyon Açıldı",
   supplier_confirmation_pending: "Tedarikçi Teyidi", vehicle_details_pending: "Araç Bilgisi Bekleniyor",

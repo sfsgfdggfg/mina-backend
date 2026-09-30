@@ -77,6 +77,8 @@ def process_controlled_outlook_customer_mail(
         OperationalDataSources | None
     ),
     master_data_repository: MasterDataRepository | None = None,
+    mina_job_repository=None,
+    allow_unverified_sender_request: bool = False,
 ) -> dict:
     """Gate real Outlook mail before AI extraction."""
 
@@ -136,7 +138,7 @@ def process_controlled_outlook_customer_mail(
         )
     ]
 
-    if not matches:
+    if not matches and not allow_unverified_sender_request:
         return _blocked_result(
             result_type=(
                 "inbound_sender_verification_required"
@@ -146,7 +148,7 @@ def process_controlled_outlook_customer_mail(
             ),
         )
 
-    if len(matches) != 1:
+    if len(matches) != 1 and not allow_unverified_sender_request:
         return _blocked_result(
             result_type=(
                 "inbound_sender_verification_required"
@@ -156,16 +158,27 @@ def process_controlled_outlook_customer_mail(
             ),
         )
 
+    trusted_name = matches[0].customer_name if len(matches) == 1 else None
     result = process_customer_inquiry_mail(
         mail=mail,
         shipment_parser=shipment_parser,
         proposal_repository=proposal_repository,
-        trusted_customer_name=matches[0].customer_name,
+        trusted_customer_name=trusted_name,
+        mina_job_repository=mina_job_repository,
     )
 
-    result["inbound_gate_status"] = "pass"
-    result["inbound_gate_reason"] = (
-        "trusted_pilot_sender"
-    )
+    if len(matches) == 1:
+        result["inbound_gate_status"] = "pass"
+        result["inbound_gate_reason"] = "trusted_pilot_sender"
+        result["counterparty_verification_required"] = False
+    else:
+        result["inbound_gate_status"] = "review_required"
+        result["inbound_gate_reason"] = (
+            "sender_not_in_verified_customer_scope"
+            if not matches
+            else "sender_matches_multiple_pilot_customers"
+        )
+        result["reason_code"] = result["inbound_gate_reason"]
+        result["counterparty_verification_required"] = True
 
     return result
