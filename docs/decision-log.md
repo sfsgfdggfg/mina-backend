@@ -7827,3 +7827,15 @@ A clear freight quote request creates its MINA job immediately in `inquiry_recei
 If the sender is not yet a verified customer relationship, job intake is still allowed but sender verification remains first-class operator work. Counterparty verification is an automation boundary, not a job-creation boundary. During the current shadow pilot no automatic outbound mail is enabled; before outbound automation is enabled, unresolved counterparty verification must remain a hard prerequisite for automated external action.
 
 False-positive intake is resolved by explicitly cancelling/closing the created job with a reason rather than recycling or deleting its MINA number. This preserves auditability and gives MINAI evidence for improving future intent classification.
+
+
+## DEC-297 — Sender Organization Is Distinct From Signatory and Shipment Contacts
+
+**Status:** Accepted
+**Date:** 2026-09-30
+
+For an inbound freight quote request, `customer_name` represents the organization buying the freight service in that transaction. A named email signatory is not the customer identity when the sender organization is explicitly available. A counterparty already known in Supplier Master may therefore be reused as the provisional customer-side organization for that transaction without changing its permanent supplier relationship.
+
+Email-signature evidence has a narrower authority than shipment-body evidence. Signature company text may support provisional counterparty identity, but signature person, title, telephone and office address must not become pickup/delivery addresses or shipment-site contacts unless the message explicitly ties them to the shipment. Explicit operational addenda after a signature remain valid evidence.
+
+Before customer verification, these facts remain non-authoritative intake data. When the operator later verifies the sender as a customer, MINAI binds that verified customer identity to the existing extraction proposal and the same `MINAYYYY/N` job; it does not rerun AI extraction or allocate a second job number. Any provisional identity refinement is auditable on the MINA job timeline.

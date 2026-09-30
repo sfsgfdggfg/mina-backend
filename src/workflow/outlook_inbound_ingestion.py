@@ -79,6 +79,7 @@ def process_controlled_outlook_customer_mail(
     master_data_repository: MasterDataRepository | None = None,
     mina_job_repository=None,
     allow_unverified_sender_request: bool = False,
+    counterparty_name_hint: str | None = None,
 ) -> dict:
     """Gate real Outlook mail before AI extraction."""
 
@@ -164,6 +165,7 @@ def process_controlled_outlook_customer_mail(
         shipment_parser=shipment_parser,
         proposal_repository=proposal_repository,
         trusted_customer_name=trusted_name,
+        counterparty_name_hint=counterparty_name_hint,
         mina_job_repository=mina_job_repository,
     )
 

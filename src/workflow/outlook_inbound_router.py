@@ -566,6 +566,7 @@ def process_controlled_outlook_inbound_mail(
             "supplier_response": None,
         }
 
+
     if (
         existing_customer_proposal is not None
         and getattr(
@@ -574,26 +575,56 @@ def process_controlled_outlook_inbound_mail(
             "customer_authored",
         ) != "agency_copied"
     ):
+        duplicate_customer_matches, duplicate_customer_error = _customer_matches(
+            mail=mail, operational_data_sources=operational_data_sources,
+            master_data_repository=master_data_repository,
+        )
+        duplicate_supplier_profiles = matching_supplier_masters(
+            master_data_repository, mail.sender_address
+        )
+        duplicate_customer_count = len(duplicate_customer_matches or [])
+        if (
+            duplicate_customer_error is None
+            and (
+                duplicate_customer_count == 1
+                or looks_like_freight_quote_request(mail)
+            )
+        ):
+            customer_result = process_controlled_outlook_customer_mail(
+                mail=mail, shipment_parser=shipment_parser,
+                proposal_repository=proposal_repository,
+                operational_data_sources=operational_data_sources,
+                master_data_repository=master_data_repository,
+                mina_job_repository=mina_job_repository,
+                allow_unverified_sender_request=(duplicate_customer_count != 1),
+                counterparty_name_hint=(
+                    duplicate_supplier_profiles[0].supplier_name
+                    if duplicate_customer_count != 1
+                    and len(duplicate_supplier_profiles) == 1
+                    else None
+                ),
+            )
+            customer_result["inbound_route"] = "customer"
+            customer_result["transactional_role"] = "customer_request"
+            customer_result["supplier_response"] = None
+            return customer_result
         result = {
-            "result_type": (
-                "extraction_confirmation_required"
-            ),
-            "ingestion_status": (
-                "duplicate_existing_proposal"
-            ),
-            "reason_code": (
-                "customer_message_already_ingested"
-            ),
+            "result_type": "extraction_confirmation_required",
+            "ingestion_status": "duplicate_existing_proposal",
+            "reason_code": "customer_message_already_ingested",
             "inbound_route": "customer",
-            "extraction_proposal": (
-                existing_customer_proposal
-            ),
+            "extraction_proposal": existing_customer_proposal,
             "supplier_response": None,
         }
         if mina_job_repository is not None:
-            job = mina_job_repository.find_by_proposal_id(existing_customer_proposal.proposal_id)
+            job = mina_job_repository.find_by_proposal_id(
+                existing_customer_proposal.proposal_id
+            )
             if job is not None:
-                result.update({"mina_job": job, "job_id": job.job_id, "mina_code": job.mina_code})
+                result.update({
+                    "mina_job": job, "job_id": job.job_id,
+                    "mina_code": job.mina_code,
+                })
         return result
 
     agency_copy_result = process_agency_copied_mail(
@@ -648,6 +679,7 @@ def process_controlled_outlook_inbound_mail(
         == "matched"
     )
 
+
     if supplier_matched:
         supplier_result = ingest_supplier_reply(
             reply=mail,
@@ -687,6 +719,10 @@ def process_controlled_outlook_inbound_mail(
             master_data_repository=master_data_repository,
             mina_job_repository=mina_job_repository,
             allow_unverified_sender_request=True,
+            counterparty_name_hint=(
+                supplier_profiles[0].supplier_name
+                if supplier_master_count == 1 else None
+            ),
         )
         customer_result["inbound_route"] = "customer"
         customer_result["transactional_role"] = "customer_request"
