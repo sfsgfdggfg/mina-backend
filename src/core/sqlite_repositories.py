@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from src.core.automation_action import ScheduledAutomationAction
-from src.core.mina_job import MinaJob, MinaJobEvent
+from src.core.mina_job import MinaJob, MinaJobEvent, MinaJobStage
 from src.core.models import Shipment
 from src.core.extraction_confirmation import ShipmentExtractionProposal
 from src.core.attachment_interpretation_review import AttachmentInterpretationReview
@@ -101,7 +101,8 @@ class SQLiteMinaJobRepository:
     def _create_for_proposal(
         self, *, proposal_id: str, shipment: Shipment, opened_by: str,
         opened_at: datetime, sequence_year: int, lifecycle_version: int,
-        job_kind, sales_owner: str | None = None,
+        job_kind, initial_stage: MinaJobStage = "inquiry_confirmed",
+        sales_owner: str | None = None,
         operations_owner: str | None = None,
     ) -> tuple[MinaJob, bool]:
         existing = self.find_by_proposal_id(proposal_id)
@@ -117,7 +118,7 @@ class SQLiteMinaJobRepository:
             mina_code=mina_code, sequence_year=sequence_year,
             sequence_number=sequence_number, lifecycle_version=lifecycle_version,
             job_kind=job_kind, intake_channel="email", source_proposal_id=proposal_id,
-            shipment=shipment.model_copy(deep=True), sales_owner=sales_owner,
+            shipment=shipment.model_copy(deep=True), stage=initial_stage, sales_owner=sales_owner,
             operations_owner=operations_owner, opened_by=opened_by,
             opened_at=opened_at, updated_at=opened_at,
         )
@@ -148,7 +149,8 @@ class SQLiteMinaJobRepository:
     def create_for_proposal(
         self, *, proposal_id: str, shipment: Shipment, opened_by: str,
         opened_at: datetime, sequence_year: int, lifecycle_version: int,
-        job_kind, sales_owner: str | None = None,
+        job_kind, initial_stage: MinaJobStage = "inquiry_confirmed",
+        sales_owner: str | None = None,
         operations_owner: str | None = None,
     ) -> tuple[MinaJob, bool]:
         if self.store.transaction_active:
@@ -156,14 +158,14 @@ class SQLiteMinaJobRepository:
                 proposal_id=proposal_id, shipment=shipment, opened_by=opened_by,
                 opened_at=opened_at, sequence_year=sequence_year,
                 lifecycle_version=lifecycle_version, job_kind=job_kind,
-                sales_owner=sales_owner, operations_owner=operations_owner,
+                initial_stage=initial_stage, sales_owner=sales_owner, operations_owner=operations_owner,
             )
         with self.store.transaction():
             return self._create_for_proposal(
                 proposal_id=proposal_id, shipment=shipment, opened_by=opened_by,
                 opened_at=opened_at, sequence_year=sequence_year,
                 lifecycle_version=lifecycle_version, job_kind=job_kind,
-                sales_owner=sales_owner, operations_owner=operations_owner,
+                initial_stage=initial_stage, sales_owner=sales_owner, operations_owner=operations_owner,
             )
 
     def _create_manual(

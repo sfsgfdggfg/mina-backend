@@ -18,6 +18,9 @@ from src.core.mail import (
     InboundMailEnvelope,
     MailSendResult,
 )
+from src.core.master_data_repository import InMemoryMasterDataRepository
+from src.core.master_data_service import create_supplier_master
+from src.core.mina_job_repository import InMemoryMinaJobRepository
 from src.core.models import Package, Shipment
 from src.core.operational_data import (
     OperationalDataSources,
@@ -114,6 +117,7 @@ def _mail(
     sender,
     message_id,
     subject="Freight inquiry",
+    body="Controlled inbound regression message.",
     has_attachments=False,
     attachment_manifest=None,
 ):
@@ -123,9 +127,7 @@ def _mail(
         mailbox_id="pilot@example.invalid",
         sender_address=sender,
         subject=subject,
-        body_text=(
-            "Controlled inbound regression message."
-        ),
+        body_text=body,
         received_at=datetime(
             2026,
             8,
@@ -439,15 +441,59 @@ def evaluate_outlook_inbound_router_regressions():
         )
 
     check(
-        overlap.get(
-            "reason_code"
-        )
-        == (
-            "sender_matches_customer_and_supplier"
-        )
-        and not overlap_parser.calls
+        overlap.get("inbound_route") == "supplier"
+        and overlap.get("transactional_role") == "supplier_response"
+        and overlap.get("ingestion_status") == "response_attached"
+        and len(overlap_parser.calls) == 1
         and not overlap_customer_calls,
-        "customer supplier identity overlap blocks before AI",
+        "matched RFQ makes the message a supplier response even for a dual-role firm",
+    )
+
+    dual_role_masters = InMemoryMasterDataRepository()
+    create_supplier_master(
+        repository=dual_role_masters, entry_id="barsan",
+        supplier_name="Barsan Global Logistics", updated_by="Regression",
+        trusted_sender_addresses=["beytullah.bulbul@barsan.com"],
+    )
+    dual_role_jobs = InMemoryMinaJobRepository()
+    dual_role_proposals = InMemoryExtractionProposalRepository()
+
+    def dual_role_customer_parser(safe_text):
+        return ShipmentProposalSnapshot.model_validate(
+            _shipment().model_copy(update={
+                "customer_name": "Barsan Global Logistics",
+                "pickup_city": "Adana", "delivery_city": "Zagreb",
+                "service_type": "LTL", "gross_weight_kg": 200,
+            }).model_dump()
+        )
+
+    dual_role = process_controlled_outlook_inbound_mail(
+        mail=_mail(
+            sender="beytullah.bulbul@barsan.com",
+            message_id="barsan-price-request-1",
+            subject="Barsan Global Lojistik/ ADANA ZAGREB/ parsiyel yükleme",
+            body=(
+                "Aşağıda detaylarını ilettiğim parsiyel yük için yaklaşık bir maliyet "
+                "teklifi iletebilir misiniz? Yüreğir Adana - Zagreb, toplam 200 kg."
+            ),
+        ),
+        shipment_parser=dual_role_customer_parser,
+        supplier_parser=RecordingSupplierParser(),
+        proposal_repository=dual_role_proposals,
+        supplier_repository=InMemorySupplierRFQRepository(),
+        operational_data_sources=None,
+        master_data_repository=dual_role_masters,
+        mina_job_repository=dual_role_jobs,
+    )
+    dual_role_job = dual_role_jobs.get(dual_role.get("job_id"))
+    check(
+        dual_role.get("transactional_role") == "customer_request"
+        and dual_role.get("counterparty_verification_required") is True
+        and dual_role.get("known_supplier_name") == "Barsan Global Logistics"
+        and dual_role_job is not None
+        and dual_role_job.stage == "inquiry_received"
+        and dual_role_job.mina_code == "MINA2026/1",
+        "known supplier asking the agency for a quote opens a new customer-side intake job",
     )
 
     ambiguous_repository = (
