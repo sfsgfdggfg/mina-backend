@@ -7839,3 +7839,14 @@ For an inbound freight quote request, `customer_name` represents the organizatio
 Email-signature evidence has a narrower authority than shipment-body evidence. Signature company text may support provisional counterparty identity, but signature person, title, telephone and office address must not become pickup/delivery addresses or shipment-site contacts unless the message explicitly ties them to the shipment. Explicit operational addenda after a signature remain valid evidence.
 
 Before customer verification, these facts remain non-authoritative intake data. When the operator later verifies the sender as a customer, MINAI binds that verified customer identity to the existing extraction proposal and the same `MINAYYYY/N` job; it does not rerun AI extraction or allocate a second job number. Any provisional identity refinement is auditable on the MINA job timeline.
+
+## DEC-298 — Inbound Freight Intent Must Ignore Transport Metadata and Distinguish Requests From Offers
+
+**Status:** Accepted
+**Date:** 2026-11-27
+
+Inbound freight-intent classification must operate on authored message text, not transport or tracking metadata. URL, `mailto`, email-address and CID payloads are removed before intent matching, and short logistics tokens such as `RFQ`, `TIR`, `KG`, `LTL` and similar signals require lexical boundaries so random tracking-token fragments cannot create a freight request.
+
+A carrier, forwarder or supplier circular that presents its own tariff, sailing schedule, rate sheet or quotation is not a customer-side request merely because it contains freight vocabulary or a phrase such as `navlun teklifimiz`. Request intent requires request-shaped language, or a concise quote-request subject, plus freight context. Static customer/supplier master roles remain secondary to the current transaction, as established by DEC-296.
+
+The production false positives that motivated this decision are retained as regression evidence: CCC Turkey weekly sailing-program circulars, Yang Ming import-tariff broadcasts and a Microsoft Copilot marketing email whose tracking URLs contained accidental logistics-token substrings. The same detector must continue to accept the real Barsan Adana–Zagreb and NNG Enerji Yalova–Ecuador quote requests. Existing false-positive MINA jobs are cancelled with explicit reasons rather than deleted or renumbered.
