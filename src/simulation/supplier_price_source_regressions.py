@@ -110,9 +110,9 @@ def evaluate_supplier_price_source_regressions() -> dict:
         currency="eur",
         transit_time="4 days",
         valid_from=date(2026, 9, 1),
-        valid_to=date(2026, 9, 30),
+        valid_to=date(2099, 9, 30),
         evidence_source="agreement",
-        evidence_reference="September agreement",
+        evidence_reference="Long-lived regression agreement",
         recorded_by="Operator One",
         recorded_at=NOW,
     )
@@ -130,9 +130,9 @@ def evaluate_supplier_price_source_regressions() -> dict:
         currency="EUR",
         transit_time="4 days",
         valid_from=date(2026, 9, 1),
-        valid_to=date(2026, 9, 30),
+        valid_to=date(2099, 9, 30),
         evidence_source="agreement",
-        evidence_reference="September agreement",
+        evidence_reference="Long-lived regression agreement",
         recorded_by="Operator One",
         recorded_at=NOW + timedelta(minutes=1),
     )
@@ -140,7 +140,7 @@ def evaluate_supplier_price_source_regressions() -> dict:
         create_supplier_fixed_rate(
             repository=prices, entry_id="rate-entry-1", supplier_name="FixedTrans",
             origin_country="Turkey", destination_country="Germany", cost=9999,
-            currency="EUR", valid_from=date(2026, 9, 1), valid_to=date(2026, 9, 30),
+            currency="EUR", valid_from=date(2026, 9, 1), valid_to=date(2099, 9, 30),
             evidence_source="agreement", recorded_by="Operator One", recorded_at=NOW,
         )
         rate_conflict_blocked = False
