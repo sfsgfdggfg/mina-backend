@@ -143,7 +143,23 @@ def _append_special_note(shipment, note: str):
         shipment.special_notes = note
 
     return shipment
+def _clear_stale_commodity_profile_note(shipment: Any):
+    existing = getattr(shipment, "special_notes", None)
+    if not isinstance(existing, str) or "[COMMODITY PROFILE]" not in existing:
+        return shipment
+    kept = [
+        line for line in existing.splitlines()
+        if not line.strip().startswith("[COMMODITY PROFILE]")
+    ]
+    cleaned = "\n".join(line for line in kept if line.strip()).strip()
+    shipment.special_notes = cleaned or None
+    return shipment
+
+
 def apply_commodity_profile_to_shipment(shipment: Any):
+    # Profile notes are derived data. Recompute them from the current category
+    # instead of carrying a stale note after commodity/operator refinement.
+    shipment = _clear_stale_commodity_profile_note(shipment)
     profile_key = (
         getattr(shipment, "commodity_category", None)
         or getattr(shipment, "commodity", None)

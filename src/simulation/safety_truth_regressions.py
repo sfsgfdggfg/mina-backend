@@ -203,6 +203,10 @@ def evaluate_safety_truth_regressions() -> dict:
             service_type="LTL",
             transport_mode="road",
             gross_weight_kg=200,
+            special_notes=(
+                "[COMMODITY PROFILE] Elektronik ürünlerde yüksek değer ve "
+                "hırsızlık riski kontrol edilmelidir."
+            ),
         ),
         (
             "Parsiyel yük için yaklaşık bir maliyet teklifi iletebilir misiniz?\n"
