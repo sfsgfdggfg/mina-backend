@@ -479,7 +479,7 @@ def evaluate_supplier_price_source_regressions() -> dict:
             cost=2100,
             currency="EUR",
             valid_from=date(2026, 9, 1),
-            valid_to=date(2026, 12, 31),
+            valid_to=date(2099, 12, 31),
             evidence_source="agreement",
             recorded_by="Operator One",
             recorded_at=NOW,
@@ -555,7 +555,7 @@ def evaluate_supplier_price_source_regressions() -> dict:
                 origin_country="Turkey", destination_country="Germany",
                 transport_mode="road", service_type="FTL", equipment_type="Tenteli",
                 cost=1990, currency="EUR", valid_from=date(2026, 9, 1),
-                valid_to=date(2026, 9, 30), evidence_source="agreement",
+                valid_to=date(2099, 9, 30), evidence_source="agreement",
             ),
             request,
         )
