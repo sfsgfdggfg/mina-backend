@@ -29,6 +29,7 @@ from src.ai.extraction_models import (
 )
 from src.ai.extraction_mapping import shipment_from_extraction
 from src.core.extraction_confirmation import ShipmentProposalSnapshot
+from src.core.inbound_counterparty_identity import message_body_before_signature
 from src.core.privacy import PrivacyBoundaryError, PrivacySafeText
 
 
@@ -190,7 +191,9 @@ def _apply_commodity_safety_overrides(shipment, email_text: str):
     data/commodity_dictionary.json instead of being hard-coded in Python.
     """
 
-    text = (email_text or "").lower()
+    # Commodity-category evidence comes only from the authored shipment body.
+    # Signature contact data (for example "Phone") must never classify cargo.
+    text = message_body_before_signature(email_text or "").lower()
     commodity_dictionary = _load_commodity_dictionary()
 
     for item in commodity_dictionary:
