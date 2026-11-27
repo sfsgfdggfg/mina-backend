@@ -226,12 +226,35 @@ class SQLiteAgencyLearningBootstrapRepository:
     def save(
         self, snapshot: AgencyLearningBootstrapSnapshot
     ) -> AgencyLearningBootstrapSnapshot:
+        event_payload = {
+            "status": snapshot.status,
+            "provider": snapshot.provider,
+            "mailbox_id": snapshot.mailbox_id,
+            "started_at": snapshot.started_at,
+            "completed_at": snapshot.completed_at,
+            "scanned_message_count": snapshot.scanned_message_count,
+            "inbound_message_count": snapshot.inbound_message_count,
+            "outbound_message_count": snapshot.outbound_message_count,
+            "rejected_message_count": snapshot.rejected_message_count,
+            "candidate_count": snapshot.candidate_count,
+            "known_candidate_count": snapshot.known_candidate_count,
+            "high_confidence_candidate_count": (
+                snapshot.high_confidence_candidate_count
+            ),
+            "proposed_fact_count": snapshot.proposed_fact_count,
+            "matched_subject_count": snapshot.matched_subject_count,
+            "recent_source_hash_count": len(snapshot.recent_source_hashes),
+            "raw_messages_persisted": snapshot.raw_messages_persisted,
+            "error_code": snapshot.error_code,
+        }
         self.store.upsert(
             namespace=self.NAMESPACE,
             record_key=self.RECORD_KEY,
             payload=snapshot.model_dump(mode="json"),
             event_type="agency_learning_bootstrap_state_changed",
             entity_type="agency_learning_bootstrap",
+            event_payload=event_payload,
+            skip_unchanged=True,
         )
         return snapshot
 

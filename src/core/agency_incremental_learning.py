@@ -81,12 +81,38 @@ class SQLiteAgencyIncrementalLearningRepository:
     def save(
         self, state: AgencyIncrementalLearningState
     ) -> AgencyIncrementalLearningState:
+        event_payload = {
+            "status": state.status,
+            "provider": state.provider,
+            "mailbox_id": state.mailbox_id,
+            "cursor_at": state.cursor_at,
+            "last_started_at": state.last_started_at,
+            "last_completed_at": state.last_completed_at,
+            "last_ai_analysis_at": state.last_ai_analysis_at,
+            "run_count": state.run_count,
+            "last_scanned_message_count": state.last_scanned_message_count,
+            "last_new_message_count": state.last_new_message_count,
+            "total_new_message_count": state.total_new_message_count,
+            "last_proposed_fact_count": state.last_proposed_fact_count,
+            "total_proposed_fact_count": state.total_proposed_fact_count,
+            "last_rejected_message_count": state.last_rejected_message_count,
+            "recent_source_hash_count": len(state.recent_source_hashes),
+            "last_structured_derivation_at": state.last_structured_derivation_at,
+            "last_structured_proposed_fact_count": (
+                state.last_structured_proposed_fact_count
+            ),
+            "total_structured_proposed_fact_count": (
+                state.total_structured_proposed_fact_count
+            ),
+            "error_code": state.error_code,
+        }
         self.store.upsert(
             namespace=self.NAMESPACE,
             record_key=self.RECORD_KEY,
             payload=state.model_dump(mode="json"),
             event_type="agency_incremental_learning_state_changed",
             entity_type="agency_incremental_learning",
+            event_payload=event_payload,
         )
         return state
 

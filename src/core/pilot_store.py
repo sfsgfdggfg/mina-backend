@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import stat
+import shutil
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -66,6 +67,7 @@ PERSISTENT_STATE_NAMESPACES = (
     "learning_facts",
     "learning_fact_by_entry",
     "agency_learning_bootstrap",
+    "agency_incremental_learning",
     "agency_copy_mail_receipts",
     "inbound_auto_poll_state",
     "inbound_sender_reviews",
@@ -411,10 +413,31 @@ class SQLitePilotStore:
         # versions transform payloads before repositories validate current models.
         return cls._decode(payload_json)
 
-    def upsert(self, *, namespace: str, record_key: str, payload: Any, event_type: str, entity_type: str) -> None:
+    def upsert(
+        self,
+        *,
+        namespace: str,
+        record_key: str,
+        payload: Any,
+        event_type: str,
+        entity_type: str,
+        event_payload: Any | None = None,
+        skip_unchanged: bool = False,
+    ) -> bool:
         payload_json = self._encode(payload)
+        event_payload_json = self._encode(
+            payload if event_payload is None else event_payload
+        )
         timestamp = utc_now_iso()
         with self._connection_scope() as connection:
+            if skip_unchanged:
+                existing = connection.execute(
+                    "SELECT payload_json FROM state_records "
+                    "WHERE namespace = ? AND record_key = ?",
+                    (namespace, record_key),
+                ).fetchone()
+                if existing is not None and existing["payload_json"] == payload_json:
+                    return False
             connection.execute(
                 """INSERT INTO state_records(namespace, record_key, payload_json, updated_at, schema_version)
                 VALUES (?, ?, ?, ?, ?)
@@ -426,8 +449,33 @@ class SQLitePilotStore:
             connection.execute(
                 """INSERT INTO pilot_events(run_id, event_type, entity_type, entity_id, payload_json, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)""",
-                (self.run_id, event_type, entity_type, record_key, payload_json, timestamp),
+                (
+                    self.run_id,
+                    event_type,
+                    entity_type,
+                    record_key,
+                    event_payload_json,
+                    timestamp,
+                ),
             )
+        return True
+
+    def storage_status(self) -> dict[str, int | float | bool]:
+        usage = shutil.disk_usage(self.db_path.parent)
+        free_percent = (usage.free / usage.total * 100.0) if usage.total else 0.0
+        min_free_bytes = 64 * 1024 * 1024
+        min_free_percent = 10.0
+        return {
+            "total_bytes": int(usage.total),
+            "used_bytes": int(usage.used),
+            "free_bytes": int(usage.free),
+            "free_percent": round(free_percent, 2),
+            "pressure": bool(
+                usage.free < min_free_bytes or free_percent < min_free_percent
+            ),
+            "min_free_bytes": min_free_bytes,
+            "min_free_percent": min_free_percent,
+        }
 
     def record_event(
         self,
