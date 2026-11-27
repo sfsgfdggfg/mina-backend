@@ -12,6 +12,10 @@ from src.core.agency_learning_bootstrap import (
     SQLiteAgencyLearningBootstrapRepository,
     source_reference_hash,
 )
+from src.core.inbound_auto_poll import (
+    InboundAutoPollState,
+    SQLiteInboundAutoPollStateRepository,
+)
 from src.core.learning_fact import LearningEvidence
 from src.core.learning_fact_repository import InMemoryLearningFactRepository
 from src.core.learning_fact_service import create_learning_fact
@@ -150,6 +154,38 @@ def evaluate_agency_incremental_learning_regressions():
                 ],
             )
         )
+        poll_repo = SQLiteInboundAutoPollStateRepository(store)
+        poll_repo.save(
+            InboundAutoPollState(
+                provider="microsoft_graph",
+                mailbox_id=AGENCY,
+                initialized_at=T0,
+                last_completed_at=T0,
+                recent_message_hashes=["a" * 64, "b" * 64],
+            )
+        )
+        poll_event = store.list_events(entity_type="inbound_auto_poll_state")[-1]
+        check(
+            poll_event["payload"].get("recent_message_hash_count") == 2
+            and "recent_message_hashes" not in poll_event["payload"],
+            "inbound auto-poll audit event stores a compact hash count instead of hash history",
+        )
+
+        bootstrap_before = store.list_events(
+            entity_type="agency_learning_bootstrap"
+        )
+        bootstrap_repo.save(bootstrap_repo.get())
+        bootstrap_after = store.list_events(
+            entity_type="agency_learning_bootstrap"
+        )
+        check(
+            len(bootstrap_before) == 1
+            and len(bootstrap_after) == 1
+            and "candidates" not in bootstrap_after[-1]["payload"]
+            and "recent_source_hashes" not in bootstrap_after[-1]["payload"],
+            "unchanged bootstrap state does not emit duplicate or full-snapshot audit events",
+        )
+
         client = _Client([old_context, late_first, new_quote])
 
         first = run_incremental_agency_learning(
@@ -167,6 +203,21 @@ def evaluate_agency_incremental_learning_regressions():
         )
         state1 = incremental_repo.get()
         snapshot1 = bootstrap_repo.get()
+        incremental_events = store.list_events(
+            entity_type="agency_incremental_learning"
+        )
+        check(
+            incremental_events
+            and all(
+                "recent_source_hashes" not in event["payload"]
+                for event in incremental_events
+            )
+            and all(
+                len(store._encode(event["payload"])) < 4096
+                for event in incremental_events
+            ),
+            "incremental learning audit events persist compact summaries instead of deduplication hash history",
+        )
         check(
             first["new_message_count"] == 2
             and state1.total_new_message_count == 2

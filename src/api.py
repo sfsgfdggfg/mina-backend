@@ -3281,6 +3281,12 @@ def _run_agency_incremental_learning_once() -> dict:
         return {"status": "already_running"}
 
     try:
+        storage = pilot_store.storage_status()
+        if storage["pressure"]:
+            return {
+                "status": "paused_storage_pressure",
+                "storage": storage,
+            }
         mailbox = _mailbox_status()
         if mailbox.get("configured") is not True:
             return {"status": "mailbox_not_configured"}
@@ -3396,6 +3402,7 @@ def get_mailbox_status():
         agency_incremental_learning_repository.get().status
     )
     status["inbound_auto_poll"] = _inbound_mailbox_poll_status()
+    status["pilot_storage"] = pilot_store.storage_status()
     status["agency_address_count"] = len(
         _runtime_agency_addresses(status.get("mailbox_id"))
     )

@@ -88,6 +88,13 @@ class SQLiteInboundAutoPollStateRepository:
             payload=state.model_dump(mode="json"),
             event_type="inbound_auto_poll_state_changed",
             entity_type="inbound_auto_poll_state",
+            event_payload={
+                "provider": state.provider,
+                "mailbox_id": state.mailbox_id,
+                "initialized_at": state.initialized_at,
+                "last_completed_at": state.last_completed_at,
+                "recent_message_hash_count": len(state.recent_message_hashes),
+            },
         )
         return state
 
