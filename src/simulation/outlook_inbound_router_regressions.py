@@ -39,6 +39,9 @@ from src.core.supplier_rfq_lifecycle import (
 from src.core.supplier_rfq_repository import (
     InMemorySupplierRFQRepository,
 )
+from src.workflow.inbound_transaction_intent import (
+    looks_like_freight_quote_request,
+)
 from src.workflow.outlook_inbound_router import (
     process_controlled_outlook_inbound_mail,
 )
@@ -250,6 +253,94 @@ def evaluate_outlook_inbound_router_regressions():
             passes.append(label)
         else:
             failures.append(label)
+
+    barsan_request = _mail(
+        sender="beytullah.bulbul@barsan.com",
+        message_id="intent-barsan",
+        subject="Barsan Global Lojistik/ ADANA ZAGREB/ parsiyel yükleme",
+        body=(
+            "Parsiyel yük için yaklaşık bir maliyet teklifi iletebilir misiniz? "
+            "Yüreğir Adana - Zagreb, toplam 200 kg."
+        ),
+    )
+    nng_request = _mail(
+        sender="volkan.erler@nngenergy.com",
+        message_id="intent-nng",
+        subject="NNG ENERJİ - YALOVA EKVADOR",
+        body=(
+            "Aşağıdaki yük için Door to Port fiyat teklifi rica ediyoruz. "
+            "2 adet 40 Feet Flatrack, Yalova - Ekvador, 38.000 KG."
+        ),
+    )
+    check(
+        looks_like_freight_quote_request(barsan_request)
+        and looks_like_freight_quote_request(nng_request),
+        "explicit freight quote requests remain transaction-intent positives",
+    )
+
+    tracking_noise_messages = [
+        _mail(
+            sender="pricing@cccturkey.com",
+            message_id="intent-ccc-program",
+            subject="41.Hafta Ihracat Gemi Programlarımız",
+            body=(
+                "Connect Console Cargo 41.Hafta Ihracat Gemi Programlarımız "
+                "Open this email in a web browser "
+                "<https://example.invalid/click?token=abcRFQxyzTIRkgLTL>"
+            ),
+        ),
+        _mail(
+            sender="pricing@cccturkey.com",
+            message_id="intent-ccc-vessel",
+            subject="AMBARLI - JEBEL ALI 47.HAFTA GEMISI",
+            body=(
+                "Haftalık gemi programı. "
+                "<https://example.invalid/ls/click?u=RFQ-TIR-KG-LTL-export>"
+            ),
+        ),
+        _mail(
+            sender="microsoftcopilotupdates@microsoft.com",
+            message_id="intent-microsoft-marketing",
+            subject="PowerPoint sununuza daha az çabayla başlayın",
+            body=(
+                "Microsoft Copilot size sunu hazırlamada yardımcı olabilir. "
+                "<https://example.invalid/click?payload=RFQkgTIRltl>"
+            ),
+        ),
+    ]
+    check(
+        all(
+            not looks_like_freight_quote_request(mail)
+            for mail in tracking_noise_messages
+        ),
+        "tracking URL token fragments cannot manufacture RFQ or freight intent",
+    )
+
+    carrier_offer = _mail(
+        sender="olgunserin@yml.com.tr",
+        message_id="intent-yangming-tariff",
+        subject="YANG MING // İTHALAT NAVLUN TARİFESİ 01-14/12/2026",
+        body=(
+            "Değerli Müşterimiz, ithalat yeni tarife rakamlarımız aşağıdaki şekildedir. "
+            "Mersin ve Iskenderun limanları için navlun teklifimiz aşağıda "
+            "bilgilerinize sunulur. Gemi programı ve konteyner tarifesi ektedir."
+        ),
+    )
+    check(
+        not looks_like_freight_quote_request(carrier_offer),
+        "carrier tariff or outbound offer language is not inverted into a customer quote request",
+    )
+
+    terse_subject_request = _mail(
+        sender="new.customer@example.com",
+        message_id="intent-terse-subject",
+        subject="Mersin - Vienna navlun teklifi",
+        body="2 palet, toplam 500 kg.",
+    )
+    check(
+        looks_like_freight_quote_request(terse_subject_request),
+        "terse quote-request subjects remain supported without requiring boilerplate request verbs",
+    )
 
     proposal_repository = (
         InMemoryExtractionProposalRepository()
