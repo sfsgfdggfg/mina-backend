@@ -60,7 +60,7 @@ def build_data_provenance_blocked_result(
     commodity_profile = (
         commodity_profile
         if commodity_profile is not None
-        else get_commodity_record(shipment.commodity)
+        else get_commodity_record(getattr(shipment, "commodity_category", None) or shipment.commodity)
     )
     missing_info = missing_info or check_missing_information(shipment)
     regulatory_compliance = (
@@ -145,7 +145,7 @@ def build_customer_identity_blocked_result(
     supplier_rfq_drafts=None,
     supplier_rfq_responses=None,
 ) -> dict:
-    commodity_profile = get_commodity_record(shipment.commodity)
+    commodity_profile = get_commodity_record(getattr(shipment, "commodity_category", None) or shipment.commodity)
     missing_info = apply_road_rfq_readiness(
         shipment,
         check_missing_information(shipment),
@@ -258,7 +258,7 @@ def process_shipment(
             customer_memory=customer_memory,
         )
 
-    commodity_profile = get_commodity_record(shipment.commodity)
+    commodity_profile = get_commodity_record(getattr(shipment, "commodity_category", None) or shipment.commodity)
     missing_info = apply_road_rfq_readiness(
         shipment,
         check_missing_information(shipment),

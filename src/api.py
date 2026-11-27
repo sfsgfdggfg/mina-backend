@@ -7749,7 +7749,7 @@ def serialize_result(result: dict) -> dict:
     management_review_draft = result.get("management_review_draft")
     customer_memory = result.get("customer_memory")
     action_recommendation = result.get("action_recommendation")
-    commodity_profile = result.get("commodity_profile") or (get_commodity_record(shipment.commodity) if shipment else None)
+    commodity_profile = result.get("commodity_profile") or (get_commodity_record(getattr(shipment, "commodity_category", None) or shipment.commodity) if shipment else None)
 
     return {
         "ingestion_status": result.get(

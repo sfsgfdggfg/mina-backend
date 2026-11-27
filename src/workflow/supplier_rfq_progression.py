@@ -378,7 +378,7 @@ def _progress_supplier_rfq_workflow(
             supplier_rfq_responses=supplier_rfq_responses,
         )
 
-    commodity_profile = get_commodity_record(shipment.commodity)
+    commodity_profile = get_commodity_record(getattr(shipment, "commodity_category", None) or shipment.commodity)
     missing_info = apply_road_rfq_readiness(
         shipment,
         check_missing_information(shipment),

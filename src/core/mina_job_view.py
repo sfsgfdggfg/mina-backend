@@ -54,6 +54,7 @@ def build_mina_job_list(repository: MinaJobRepository) -> dict[str, Any]:
             "customer_name": job.shipment.customer_name,
             "route": _route_text(job),
             "transport_mode": job.shipment.transport_mode,
+            "commodity_category": getattr(job.shipment, "commodity_category", None),
             "opened_at": job.opened_at,
             "updated_at": job.updated_at,
         })
@@ -309,6 +310,7 @@ def build_mina_job_detail(
             "customer_name": job.shipment.customer_name,
             "route": _route_text(job),
             "transport_mode": job.shipment.transport_mode,
+            "commodity_category": getattr(job.shipment, "commodity_category", None),
             "customer_quote_deadline_at": job.shipment.customer_quote_deadline_at,
         },
         "automation": {

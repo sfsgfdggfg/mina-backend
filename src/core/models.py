@@ -43,6 +43,7 @@ class Shipment(BaseModel):
     delivery_contact_phone: Optional[str] = None
 
     commodity: Optional[str] = None
+    commodity_category: Optional[str] = None
     gtip_code: Optional[str] = None
     hs_chapter: Optional[str] = None
     hs_heading: Optional[str] = None

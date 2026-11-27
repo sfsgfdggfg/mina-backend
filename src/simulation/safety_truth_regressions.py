@@ -194,6 +194,54 @@ def evaluate_safety_truth_regressions() -> dict:
     )
     if electronics_candidate.is_high_value is not None:
         failures.append("electronic high-value candidate became confirmed high-value")
+    if electronics_candidate.commodity_category != "Elektronik":
+        failures.append("canonical electronics category was not preserved separately")
+
+    barsan_exact = build_shipment_from_extraction(
+        _extraction(
+            commodity="Elektronik",
+            service_type="LTL",
+            transport_mode="road",
+            gross_weight_kg=200,
+        ),
+        (
+            "Parsiyel yük için yaklaşık bir maliyet teklifi iletebilir misiniz?\n"
+            "Yüreğir/Adana - Zagreb\n"
+            "Ürün: elektrostatik filtre\n"
+            "Toplam ağırlık 200 kilo civarında."
+        ),
+    )
+    if barsan_exact.commodity != "elektrostatik filtre":
+        failures.append("explicit Barsan product description was collapsed to a broad category")
+    if barsan_exact.commodity_category is not None:
+        failures.append("unsupported Barsan commodity category was invented")
+    if "[COMMODITY PROFILE]" in str(barsan_exact.special_notes or ""):
+        failures.append("unsupported broad commodity profile was attached to exact Barsan cargo")
+
+    nng_sea = build_shipment_from_extraction(
+        _extraction(
+            customer_name="NNG Enerji",
+            commodity="Gaz Türbini Paketi",
+            transport_mode=None,
+            service_type="FTL",
+            gross_weight_kg=38000,
+        ),
+        (
+            "Aşağıdaki yük için Door to Port fiyat teklifi rica ediyoruz.\n"
+            "2 adet 40 Feet Flatrack, 2 adet 40 OT taşmasız ve 1 adet 40 OT taşmalı.\n"
+            "Yükleme: Yalova - NNG Enerji Çiftlikköy.\n"
+            "Boşaltma: Port of Posorja veya Guayaquil Ekvador.\n"
+            "1. Flatrack yükü 1130 x 285 x 330 cm 38.000 KG (Gaz Türbini Paketi)."
+        ),
+    )
+    if nng_sea.transport_mode != "sea":
+        failures.append("strong NNG door-to-port/container evidence did not infer sea mode")
+    if nng_sea.service_type != "FCL":
+        failures.append("NNG sea-container request retained the road FTL default")
+    if nng_sea.equipment_type != "Flat Rack + Open Top":
+        failures.append("NNG FR/OT equipment evidence was not preserved")
+    if nng_sea.commodity != "Gaz Türbini Paketi":
+        failures.append("NNG exact commodity description was not preserved")
 
     for road_text in (
         "Adana Hamburg karayolu navlun rica ederiz.",

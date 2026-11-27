@@ -78,7 +78,10 @@ def assess_gtip_commodity_consistency(
 
 def has_gtip_commodity_conflict(shipment: Any) -> bool:
     gtip_code = getattr(shipment, "gtip_code", None)
-    commodity = getattr(shipment, "commodity", None)
+    commodity = (
+        getattr(shipment, "commodity_category", None)
+        or getattr(shipment, "commodity", None)
+    )
     current = assess_gtip_commodity_consistency(gtip_code, commodity)
     if current["gtip_commodity"] is not None and commodity:
         return bool(current["conflict"])

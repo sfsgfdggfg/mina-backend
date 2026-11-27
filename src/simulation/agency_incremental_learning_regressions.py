@@ -104,6 +104,15 @@ def evaluate_agency_incremental_learning_regressions():
             Path(bounded_tmp) / "bounded.sqlite3",
             technical_event_limit=3,
         )
+        bounded_store.storage_status = lambda: {
+            "total_bytes": 1_000_000_000,
+            "used_bytes": 100_000_000,
+            "free_bytes": 900_000_000,
+            "free_percent": 90.0,
+            "pressure": False,
+            "min_free_bytes": 67_108_864,
+            "min_free_percent": 10.0,
+        }
         bounded_poll = SQLiteInboundAutoPollStateRepository(bounded_store)
         for minute in range(5):
             bounded_poll.save(
@@ -160,6 +169,18 @@ def evaluate_agency_incremental_learning_regressions():
 
     with TemporaryDirectory() as tmp:
         store = SQLitePilotStore(Path(tmp) / "state.sqlite3")
+        # This suite validates audit payload semantics, not host disk pressure.
+        # Developer machines may legitimately be below the production 10% free
+        # guard, in which case technical audit writes are intentionally skipped.
+        store.storage_status = lambda: {
+            "total_bytes": 1_000_000_000,
+            "used_bytes": 100_000_000,
+            "free_bytes": 900_000_000,
+            "free_percent": 90.0,
+            "pressure": False,
+            "min_free_bytes": 67_108_864,
+            "min_free_percent": 10.0,
+        }
         bootstrap_repo = SQLiteAgencyLearningBootstrapRepository(store)
         incremental_repo = SQLiteAgencyIncrementalLearningRepository(store)
         bootstrap_repo.save(

@@ -60,7 +60,7 @@ def check_missing_information(shipment: Shipment) -> MissingInfoResult:
             missing_fields.append("machine dimensions")
 
     # Commodity profile driven missing info
-    commodity_profile = get_commodity_operational_profile(shipment.commodity)
+    commodity_profile = get_commodity_operational_profile(getattr(shipment, "commodity_category", None) or shipment.commodity)
     clarification_requirements = (
         get_commodity_clarification_requirements(shipment.commodity)
     )

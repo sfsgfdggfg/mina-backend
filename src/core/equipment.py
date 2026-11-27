@@ -193,7 +193,7 @@ def decide_equipment(shipment: Shipment) -> EquipmentDecision:
         )
 
     # Commodity profile reefer trigger
-    commodity_profile = get_commodity_operational_profile(shipment.commodity)
+    commodity_profile = get_commodity_operational_profile(getattr(shipment, "commodity_category", None) or shipment.commodity)
     if commodity_profile.get("requires_reefer") or commodity_profile.get("default_equipment") == "Reefer":
         return EquipmentDecision(
             selected_equipment="Reefer",
