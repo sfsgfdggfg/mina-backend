@@ -208,7 +208,8 @@ def evaluate_safety_truth_regressions() -> dict:
             "Parsiyel yük için yaklaşık bir maliyet teklifi iletebilir misiniz?\n"
             "Yüreğir/Adana - Zagreb\n"
             "Ürün: elektrostatik filtre\n"
-            "Toplam ağırlık 200 kilo civarında."
+            "Toplam ağırlık 200 kilo civarında.\n"
+            "Saygılarımla\nBeytullah Bülbül\nPhone: +90 555 000 00 00"
         ),
     )
     if barsan_exact.commodity != "elektrostatik filtre":
