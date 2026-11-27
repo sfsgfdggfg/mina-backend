@@ -7850,3 +7850,14 @@ Inbound freight-intent classification must operate on authored message text, not
 A carrier, forwarder or supplier circular that presents its own tariff, sailing schedule, rate sheet or quotation is not a customer-side request merely because it contains freight vocabulary or a phrase such as `navlun teklifimiz`. Request intent requires request-shaped language, or a concise quote-request subject, plus freight context. Static customer/supplier master roles remain secondary to the current transaction, as established by DEC-296.
 
 The production false positives that motivated this decision are retained as regression evidence: CCC Turkey weekly sailing-program circulars, Yang Ming import-tariff broadcasts and a Microsoft Copilot marketing email whose tracking URLs contained accidental logistics-token substrings. The same detector must continue to accept the real Barsan Adana–Zagreb and NNG Enerji Yalova–Ecuador quote requests. Existing false-positive MINA jobs are cancelled with explicit reasons rather than deleted or renumbered.
+
+## DEC-299 — Preserve Exact Cargo Description Separately From Operational Category and Use Mode-Aware Service Types
+
+**Status:** Accepted
+**Date:** 2026-11-27
+
+Inbound extraction preserves the source-authored cargo/product description in `commodity`. A broader canonical classification used for commodity profiles, risk rules or operational checklists is stored separately in `commodity_category`. Deterministic source evidence such as `Ürün: elektrostatik filtre` may refine the exact description and must not be replaced by a generic category such as `Elektronik`. When no trustworthy category match exists, the category remains unknown rather than being invented.
+
+Service type is mode-aware. Road freight uses FTL/LTL; sea-container freight uses FCL/LCL. Strong explicit source evidence such as Door-to-Port, FCL/LCL, Flat Rack/Open Top equipment, or named-port wording may correct an AI/default road classification to sea. A sea-container request must not remain FTL merely because FTL is the historical road-pilot default. Ambiguous multi-mode wording remains unresolved rather than being collapsed to one mode.
+
+The production Barsan Adana–Zagreb request and NNG Enerji Yalova–Ecuador request are regression evidence for this decision. Barsan must retain `elektrostatik filtre` as the exact cargo description without inventing an Electronics category. NNG must retain `Gaz Türbini Paketi`, infer sea mode from Door-to-Port and FR/OT evidence, use FCL, and preserve Flat Rack/Open Top equipment evidence. Existing unconfirmed intake snapshots may be audit-refined in place; MINA numbers are not reallocated.

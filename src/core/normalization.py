@@ -88,6 +88,14 @@ SERVICE_TYPE_MAP = {
     "ltl": "LTL",
     "partial": "LTL",
     "parsiyel": "LTL",
+
+    "fcl": "FCL",
+    "full container": "FCL",
+    "full container load": "FCL",
+
+    "lcl": "LCL",
+    "less than container": "LCL",
+    "less than container load": "LCL",
 }
 
 
@@ -140,7 +148,13 @@ def normalize_shipment(shipment: Shipment) -> Shipment:
     shipment.delivery_contact_name = normalize_text(shipment.delivery_contact_name)
     shipment.delivery_contact_phone = normalize_text(shipment.delivery_contact_phone)
 
-    shipment.commodity = map_value(shipment.commodity, COMMODITY_MAP)
+    # `commodity` is source-facing exact cargo description. Do not collapse it
+    # into a broad category here; `commodity_category` carries canonical profile
+    # classification separately.
+    shipment.commodity = normalize_text(shipment.commodity)
+    shipment.commodity_category = map_value(
+        shipment.commodity_category, COMMODITY_MAP
+    )
 
     shipment.service_type = map_value(shipment.service_type, SERVICE_TYPE_MAP) or "FTL"
     shipment.equipment_type = normalize_text(shipment.equipment_type)

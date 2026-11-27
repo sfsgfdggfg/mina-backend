@@ -144,12 +144,16 @@ def _append_special_note(shipment, note: str):
 
     return shipment
 def apply_commodity_profile_to_shipment(shipment: Any):
-    record = get_commodity_record(getattr(shipment, "commodity", None))
+    profile_key = (
+        getattr(shipment, "commodity_category", None)
+        or getattr(shipment, "commodity", None)
+    )
+    record = get_commodity_record(profile_key)
 
     if not record:
         return shipment
 
-    profile = get_commodity_operational_profile(getattr(shipment, "commodity", None))
+    profile = get_commodity_operational_profile(profile_key)
 
     notes = []
     record_notes = record.get("notes", [])

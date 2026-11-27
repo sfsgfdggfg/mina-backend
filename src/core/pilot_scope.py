@@ -64,7 +64,7 @@ def _append_reason(reasons: list[str], reason: str) -> None:
 
 
 def _commodity_classification(shipment: Shipment) -> str:
-    record = get_commodity_record(shipment.commodity)
+    record = get_commodity_record(getattr(shipment, "commodity_category", None) or shipment.commodity)
     normalized_commodity = normalize_commodity_value(shipment.commodity)
     if record is None and normalized_commodity:
         record = next(

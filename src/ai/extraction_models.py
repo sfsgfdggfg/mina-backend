@@ -89,7 +89,11 @@ class _ShipmentExtractionFields(BaseModel):
 
     commodity: Optional[str] = Field(
         default=None,
-        description="Cargo / product type",
+        description=(
+            "Exact cargo / product description from the source message. "
+            "Preserve specific product wording; do not replace it with a broad "
+            "risk/category label such as Electronics or Machinery."
+        ),
     )
     gross_weight_kg: Optional[float] = Field(
         default=None,
@@ -100,7 +104,8 @@ class _ShipmentExtractionFields(BaseModel):
     service_type: str = Field(
         default="FTL",
         description=(
-            "FTL or LTL. Default FTL unless partial is explicitly requested"
+            "Service/load type appropriate to the transport mode: FTL/LTL for "
+            "road, FCL/LCL for sea. Do not label sea-container cargo as FTL."
         ),
     )
     transport_mode: Optional[
