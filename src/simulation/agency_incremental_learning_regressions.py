@@ -289,6 +289,12 @@ def evaluate_agency_incremental_learning_regressions():
             and incremental_repo.get().mailbox_id == AGENCY,
             "incremental cursor advances only after successful durable merge and stays mailbox-bound",
         )
+        store.purge_expired(now=T0 + timedelta(days=40))
+        check(
+            incremental_repo.get().cursor_at == T0 + timedelta(minutes=20)
+            and incremental_repo.get().run_count == 3,
+            "incremental learning cursor survives ordinary retention purge across long pilot gaps",
+        )
 
         replacement_mailbox = "info@another-agency.test"
         bootstrap_repo.save(
