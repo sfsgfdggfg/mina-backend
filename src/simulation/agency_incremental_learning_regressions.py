@@ -99,6 +99,32 @@ def evaluate_agency_incremental_learning_regressions():
     masters, customer, supplier = _masters()
     learning = InMemoryLearningFactRepository()
 
+    with TemporaryDirectory() as bounded_tmp:
+        bounded_store = SQLitePilotStore(
+            Path(bounded_tmp) / "bounded.sqlite3",
+            technical_event_limit=3,
+        )
+        bounded_poll = SQLiteInboundAutoPollStateRepository(bounded_store)
+        for minute in range(5):
+            bounded_poll.save(
+                InboundAutoPollState(
+                    provider="microsoft_graph",
+                    mailbox_id=AGENCY,
+                    initialized_at=T0,
+                    last_completed_at=T0 + timedelta(minutes=minute),
+                    recent_message_hashes=[f"{minute:064x}"],
+                )
+            )
+        bounded_events = bounded_store.list_events(
+            entity_type="inbound_auto_poll_state"
+        )
+        check(
+            len(bounded_events) == 3
+            and bounded_events[0]["payload"]["last_completed_at"]
+            == (T0 + timedelta(minutes=2)).isoformat(),
+            "technical state audit history is hard-capped while current state keeps advancing",
+        )
+
     old_context = _mail(
         "old-context",
         T0 - timedelta(hours=1),

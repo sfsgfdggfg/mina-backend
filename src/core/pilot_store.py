@@ -106,6 +106,12 @@ PERSISTENT_EVENT_ENTITY_TYPES = (
     "operational_shift_close_receipt",
     "operational_shift_open_acceptance_receipt",
 )
+BOUNDED_TECHNICAL_EVENT_ENTITY_TYPES = frozenset({
+    "agency_learning_bootstrap",
+    "agency_incremental_learning",
+    "inbound_auto_poll_state",
+})
+DEFAULT_TECHNICAL_EVENT_LIMIT = 10_000
 
 
 class SQLiteTransactionError(RuntimeError):
@@ -166,6 +172,7 @@ class SQLitePilotStore:
         *,
         run_id: str | None = None,
         retention_days: int | None = None,
+        technical_event_limit: int | None = None,
     ) -> None:
         self.db_path = (
             Path(db_path)
@@ -196,6 +203,21 @@ class SQLitePilotStore:
                 "MINAI pilot retention must be between 1 and 365 days."
             )
         self.retention_days = configured_retention
+        configured_technical_event_limit = (
+            technical_event_limit
+            if technical_event_limit is not None
+            else int(
+                os.getenv(
+                    "MINAI_PILOT_TECHNICAL_EVENT_LIMIT",
+                    str(DEFAULT_TECHNICAL_EVENT_LIMIT),
+                )
+            )
+        )
+        if not 1 <= configured_technical_event_limit <= 100_000:
+            raise ValueError(
+                "MINAI pilot technical event limit must be between 1 and 100000."
+            )
+        self.technical_event_limit = configured_technical_event_limit
 
         self._initialize()
         self.purge_expired()
@@ -446,6 +468,13 @@ class SQLitePilotStore:
                               schema_version = excluded.schema_version""",
                 (namespace, record_key, payload_json, timestamp, STATE_RECORD_SCHEMA_VERSION),
             )
+            is_bounded_technical_event = (
+                entity_type in BOUNDED_TECHNICAL_EVENT_ENTITY_TYPES
+            )
+            if is_bounded_technical_event and self.storage_status()["pressure"]:
+                # Current state is operationally useful; historical technical
+                # telemetry is not allowed to consume the emergency reserve.
+                return True
             connection.execute(
                 """INSERT INTO pilot_events(run_id, event_type, entity_type, entity_id, payload_json, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)""",
@@ -458,7 +487,35 @@ class SQLitePilotStore:
                     timestamp,
                 ),
             )
+            if is_bounded_technical_event:
+                self._prune_bounded_technical_event_history(
+                    connection,
+                    entity_type=entity_type,
+                    entity_id=record_key,
+                )
         return True
+
+    def _prune_bounded_technical_event_history(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        entity_type: str,
+        entity_id: str,
+    ) -> int:
+        threshold = connection.execute(
+            "SELECT event_id FROM pilot_events "
+            "WHERE entity_type = ? AND entity_id = ? "
+            "ORDER BY event_id DESC LIMIT 1 OFFSET ?",
+            (entity_type, entity_id, self.technical_event_limit - 1),
+        ).fetchone()
+        if threshold is None:
+            return 0
+        cursor = connection.execute(
+            "DELETE FROM pilot_events WHERE entity_type = ? AND entity_id = ? "
+            "AND event_id < ?",
+            (entity_type, entity_id, int(threshold["event_id"])),
+        )
+        return int(cursor.rowcount)
 
     def storage_status(self) -> dict[str, int | float | bool]:
         usage = shutil.disk_usage(self.db_path.parent)
